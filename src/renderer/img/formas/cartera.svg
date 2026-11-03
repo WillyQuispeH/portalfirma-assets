@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 180" fill="none" stroke-linecap="round" stroke-linejoin="round">
+<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3d9cf0"/><stop offset="1" stop-color="#6a2fe0"/></linearGradient></defs>
+<circle cx="560" cy="44" r="26" fill="#3d9cf0" fill-opacity=".12"/>
+<path d="M0 180 C 120 140, 220 150, 330 160 S 540 140, 640 150 V180Z" fill="#3f4fe6" fill-opacity=".06"/>
+<g stroke="url(#g)" stroke-width="2.2" opacity=".75">
+<path d="M150 180V112l52-40 52 40v68"/><rect x="186" y="134" width="32" height="46" rx="3"/><path d="M165 120h0M239 120h0"/><rect x="164" y="118" width="16" height="14" rx="2"/><rect x="224" y="118" width="16" height="14" rx="2"/>
+<path d="M268 180V58h70v122"/><path d="M282 74h14M310 74h14M282 94h14M310 94h14M282 114h14M310 114h14M282 134h14M310 134h14"/><rect x="292" y="152" width="22" height="28" rx="2"/>
+<path d="M352 180v-56l38-30 38 30v56"/><path d="M372 180v-28h36v28"/><circle cx="390" cy="118" r="7"/>
+<path d="M442 180V96l30-24 30 24v84"/><path d="M458 112h28M458 130h28M458 148h28"/>
+<path d="M516 180v-40h76v40"/><path d="M510 142l44-30 44 30"/><rect x="540" y="152" width="16" height="16" rx="2"/>
+</g>
+<g stroke="#3f4fe6" stroke-width="1.4" opacity=".22"><path d="M110 180V130l-30-22-30 22v50"/><path d="M610 180v-30l-14-10-14 10v30"/></g>
+</svg>

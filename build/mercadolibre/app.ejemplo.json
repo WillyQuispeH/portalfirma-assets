@@ -1,0 +1,6 @@
+{
+  "client_id": "ID de la app PortalFirma Asset en developers.mercadolibre.cl",
+  "client_secret": "Clave secreta de esa app (no se publica)",
+  "redirect_uri": "https://www.portalfirma.cl/mercadolibre/callback",
+  "pkce": true
+}

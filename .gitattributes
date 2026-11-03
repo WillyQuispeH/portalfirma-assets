@@ -1,0 +1,22 @@
+# Saltos de línea LF en el repositorio, en Windows y Mac
+* text=auto eol=lf
+
+# Binarios
+*.pdf binary
+*.png binary
+*.jpg binary
+*.webp binary
+*.ico binary
+*.bmp binary
+*.bcmap binary
+*.wasm binary
+*.ttf binary
+*.otf binary
+*.woff binary
+*.woff2 binary
+*.pfb binary
+*.bin binary
+*.docx binary
+*.xlsx binary
+*.traineddata binary
+*.gz binary
