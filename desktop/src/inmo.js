@@ -17,7 +17,7 @@
 //    (firmas enviadas, y documentos o fotos de antes de R2 que aún no se suben) queda local, en datos.json › extrasProp
 //    (por id de propiedad), y se suma a la copia.
 //  · Modo de prueba (PF_MOCK=1): todo en el JSON local de siempre (userData/inmo/datos.json), sin servidor.
-//    Negocios, eventos de la agenda y leads también van a la API (PUT del documento completo; ver «negocios y eventos»).
+//    Negocios, eventos de la agenda, leads y firmas enviadas también van a la API (PUT del documento completo; ver «negocios y eventos»).
 // En los dos modos siguen locales: la configuración y la última importación.
 'use strict';
 const fs = require('fs'); const path = require('path');
@@ -87,8 +87,8 @@ function limpiarProp(o) {
 // ============================================================================ repositorio (copia en memoria)
 
 // usuario: el de la sesión de Asset · base: lo último que mandó el servidor de cada propiedad ('p:id'), persona ('c:id'),
-// negocio ('n:id'), evento ('e:id') y lead ('l:id')
-const R = { usuario: null, props: [], pers: [], negs: [], evs: [], leads: [], base: new Map(), marca: null, listo: false, cargando: null };
+// negocio ('n:id'), evento ('e:id'), lead ('l:id') y firma ('f:id')
+const R = { usuario: null, props: [], pers: [], negs: [], evs: [], leads: [], firmas: [], base: new Map(), marca: null, listo: false, cargando: null };
 const P = () => (API ? R.props : db().propiedades);
 const C = () => (API ? R.pers : db().personas);
 // ganchos que pone main.js: avisar en pantalla, avisar que cambiaron datos y el nombre de un usuario del equipo
@@ -100,7 +100,7 @@ const configurar = (o = {}) => { Object.assign(H, o); };
 const CAMPOS_API = ['codigo', 'titulo', 'tipo', 'venta', 'arriendo', 'precioVenta', 'precioArriendo', 'estadoVenta', 'estadoArriendo', 'direccion', 'unidad', 'comuna', 'region', 'rol',
   'lat', 'lng', 'placeId', 'supTotal', 'supUtil', 'dormitorios', 'banos', 'estacionamientos', 'bodegas', 'amoblado', 'gastosComunes', 'descripcion', 'notasInternas', 'tituloPortal',
   'portalBarrio', 'etiquetas', 'ficha', 'portales', 'leads', 'fotos', 'corredor'];
-const DEL_SERVIDOR = new Set(['id', 'documentos', 'vinculos', 'duenoVisible', 'archivada', 'origen', 'editados', 'idLegado', 'version', 'creado', 'actualizado', 'eliminado', 'captadorId', 'captador']);
+const DEL_SERVIDOR = new Set(['id', 'documentos', 'firmas', 'vinculos', 'duenoVisible', 'archivada', 'origen', 'editados', 'idLegado', 'version', 'creado', 'actualizado', 'eliminado', 'captadorId', 'captador']);
 const MAX = { titulo: 160, codigo: 40, direccion: 300, unidad: 40, comuna: 80, region: 80, rol: 40, placeId: 300, descripcion: 20000, notasInternas: 5000, tituloPortal: 160, portalBarrio: 120 };
 const VACIO = { etiquetas: [], fotos: [], leads: [], portales: {}, venta: false, arriendo: false, amoblado: false };
 const ENTEROS = ['dormitorios', 'banos', 'estacionamientos', 'bodegas'];
@@ -180,8 +180,10 @@ function fusionar(local, vieja, nuevo, campos) {
 // lo local de una propiedad (lo que la API no guarda): firmas, documentos y fotos de este computador
 function extrasDe(id) { return (db().extrasProp ||= {})[id] || null; }
 function conExtras(p) {
+  conFirmas(p);
   const ex = extrasDe(p.id); if (!ex) return p;
   for (const [k, v] of Object.entries(ex)) {
+    if (k === 'firmas' && API) continue; // de antes: se sube con subirFirmasLocales
     if (k === 'fotos') p.fotos = [...v, ...(p.fotos || []).filter((u) => !v.includes(u))].slice(0, 60);
     else if (k === 'documentos') p.documentos = [...clonar(v), ...(p.documentos || []).filter((d) => !v.some((x) => x.id === d.id))];
     else p[k] = clonar(v); // copia: lo guardado solo cambia con guardarExtras (así se detecta qué cambió)
@@ -192,6 +194,7 @@ function guardarExtras(p) {
   const ex = {};
   for (const [k, v] of Object.entries(p)) if (!CAMPOS_API.includes(k) && !DEL_SERVIDOR.has(k) && !vacio(v)) ex[k] = v;
   const docsLocales = (p.documentos || []).filter((d) => d.path); if (docsLocales.length) ex.documentos = docsLocales;
+  if (!db().firmasSubidas && db().extrasProp?.[p.id]?.firmas) ex.firmas = db().extrasProp[p.id].firmas; // de antes, hasta que se suban
   if ((p.fotos || []).some((u) => !esWeb(u))) ex.fotos = p.fotos;
   const d = db(); d.extrasProp ||= {};
   const antes = JSON.stringify(d.extrasProp[p.id] || null); const nuevo = Object.keys(ex).length ? ex : null;
@@ -229,6 +232,7 @@ const DOCS = {
   neg: { lista: () => R.negs, pref: 'n:', ruta: '/negocios', que: 'negocios', nombre: 'un negocio' },
   ev: { lista: () => R.evs, pref: 'e:', ruta: '/eventos', que: 'agenda', nombre: 'un evento de la agenda' },
   lead: { lista: () => R.leads, pref: 'l:', ruta: '/leads', que: 'leads', nombre: 'un lead' },
+  firma: { lista: () => R.firmas, pref: 'f:', ruta: '/firmas', que: 'propiedades', nombre: 'el registro de un documento en firma' },
 };
 // mensajes de la conversación de un lead: { tipo: 'msgs', lead, ks } (los envía leads.js, que tiene la conversación)
 function encolarMensajes(lead, ks) {
@@ -297,6 +301,96 @@ async function subirNegociosEventos() {
   d.respaldoLocal = { fecha: now(), negocios: d.negocios || [], eventos: d.eventos || [], rechazados: res.rechazados };
   delete d.negocios; delete d.eventos; save();
   if (res.negocios || res.eventos) H.avisar(`Se subieron al servidor ${[res.negocios && `${res.negocios} ${res.negocios === 1 ? 'negocio' : 'negocios'}`, res.eventos && `${res.eventos} ${res.eventos === 1 ? 'evento de la agenda' : 'eventos de la agenda'}`].filter(Boolean).join(' y ')} que estaban solo en este computador.${res.rechazados.length ? ` ${res.rechazados.length} no se pudieron subir (quedaron respaldados en este equipo).` : ''}`);
+}
+
+// ---------- firmas enviadas (documentos en firma) ----------
+// Con la API, cada envío a firmar es un documento de la tabla firmas (id «op<número>»), visible para toda la corredora.
+// p.firmas sigue existiendo para quien la lee (la ficha, Hoy, el Agente, etapas…), pero se calcula: las firmas cuyas
+// propIds incluyen la propiedad. Para agregar o cambiar una firma: agregarFirma(doc, propIds, texto) y
+// actualizarFirma(operacion, fn, texto). En PF_MOCK, todo sigue en p.firmas y en el historial local («Mis operaciones»).
+const firmaIdDe = (doc) => (Number(doc.operacion) ? 'op' + Number(doc.operacion) : doc.id || uid('fi'));
+const porFecha = (a, b) => String(b.fecha || '').localeCompare(String(a.fecha || ''));
+function firmasDe(propId) {
+  if (!API) { const p = P().find((x) => x.id === propId); return p?.firmas || []; }
+  return R.firmas.filter((f) => (f.propIds || []).includes(propId)).sort(porFecha);
+}
+/** Todas las firmas, con sus propiedades: [{ f, propIds }] (en PF_MOCK, armadas desde cada propiedad). */
+function todasLasFirmas() {
+  if (API) return R.firmas.slice().sort(porFecha);
+  const m = new Map();
+  for (const p of P()) for (const f of p.firmas || []) { const k = f.operacion ? 'op' + f.operacion : p.id + (f.fecha || ''); const x = m.get(k); if (x) x.propIds.push(p.id); else m.set(k, { ...f, propIds: [p.id] }); }
+  return [...m.values()].sort(porFecha);
+}
+function agregarFirma(doc, propIds = [], texto = null) {
+  propIds = [...new Set(propIds.filter(Boolean))];
+  if (!API) {
+    for (const id of propIds) parchear(id, (pp) => { pp.firmas ||= []; pp.firmas.unshift(clonar(doc)); pp.firmas.length = Math.min(pp.firmas.length, 100); }, texto);
+    return doc;
+  }
+  const id = firmaIdDe(doc); const i = R.firmas.findIndex((x) => x.id === id); const antes = i >= 0 ? R.firmas[i] : null;
+  const f = { ...(antes || {}), ...clonar(doc), id, propIds: [...new Set([...(antes?.propIds || []), ...propIds])] };
+  if (!f.fecha) f.fecha = now();
+  // los firmantes de un segundo registro de la misma operación se juntan con los que ya había (por RUT o nombre)
+  if (antes?.firmantes?.length && doc.firmantes?.length) f.firmantes = doc.firmantes.map((s) => ({ ...(antes.firmantes.find((y) => (y.rut && y.rut === s.rut) || (y.nombre && y.nombre === s.nombre)) || {}), ...s }));
+  if (antes) R.firmas[i] = f; else R.firmas.unshift(f);
+  if (texto) for (const pid of propIds) log(pid, texto);
+  guardarTodo(); H.cambio('propiedades');
+  return f;
+}
+function actualizarFirma(operacion, fn, texto = null) {
+  const op = Number(operacion); if (!op) return null;
+  if (!API) {
+    let hecho = null;
+    for (const p of P()) { const f = (p.firmas || []).find((y) => Number(y.operacion) === op); if (f) { parchear(p.id, () => fn(f), texto); hecho ||= f; } }
+    return hecho;
+  }
+  const f = R.firmas.find((x) => Number(x.operacion) === op); if (!f) return null;
+  fn(f); if (texto) for (const pid of f.propIds || []) log(pid, texto);
+  guardarTodo(); H.cambio('propiedades');
+  return f;
+}
+const firmaDeOperacion = (op) => (API ? R.firmas.find((x) => Number(x.operacion) === Number(op)) : todasLasFirmas().find((x) => Number(x.operacion) === Number(op))) || null;
+// p.firmas calculado (con la API): se define en cada propiedad que entra a la copia
+function conFirmas(p) {
+  if (API && !Object.getOwnPropertyDescriptor(p, 'firmas')?.get) Object.defineProperty(p, 'firmas', { get() { return firmasDe(this.id); }, set() {}, enumerable: true, configurable: true });
+  return p;
+}
+// las firmas de las propiedades (extrasProp) y el historial de «Mis operaciones» de este equipo se suben una vez
+async function subirFirmasLocales(historial = []) {
+  const d = db(); if (d.firmasSubidas) return;
+  const m = new Map();
+  const agregar = (x, pid) => {
+    const op = Number(x.operacion ?? x.operation);
+    const id = op ? 'op' + op : 'fx' + require('crypto').createHash('sha1').update(`${pid}|${x.fecha || x.date}|${x.plantilla || x.name}`).digest('hex').slice(0, 14);
+    const a = m.get(id) || { id, propIds: [] };
+    // los firmantes de la misma operación (propiedad e historial) se juntan por RUT o nombre
+    const fs0 = a.firmantes || []; const fs1 = (x.firmantes || []).map((f) => ({ ...f, rol: f.rol || f.calidad || null }));
+    const firmantes = fs0.length && fs1.length ? fs0.map((f) => ({ ...(fs1.find((y) => (y.rut && y.rut === f.rut) || (y.nombre && y.nombre === f.nombre)) || {}), ...f })) : fs0.length ? fs0 : fs1;
+    m.set(id, { ...a, ...x, firmantes, id, operacion: op || null, plantilla: x.plantilla || x.name || a.plantilla || 'Documento', fecha: x.fecha || x.date || a.fecha, propIds: [...new Set([...a.propIds, ...(pid ? [pid] : []), ...(x.propId ? [x.propId] : [])])] });
+  };
+  for (const [pid, ex] of Object.entries(d.extrasProp || {})) for (const f of ex.firmas || []) agregar(f, pid);
+  for (const h of historial) if (Number(h.operation)) agregar({ operacion: h.operation, plantilla: h.name, fecha: h.date, origen: h.origen || (h.bulk ? 'masiva' : 'editor'), negocioId: h.negocioId || null, tipoFirma: h.tipoFirma || null, tramite: h.tramite || null, firmantes: h.firmantes || [] }, null);
+  const items = [...m.values()].map(({ operation, name, date, propId, ...x }) => x);
+  for (let i = 0; i < items.length; i += 200) await asset().llamar('POST', '/firmas/importar', { items: items.slice(i, i + 200) });
+  for (const ex of Object.values(d.extrasProp || {})) delete ex.firmas;
+  for (const [pid, ex] of Object.entries(d.extrasProp || {})) if (!Object.keys(ex).length) delete d.extrasProp[pid];
+  d.firmasSubidas = now(); save();
+}
+// «Mis operaciones»: lo enviado desde Asset, como lo usan sync.js y la pantalla de operaciones
+// ({ operation, name, date, propId, negocioId, origen, firmantes, tipoFirma, tramite }). Con la API sale de las firmas.
+function historialEnvios() {
+  if (!API) return require('./store').get('history') || [];
+  return todasLasFirmas().filter((f) => f.operacion).map((f) => ({ operation: f.operacion, name: f.plantilla, date: f.fecha, propId: (f.propIds || [])[0] || null, negocioId: f.negocioId || null,
+    origen: f.origen || null, firmantes: (f.firmantes || []).map((s) => ({ ...s, calidad: s.calidad || s.rol || null })), tipoFirma: f.tipoFirma || null, tramite: f.tramite || null, ...(f.origen === 'masiva' ? { bulk: true } : {}) }));
+}
+/** Registra un envío (con o sin propiedad). h: { operation, name, propId?, negocioId?, origen?, firmantes?, tipoFirma?, tramite?, bulk? } */
+function registrarEnvio(h) {
+  const op = Number(String(h.operation ?? '').replace(/\D/g, ''));
+  if (!API) { const st = require('./store'); const l = st.get('history') || []; const i = op ? l.findIndex((x) => Number(x.operation) === op) : -1; const e = { ...h, date: h.date || now() };
+    if (i >= 0) l[i] = { ...l[i], ...e }; else l.unshift(e); st.set('history', l.slice(0, 500)); return e; }
+  if (!op) return null;
+  return agregarFirma({ operacion: op, plantilla: h.name || 'Documento', fecha: h.date || now(), origen: h.origen || (h.bulk ? 'masiva' : 'editor'), negocioId: h.negocioId || null,
+    tipoFirma: h.tipoFirma || null, tramite: h.tramite || null, ...(h.firmantes?.length ? { firmantes: h.firmantes.map((s) => ({ ...s, rol: s.rol || s.calidad || null })) } : {}) }, h.propId ? [h.propId] : []);
 }
 
 // ---------- cola de escrituras (serializada) ----------
@@ -375,7 +469,7 @@ function recibirRespuesta(ruta, x) {
   if (!x || typeof x !== 'object' || !x.id) return;
   if (/^\/propiedades\//.test(ruta)) recibirProp(x); else if (/^\/personas\//.test(ruta)) recibirPer(x);
   else if (/^\/negocios\//.test(ruta)) recibirDoc('neg', x); else if (/^\/eventos\//.test(ruta)) recibirDoc('ev', x);
-  else if (/^\/leads\/[^/]+$/.test(ruta)) recibirDoc('lead', x);
+  else if (/^\/leads\/[^/]+$/.test(ruta)) recibirDoc('lead', x); else if (/^\/firmas\//.test(ruta)) recibirDoc('firma', x);
 }
 // manda lo que cambió de una propiedad o persona (contra lo último que mandó el servidor) con su versión
 async function enviarDiferencia(tipo, id) {
@@ -397,7 +491,7 @@ async function fallo(op, e) {
     try { if (e.datos?.visible) await recargarDoc('lead', e.datos.id); await H.leads.alDuplicado(id, e.datos || {}); } catch (e2) { console.warn('[inmo] lead duplicado:', e2.message); }
     H.cambio('leads'); return;
   }
-  const tipoDoc = DOCS[op.tipo] ? op.tipo : /^\/negocios\//.test(op.ruta || '') ? 'neg' : /^\/eventos\//.test(op.ruta || '') ? 'ev' : /^\/leads\//.test(op.ruta || '') ? 'lead' : null;
+  const tipoDoc = DOCS[op.tipo] ? op.tipo : /^\/negocios\//.test(op.ruta || '') ? 'neg' : /^\/eventos\//.test(op.ruta || '') ? 'ev' : /^\/leads\//.test(op.ruta || '') ? 'lead' : /^\/firmas\//.test(op.ruta || '') ? 'firma' : null;
   if (tipoDoc) {
     const D = DOCS[tipoDoc]; const id = op.id || decodeURIComponent(String(op.ruta).split('/')[2]);
     if (op.metodo === 'DELETE' && e.status === 404) { R.base.delete(D.pref + id); return; }
@@ -440,13 +534,15 @@ async function cargarTodo() {
   remapearLegado();
   try { await subirNegociosEventos(); } catch (e) { console.warn('[inmo] negocios y eventos locales sin subir:', e.message); }
   try { const t = await H.leads?.subirLocales?.(); if (t) H.avisar(t); } catch (e) { console.warn('[inmo] leads locales sin subir:', e.message); }
-  const [n, e, ld] = await Promise.all([traer('/negocios'), traer('/eventos'), traer('/leads')]);
+  try { await subirFirmasLocales(H.historialLocal ? H.historialLocal() : []); } catch (e) { console.warn('[inmo] firmas locales sin subir:', e.message); }
+  const [n, e, ld, fi] = await Promise.all([traer('/negocios'), traer('/eventos'), traer('/leads'), traer('/firmas')]);
   R.negs.length = 0; for (const x of n.items) if (!x.eliminado) { R.base.set('n:' + x.id, clonar(x)); R.negs.push(clonar(x)); }
   R.evs.length = 0; for (const x of e.items) if (!x.eliminado) { R.base.set('e:' + x.id, clonar(x)); R.evs.push(clonar(x)); }
   R.leads.length = 0; for (const x of ld.items) if (!x.eliminado) { R.base.set('l:' + x.id, clonar(x)); R.leads.push(clonar(x)); }
+  R.firmas.length = 0; for (const x of fi.items) if (!x.eliminado) { R.base.set('f:' + x.id, clonar(x)); R.firmas.push(clonar(x)); }
   R.negs.sort((x, y) => String(y.creado).localeCompare(String(x.creado)));
   R.leads.sort((x, y) => String(y.creado).localeCompare(String(x.creado)));
-  R.marca = { p: marcaDe(a.marca), c: marcaDe(b.marca), n: marcaDe(n.marca), e: marcaDe(e.marca), l: marcaDe(ld.marca) }; R.listo = true;
+  R.marca = { p: marcaDe(a.marca), c: marcaDe(b.marca), n: marcaDe(n.marca), e: marcaDe(e.marca), l: marcaDe(ld.marca), f: marcaDe(fi.marca) }; R.listo = true;
 }
 let sincronizando = null;
 function sincronizar() {
@@ -512,7 +608,7 @@ async function iniciar(u) {
   const antes = R.usuario;
   R.usuario = u ? { id: u.id, rol: u.rol, nombre: u.nombre, corredoraId: u.corredoraId } : null;
   if (!API || !u) return;
-  if (antes && (antes.corredoraId !== u.corredoraId || antes.id !== u.id)) { R.listo = false; R.base.clear(); R.props.length = 0; R.pers.length = 0; R.negs.length = 0; R.evs.length = 0; R.leads.length = 0; }
+  if (antes && (antes.corredoraId !== u.corredoraId || antes.id !== u.id)) { R.listo = false; R.base.clear(); R.props.length = 0; R.pers.length = 0; R.negs.length = 0; R.evs.length = 0; R.leads.length = 0; R.firmas.length = 0; }
   const g = leerCola();
   if (g?.ops?.length && !cola.length) { if (g.usuarioId === u.id) cola.push(...g.ops); else escribirCola(null); }
   if (!R.listo) { try { await (R.cargando ||= cargarTodo().finally(() => { R.cargando = null; })); } catch (e) { H.avisar(`No se pudo cargar la cartera desde el servidor: ${e.message}`); } }
@@ -526,7 +622,7 @@ async function cerrar() {
   if (API) {
     await esperarCola(4000); persistirCola();
     for (const op of cola) if (op.tipo === 'fn') op.rechazar(err('Se cerró la sesión de PortalFirma Asset.', 'NEEDS_ASSET_LOGIN'));
-    cola.length = 0; if (reloj) { clearInterval(reloj); reloj = null; } R.listo = false; R.base.clear(); R.props.length = 0; R.pers.length = 0; R.negs.length = 0; R.evs.length = 0; R.leads.length = 0; }
+    cola.length = 0; if (reloj) { clearInterval(reloj); reloj = null; } R.listo = false; R.base.clear(); R.props.length = 0; R.pers.length = 0; R.negs.length = 0; R.evs.length = 0; R.leads.length = 0; R.firmas.length = 0; }
   R.usuario = null;
 }
 const usuario = () => R.usuario;
@@ -1041,4 +1137,4 @@ const _reset = () => { cache = null; };
 module.exports = { personaDesdeLead, esEmpresa, eventos, negocios, personaPorId, registrar, obtener, parchear, todas, config, guardarConfig, registrarLead, guardar: guardarTodo, TIPOS, ESTADOS, ROLES, validRut, fmtRut, listar, resumen, guardarPropiedad, archivarPropiedad, guardarPersona, borrarPersona, vincular, desvincular,
   nota, actividadDe, actividadTodas, agregarDocumentos, quitarDocumento, docPath, mostrarCarpeta, subirFotos, importarPF, desdePF, exportarDatos, _reset,
   // repositorio (sesión de Asset y sincronización)
-  API, configurar, iniciar, cerrar, sincronizar, leadsLista: () => R.leads, encolarMensajes, subirR2, recargarLead: (id) => recargarDoc('lead', id), esperarCola, usuario, listo, asignarCaptador, asignarVarios };
+  API, configurar, iniciar, cerrar, sincronizar, firmasDe, todasLasFirmas, agregarFirma, actualizarFirma, firmaDeOperacion, historialEnvios, registrarEnvio, leadsLista: () => R.leads, encolarMensajes, subirR2, recargarLead: (id) => recargarDoc('lead', id), esperarCola, usuario, listo, asignarCaptador, asignarVarios };

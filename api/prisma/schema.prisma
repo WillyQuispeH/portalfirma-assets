@@ -36,6 +36,7 @@ model Corredora {
   negocios        Negocio[]
   eventos         Evento[]
   leads           Lead[]
+  firmas          Firma[]
 
   @@map("corredoras")
 }
@@ -70,6 +71,7 @@ model Usuario {
   negocios       Negocio[]   @relation("negocioCorredor")
   eventos        Evento[]    @relation("eventoCorredor")
   leads          Lead[]      @relation("leadCorredor")
+  firmasEnviadas Firma[]     @relation("firmaEnviadaPor")
 
   @@index([corredoraId])
   @@map("usuarios")
@@ -483,4 +485,51 @@ model LeadMensaje {
   @@unique([leadId, k])
   @@index([leadId, actualizadoEn])
   @@map("lead_mensajes")
+}
+
+// ============================================================================ firmas
+
+/// Un documento enviado a firmar desde Asset (firmas.js de la app): la operación de Portalfirma, a qué propiedades y
+/// negocio pertenece, quién lo envió, sus firmantes (con su calidad y si ya firmaron) y su estado. Reemplaza la lista
+/// `firmas` que cada propiedad guardaba en el equipo que la envió y el historial local de «Mis operaciones».
+/// Id: «op<número>» cuando hay operación (dos equipos que registran la misma operación escriben la misma fila).
+/// Visible para toda la corredora; los firmantes que son dueños se reservan a quien no captó la propiedad.
+model Firma {
+  id            String    @id
+  corredoraId   String    @map("corredora_id") @db.Uuid
+  operacion     Int?
+  /// nombre del documento (plantilla, formato o archivo)
+  documento     String
+  /// plantilla | asset | formato | agente | editor | masiva…
+  origen        String    @default("asset")
+  /// en_firma | firmado | anulado | rechazado | pendiente_pago
+  estado        String    @default("en_firma")
+  legalizado    Boolean   @default(false)
+  firmados      Int       @default(0)
+  total         Int       @default(0)
+  propiedadIds  String[]  @default([]) @map("propiedad_ids")
+  negocioId     String?   @map("negocio_id")
+  enviadoPorId  String?   @map("enviado_por_id") @db.Uuid
+  enviadoEn     DateTime  @default(now()) @map("enviado_en")
+  firmadoEn     DateTime? @map("firmado_en")
+  /// última vez que alguien consultó la operación en Portalfirma
+  revisadoEn    DateTime? @map("revisado_en")
+  /// [{ nombre, rut, rol, personaId, email, telefono, firmo }]
+  firmantes     Json      @default("[]")
+  /// el resto (plantillaId, formato, hito, número, archivo, tipo de firma, trámite…)
+  datos         Json      @default("{}")
+  version       Int       @default(1)
+  creadoEn      DateTime  @default(now()) @map("creado_en")
+  actualizadoEn DateTime  @updatedAt @map("actualizado_en")
+  eliminadoEn   DateTime? @map("eliminado_en")
+
+  corredora  Corredora @relation(fields: [corredoraId], references: [id], onDelete: Restrict)
+  enviadoPor Usuario?  @relation("firmaEnviadaPor", fields: [enviadoPorId], references: [id], onDelete: SetNull)
+
+  @@unique([corredoraId, operacion])
+  @@index([corredoraId, actualizadoEn])
+  @@index([corredoraId, estado])
+  @@index([corredoraId, negocioId])
+  @@index([propiedadIds], type: Gin)
+  @@map("firmas")
 }

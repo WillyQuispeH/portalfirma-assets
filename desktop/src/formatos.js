@@ -256,7 +256,7 @@ function crear({ inmo, pf, renderPdf, dir, cambiarPropiedad, firmas = null, nego
       tipoFirma: fm.tipo, tramite: fm.tramite,
       firmantes: sig.map((s) => ({ nombre: s.nombre, rut: inmo.fmtRut(s.rut), rol: s.alias, titulo: s.titulo, personaId: s.personaId || null, email: s.email, telefono: s.telefono, firmo: false })), negocioId: null };
     firmas?.registrar({ operacion: op, nombre: esOrden ? `${f.titulo} nº ${o.numero}` : f.titulo, propId: p.id, firmantes: sig.map((s) => ({ nombre: s.nombre, rut: s.rut, alias: s.alias, email: s.email, telefono: s.telefono })), origen: 'formato', tipoFirma: fm.tipo, tramite: fm.tramite });
-    for (const q of [p, ...(o.otras || []).map((id) => inmo.obtener(id)).filter(Boolean)]) inmo.parchear(q.id, (pp) => { pp.firmas ||= []; pp.firmas.unshift({ ...doc }); pp.firmas.length = Math.min(pp.firmas.length, 100); }, `«${f.titulo}»${esOrden ? ' nº ' + o.numero : ''} enviado a firmar (operación ${op})`);
+    inmo.agregarFirma(doc, [p, ...(o.otras || []).map((id) => inmo.obtener(id)).filter(Boolean)].map((q) => q.id), `«${f.titulo}»${esOrden ? ' nº ' + o.numero : ''} enviado a firmar (operación ${op})`);
     const d = esOrden ? (personaId ? inmo.personaPorId(personaId) : null) : dueno(p); if (d) inmo.registrar(d.id, `Firma «${f.titulo}» · operación ${op}`, { ref2: p.id });
     return { ok: true, operacion: op, documento: f.titulo, numero: o.numero || null, archivo: a, propiedad: { id: p.id, codigo: p.codigo }, firmantes: doc.firmantes, pago: r?.payment || null };
   }

@@ -3,6 +3,8 @@
 // guarda una copia local para abrir rápido y consulta el detalle (firmantes y versiones) solo cuando se abre.
 const fs = require('fs'); const path = require('path'); const { app } = require('electron');
 const store = require('./store');
+// lo enviado desde Asset: con la cuenta de Asset sale de la base (firmas); en modo de prueba, del historial local
+const historial = () => { const inmo = require('./inmo'); return inmo.API ? inmo.historialEnvios() : store.get('history') || []; };
 
 const YEARS_BACK = 3;            // historia que se trae la primera vez
 const PAGE = 100;                // máximo del conector por consulta
@@ -61,7 +63,7 @@ async function sync({ full = false } = {}) {
       }
     }
     // los envíos hechos desde esta app también aparecen (aunque se hayan creado con otro teléfono)
-    for (const h of store.get('history') || []) {
+    for (const h of historial()) {
       const n = Number(String(h.operation ?? '').replace(/\D/g, '')); if (!n || c.items[n]) continue;
       c.items[n] = { operation: n, name: h.name || 'Documento', stage: 'process', created: h.date, updated: h.date, local: true };
     }
@@ -90,7 +92,7 @@ async function apiSync() {
     }
   }
   // lo enviado desde Asset también (0.16.16): aunque la cuenta todavía no lo liste, queda a la vista con su propiedad
-  for (const h of store.get('history') || []) { const n = Number(String(h.operation ?? '').replace(/\D/g, '')); if (!n) continue; seen.add(n); if (!c.items[n]) c.items[n] = { operation: n, name: h.name || 'Documento', stage: 'process', created: h.date, updated: h.date, local: true }; }
+  for (const h of historial()) { const n = Number(String(h.operation ?? '').replace(/\D/g, '')); if (!n) continue; seen.add(n); if (!c.items[n]) c.items[n] = { operation: n, name: h.name || 'Documento', stage: 'process', created: h.date, updated: h.date, local: true }; }
   for (const op of Object.keys(c.items)) if (!seen.has(Number(op))) { delete c.items[op]; delete c.details[op]; }
   c.lastSync = new Date().toISOString(); save(c);
   return { ...list(), found: seen.size };
@@ -99,7 +101,7 @@ const apiSummary = (it) => (it.sig ? { status: it.stage === 'finalized' ? 'final
 
 function list() {
   const c = cache();
-  const hist = Object.fromEntries((store.get('history') || []).filter((h) => h && h.operation).map((h) => [Number(h.operation), h]));
+  const hist = Object.fromEntries(historial().filter((h) => h && h.operation).map((h) => [Number(h.operation), h]));
   const base = { ...c.items }; for (const [n, h] of Object.entries(hist)) if (!base[n]) base[n] = { operation: Number(n), name: h.name || 'Documento', stage: 'process', created: h.date, updated: h.date, local: true };   // recién enviado desde Asset
   const items = Object.values(base).map((it) => { const h = hist[it.operation]; return { ...it, ...apiSummary(it), ...summary(c.details[it.operation]?.d), ...(h?.propId || h?.origen ? { asset: { propId: h.propId || null, negocioId: h.negocioId || null, origen: h.origen || null, firmantes: h.firmantes || [], tipoFirma: h.tipoFirma || null, tramite: h.tramite || null } } : {}) }; })
     .sort((a, b) => String(b.updated || b.created).localeCompare(String(a.updated || a.created)));

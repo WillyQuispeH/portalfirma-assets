@@ -190,7 +190,7 @@ function crear({ inmo, negocios, pf, firmas = null }) {
     if (op) firmas?.registrar({ operacion: op, nombre: f.plantilla.nombre, propId: f.propiedad?.id || null, negocioId: o.negocioId || null, firmantes: doc.firmantes.map((x) => ({ ...x, alias: x.rol })), origen: 'plantilla' });
     let negMsg = null;
     if (o.negocioId && op) { const n = negocios.ver(o.negocioId); if (n?.etapaInfo?.firma) { negocios.vincularFirma(n.id, n.etapa, op); doc.negocioId = n.id; negMsg = `Quedó ligado a la etapa «${n.etapaInfo.t}» del negocio: cuando se firme, avanza solo.`; } }
-    if (f.propiedad) inmo.parchear(f.propiedad.id, (p) => { p.firmas ||= []; p.firmas.unshift(doc); p.firmas.length = Math.min(p.firmas.length, 100); }, `Documento «${f.plantilla.nombre}» enviado a firmar${op ? ' (operación ' + op + ')' : ''}`);
+    if (f.propiedad) inmo.agregarFirma(doc, [f.propiedad.id], `Documento «${f.plantilla.nombre}» enviado a firmar${op ? ' (operación ' + op + ')' : ''}`);
     else inmo.guardar();
     return { ok: true, operacion: op, plantilla: f.plantilla.nombre, propiedad: f.propiedad, firmantes: doc.firmantes, negocio: negMsg, mensaje: String(r.text).slice(0, 300) };
   }
@@ -203,7 +203,7 @@ function crear({ inmo, negocios, pf, firmas = null }) {
     const firm = (d.signatories || []).map((s) => ({ nombre: s.name, rut: s.rut, firmo: !!s.signed }));
     const listo = d.status === 'finalized' || (firm.length && firm.every((s) => s.firmo));
     const estado = listo ? 'firmado' : d.status === 'unPayed' ? 'pendiente_pago' : 'en_firma';
-    for (const p of inmo.todas()) { const x = (p.firmas || []).find((y) => y.operacion === op); if (x && x.estado !== estado) inmo.parchear(p.id, () => { x.estado = estado; }, estado === 'firmado' ? `«${x.plantilla}» firmado por todos (operación ${op})` : null); }
+    { const x = inmo.firmaDeOperacion(op); if (x && x.estado !== estado) inmo.actualizarFirma(op, (y) => { y.estado = estado; }, estado === 'firmado' ? `«${x.plantilla}» firmado por todos (operación ${op})` : null); }
     return { operacion: op, estado, estadoTxt: { firmado: 'Firmado por todos', pendiente_pago: 'Pendiente de pago', en_firma: 'En firma' }[estado], firmados: firm.filter((s) => s.firmo).length, total: firm.length, firmantes: firm, archivos: (d.files || []).map((x) => x.fileName) };
   }
 

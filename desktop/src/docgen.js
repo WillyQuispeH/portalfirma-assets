@@ -209,7 +209,7 @@ function crear({ inmo, negocios, docs, ai, pf, renderPdf, dir, mock = false, fir
     let negMsg = null;
     if (o.negocioId) { const n = negocios.ver(o.negocioId); if (n?.etapaInfo?.firma) { negocios.vincularFirma(n.id, n.etapa, op); doc.negocioId = n.id; negMsg = `Quedó ligado a la etapa «${n.etapaInfo.t}» del negocio: cuando se firme, avanza solo.`; } }
     firmas?.registrar({ operacion: op, nombre: o.titulo, propId: p?.id || null, negocioId: doc.negocioId, firmantes: firm.map((f) => ({ nombre: f.nombre, rut: f.rut, alias: f.alias, email: f.email, telefono: f.telefono })), origen: 'asset' });
-    if (p) inmo.parchear(p.id, (pp) => { pp.firmas ||= []; pp.firmas.unshift(doc); pp.firmas.length = Math.min(pp.firmas.length, 100); }, `«${o.titulo}» creado en Asset y enviado a firmar (operación ${op})`);
+    if (p) inmo.agregarFirma(doc, [p.id], `«${o.titulo}» creado en Asset y enviado a firmar (operación ${op})`);
     else { const l = inmo.config().documentosSueltos || []; l.unshift(doc); inmo.guardarConfig({ documentosSueltos: l.slice(0, 100) }); }
     return { ok: true, operacion: op, plantilla: o.titulo, archivo, propiedad: p ? { id: p.id, codigo: p.codigo } : null, firmantes: doc.firmantes, negocio: negMsg, pago: r?.payment || null };
   }

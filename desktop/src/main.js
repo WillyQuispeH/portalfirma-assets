@@ -379,9 +379,7 @@ handle('tpl:forms', (id) => pf.templateForms(id));
 handle('tpl:send', async (id, values, name) => {
   const r = await pf.templateSend(id, values);
   const operation = r?.operation ?? r?.operationNumber ?? r?.data?.operation ?? findKey(r, /operation/i);
-  const history = store.get('history') || [];
-  history.unshift({ operation, name: name || 'Plantilla notarial', date: new Date().toISOString() });
-  store.set('history', history.slice(0, 200));
+  if (operation) inmo.registrarEnvio({ operation, name: name || 'Plantilla notarial', origen: 'notaria' }); // «Mis operaciones»
   return { raw: r, operation };
 });
 handle('open:path', (p) => { shell.showItemInFolder(p); return true; });
@@ -431,9 +429,7 @@ handle('doc:send', async (payload) => {
     const code = /status code (\d+)/.exec(msg)?.[1];
     throw new Error(code ? `Portalfirma no pudo crear la operación (error ${code} del servidor). Revisa «Mis operaciones» antes de reintentar, para no duplicarla.` : msg);
   }
-  const history = store.get('history') || [];
-  history.unshift({ operation, name: payload.__fileName, date: new Date().toISOString() });
-  store.set('history', history.slice(0, 200));
+  if (operation) inmo.registrarEnvio({ operation, name: payload.__fileName, origen: 'editor' }); // «Mis operaciones»
   return { raw: r, operation };
 });
 
@@ -669,6 +665,7 @@ handle('op:detail', (n) => {
 handle('op:manage', (args) => pf.manage(args));
 handle('op:byRut', (rut, start, end) => pf.byRut(rut, start, end));
 handle('history:list', () => { // los envíos que fallaron (sin número de operación) no se muestran
+  if (inmo.API) return inmo.historialEnvios();
   const h = (store.get('history') || []).filter((x) => x && x.operation != null && x.operation !== '');
   store.set('history', h); return h;
 });
@@ -720,7 +717,7 @@ function findUrl(obj) {
 // ---- PortalFirma Asset: cartera, personas y actividad (base local) ----
 const inmo = require('./inmo');
 global.__inmo = inmo; // las pruebas e2e lo usan desde el proceso principal (app.evaluate)
-inmo.configurar({ avisar: (texto) => toUI('agent:event', { type: 'aviso', texto }), cambio: (que) => toUI('agent:event', { type: 'datos', que: que || 'propiedades' }), nombreUsuario: (id) => equipo.nombre(id) });
+inmo.configurar({ historialLocal: () => store.get('history') || [], avisar: (texto) => toUI('agent:event', { type: 'aviso', texto }), cambio: (que) => toUI('agent:event', { type: 'datos', que: que || 'propiedades' }), nombreUsuario: (id) => equipo.nombre(id) });
 const ml = require('./portales/mercadolibre');
 const negocios = require('./negocios');
 // Un cambio en la ficha (desde un botón, un negocio o el agente) mantiene al día el aviso del portal

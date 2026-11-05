@@ -5,6 +5,9 @@
 //  · Sigue solo cada operación en firma: quién firmó, quién falta, cuándo quedó lista o legalizada; avisa al ejecutivo.
 //  · Revisa correo y celular de cada firmante ANTES de enviar (para que el enlace de Portalfirma llegue) y permite
 //    corregir el dato de un firmante y reenviarle el enlace. Los enlaces los envía Portalfirma, no Asset.
+//  · Con la cuenta de Asset, el registro vive en la base (tabla firmas, vía inmo: agregarFirma, actualizarFirma,
+//    todasLasFirmas, registrarEnvio): toda la corredora ve qué está en firma. La ronda la hace el equipo de quien
+//    envió (la consulta a Portalfirma va con su cuenta) y lo que encuentra queda en la base para todos.
 'use strict';
 const store = require('./store');
 
@@ -72,20 +75,25 @@ function crear({ inmo, pf, negocios = null, aviso = () => {}, alDetalle = () => 
   // ---------- registro en «Mis operaciones» ----------
   function registrar({ operacion, nombre, propId = null, negocioId = null, firmantes = [], origen = 'asset', tipoFirma = null, tramite = null }) {
     const op = Number(operacion); if (!op) return null;
-    const h = store.get('history') || []; const i = h.findIndex((x) => Number(x.operation) === op);
     const e = { operation: op, name: nombre, date: new Date().toISOString(), propId, negocioId, origen, tipoFirma, tramite,
       firmantes: firmantes.map((f) => ({ nombre: f.nombre, rut: f.rut, calidad: calidad(f.alias || f.calidad || f.rol), email: f.email || '', telefono: f.telefono || '' })) };
+    if (inmo.registrarEnvio) { inmo.registrarEnvio(e); return e; }
+    const h = store.get('history') || []; const i = h.findIndex((x) => Number(x.operation) === op);
     if (i >= 0) h[i] = { ...h[i], ...e }; else h.unshift(e);
     store.set('history', h.slice(0, 500)); return e;
   }
-  const meta = (op) => (store.get('history') || []).find((x) => Number(x.operation) === Number(op)) || null;
+  const meta = (op) => (inmo.historialEnvios ? inmo.historialEnvios() : store.get('history') || []).find((x) => Number(x.operation) === Number(op)) || null;
 
   // ---------- documentos en firma (los de la cartera) ----------
-  function enFirma() {
-    const out = [];
-    for (const p of inmo.todas()) for (const f of p.firmas || []) if (f.operacion && !['firmado', 'anulado', 'rechazado'].includes(f.estado)) out.push({ p, f });
-    return out;
+  // cada firma con su (primera) propiedad: { p, f }
+  function conPropiedad(f) { const ids = f.propIds || []; return { p: ids.length ? inmo.todas().find((x) => ids.includes(x.id)) || null : null, f }; }
+  function enFirmaTodas() {
+    if (inmo.todasLasFirmas) return inmo.todasLasFirmas().filter((f) => f.operacion).map(conPropiedad);
+    const out = []; for (const p of inmo.todas()) for (const f of p.firmas || []) if (f.operacion) out.push({ p, f }); return out;
   }
+  const enFirma = () => enFirmaTodas().filter(({ f }) => !['firmado', 'anulado', 'rechazado'].includes(f.estado));
+  // la ronda revisa lo que envió este usuario (con la API; la consulta a Portalfirma va con su cuenta)
+  const mia = (f) => !inmo.API || !f.enviadoPorId || f.enviadoPorId === inmo.usuario?.()?.id;
   const dias = (iso) => Math.floor((Date.now() - new Date(iso).getTime()) / 864e5);
   // detalle de Portalfirma → estado normalizado
   function leerDetalle(d, previo) {
@@ -118,8 +126,7 @@ function crear({ inmo, pf, negocios = null, aviso = () => {}, alDetalle = () => 
       for (const s of x.firmantes) if (s.firmo && !yaFirmaron.has(inmo.fmtRut(s.rut))) cambios.push(`${s.nombre || 'Un firmante'}${s.calidad ? ` (${s.calidad})` : ''} firmó «${antes.plantilla}»`);
       if (x.estado === 'firmado' && antes.estado !== 'firmado') cambios.push(`«${antes.plantilla}» quedó firmado por todos`);
       if (x.legalizado && !antes.legalizado) cambios.push(`«${antes.plantilla}» quedó legalizado`);
-      inmo.parchear(loc.p.id, (pp) => {
-        const f = (pp.firmas || []).find((y) => Number(y.operacion) === op); if (!f) return;
+      inmo.actualizarFirma(op, (f) => {
         const prevF = f.firmantes || [];
         f.firmantes = x.firmantes.map((s) => ({ ...(prevF.find((y) => y.rut && inmo.fmtRut(y.rut) === inmo.fmtRut(s.rut)) || {}), nombre: s.nombre || undefined, rut: s.rut ? inmo.fmtRut(s.rut) : '', rol: s.calidad || prevF.find((y) => inmo.fmtRut(y.rut) === inmo.fmtRut(s.rut))?.rol || '', firmo: s.firmo, email: s.email, telefono: s.telefono }));
         if (x.estado === 'firmado' && f.estado !== 'firmado') f.firmado = new Date().toISOString();
@@ -127,18 +134,17 @@ function crear({ inmo, pf, negocios = null, aviso = () => {}, alDetalle = () => 
       }, cambios.length ? cambios.join(' · ') + ` (operación ${op})` : null);
       if (x.estado === 'firmado' && negocios && loc.f.negocioId) await negocios.revisarFirmas(pf, loc.f.negocioId).catch(() => null);   // el negocio avanza solo
     }
-    return { operacion: op, ...x, documento: loc?.f.plantilla || meta(op)?.name || null, propiedad: loc ? { id: loc.p.id, codigo: loc.p.codigo } : null, cambios,
+    return { operacion: op, ...x, documento: loc?.f.plantilla || meta(op)?.name || null, propiedad: loc?.p ? { id: loc.p.id, codigo: loc.p.codigo } : null, cambios,
       pendientes: x.firmantes.filter((s) => !s.firmo).map((s) => ({ nombre: s.nombre, calidad: s.calidad, email: s.email, telefono: s.telefono })),
       diasEnFirma: loc ? dias(loc.f.fecha) : null };
   }
-  function enFirmaTodas() { const out = []; for (const p of inmo.todas()) for (const f of p.firmas || []) if (f.operacion) out.push({ p, f }); return out; }
 
   // ronda automática: revisa lo que está en firma (de a uno, sin apuro) y avisa los cambios al ejecutivo
   let corriendo = false;
   async function ronda() {
     if (corriendo) return []; corriendo = true; const avisos = [];
     try {
-      for (const { f } of enFirma()) {
+      for (const { f } of enFirma().filter(({ f }) => mia(f))) {
         if (f.revisado && Date.now() - new Date(f.revisado).getTime() < 4 * 60 * 1000) continue;
         try { const r = await revisar(f.operacion); if (r.cambios.length) { avisos.push(...r.cambios); aviso(r); } } catch (e) { if (e.code === 'NEEDS_LOGIN') break; }
       }
@@ -151,7 +157,7 @@ function crear({ inmo, pf, negocios = null, aviso = () => {}, alDetalle = () => 
   }
   // lista para el agente y para «Hoy»: qué está en firma, quién falta y hace cuántos días
   function pendientes({ propId = null } = {}) {
-    return enFirma().filter((x) => !propId || x.p.id === propId).map(({ p, f }) => ({ operacion: f.operacion, documento: f.plantilla, propiedad: p.codigo, estado: f.estado, dias: dias(f.fecha),
+    return enFirma().filter((x) => x.p && (!propId || x.p.id === propId)).map(({ p, f }) => ({ operacion: f.operacion, documento: f.plantilla, propiedad: p.codigo, estado: f.estado, dias: dias(f.fecha),
       firmados: (f.firmantes || []).filter((s) => s.firmo).length, total: (f.firmantes || []).length,
       faltan: (f.firmantes || []).filter((s) => !s.firmo).map((s) => `${s.nombre}${s.rol ? ' (' + s.rol + ')' : ''}`),
       atrasada: dias(f.fecha) >= 3 && (f.firmantes || []).some((s) => !s.firmo) }));

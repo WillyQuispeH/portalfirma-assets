@@ -268,7 +268,7 @@ function crear({ inmo, negocios, agenda, ml, pf, cambiarPropiedad, docs, pubs, e
         if (est) await est.alAgendar(e).catch(() => null); // la visita (con o sin orden) es un hito del negocio
         if (!(x.p.vinculos || []).some((v) => v.personaId === c.id)) await inmo.vincular(x.p.id, c.id, 'interesado');
         if (op) firmas?.registrar({ operacion: op, nombre: 'Orden de visita', propId: x.p.id, firmantes: [{ nombre: c.nombre, rut: c.rut, alias: 'visitante', email: c.email, telefono: c.telefono }], origen: 'plantilla' });
-        inmo.parchear(x.p.id, (pp) => { pp.firmas ||= []; pp.firmas.unshift({ operacion: op, plantilla: 'Orden de visita', plantillaId: x.t.template_version_id, fecha: new Date().toISOString(), estado: 'en_firma', firmantes: [{ nombre: c.nombre, rut: c.rut, rol: 'Visitante', personaId: c.id }], negocioId: null }); pp.firmas.length = Math.min(pp.firmas.length, 100); }, `Orden de visita enviada a firmar a ${c.nombre}${op ? ' (operación ' + op + ')' : ''}`);
+        inmo.agregarFirma({ operacion: op, plantilla: 'Orden de visita', plantillaId: x.t.template_version_id, origen: 'agente', fecha: new Date().toISOString(), estado: 'en_firma', firmantes: [{ nombre: c.nombre, rut: c.rut, rol: 'Visitante', personaId: c.id }], negocioId: null }, [x.p.id], `Orden de visita enviada a firmar a ${c.nombre}${op ? ' (operación ' + op + ')' : ''}`);
         return { ok: true, operacion: op, visitante: c.nombre, evento: resumenEv(agenda.ver(e.id)), mensaje: String(r.text).slice(0, 300), efectos: { datos: 'agenda' } }; } },
 
 

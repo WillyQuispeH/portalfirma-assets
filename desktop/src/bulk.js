@@ -146,7 +146,8 @@ async function send(ids, { email, protocolization = 'none', typeSign = 'simple' 
         if (op == null) throw new Error(/status code (\d+)/.test(msg) ? `Portalfirma no pudo crear la operación (error ${/status code (\d+)/.exec(msg)[1]}). Revisa «Mis operaciones» antes de reintentar.` : msg || 'Portalfirma no devolvió el número de operación.');
         it.status = 'sent'; it.operation = op; it.error = '';
         if (it.hash) sentHashes.add(it.hash);
-        history.unshift({ operation: op, name: it.name, date: new Date().toISOString(), bulk: true });
+        // «Mis operaciones»: con la cuenta de Asset va a la base (firmas); en modo de prueba, al historial local
+        { const inmo = require('./inmo'); if (inmo.API) inmo.registrarEnvio({ operation: op, name: it.name, origen: 'masiva', bulk: true }); else history.unshift({ operation: op, name: it.name, date: new Date().toISOString(), bulk: true }); }
         try { onSent(it); } catch {}
       } catch (e) { it.status = 'send_error'; it.error = e.message || String(e); }
       store.set('bulkSentHashes', [...sentHashes].slice(-2000)); store.set('history', history.slice(0, 500));
