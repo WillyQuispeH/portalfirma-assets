@@ -13,10 +13,12 @@
 //    persona la cambió) o un rechazo recarga esa propiedad y avisa. Lo que llega del servidor se combina campo a campo
 //    con lo local que aún no se envía (no se pisa). El historial (actividad) de propiedades, personas, negocios y
 //    agenda va a /v1/actividad; registrar() también es sincrónico y se encola.
-//    Lo que la API todavía no guarda de una propiedad (firmas enviadas, documentos y fotos guardados en este
-//    computador) queda local, en datos.json › extrasProp (por id de propiedad), y se suma a la copia.
+//    Fotos y documentos van a R2 (ver «Archivos de la propiedad»). Lo que la API todavía no guarda de una propiedad
+//    (firmas enviadas, y documentos o fotos de antes de R2 que aún no se suben) queda local, en datos.json › extrasProp
+//    (por id de propiedad), y se suma a la copia.
 //  · Modo de prueba (PF_MOCK=1): todo en el JSON local de siempre (userData/inmo/datos.json), sin servidor.
-// En los dos modos siguen locales (otra fase): negocios, eventos de la agenda, configuración y la última importación.
+//    Negocios y eventos de la agenda también van a la API (PUT del documento completo; ver «negocios y eventos»).
+// En los dos modos siguen locales: la configuración y la última importación.
 'use strict';
 const fs = require('fs'); const path = require('path');
 const { app, shell } = require('electron');
@@ -84,8 +86,9 @@ function limpiarProp(o) {
 
 // ============================================================================ repositorio (copia en memoria)
 
-// usuario: el de la sesión de Asset · base: lo último que mandó el servidor de cada propiedad ('p:id') y persona ('c:id')
-const R = { usuario: null, props: [], pers: [], base: new Map(), marca: null, listo: false, cargando: null };
+// usuario: el de la sesión de Asset · base: lo último que mandó el servidor de cada propiedad ('p:id'), persona ('c:id'),
+// negocio ('n:id') y evento ('e:id')
+const R = { usuario: null, props: [], pers: [], negs: [], evs: [], base: new Map(), marca: null, listo: false, cargando: null };
 const P = () => (API ? R.props : db().propiedades);
 const C = () => (API ? R.pers : db().personas);
 // ganchos que pone main.js: avisar en pantalla, avisar que cambiaron datos y el nombre de un usuario del equipo
@@ -96,7 +99,7 @@ const configurar = (o = {}) => { Object.assign(H, o); };
 const CAMPOS_API = ['codigo', 'titulo', 'tipo', 'venta', 'arriendo', 'precioVenta', 'precioArriendo', 'estadoVenta', 'estadoArriendo', 'direccion', 'unidad', 'comuna', 'region', 'rol',
   'lat', 'lng', 'placeId', 'supTotal', 'supUtil', 'dormitorios', 'banos', 'estacionamientos', 'bodegas', 'amoblado', 'gastosComunes', 'descripcion', 'notasInternas', 'tituloPortal',
   'portalBarrio', 'etiquetas', 'ficha', 'portales', 'leads', 'fotos', 'corredor'];
-const DEL_SERVIDOR = new Set(['id', 'vinculos', 'duenoVisible', 'archivada', 'origen', 'editados', 'idLegado', 'version', 'creado', 'actualizado', 'eliminado', 'captadorId', 'captador']);
+const DEL_SERVIDOR = new Set(['id', 'documentos', 'vinculos', 'duenoVisible', 'archivada', 'origen', 'editados', 'idLegado', 'version', 'creado', 'actualizado', 'eliminado', 'captadorId', 'captador']);
 const MAX = { titulo: 160, codigo: 40, direccion: 300, unidad: 40, comuna: 80, region: 80, rol: 40, placeId: 300, descripcion: 20000, notasInternas: 5000, tituloPortal: 160, portalBarrio: 120 };
 const VACIO = { etiquetas: [], fotos: [], leads: [], portales: {}, venta: false, arriendo: false, amoblado: false };
 const ENTEROS = ['dormitorios', 'banos', 'estacionamientos', 'bodegas'];
@@ -179,6 +182,7 @@ function conExtras(p) {
   const ex = extrasDe(p.id); if (!ex) return p;
   for (const [k, v] of Object.entries(ex)) {
     if (k === 'fotos') p.fotos = [...v, ...(p.fotos || []).filter((u) => !v.includes(u))].slice(0, 60);
+    else if (k === 'documentos') p.documentos = [...clonar(v), ...(p.documentos || []).filter((d) => !v.some((x) => x.id === d.id))];
     else p[k] = clonar(v); // copia: lo guardado solo cambia con guardarExtras (así se detecta qué cambió)
   }
   return p;
@@ -186,6 +190,7 @@ function conExtras(p) {
 function guardarExtras(p) {
   const ex = {};
   for (const [k, v] of Object.entries(p)) if (!CAMPOS_API.includes(k) && !DEL_SERVIDOR.has(k) && !vacio(v)) ex[k] = v;
+  const docsLocales = (p.documentos || []).filter((d) => d.path); if (docsLocales.length) ex.documentos = docsLocales;
   if ((p.fotos || []).some((u) => !esWeb(u))) ex.fotos = p.fotos;
   const d = db(); d.extrasProp ||= {};
   const antes = JSON.stringify(d.extrasProp[p.id] || null); const nuevo = Object.keys(ex).length ? ex : null;
@@ -215,8 +220,72 @@ function recibirPer(x, vieja = null) {
   R.pers.unshift(nuevo); return nuevo;
 }
 
+// ---------- negocios y eventos de la agenda (documentos completos) ----------
+// negocios.js y agenda.js trabajan igual que siempre sobre las listas negocios() y eventos() y llaman a guardar().
+// Con la API, guardar() compara cada negocio y evento con lo último que mandó el servidor y encola un PUT con el
+// documento completo (o un DELETE si se quitó de la lista). El servidor aplica quién ve qué (el corredor, lo suyo).
+const DOCS = {
+  neg: { lista: () => R.negs, pref: 'n:', ruta: '/negocios', que: 'negocios', nombre: 'un negocio' },
+  ev: { lista: () => R.evs, pref: 'e:', ruta: '/eventos', que: 'agenda', nombre: 'un evento de la agenda' },
+};
+const SERV_DOC = new Set(['version', 'creado', 'actualizado', 'creadoPorId']);
+function docIgual(a, b) {
+  for (const k of new Set([...Object.keys(a || {}), ...Object.keys(b || {})])) if (!SERV_DOC.has(k) && !igual(a?.[k], b?.[k])) return false;
+  return true;
+}
+const docCuerpo = (x, b) => { const o = {}; for (const [k, v] of Object.entries(x)) if (!SERV_DOC.has(k) && v !== undefined) o[k] = v; if (b?.version) o.version = b.version; return o; };
+function recibirDoc(tipo, x, enviado = null) {
+  const D = DOCS[tipo]; const l = D.lista(); const i = l.findIndex((y) => y.id === x.id);
+  if (x.eliminado) { if (i >= 0) l.splice(i, 1); R.base.delete(D.pref + x.id); return null; }
+  R.base.set(D.pref + x.id, clonar(x));
+  if (i < 0) { if (enviado) { encolar({ tipo, id: x.id }); return null; } l.unshift(clonar(x)); return l[0]; } // se quitó aquí mientras se enviaba: se borra
+  if (enviado && !docIgual(l[i], enviado)) { encolar({ tipo, id: x.id }); return l[i]; } // cambió otra vez: va de nuevo
+  return reemplazar(l, i, clonar(x));
+}
+// qué negocios y eventos cambiaron (o se quitaron) desde lo último del servidor → a la cola
+function detectarDocs() {
+  if (!API || !R.listo || !R.usuario) return;
+  for (const [tipo, D] of Object.entries(DOCS)) {
+    const ids = new Set();
+    for (const x of D.lista()) { ids.add(x.id); const b = R.base.get(D.pref + x.id); if (!b || !docIgual(x, b)) encolar({ tipo, id: x.id }); }
+    for (const k of R.base.keys()) if (k.startsWith(D.pref) && !ids.has(k.slice(2))) encolar({ tipo, id: k.slice(2) });
+  }
+}
+async function enviarDoc(tipo, id) {
+  const D = DOCS[tipo]; const x = D.lista().find((y) => y.id === id); const b = R.base.get(D.pref + id);
+  if (!x) { // se quitó de la lista
+    if (!b) return null;
+    try { await asset().llamar('DELETE', `${D.ruta}/${encodeURIComponent(id)}`); } catch (e) { if (e.status !== 404) throw e; }
+    R.base.delete(D.pref + id); return null;
+  }
+  if (b && docIgual(x, b)) return x;
+  const enviado = clonar(x);
+  return recibirDoc(tipo, await asset().llamar('PUT', `${D.ruta}/${encodeURIComponent(id)}`, docCuerpo(x, b)), enviado);
+}
+async function recargarDoc(tipo, id) {
+  const D = DOCS[tipo]; R.base.delete(D.pref + id);
+  try { recibirDoc(tipo, await asset().llamar('GET', `${D.ruta}/${encodeURIComponent(id)}`)); }
+  catch (e) { if (e.status === 404 || e.status === 403) recibirDoc(tipo, { id, eliminado: true }); else throw e; }
+}
+// lo que estaba en el JSON local de este equipo (antes de la API) se sube una vez; queda un respaldo en datos.json
+async function subirNegociosEventos() {
+  const d = db(); const hay = (d.negocios || []).length || (d.eventos || []).length;
+  if (!hay) return;
+  const res = { negocios: 0, eventos: 0, rechazados: [] };
+  for (const [clave, ruta] of [['negocios', '/negocios/importar'], ['eventos', '/eventos/importar']]) {
+    const l = d[clave] || [];
+    for (let i = 0; i < l.length; i += 200) {
+      const r = await asset().llamar('POST', ruta, { items: l.slice(i, i + 200) });
+      res[clave] += r.nuevos; res.rechazados.push(...(r.rechazados || []));
+    }
+  }
+  d.respaldoLocal = { fecha: now(), negocios: d.negocios || [], eventos: d.eventos || [], rechazados: res.rechazados };
+  delete d.negocios; delete d.eventos; save();
+  if (res.negocios || res.eventos) H.avisar(`Se subieron al servidor ${[res.negocios && `${res.negocios} ${res.negocios === 1 ? 'negocio' : 'negocios'}`, res.eventos && `${res.eventos} ${res.eventos === 1 ? 'evento de la agenda' : 'eventos de la agenda'}`].filter(Boolean).join(' y ')} que estaban solo en este computador.${res.rechazados.length ? ` ${res.rechazados.length} no se pudieron subir (quedaron respaldados en este equipo).` : ''}`);
+}
+
 // ---------- cola de escrituras (serializada) ----------
-// op: { tipo: 'prop' | 'per', id } diferencia en segundo plano · { tipo: 'act', a } historial ·
+// op: { tipo: 'prop' | 'per', id } diferencia en segundo plano · { tipo: 'neg' | 'ev', id } documento completo · { tipo: 'act', a } historial ·
 //     { tipo: 'raw', metodo, ruta, cuerpo } diferencia guardada de una sesión anterior · { tipo: 'fn', fn } escritura que alguien espera
 const cola = []; let trabajando = false; let esperas = [];
 // lo pendiente queda en su propio archivo (cola-api.json), para no reescribir datos.json en cada entrada del historial
@@ -233,13 +302,17 @@ function persistirCola() {
       const x = (op.tipo === 'prop' ? R.props : R.pers).find((y) => y.id === op.id); const b = R.base.get((op.tipo === 'prop' ? 'p:' : 'c:') + op.id);
       if (!x || !b) continue; const dif = op.tipo === 'prop' ? diferenciaProp(x, b) : diferenciaPer(x, b);
       if (Object.keys(dif).length) ops.push({ tipo: 'raw', metodo: 'PATCH', ruta: `/${op.tipo === 'prop' ? 'propiedades' : 'personas'}/${op.id}`, cuerpo: { ...dif, version: b.version }, que: x.codigo || x.nombre || '' });
+    } else if (DOCS[op.tipo]) {
+      const D = DOCS[op.tipo]; const x = D.lista().find((y) => y.id === op.id); const b = R.base.get(D.pref + op.id); const ruta = `${D.ruta}/${encodeURIComponent(op.id)}`;
+      if (x && !(b && docIgual(x, b))) ops.push({ tipo: 'raw', metodo: 'PUT', ruta, cuerpo: docCuerpo(x, b) });
+      else if (!x && b) ops.push({ tipo: 'raw', metodo: 'DELETE', ruta });
     }
   }
   escribirCola(ops.length ? { usuarioId: R.usuario?.id || null, ops } : null);
 }
 function encolar(op) {
   if (!API) return;
-  if ((op.tipo === 'prop' || op.tipo === 'per') && cola.some((x) => x.tipo === op.tipo && x.id === op.id && !x.enviando)) { persistirCola(); return; }
+  if ((op.tipo === 'prop' || op.tipo === 'per' || DOCS[op.tipo]) && cola.some((x) => x.tipo === op.tipo && x.id === op.id && !x.enviando)) { persistirCola(); return; }
   cola.push(op); persistirCola(); procesar();
 }
 // una escritura que se espera: va en orden con lo encolado y su error llega a quien la pidió
@@ -266,6 +339,7 @@ async function procesar() {
           await asset().llamar('POST', '/actividad', cola.slice(0, n).map((x) => x.a));
           cola.splice(0, n);
         } else if (op.tipo === 'raw') { recibirRespuesta(op.ruta, await asset().llamar(op.metodo, op.ruta, op.cuerpo)); cola.shift(); }
+        else if (DOCS[op.tipo]) { await enviarDoc(op.tipo, op.id); cola.shift(); }
         else { await enviarDiferencia(op.tipo, op.id); cola.shift(); }
         persistirCola(); espera = 0;
       } catch (e) {
@@ -283,6 +357,7 @@ async function procesar() {
 function recibirRespuesta(ruta, x) {
   if (!x || typeof x !== 'object' || !x.id) return;
   if (/^\/propiedades\//.test(ruta)) recibirProp(x); else if (/^\/personas\//.test(ruta)) recibirPer(x);
+  else if (/^\/negocios\//.test(ruta)) recibirDoc('neg', x); else if (/^\/eventos\//.test(ruta)) recibirDoc('ev', x);
 }
 // manda lo que cambió de una propiedad o persona (contra lo último que mandó el servidor) con su versión
 async function enviarDiferencia(tipo, id) {
@@ -297,6 +372,14 @@ async function enviarDiferencia(tipo, id) {
 async function fallo(op, e) {
   const conflicto = e.status === 409;
   if (op.tipo === 'act') { console.warn('[inmo] historial no registrado:', e.message); return; }
+  const tipoDoc = DOCS[op.tipo] ? op.tipo : /^\/negocios\//.test(op.ruta || '') ? 'neg' : /^\/eventos\//.test(op.ruta || '') ? 'ev' : null;
+  if (tipoDoc) {
+    const D = DOCS[tipoDoc]; const id = op.id || decodeURIComponent(String(op.ruta).split('/')[2]);
+    if (op.metodo === 'DELETE' && e.status === 404) { R.base.delete(D.pref + id); return; }
+    H.avisar(conflicto ? `Otra persona cambió ${D.nombre} recién: se recargó con sus datos. Revisa y vuelve a aplicar tu cambio.` : e.status === 403 || e.status === 404 ? `${D.nombre[0].toUpperCase() + D.nombre.slice(1)} ya no está a tu cargo o se eliminó: se quitó de tu lista.` : `No se pudo guardar ${D.nombre}: ${e.message}`);
+    try { await recargarDoc(tipoDoc, id); } catch {}
+    H.cambio(D.que); return;
+  }
   const esProp = op.tipo === 'prop' || /^\/propiedades\//.test(op.ruta || '');
   const id = op.id || String(op.ruta || '').split('/')[2];
   const x = (esProp ? R.props : R.pers).find((y) => y.id === id);
@@ -329,8 +412,13 @@ async function cargarTodo() {
   R.base.clear();
   R.props.length = 0; for (const x of a.items) { R.base.set('p:' + x.id, clonar(x)); R.props.push(conExtras(clonar(x))); }
   R.pers.length = 0; for (const x of b.items) { R.base.set('c:' + x.id, clonar(x)); R.pers.push(clonar(x)); }
-  R.marca = { p: marcaDe(a.marca), c: marcaDe(b.marca) }; R.listo = true;
   remapearLegado();
+  try { await subirNegociosEventos(); } catch (e) { console.warn('[inmo] negocios y eventos locales sin subir:', e.message); }
+  const [n, e] = await Promise.all([traer('/negocios'), traer('/eventos')]);
+  R.negs.length = 0; for (const x of n.items) if (!x.eliminado) { R.base.set('n:' + x.id, clonar(x)); R.negs.push(clonar(x)); }
+  R.evs.length = 0; for (const x of e.items) if (!x.eliminado) { R.base.set('e:' + x.id, clonar(x)); R.evs.push(clonar(x)); }
+  R.negs.sort((x, y) => String(y.creado).localeCompare(String(x.creado)));
+  R.marca = { p: marcaDe(a.marca), c: marcaDe(b.marca), n: marcaDe(n.marca), e: marcaDe(e.marca) }; R.listo = true;
 }
 let sincronizando = null;
 function sincronizar() {
@@ -350,8 +438,19 @@ function sincronizar() {
     for (const x of b.items) { const antes = R.pers.find((c) => c.id === x.id); if (antes && !x.eliminado && x.version === R.base.get('c:' + x.id)?.version) continue; recibirPer(x); n++; }
     // pasó a ser captador: el servidor ahora le muestra al dueño (la persona no cambió, así que no vino en la lista)
     for (const id of new Set(reabrir)) await recargarPer(id).catch(() => {});
-    R.marca = { p: marcaDe(a.marca), c: marcaDe(b.marca) };
     if (n) H.cambio('propiedades');
+    const marcas = {};
+    for (const [tipo, D] of Object.entries(DOCS)) {
+      const k = D.pref[0]; const r = await traer(D.ruta, `&desde=${encodeURIComponent(R.marca[k])}`); let m = 0;
+      for (const x of r.items) {
+        if (pendiente(tipo, x.id)) continue; // lo que se está enviando: si chocó, lo resuelve la cola (409 → recarga)
+        const b = R.base.get(D.pref + x.id);
+        if (x.eliminado ? !b && !D.lista().some((y) => y.id === x.id) : b && x.version === b.version) continue;
+        recibirDoc(tipo, x); m++;
+      }
+      marcas[k] = marcaDe(r.marca); if (m) { n += m; H.cambio(D.que); }
+    }
+    R.marca = { ...R.marca, p: marcaDe(a.marca), c: marcaDe(b.marca), ...marcas };
     return n;
   })().catch((e) => { if (e.code !== 'NEEDS_ASSET_LOGIN' && e.code !== 'SIN_CONEXION') console.warn('[inmo] sincronizar:', e.message); return 0; }).finally(() => { sincronizando = null; }));
 }
@@ -385,20 +484,21 @@ async function iniciar(u) {
   const antes = R.usuario;
   R.usuario = u ? { id: u.id, rol: u.rol, nombre: u.nombre, corredoraId: u.corredoraId } : null;
   if (!API || !u) return;
-  if (antes && antes.corredoraId !== u.corredoraId) { R.listo = false; R.base.clear(); R.props.length = 0; R.pers.length = 0; }
+  if (antes && (antes.corredoraId !== u.corredoraId || antes.id !== u.id)) { R.listo = false; R.base.clear(); R.props.length = 0; R.pers.length = 0; R.negs.length = 0; R.evs.length = 0; }
   const g = leerCola();
   if (g?.ops?.length && !cola.length) { if (g.usuarioId === u.id) cola.push(...g.ops); else escribirCola(null); }
   if (!R.listo) { try { await (R.cargando ||= cargarTodo().finally(() => { R.cargando = null; })); } catch (e) { H.avisar(`No se pudo cargar la cartera desde el servidor: ${e.message}`); } }
   else await sincronizar();
   if (!reloj) { reloj = setInterval(() => { sincronizar(); procesar(); if (!R.listo && R.usuario) iniciar(R.usuario).catch(() => {}); }, 60 * 1000); reloj.unref?.(); }
   procesar();
+  if (R.listo) subirLocales();
 }
 // al cerrar la sesión: manda lo pendiente (unos segundos) y vacía la copia
 async function cerrar() {
   if (API) {
     await esperarCola(4000); persistirCola();
     for (const op of cola) if (op.tipo === 'fn') op.rechazar(err('Se cerró la sesión de PortalFirma Asset.', 'NEEDS_ASSET_LOGIN'));
-    cola.length = 0; if (reloj) { clearInterval(reloj); reloj = null; } R.listo = false; R.base.clear(); R.props.length = 0; R.pers.length = 0; }
+    cola.length = 0; if (reloj) { clearInterval(reloj); reloj = null; } R.listo = false; R.base.clear(); R.props.length = 0; R.pers.length = 0; R.negs.length = 0; R.evs.length = 0; }
   R.usuario = null;
 }
 const usuario = () => R.usuario;
@@ -606,10 +706,54 @@ async function nota(ref, texto) {
   if (API) return (await llamarEnCola('POST', '/actividad/notas', { entidadTipo: tipoEntidad(ref), entidadId: String(ref), texto: String(texto).trim().slice(0, 600) })).map(deServidor);
   log(ref, String(texto).trim(), { tipo: 'nota' }); save(); return actividadDe(ref);
 }
-// los archivos quedan en este computador (la API guarda solo sus datos cuando haya almacenamiento de archivos)
-const docsDir = (id) => { const d = path.join(dir(), 'documentos', id.replace(/[^a-z0-9]/gi, '')); fs.mkdirSync(d, { recursive: true }); return d; };
-function agregarDocumentos(propId, paths, tipo = 'otro') {
-  const p = prop(propId); const out = docsDir(propId); p.documentos ||= [];
+// Archivos de la propiedad. Con la API: fotos y documentos van a R2 (la API entrega una URL firmada, el archivo se sube
+// directo y la API lo confirma); los documentos que se abren quedan en una copia local (documentos/<propiedad>/<doc>/).
+// En PF_MOCK: en este computador, como siempre.
+const docsDir = (id) => { const d = path.join(dir(), 'documentos', id.replace(/[^a-z0-9-]/gi, '')); fs.mkdirSync(d, { recursive: true }); return d; };
+const MIME = { pdf: 'application/pdf', doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', xls: 'application/vnd.ms-excel',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', heic: 'image/heic', txt: 'text/plain' };
+const mimeDe = (nombre) => MIME[path.extname(nombre).slice(1).toLowerCase()] || 'application/octet-stream';
+const DOC_MAX = 50 * 1024 * 1024; const FOTO_MAX = 15 * 1024 * 1024;
+async function subirR2(url, buf, tipo) {
+  let r;
+  try { r = await fetch(url, { method: 'PUT', headers: { 'content-type': tipo }, body: buf, signal: AbortSignal.timeout(Math.max(60000, buf.length / 50)) }); } // ≥ 50 KB/s
+  catch { throw err('No se pudo subir el archivo. Revisa tu conexión a internet.', 'SIN_CONEXION'); }
+  if (!r.ok) throw err(`No se pudo subir el archivo (el almacenamiento respondió ${r.status}).`);
+}
+/** Sube fotos ({ buf, tipo, ref? }: JPG, PNG o WebP; ref queda al inicio del nombre) de una propiedad y devuelve sus URLs públicas (aún no quedan en la propiedad). */
+async function subirFotos(propId, fotos) {
+  if (!API) throw err('Las fotos se suben solo con la cuenta de Asset.');
+  const out = [];
+  for (let i = 0; i < fotos.length; i += 40) {
+    const tanda = fotos.slice(i, i + 40);
+    for (const f of tanda) if (f.buf.length > FOTO_MAX) throw err('Una foto pesa más de 15 MB.');
+    const { subidas } = await asset().llamar('POST', `/propiedades/${propId}/fotos/subidas`, { archivos: tanda.map((f) => ({ tipo: f.tipo || 'image/jpeg', tamano: f.buf.length, ...(f.ref ? { ref: f.ref } : {}) })) });
+    for (let j = 0; j < tanda.length; j += 4) await Promise.all(tanda.slice(j, j + 4).map((f, k) => subirR2(subidas[j + k].subida, f.buf, f.tipo || 'image/jpeg'))); // de a 4
+    out.push(...subidas.map((x) => x.url));
+  }
+  return out;
+}
+async function subirDocumento(propId, src, tipo = 'otro', nombre = path.basename(src)) {
+  const buf = fs.readFileSync(src);
+  if (!buf.length) throw err(`«${nombre}» está vacío.`);
+  if (buf.length > DOC_MAX) throw err(`«${nombre}» pesa más de 50 MB.`);
+  const tipoArchivo = mimeDe(nombre);
+  const { clave, subida } = await asset().llamar('POST', `/propiedades/${propId}/documentos/subida`, { nombre, tipoArchivo, tamano: buf.length });
+  await subirR2(subida, buf, tipoArchivo);
+  return recibirProp(await asset().llamar('POST', `/propiedades/${propId}/documentos`, { clave, nombre, tipo, tamano: buf.length }));
+}
+async function agregarDocumentos(propId, paths, tipo = 'otro') {
+  const p = prop(propId);
+  if (API) {
+    let ult = p; const fallas = [];
+    for (const src of paths) {
+      try { if (!fs.statSync(src).isFile()) continue; ult = (await subirDocumento(propId, src, tipo)) || ult; }
+      catch (e) { fallas.push(`${path.basename(src)}: ${e.message}`); }
+    }
+    if (fallas.length) { if (fallas.length === paths.length) throw err(fallas.join(' · ')); H.avisar(`No se pudieron agregar: ${fallas.join(' · ')}`); }
+    return ult;
+  }
+  const out = docsDir(propId); p.documentos ||= [];
   for (const src of paths) {
     const st = fs.statSync(src); if (!st.isFile()) continue;
     let name = path.basename(src); let dest = path.join(out, name); let n = 2;
@@ -618,15 +762,72 @@ function agregarDocumentos(propId, paths, tipo = 'otro') {
     p.documentos.unshift({ id: uid('d'), nombre: path.basename(dest), path: dest, tipo, size: st.size, fecha: now() });
     log(p.id, `Documento agregado: ${path.basename(dest)}`);
   }
-  p.actualizado = now(); if (API) guardarExtras(p); else save(); return p;
+  p.actualizado = now(); save(); return p;
 }
-function quitarDocumento(propId, docId) {
+async function quitarDocumento(propId, docId) {
   const p = prop(propId); const doc = (p.documentos || []).find((x) => x.id === docId); if (!doc) return p;
+  if (API && !doc.path) {
+    const x = recibirProp(await asset().llamar('DELETE', `/propiedades/${propId}/documentos/${docId}`));
+    fs.rmSync(path.join(docsDir(propId), docId), { recursive: true, force: true });
+    return x;
+  }
   p.documentos = p.documentos.filter((x) => x !== doc); try { fs.unlinkSync(doc.path); } catch {}
   log(p.id, `Documento quitado: ${doc.nombre}`); if (API) guardarExtras(p); else save(); return p;
 }
-const docPath = (propId, docId) => { const doc = (prop(propId).documentos || []).find((x) => x.id === docId); if (!doc || !doc.path || !fs.existsSync(doc.path)) throw err('El archivo ya no está.'); return doc.path; };
+/** Ruta local del documento para abrirlo: con la API lo baja (la primera vez, o si cambió de tamaño). */
+async function docPath(propId, docId) {
+  const doc = (prop(propId).documentos || []).find((x) => x.id === docId);
+  if (doc?.path) { if (!fs.existsSync(doc.path)) throw err('El archivo ya no está.'); return doc.path; }
+  if (!doc || !API) throw err('El archivo ya no está.');
+  const carpeta = path.join(docsDir(propId), docId); const destino = path.join(carpeta, doc.nombre.replace(/[\\/:*?"<>|]/g, '_'));
+  try { if (fs.statSync(destino).size === doc.size) return destino; } catch {}
+  const { url } = await asset().llamar('GET', `/propiedades/${propId}/documentos/${docId}/descarga`);
+  let r;
+  try { r = await fetch(url, { signal: AbortSignal.timeout(120000) }); } catch { throw err('No se pudo bajar el documento. Revisa tu conexión a internet.', 'SIN_CONEXION'); }
+  if (!r.ok) throw err('No se pudo bajar el documento.');
+  fs.mkdirSync(carpeta, { recursive: true }); const tmp = destino + '.parcial';
+  fs.writeFileSync(tmp, Buffer.from(await r.arrayBuffer())); fs.renameSync(tmp, destino);
+  return destino;
+}
 const mostrarCarpeta = (propId) => shell.openPath(docsDir(propId));
+
+// Lo que quedó guardado solo en este computador antes de R2 (documentos en extrasProp y fotos pffoto://) se sube una
+// vez, en segundo plano, al iniciar sesión. Lo que no se pueda subir queda local y se reintenta en el próximo inicio.
+let migrando = null;
+function subirLocales() {
+  migrando ||= (async () => {
+    const ex = db().extrasProp || {}; let docs = 0; let fotos = 0;
+    for (const id of Object.keys(ex)) {
+      if (!R.usuario) break;
+      const p = P().find((x) => x.id === id); if (!p) continue;
+      for (const d of (ex[id]?.documentos || []).filter((x) => x.path)) {
+        if (!fs.existsSync(d.path)) { quitarLocal(id, d.id); continue; }
+        try { await subirDocumento(id, d.path, d.tipo || 'otro', d.nombre); quitarLocal(id, d.id); try { fs.unlinkSync(d.path); } catch {} docs++; }
+        catch (e) { console.warn('[inmo] documento local sin subir:', d.nombre, e.message); }
+      }
+      const locales = (p.fotos || []).filter((u) => /^pffoto:\/\/f\//.test(u));
+      if (!locales.length) continue;
+      try {
+        const base = path.resolve(dir(), 'fotos');
+        const archivos = locales.map((u) => path.resolve(base, decodeURIComponent(u.replace(/^pffoto:\/\/f\//, ''))));
+        const hay = archivos.map((f) => f.startsWith(base + path.sep) && fs.existsSync(f));
+        const urls = await subirFotos(id, archivos.filter((_, i) => hay[i]).map((f) => ({ buf: fs.readFileSync(f), tipo: 'image/jpeg' })));
+        const mapa = new Map(); let k = 0; locales.forEach((u, i) => mapa.set(u, hay[i] ? urls[k++] : null));
+        parchear(id, (pp) => { pp.fotos = (pp.fotos || []).map((u) => (mapa.has(u) ? mapa.get(u) : u)).filter(Boolean); });
+        fotos += urls.length;
+      } catch (e) { console.warn('[inmo] fotos locales sin subir:', id, e.message); }
+    }
+    if (docs || fotos) H.avisar(`Se subieron al servidor ${[docs && `${docs} ${docs === 1 ? 'documento' : 'documentos'}`, fotos && `${fotos} ${fotos === 1 ? 'foto' : 'fotos'}`].filter(Boolean).join(' y ')} que estaban solo en este computador.`);
+  })().catch((e) => console.warn('[inmo] subir locales:', e.message)).finally(() => { migrando = null; });
+  return migrando;
+}
+function quitarLocal(propId, docId) {
+  const e = db().extrasProp?.[propId]; if (!e?.documentos) return;
+  e.documentos = e.documentos.filter((x) => x.id !== docId); if (!e.documentos.length) delete e.documentos;
+  if (!Object.keys(e).length) delete db().extrasProp[propId];
+  save();
+  const p = P().find((x) => x.id === propId); if (p) p.documentos = (p.documentos || []).filter((x) => x.id !== docId);
+}
 
 // ============================================================================ importación desde Portalfirma (MCP: property_manage_tools)
 
@@ -712,8 +913,10 @@ function parchear(id, fn, texto) {
   return p;
 }
 const todas = () => P();
-const negocios = () => (db().negocios ||= []);
-const eventos = () => (db().eventos ||= []);
+const negocios = () => (API ? R.negs : (db().negocios ||= []));
+const eventos = () => (API ? R.evs : (db().eventos ||= []));
+// guardar(): lo que negocios.js, agenda.js y otros cambiaron. Con la API, además, encola lo que cambió de negocios y eventos
+function guardarTodo() { save(); detectarDocs(); }
 const personaPorId = (id) => C().find((x) => x.id === id) || null;
 FC.propietario.buscar = personaPorId;
 const registrar = (ref, texto, extra) => log(ref, texto, extra);
@@ -807,7 +1010,7 @@ async function actividadTodas({ q = '', clase = '', desde = 0, limite = 60 } = {
 function exportarDatos() { return { ...clonar(db()), propiedades: clonar(P()), personas: clonar(C()) }; }
 const _reset = () => { cache = null; };
 
-module.exports = { personaDesdeLead, esEmpresa, eventos, negocios, personaPorId, registrar, obtener, parchear, todas, config, guardarConfig, registrarLead, guardar: save, TIPOS, ESTADOS, ROLES, validRut, fmtRut, listar, resumen, guardarPropiedad, archivarPropiedad, guardarPersona, borrarPersona, vincular, desvincular,
-  nota, actividadDe, actividadTodas, agregarDocumentos, quitarDocumento, docPath, mostrarCarpeta, importarPF, desdePF, exportarDatos, _reset,
+module.exports = { personaDesdeLead, esEmpresa, eventos, negocios, personaPorId, registrar, obtener, parchear, todas, config, guardarConfig, registrarLead, guardar: guardarTodo, TIPOS, ESTADOS, ROLES, validRut, fmtRut, listar, resumen, guardarPropiedad, archivarPropiedad, guardarPersona, borrarPersona, vincular, desvincular,
+  nota, actividadDe, actividadTodas, agregarDocumentos, quitarDocumento, docPath, mostrarCarpeta, subirFotos, importarPF, desdePF, exportarDatos, _reset,
   // repositorio (sesión de Asset y sincronización)
   API, configurar, iniciar, cerrar, sincronizar, esperarCola, usuario, listo, asignarCaptador, asignarVarios };

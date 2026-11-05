@@ -6,7 +6,7 @@
 //  · actualizado_en indexado junto a corredora_id: la app de escritorio sincroniza solo lo que cambió (delta);
 //  · eliminado_en (borrado lógico): la sincronización sabe qué quitar;
 //  · version: control de concurrencia optimista (dos personas editando lo mismo no se pisan sin saberlo);
-//  · id_legado: el id que tenía en el JSON local de la app, para reconectar lo que aún vive ahí (negocios, eventos);
+//  · id_legado: el id que tenía en el JSON local de la app (propiedades y personas); negocios y eventos conservan su id;
 //  · búsqueda por parecido con pg_trgm (índice GIN) sobre un texto normalizado, rápida aunque haya muchos datos.
 
 generator client {
@@ -33,6 +33,8 @@ model Corredora {
   propiedades     Propiedad[]
   personas        Persona[]
   actividad       Actividad[]
+  negocios        Negocio[]
+  eventos         Evento[]
 
   @@map("corredoras")
 }
@@ -64,6 +66,8 @@ model Usuario {
   corredora      Corredora   @relation(fields: [corredoraId], references: [id], onDelete: Restrict)
   sesiones       Sesion[]
   captaciones    Propiedad[] @relation("captador")
+  negocios       Negocio[]   @relation("negocioCorredor")
+  eventos        Evento[]    @relation("eventoCorredor")
 
   @@index([corredoraId])
   @@map("usuarios")
@@ -189,6 +193,8 @@ model Propiedad {
   fotos      PropiedadFoto[]
   documentos PropiedadDocumento[]
   vinculos   PropiedadPersona[]
+  negocios   Negocio[]
+  eventos    Evento[]
 
   @@unique([corredoraId, codigo])
   @@unique([corredoraId, origenSistema, origenId])
@@ -283,6 +289,7 @@ model Persona {
 
   corredora Corredora          @relation(fields: [corredoraId], references: [id], onDelete: Restrict)
   vinculos  PropiedadPersona[]
+  negocios  Negocio[]
 
   @@unique([corredoraId, rut])
   @@unique([corredoraId, idLegado])
@@ -331,4 +338,79 @@ model Actividad {
   @@index([corredoraId, ref2, fecha(sort: Desc)])
   @@index([corredoraId, fecha(sort: Desc)])
   @@map("actividad")
+}
+
+// ============================================================================ negocios y agenda
+//
+// La app de escritorio crea los ids (los mismos que ya tenían en su JSON local, o un UUID para los nuevos), así que
+// son texto. Columnas solo para lo que se filtra o se relaciona; el resto de la estructura (tareas por etapa, firmas,
+// comisión, próxima acción…) va en `datos`, tal como la usa la app. Cada uno está a cargo de un corredor (usuario):
+// el corredor ve los suyos y el administrador, todos.
+
+/// Un negocio de venta o arriendo y su avance por etapas (negocios.js de la app).
+model Negocio {
+  id            String    @id
+  corredoraId   String    @map("corredora_id") @db.Uuid
+  /// venta | arriendo
+  tipo          String
+  /// abierto | ganado | perdido
+  estado        String    @default("abierto")
+  etapa         String
+  propiedadId   String?   @map("propiedad_id") @db.Uuid
+  clienteId     String?   @map("cliente_id") @db.Uuid
+  corredorId    String?   @map("corredor_id") @db.Uuid
+  /// fecha de la próxima acción (para las vencidas)
+  proximaFecha  DateTime? @map("proxima_fecha") @db.Date
+  datos         Json      @default("{}")
+  version       Int       @default(1)
+  creadoPorId   String?   @map("creado_por_id") @db.Uuid
+  creadoEn      DateTime  @default(now()) @map("creado_en")
+  actualizadoEn DateTime  @updatedAt @map("actualizado_en")
+  eliminadoEn   DateTime? @map("eliminado_en")
+
+  corredora Corredora  @relation(fields: [corredoraId], references: [id], onDelete: Restrict)
+  propiedad Propiedad? @relation(fields: [propiedadId], references: [id], onDelete: SetNull)
+  cliente   Persona?   @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+  corredor  Usuario?   @relation("negocioCorredor", fields: [corredorId], references: [id], onDelete: SetNull)
+
+  @@index([corredoraId, actualizadoEn])
+  @@index([corredoraId, corredorId, estado])
+  @@index([corredoraId, propiedadId])
+  @@index([corredoraId, clienteId])
+  @@map("negocios")
+}
+
+/// Un evento de la agenda: visita, reunión, firma, llamada o tarea (agenda.js de la app).
+model Evento {
+  id            String    @id
+  corredoraId   String    @map("corredora_id") @db.Uuid
+  /// visita | reunion | firma | llamada | tarea | otro
+  tipo          String
+  /// programado | hecho | cancelado
+  estado        String    @default("programado")
+  fecha         DateTime  @db.Date
+  /// HH:MM (hora de Chile), o null si es de todo el día
+  hora          String?
+  propiedadId   String?   @map("propiedad_id") @db.Uuid
+  /// id del negocio (texto, sin llave foránea: puede llegar antes que el negocio)
+  negocioId     String?   @map("negocio_id")
+  personaIds    String[]  @default([]) @map("persona_ids")
+  corredorId    String?   @map("corredor_id") @db.Uuid
+  datos         Json      @default("{}")
+  version       Int       @default(1)
+  creadoPorId   String?   @map("creado_por_id") @db.Uuid
+  creadoEn      DateTime  @default(now()) @map("creado_en")
+  actualizadoEn DateTime  @updatedAt @map("actualizado_en")
+  eliminadoEn   DateTime? @map("eliminado_en")
+
+  corredora Corredora  @relation(fields: [corredoraId], references: [id], onDelete: Restrict)
+  propiedad Propiedad? @relation(fields: [propiedadId], references: [id], onDelete: SetNull)
+  corredor  Usuario?   @relation("eventoCorredor", fields: [corredorId], references: [id], onDelete: SetNull)
+
+  @@index([corredoraId, actualizadoEn])
+  @@index([corredoraId, corredorId, fecha])
+  @@index([corredoraId, propiedadId])
+  @@index([corredoraId, negocioId])
+  @@index([personaIds], type: Gin)
+  @@map("eventos")
 }

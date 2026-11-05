@@ -9,6 +9,13 @@ const esquema = z.object({
   JWT_SECRETO: z.string().min(32, 'debe tener al menos 32 caracteres (genera uno con crypto.randomBytes)'),
   JWT_DURACION: z.string().default('15m'),
   REFRESH_DIAS: z.coerce.number().int().positive().default(30),
+  // almacenamiento de archivos (Cloudflare R2, compatible con S3): fotos y documentos de las propiedades
+  R2_ENDPOINT: z.url('debe ser la URL S3 de la cuenta (https://<cuenta>.r2.cloudflarestorage.com)'),
+  R2_ACCESS_KEY_ID: z.string().min(1),
+  R2_SECRET_ACCESS_KEY: z.string().min(1),
+  R2_BUCKET: z.string().min(1),
+  /** dominio público del bucket (las fotos se sirven desde ahí) */
+  R2_DOMAIN: z.url().transform((u) => u.replace(/\/+$/, '')),
 });
 
 export type Env = z.infer<typeof esquema>;

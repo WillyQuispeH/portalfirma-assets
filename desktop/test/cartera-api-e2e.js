@@ -11,11 +11,13 @@ const { _electron: electron } = require('playwright'); const path = require('pat
 const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  ✔ ' + m); };
 
 const API_DIR = path.join(__dirname, '..', '..', 'api');
-const env = Object.fromEntries(fs.readFileSync(path.join(API_DIR, '.env'), 'utf8').split(/\r?\n/).map((l) => /^([A-Z_]+)=(.*)$/.exec(l)).filter(Boolean).map((m) => [m[1], m[2].trim().replace(/^"(.*)"$/, '$1')]));
+const env = Object.fromEntries(fs.readFileSync(path.join(API_DIR, '.env'), 'utf8').split(/\r?\n/).map((l) => /^([A-Z0-9_]+)=(.*)$/.exec(l)).filter(Boolean).map((m) => [m[1], m[2].trim().replace(/^"(.*)"$/, '$1')]));
 const API = (process.argv[2] || 'http://localhost:3000') + '/v1';
 process.env.DATABASE_URL ||= env.DATABASE_URL;
 const { PrismaClient } = require(path.join(API_DIR, 'node_modules', '@prisma/client'));
 const SUF = Date.now().toString(36);
+const PDF = Buffer.from('%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n');
+const JPG = Buffer.from('/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=', 'base64');
 const dv = (n) => { let s = 0, m = 2; for (const d of String(n).split('').reverse()) { s += Number(d) * m; m = m === 7 ? 2 : m + 1; } const r = 11 - (s % 11); return r === 11 ? '0' : r === 10 ? 'K' : String(r); };
 const rut = (n) => `${n}-${dv(n)}`;
 const req = async (metodo, ruta, cuerpo, token) => {
@@ -34,6 +36,16 @@ const req = async (metodo, ruta, cuerpo, token) => {
   try {
     admin = await db.usuario.findUnique({ where: { email: String(env.SEMBRAR_ADMIN_EMAIL).toLowerCase() } });
     ok(admin && admin.rol === 'ADMIN', 'el administrador de api/.env existe en la base');
+    // propiedad de prueba para los archivos, con un documento y una foto que quedaron solo en este computador
+    const tok0 = (await req('POST', '/auth/ingresar', { email: env.SEMBRAR_ADMIN_EMAIL, clave: env.SEMBRAR_ADMIN_CLAVE })).j?.tokenAcceso;
+    const pa = (await req('POST', '/propiedades', { titulo: `E2E Archivos ${SUF}`, tipo: 'casa', venta: true }, tok0)).j;
+    creadas.props.push(pa.id);
+    const inmoDir = path.join(tmp, 'inmo'); fs.mkdirSync(path.join(inmoDir, 'documentos', pa.id), { recursive: true }); fs.mkdirSync(path.join(inmoDir, 'fotos', pa.id), { recursive: true });
+    const docLocal = path.join(inmoDir, 'documentos', pa.id, 'Mandato antiguo.pdf'); fs.writeFileSync(docLocal, PDF);
+    fs.writeFileSync(path.join(inmoDir, 'fotos', pa.id, 'd-e2e.jpg'), JPG);
+    fs.writeFileSync(path.join(inmoDir, 'datos.json'), JSON.stringify({ extrasProp: { [pa.id]: {
+      documentos: [{ id: 'dlocal1', nombre: 'Mandato antiguo.pdf', path: docLocal, tipo: 'mandato', size: PDF.length, fecha: new Date().toISOString() }],
+      fotos: [`pffoto://f/${encodeURIComponent(pa.id)}/d-e2e.jpg`] } } }));
     const enBase = await db.propiedad.findMany({ where: { corredoraId: admin.corredoraId, eliminadoEn: null }, select: { id: true, codigo: true, archivada: true, origenSistema: true }, orderBy: { codigo: 'asc' } });
     ok(enBase.length > 0, `la corredora tiene ${enBase.length} propiedades en la base`);
     prop = enBase.find((p) => !p.archivada && /^WE-/.test(p.codigo)) || enBase.find((p) => !p.archivada);
@@ -123,12 +135,36 @@ const req = async (metodo, ruta, cuerpo, token) => {
       return inmo.importarPF(pf);
     }, [SUF, rutDueno]);
     const imp = await db.propiedad.findFirst({ where: { corredoraId: admin.corredoraId, origenSistema: 'portalfirma', origenId: `e2e-${SUF}` }, include: { vinculos: true, fotos: true } });
-    if (imp) creadas.props = [imp.id];
+    if (imp) creadas.props.push(imp.id);
     const duena = await db.persona.findFirst({ where: { corredoraId: admin.corredoraId, nombre: `E2E Dueña ${SUF}` } });
     if (duena) creadas.personas.push(duena.id);
     ok(res.nuevas === 1 && res.personas === 1 && imp && Number(imp.precioVenta) === 4321 && imp.fotos.length === 1, 'importar desde Portalfirma crea la propiedad en la base (por su id de origen)');
     ok(duena && imp.vinculos.some((v) => v.personaId === duena.id && v.rol === 'propietario'), 'con su propietaria en el CRM, vinculada');
     ok((await call('inmoListar')).propiedades.some((p) => p.id === imp.id && p.origen?.sistema === 'portalfirma'), 'y la cartera la trae al sincronizar');
+    // 9) archivos en R2: lo local de antes se sube solo al iniciar sesión; agregar, abrir y quitar un documento; fotos
+    const R2 = env.R2_DOMAIN.replace(/\/+$/, '');
+    let migr = null;
+    for (let i = 0; i < 60; i++) { await new Promise((r) => setTimeout(r, 400)); migr = await db.propiedad.findUnique({ where: { id: pa.id }, include: { documentos: true, fotos: true } }); if (migr.documentos.length && migr.fotos.length) break; }
+    ok(migr.documentos.some((d) => d.nombre === 'Mandato antiguo.pdf' && d.tamano === PDF.length && d.claveAlmacenamiento), 'el documento que estaba solo en este computador se subió a R2 y quedó en la base');
+    ok(migr.fotos.length === 1 && migr.fotos[0].url.startsWith(R2 + '/') && /\/fotos\/[0-9a-f-]{36}\.jpg$/.test(migr.fotos[0].url), 'la foto local (pffoto://) se subió y la propiedad quedó con su URL pública');
+    ok(!fs.existsSync(docLocal), 'y la copia local del documento ya no hace falta');
+    const datosLoc = JSON.parse(fs.readFileSync(path.join(inmoDir, 'datos.json'), 'utf8'));
+    ok(!datosLoc.extrasProp?.[pa.id], 'extrasProp ya no guarda documentos ni fotos de esa propiedad');
+    let pv = (await call('inmoListar')).propiedades.find((x) => x.id === pa.id);
+    ok(pv.documentos.length === 1 && !pv.documentos[0].path && pv.fotos.length === 1 && pv.fotos[0].startsWith(R2), 'la copia de la app muestra el documento y la foto del servidor (sin duplicados)');
+    const nuevoDoc = path.join(tmp, `Escritura ${SUF}.pdf`); fs.writeFileSync(nuevoDoc, Buffer.concat([PDF, Buffer.from(SUF)]));
+    pv = await call('inmoDocAgregar', pa.id, [nuevoDoc], 'escritura');
+    const dn = pv.documentos.find((d) => d.nombre === `Escritura ${SUF}.pdf`);
+    ok(dn && (await db.propiedadDocumento.findFirst({ where: { id: dn.id, tipo: 'escritura' } })), 'agregar un documento lo sube a R2 y queda en la base');
+    const local = await app.evaluate((_e, [id, d]) => global.__inmo.docPath(id, d), [pa.id, dn.id]);
+    ok(fs.readFileSync(local).equals(fs.readFileSync(nuevoDoc)) && local !== nuevoDoc, 'abrirlo lo baja de R2 (igual al original)');
+    pv = await call('inmoDocQuitar', pa.id, dn.id);
+    ok(!pv.documentos.some((d) => d.id === dn.id) && !(await db.propiedadDocumento.findUnique({ where: { id: dn.id } })) && !fs.existsSync(local), 'quitarlo lo borra de la base y la copia bajada');
+    const urls = await app.evaluate((_e, [id, b64]) => global.__inmo.subirFotos(id, [{ buf: Buffer.from(b64, 'base64'), tipo: 'image/jpeg', ref: 'd-drive123' }]), [pa.id, JPG.toString('base64')]);
+    ok(urls.length === 1 && /\/fotos\/d-drive123_[0-9a-f-]{36}\.jpg$/.test(urls[0]) && (await fetch(urls[0])).ok, 'subirFotos deja la foto pública en R2 (con la referencia de Drive en el nombre)');
+    await app.evaluate((_e, [id, u]) => global.__inmo.parchear(id, (p) => { p.fotos = [...(p.fotos || []), u]; }), [pa.id, urls[0]]);
+    let fotosDb = []; for (let i = 0; i < 30 && fotosDb.length < 2; i++) { await new Promise((r) => setTimeout(r, 300)); fotosDb = await db.propiedadFoto.findMany({ where: { propiedadId: pa.id } }); }
+    ok(fotosDb.length === 2, 'y al agregarla a la propiedad llega a la base');
     ok(!errs.length, 'sin errores en la pantalla' + (errs.length ? ': ' + errs.join(' | ') : ''));
     console.log('\nOK cartera-api');
   } catch (e) {
@@ -144,6 +180,13 @@ const req = async (metodo, ruta, cuerpo, token) => {
         await db.actividad.deleteMany({ where: { fecha: { gte: inicio }, OR: [{ entidadId: { in: [prop.id, ...creadas.personas] } }, { ref2: { in: creadas.personas } }] } });
       }
       if (creadas.props.length) {
+        // sus archivos en R2: todo lo que esté bajo la carpeta de cada propiedad de prueba (también lo no confirmado)
+        const { S3Client, ListObjectsV2Command, DeleteObjectsCommand } = require(path.join(API_DIR, 'node_modules', '@aws-sdk/client-s3'));
+        const s3 = new S3Client({ region: 'auto', endpoint: env.R2_ENDPOINT, credentials: { accessKeyId: env.R2_ACCESS_KEY_ID, secretAccessKey: env.R2_SECRET_ACCESS_KEY } });
+        for (const id of creadas.props) {
+          const l = await s3.send(new ListObjectsV2Command({ Bucket: env.R2_BUCKET, Prefix: `c/${admin.corredoraId}/p/${id}/` }));
+          if (l.Contents?.length) await s3.send(new DeleteObjectsCommand({ Bucket: env.R2_BUCKET, Delete: { Objects: l.Contents.map((o) => ({ Key: o.Key })), Quiet: true } }));
+        }
         await db.actividad.deleteMany({ where: { entidadId: { in: creadas.props } } });
         await db.propiedad.deleteMany({ where: { id: { in: creadas.props } } }); // fotos y vínculos se borran en cascada
       }

@@ -295,27 +295,31 @@ handle('ai:models', () => ai.models());
 handle('ai:chat', (req) => { if (!lastSession) { const e = new Error('El asistente legal es exclusivo para clientes de Portalfirma. Inicia sesión con tu cuenta.'); e.code = 'NEEDS_ACCOUNT'; throw e; } return ai.chat(req || {}); });
 const gdrive = require('./gdrive');
 // Fotos de una propiedad desde Google Drive (la carpeta de la empresa): se eligen en el selector de Google, se bajan,
-// se pasan a JPG (también las HEIC del iPhone) de hasta 2048 px y quedan guardadas en este computador.
+// se pasan a JPG (también las HEIC del iPhone) de hasta 2048 px y se suben al almacenamiento de Asset (R2). En PF_MOCK
+// quedan guardadas en este computador.
 async function fotosDesdeDrive(propId) {
   const p = inmo.obtener(propId); const st = gdrive.status();
   if (!st.connected) { const e = new Error('Conecta el Google Drive de la empresa para elegir las fotos.'); e.code = 'NO_DRIVE'; throw e; }
   const calle = String(p.direccion || '').match(/^(.*?\d+)/)?.[1] || p.direccion || p.titulo || '';
   const picked = (await gdrive.pick(null, { multi: true, imagenes: true, query: calle.trim() })).filter((f) => !f.isFolder);
   if (!picked.length) return { agregadas: 0, total: (p.fotos || []).length, omitidas: [], cancelado: true };
-  const dir = path.join(fotosDir(), p.id); fs.mkdirSync(dir, { recursive: true });
-  const ya = new Set((p.fotos || []).map((u) => String(u).split('/').pop()));
-  const nuevas = []; const omitidas = [];
+  const dir = path.join(fotosDir(), p.id); if (!inmo.API) fs.mkdirSync(dir, { recursive: true });
+  // repetidas: local «d-<id>.jpg»; en R2 «d-<id>_<uuid>.jpg»
+  const ya = new Set((p.fotos || []).map((u) => String(u).split('/').pop().replace(/_[0-9a-f-]{36}(?=\.\w+$)/, '')));
+  const nuevas = []; const omitidas = []; const jpgs = [];
   for (const [i, f] of picked.slice(0, 40).entries()) {
     const nombre = `d-${String(f.id).replace(/[^\w-]/g, '').slice(0, 40)}.jpg`; if (ya.has(nombre)) { omitidas.push({ name: f.name, motivo: 'ya estaba cargada' }); continue; }
     try {
       const { bytes } = await gdrive.bytesDe(f.id); let img = nativeImage.createFromBuffer(Buffer.from(bytes));
       if (img.isEmpty()) { omitidas.push({ name: f.name, motivo: /hei[cf]/i.test(f.mimeType || f.name) ? 'formato HEIC no legible en este computador' : 'no es una imagen legible' }); continue; }
       const { width } = img.getSize(); if (width > 2048) img = img.resize({ width: 2048, quality: 'best' });
-      fs.writeFileSync(path.join(dir, nombre), img.toJPEG(86)); nuevas.push(`pffoto://f/${encodeURIComponent(p.id)}/${nombre}`);
+      if (inmo.API) jpgs.push({ buf: img.toJPEG(86), tipo: 'image/jpeg', ref: nombre.replace(/\.jpg$/, '') });
+      else { fs.writeFileSync(path.join(dir, nombre), img.toJPEG(86)); nuevas.push(`pffoto://f/${encodeURIComponent(p.id)}/${nombre}`); }
     } catch (e) { omitidas.push({ name: f.name, motivo: e.message }); }
     if (i % 4 === 3) toUI('agent:event', { type: 'progreso', que: 'fotos', hechas: i + 1, total: picked.length });
   }
   if (picked.length > 40) omitidas.push({ name: `${picked.length - 40} fotos más`, motivo: 'máximo 40 por vez' });
+  if (jpgs.length) { toUI('agent:event', { type: 'progreso', que: 'fotos', hechas: picked.length, total: picked.length, texto: 'Subiendo las fotos…' }); nuevas.push(...(await inmo.subirFotos(p.id, jpgs))); }
   if (nuevas.length) inmo.parchear(p.id, (pp) => { pp.fotos = [...(pp.fotos || []), ...nuevas].slice(0, 60); }, `${nuevas.length} ${nuevas.length === 1 ? 'foto cargada' : 'fotos cargadas'} desde Google Drive`);
   return { agregadas: nuevas.length, total: (inmo.obtener(p.id).fotos || []).length, omitidas };
 }
@@ -1264,6 +1268,6 @@ handle('inmo:docElegir', async (id) => {
   return r.canceled ? null : inmo.agregarDocumentos(id, r.filePaths);
 });
 handle('inmo:docQuitar', (id, d) => inmo.quitarDocumento(id, d));
-handle('inmo:docAbrir', (id, d) => { const p = inmo.docPath(id, d); if (/\.(pdf|docx?|xlsx?|jpe?g|png|webp)$/i.test(p)) openInEditor([p]); else shell.openPath(p); return true; });
+handle('inmo:docAbrir', async (id, d) => { const p = await inmo.docPath(id, d); if (/\.(pdf|docx?|xlsx?|jpe?g|png|webp)$/i.test(p)) openInEditor([p]); else shell.openPath(p); return true; });
 handle('inmo:docCarpeta', (id) => inmo.mostrarCarpeta(id));
 handle('inmo:importar', () => inmo.importarPF(pf, (x) => toUI('inmo:progreso', x)));

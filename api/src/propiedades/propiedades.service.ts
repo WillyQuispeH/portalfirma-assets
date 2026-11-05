@@ -14,6 +14,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ActividadService, type NuevaActividad } from '../comun/actividad.service';
 import { crearCursor, leerCursor } from '../comun/paginas';
+import { AlmacenamientoService } from '../archivos/almacenamiento.service';
 import { formatearRut, limpiarRut, normalizar, palabras, rutValido } from '../comun/texto';
 import type { UsuarioToken } from '../auth/usuario-actual';
 import {
@@ -38,6 +39,7 @@ export class PropiedadesService {
   constructor(
     private readonly db: PrismaService,
     private readonly actividad: ActividadService,
+    private readonly r2: AlmacenamientoService,
   ) {}
 
   private log(u: UsuarioToken, entidadId: string, texto: string, extra: Partial<NuevaActividad> = {}): NuevaActividad {
@@ -113,7 +115,24 @@ export class PropiedadesService {
     throw new ConflictException('No se pudo asignar un código a la propiedad. Intenta de nuevo.');
   }
 
-  private async fijarFotos(tx: Tx, propiedadId: string, urls: string[]) {
+  /**
+   * Reemplaza las fotos. Las que están en nuestro R2 deben ser de la corredora; las que se quitan van a `quitadas`
+   * para borrarlas de R2 cuando la transacción se confirme (si falla, siguen ahí).
+   */
+  private async fijarFotos(tx: Tx, u: UsuarioToken, propiedadId: string, urls: string[], quitadas?: string[]) {
+    const propia = `c/${u.corredoraId}/`;
+    for (const url of urls) {
+      const clave = this.r2.claveDeUrl(url);
+      if (clave != null && !clave.startsWith(propia))
+        throw new BadRequestException('Hay una foto que no es de tu corredora.');
+    }
+    if (quitadas) {
+      const antes = await tx.propiedadFoto.findMany({ where: { propiedadId }, select: { url: true } });
+      for (const { url } of antes) {
+        const clave = this.r2.claveDeUrl(url);
+        if (clave && !urls.includes(url)) quitadas.push(clave);
+      }
+    }
     await tx.propiedadFoto.deleteMany({ where: { propiedadId } });
     if (urls.length)
       await tx.propiedadFoto.createMany({
@@ -158,7 +177,7 @@ export class PropiedadesService {
           busqueda: textoBusqueda({ ...o, codigo, titulo: o.titulo! }),
         },
       });
-      if (o.fotos) await this.fijarFotos(tx, creada.id, o.fotos);
+      if (o.fotos) await this.fijarFotos(tx, u, creada.id, o.fotos);
       await this.actividad.registrar(this.log(u, creada.id, 'Propiedad creada'), tx);
       return this.buscar(u, creada.id, tx);
     });
@@ -166,6 +185,7 @@ export class PropiedadesService {
   }
 
   async actualizar(u: UsuarioToken, id: string, entrada: PropiedadEntrada) {
+    const quitadas: string[] = [];
     const p = await this.db.$transaction(async (tx) => {
       const previa = await this.buscar(u, id, tx);
       if (entrada.version && entrada.version !== previa.version)
@@ -203,7 +223,7 @@ export class PropiedadesService {
         comuna: (d.comuna as string | null | undefined) ?? previa.comuna,
       });
       await tx.propiedad.update({ where: { id }, data: { ...d, version: { increment: 1 } } });
-      if (o.fotos) await this.fijarFotos(tx, id, o.fotos);
+      if (o.fotos) await this.fijarFotos(tx, u, id, o.fotos, quitadas);
       const estados = cambios.filter((k) => /^estado/.test(k));
       const texto = estados.length
         ? 'Estado: ' +
@@ -217,6 +237,7 @@ export class PropiedadesService {
       await this.actividad.registrar(this.log(u, id, texto), tx);
       return this.buscar(u, id, tx);
     });
+    this.r2.borrar(quitadas);
     return propiedadApp(p, u);
   }
 
@@ -361,7 +382,7 @@ export class PropiedadesService {
               busqueda: textoBusqueda({ ...o, codigo, titulo }),
             },
           });
-          if (o.fotos?.length) await this.fijarFotos(tx, creada.id, o.fotos);
+          if (o.fotos?.length) await this.fijarFotos(tx, u, creada.id, o.fotos);
           await this.actividad.registrar(this.log(u, creada.id, `Importada desde ${sistema}`), tx);
           propId = creada.id;
           res.nuevas++;
@@ -395,7 +416,7 @@ export class PropiedadesService {
                 version: { increment: 1 },
               },
             });
-            if (libres.fotos) await this.fijarFotos(tx, previa.id, libres.fotos);
+            if (libres.fotos) await this.fijarFotos(tx, u, previa.id, libres.fotos);
             await this.actividad.registrar(
               this.log(
                 u,

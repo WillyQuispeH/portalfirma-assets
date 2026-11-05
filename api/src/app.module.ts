@@ -13,6 +13,9 @@ import { PersonasController } from './personas/personas.controller';
 import { PersonasService } from './personas/personas.service';
 import { PropiedadesController } from './propiedades/propiedades.controller';
 import { PropiedadesService } from './propiedades/propiedades.service';
+import { ArchivosModule } from './archivos/archivos';
+import { NegociosController, NegociosService } from './negocios/negocios';
+import { EventosController, EventosService } from './agenda/eventos';
 
 @Module({
   imports: [
@@ -21,9 +24,24 @@ import { PropiedadesService } from './propiedades/propiedades.service';
     PrismaModule,
     AuthModule,
     ActividadModule,
+    ArchivosModule,
   ],
-  controllers: [UsuariosController, SaludController, PropiedadesController, PersonasController, ActividadController],
+  controllers: [
+    UsuariosController,
+    SaludController,
+    PropiedadesController,
+    PersonasController,
+    ActividadController,
+    NegociosController,
+    EventosController,
+  ],
   // el límite de intentos va antes que la sesión: un login fallido también cuenta
-  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }, PropiedadesService, PersonasService],
+  providers: [
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    PropiedadesService,
+    PersonasService,
+    NegociosService,
+    EventosService,
+  ],
 })
 export class AppModule {}
