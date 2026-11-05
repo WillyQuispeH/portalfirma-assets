@@ -2,6 +2,8 @@
 //  · Administrador: lista completa, agregar usuario con clave inicial, editar nombre, rol, teléfono y si está activo,
 //    asignar una clave nueva y vincular cada uno con su usuario de wechatia (o traerlos y vincular por correo).
 //  · Corredor: ve el equipo (nombre, contacto y rol), sin editar.
+// Con el kit: Boton, Input, Select, Switch, Badge, Avatar y EstadoVacio (va dentro del modal antiguo de la app, por eso
+// la cabecera es propia y no CabeceraPagina).
 // Los id (#usrPanel, #usrNuevo, #usrForm, #usrNombre…, [data-usr], [data-usr-ed], [data-usr-clave]) los usan las pruebas.
 import { useEffect, useState, type FormEvent } from 'react';
 import Boton from '../../ui/Boton';
@@ -10,6 +12,8 @@ import Select from '../../ui/Select';
 import Badge from '../../ui/Badge';
 import Switch from '../../ui/Switch';
 import Icono from '../../ui/Icono';
+import Avatar from '../../ui/Avatar';
+import EstadoVacio from '../../ui/EstadoVacio';
 import { useUsuario } from '../../../store/hooks/useUsuario.hook';
 import { useAcceso } from '../../../store/hooks/useAcceso.hook';
 import { usePerfil } from '../../../store/hooks/usePerfil.hook';
@@ -20,7 +24,6 @@ import { toast } from '../../../utils/app';
 import { fechaHora } from '../../../utils/formato';
 
 const ROLES: [RolAsset, string][] = [['CORREDOR', 'Corredor'], ['ADMIN', 'Administrador']];
-const iniciales = (n: string) => String(n || '').trim().split(/\s+/).map((x) => x[0]).slice(0, 2).join('').toUpperCase() || '?';
 
 type TModo = { tipo: 'nuevo' } | { tipo: 'editar'; u: IUsuario } | { tipo: 'clave'; u: IUsuario } | null;
 
@@ -37,7 +40,7 @@ export default function Usuarios() {
   useEffect(() => { if (listoPerfil) usuarioGetAll(admin); }, [usuarioGetAll, admin, listoPerfil, yo.id]);
 
   const listo = () => { setModo(null); perfilGet(); };
-  if (!listoPerfil) return <div id="usrPanel" className="usr tw:text-sm tw:text-muted"><span className="spinner sm" /> Cargando…</div>;
+  if (!listoPerfil) return <div id="usrPanel" className="usr"><EstadoVacio compacto texto="Cargando…" /></div>;
   const traerWechatia = async () => {
     setTrayendo(true); await usuarioWechatia(); setTrayendo(false);
   };
@@ -45,7 +48,7 @@ export default function Usuarios() {
   return (
     <div id="usrPanel" className="usr tw:flex tw:flex-col tw:gap-4 tw:min-w-0">
       <div className="tw:flex tw:items-start tw:gap-3">
-        <span className="tw:flex tw:items-center tw:justify-center tw:w-10 tw:h-10 tw:rounded-xl tw:bg-lav tw:text-lav-ink tw:flex-none"><Icono nombre="users" tam={20} /></span>
+        <span className="tw:flex tw:items-center tw:justify-center tw:w-10 tw:h-10 tw:rounded-xl tw:bg-lav-soft tw:text-lav-softink tw:flex-none"><Icono nombre="users" tam={19} /></span>
         <div className="tw:min-w-0">
           <h2 className="tw:m-0 tw:text-lg tw:font-bold">{admin ? 'Usuarios' : 'Equipo'} de {cuenta?.corredora?.nombre || 'la corredora'}</h2>
           <p className="tw:m-0 tw:mt-1 tw:text-[13px] tw:text-muted">
@@ -54,11 +57,11 @@ export default function Usuarios() {
         </div>
       </div>
 
-      {error && <p className="tw:m-0 tw:text-err tw:text-sm" id="usrErrLista">{error}</p>}
+      {error && <p role="alert" className="tw:m-0 tw:text-red-softink tw:text-sm" id="usrErrLista">{error}</p>}
       <ul className="tw:list-none tw:m-0 tw:p-0 tw:flex tw:flex-col tw:gap-2" id="usrLista">
         {lista.map((u) => <Fila key={u.id} u={u} yo={yo.id} admin={admin} onEditar={() => setModo({ tipo: 'editar', u })} onClave={() => setModo({ tipo: 'clave', u })} />)}
-        {!lista.length && !cargando && <li className="tw:text-sm tw:text-muted">Aún no hay usuarios.</li>}
-        {cargando && !lista.length && <li className="tw:text-sm tw:text-muted"><span className="spinner sm" /> Cargando…</li>}
+        {!lista.length && !cargando && <li><EstadoVacio icono="users" texto="Aún no hay usuarios." /></li>}
+        {cargando && !lista.length && <li><EstadoVacio compacto texto="Cargando…" /></li>}
       </ul>
 
       {admin && modo?.tipo === 'nuevo' && <FormNuevo onListo={() => { listo(); toast('Usuario agregado. Ya puede entrar con su correo y la clave inicial.'); }} onCancelar={() => setModo(null)} />}
@@ -85,7 +88,7 @@ export default function Usuarios() {
 function Fila({ u, yo, admin, onEditar, onClave }: { u: IUsuario; yo: string; admin: boolean; onEditar: () => void; onClave: () => void }) {
   return (
     <li data-usr={u.id} className={`tw:flex tw:items-center tw:gap-3 tw:p-3 tw:rounded-xl tw:border tw:border-solid tw:border-edge tw:border-b-2 tw:border-b-edge-b tw:bg-card ${u.activo ? '' : 'tw:opacity-60'}`}>
-      <span className="tw:flex tw:items-center tw:justify-center tw:w-9 tw:h-9 tw:rounded-full tw:bg-sunken tw:text-[13px] tw:font-bold tw:flex-none">{iniciales(u.nombre)}</span>
+      <Avatar nombre={u.nombre} />
       <div className="tw:min-w-0 tw:flex-1">
         <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
           <b className="tw:text-sm">{u.nombre}</b>{u.id === yo && <span className="tw:text-xs tw:text-muted">(tú)</span>}
@@ -137,7 +140,7 @@ function FormNuevo({ onListo, onCancelar }: { onListo: () => void; onCancelar: (
         <Select id="usrRol" etiqueta="Rol" opciones={ROLES} value={d.rol} onChange={(e) => setD({ ...d, rol: e.target.value as RolAsset })} />
         <Input id="usrClave" etiqueta="Clave inicial" type="password" autoComplete="new-password" value={d.clave} onChange={(e) => setD({ ...d, clave: e.target.value })} ayuda="Al menos 8 caracteres. Dásela a la persona; puede cambiarla después." />
       </div>
-      {err && <p className="tw:m-0 tw:text-err tw:text-sm" id="usrErr">{err}</p>}
+      {err && <p role="alert" className="tw:m-0 tw:text-[13px] tw:font-semibold tw:text-red-softink" id="usrErr">{err}</p>}
       <Acciones enviando={enviando} texto="Agregar" onCancelar={onCancelar} />
     </form>
   );
@@ -173,7 +176,7 @@ function FormEditar({ u, yo, wechatia, onListo, onCancelar }: { u: IUsuario; yo:
       </div>
       <Switch id="usrActivo" activo={d.activo} deshabilitado={soyYo} alCambiar={(v) => setD({ ...d, activo: v })} etiqueta="Activo"
         descripcion={soyYo ? 'No puedes desactivarte.' : 'Desactivado no puede entrar y se cierran sus sesiones abiertas.'} />
-      {err && <p className="tw:m-0 tw:text-err tw:text-sm" id="usrErr">{err}</p>}
+      {err && <p role="alert" className="tw:m-0 tw:text-[13px] tw:font-semibold tw:text-red-softink" id="usrErr">{err}</p>}
       <Acciones enviando={enviando} texto="Guardar" onCancelar={onCancelar} />
     </form>
   );
@@ -192,7 +195,7 @@ function FormClave({ u, onListo, onCancelar }: { u: IUsuario; onListo: () => voi
       <b className="tw:text-sm">Clave nueva para {u.nombre}</b>
       <Input id="usrClaveNueva" etiqueta="Clave nueva" type="password" autoComplete="new-password" value={clave} onChange={(e) => setClave(e.target.value)} autoFocus
         ayuda="Al menos 8 caracteres. Se cierran sus sesiones abiertas: entra de nuevo con esta clave." />
-      {err && <p className="tw:m-0 tw:text-err tw:text-sm" id="usrErr">{err}</p>}
+      {err && <p role="alert" className="tw:m-0 tw:text-[13px] tw:font-semibold tw:text-red-softink" id="usrErr">{err}</p>}
       <Acciones enviando={enviando} texto="Asignar clave" onCancelar={onCancelar} />
     </form>
   );

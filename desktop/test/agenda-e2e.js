@@ -46,7 +46,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     ok(/Llamar al banco/.test(await txt('#view-agenda .ag-ev')), 'filtro por tipo: solo la llamada');
     await w.click('#agTipo button:text("Todo")'); await w.click('#agRango button:text("Próximos 14 días")'); await w.waitForFunction(() => document.querySelectorAll('#view-agenda .ag-ev').length === 3);
 
-    await w.click(`[data-hecho="${llamada.id}"]`); await w.waitForSelector(`[data-ev="${llamada.id}"] .im-st.ok`);
+    await w.click(`[data-hecho="${llamada.id}"]`); await w.waitForSelector(`[data-ev="${llamada.id}"] [data-estado="hecho"]`);
     ok((await call('agendaObtener', llamada.id)).estado === 'hecho', 'marcar como hecho lo guarda');
 
     await w.click(`[data-repro="${tarea.id}"]`); await w.waitForSelector(`[data-reprogramar="${tarea.id}"]`);
@@ -58,7 +58,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
 
     await w.click(`[data-canc="${tarea.id}"]`); await w.waitForSelector(`[data-ev="${tarea.id}"]`, { state: 'detached' });
     ok((await call('agendaObtener', tarea.id)).estado === 'cancelado', 'cancelar lo guarda y lo quita del rango');
-    await w.click('#agRango button:text("Todo")'); await w.waitForSelector(`[data-ev="${tarea.id}"] .im-st.off`);
+    await w.click('#agRango button:text("Todo")'); await w.waitForSelector(`[data-ev="${tarea.id}"] [data-estado="cancelado"]`);
     ok(true, 'en «Todo» aparece como Cancelado');
 
     // «Nuevo evento»: el formulario sigue en src/renderer/agenda.js y al guardar la lista React se recarga

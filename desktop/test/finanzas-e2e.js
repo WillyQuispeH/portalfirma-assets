@@ -45,13 +45,13 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     ok(/UF 100 perdida/.test(kpis), 'comisión perdida: el negocio que se cayó');
     ok(/1 negocios sin comisión/.test(kpis), 'avisa el negocio sin comisión definida');
 
-    const porCor = await txt('.rx-fin .im-box:has(h3:text("Por corredor"))');
+    const porCor = await txt('.rx-fin [data-fin="corredores"]');
     ok(/Ana Rivas 1 UF 200 —/.test(porCor) && /Beto Soto 1 — \$300\.000/.test(porCor), 'el administrador ve la comisión por corredor');
     ok((await w.$$('.rx-fin-det tbody tr')).length === 4, 'el detalle lista los 4 negocios');
 
-    await w.click('.rx-fin .im-seg button:text("Arriendos")');
+    await w.click('#finTipo [data-tab="arriendo"]');
     ok((await w.$$('.rx-fin-det tbody tr')).length === 1 && /— ganada/.test(await txt('.rx-fin .ng-kpis')), 'el filtro Arriendos deja solo el arriendo');
-    await w.click('.rx-fin .im-seg button:text("Todos")');
+    await w.click('#finTipo [data-tab="todos"]');
 
     await w.click(`.rx-fin-det tr[data-id="${nV.id}"]`); await w.waitForSelector('#view-negocios:not(.hidden) .ng-ficha');
     ok(/Casa La Reina/.test(await txt('#view-negocios')), 'al hacer clic en una fila se abre el negocio');
@@ -59,7 +59,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     // corredor: solo sus negocios, sin la tabla por corredor
     await call('assetIngresar', 'beto@x.cl', 'clave-beto-123'); await w.evaluate(async () => { window.PERFIL = await window.api('accEstado'); });
     await abrir();
-    ok(/de tus negocios/.test(await txt('.rx-fin .im-head')) && !(await w.$('.rx-fin .im-box h3:text("Por corredor")')), 'el corredor ve «tus negocios», sin la tabla por corredor');
+    ok(/de tus negocios/.test(await txt('.rx-fin [data-cabecera]')) && !(await w.$('.rx-fin [data-fin="corredores"]')), 'el corredor ve «tus negocios», sin la tabla por corredor');
     ok((await w.$$('.rx-fin-det tbody tr')).length === 1 && /\$300\.000 en curso/.test(await txt('.rx-fin .ng-kpis')), 'y solo su negocio');
 
     const relevantes = errs.filter((e) => /Content Security Policy|ReactUI|react|Finanzas/i.test(e));

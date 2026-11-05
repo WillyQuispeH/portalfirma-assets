@@ -1,15 +1,21 @@
 // Actividad: todo lo que pasó en la cartera, agrupado por día, con búsqueda, filtros y «Ver más».
-// Los id acQ, acCl, acLista y acCont y la clase ac-dia los usa test/vista-e2e.js.
+// Hecha con el kit: CabeceraPagina (con «volver» al inicio), Buscador, Tabs, Card, EstadoVacio y Boton.
+// Los id acVolver, acQ, acCl (data-c en cada filtro), acLista, acCont y acMas y la clase ac-dia los usan
+// test/actividad-e2e.js y test/vista-e2e.js.
 import { Fragment, useEffect } from 'react';
 import { useActividad } from '../../../store/hooks/useActividad.hook';
 import { abrirAgenda, abrirFicha, abrirInicio, abrirNegocio, abrirPersona } from '../../../utils/app';
 import Buscador from '../../ui/Buscador';
-import Icono from '../../ui/Icono';
+import CabeceraPagina from '../../ui/CabeceraPagina';
+import Tabs, { type TTabOpcion } from '../../ui/Tabs';
+import Card from '../../ui/Card';
+import EstadoVacio from '../../ui/EstadoVacio';
+import Boton from '../../ui/Boton';
 import ActividadItem from './ActividadItem';
 import { tituloDia } from './fechas';
 import type { IActividadItem, TActividadFiltro } from '../../../store/interfaces/actividad.interface';
 
-const FILTROS: [TActividadFiltro, string][] = [['', 'Todo'], ['propiedad', 'Propiedades'], ['negocio', 'Negocios'], ['persona', 'Personas'], ['agenda', 'Agenda'], ['nota', 'Notas']];
+const FILTROS: TTabOpcion<TActividadFiltro>[] = [['', 'Todo'], ['propiedad', 'Propiedades'], ['negocio', 'Negocios'], ['persona', 'Personas'], ['agenda', 'Agenda'], ['nota', 'Notas']];
 
 function abrir(a: IActividadItem) {
   if (!a.ir) return;
@@ -27,41 +33,39 @@ export default function Actividad() {
 
   return (
     <div className="im-wrap tw:max-w-[920px]">
-      <div className="tw:flex tw:items-center tw:gap-3.5 tw:mb-3.5">
-        <button className="ghost tw:w-auto tw:m-0" id="acVolver" onClick={abrirInicio}><Icono nombre="chevL" tam={16} /> Inicio</button>
-        <div>
-          <h1 className="tw:m-0 tw:text-2xl">Actividad</h1>
-          <small className="tw:text-muted" id="acCont">{total ? `${total} ${total === 1 ? 'movimiento' : 'movimientos'}` : ''}</small>
-        </div>
+      <CabeceraPagina
+        volver={{ texto: 'Inicio', alTocar: abrirInicio, id: 'acVolver' }}
+        titulo="Actividad"
+        subtitulo={<span id="acCont">{total ? `${total} ${total === 1 ? 'movimiento' : 'movimientos'}` : ''}</span>}
+      />
+
+      <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-3 tw:mb-4">
+        <Buscador kit id="acQ" valor={q} alCambiar={actividadSetQ} espera={220} placeholder="Buscar por propiedad, cliente o acción" />
+        <Tabs id="acCl" dato="c" etiqueta="Filtrar por" opciones={FILTROS} valor={clase} alCambiar={actividadSetClase} className="tw:max-w-full tw:overflow-x-auto" />
       </div>
 
-      <div className="tw:flex tw:flex-wrap tw:gap-2.5 tw:items-center tw:mb-3">
-        <Buscador id="acQ" clase="ac-q" valor={q} alCambiar={actividadSetQ} espera={220} placeholder="Buscar por propiedad, cliente o acción" />
-        <div className="ga-chips" id="acCl">
-          {FILTROS.map(([k, t]) => <button key={k} data-c={k} className={clase === k ? 'on' : ''} onClick={() => actividadSetClase(k)}>{t}</button>)}
-        </div>
-      </div>
+      {error && <p role="alert" className="tw:text-red-softink">No se pudo leer la actividad: {error}</p>}
 
-      {error && <p className="error">No se pudo leer la actividad: {error}</p>}
-
-      <div className="im-box tw:pt-1.5 tw:px-3.5 tw:pb-3.5">
-        <div id="acLista">
+      <Card>
+        <div id="acLista" className="tw:-mx-3 tw:-mt-2">
           {cargado && (items.length ? items.map((a) => {
             const dia = tituloDia(a.fecha); const nuevoDia = dia !== diaAnterior; diaAnterior = dia;
             return (
               <Fragment key={a.id}>
-                {nuevoDia && <h4 className="ac-dia tw:mt-3.5 tw:mb-1.5 tw:text-[11px] tw:uppercase tw:tracking-[.05em] tw:text-muted">{dia}</h4>}
+                {nuevoDia && <h4 className="ac-dia tw:mt-3.5 tw:mb-1.5 tw:mx-3 tw:text-[11px] tw:font-semibold tw:uppercase tw:tracking-[.05em] tw:text-muted">{dia}</h4>}
                 <ActividadItem item={a} alAbrir={() => abrir(a)} />
               </Fragment>
             );
           }) : (
-            <p className="muted tw:py-5 tw:px-1.5">{q || clase ? 'Nada coincide con el filtro.' : 'Aún no hay actividad.'}</p>
+            <EstadoVacio icono="clock" texto={q || clase ? 'Nada coincide con el filtro.' : 'Aún no hay actividad.'} />
           ))}
         </div>
         {hayMas && (
-          <button className="secondary tw:block tw:w-auto tw:mt-3 tw:mx-auto" id="acMas" disabled={cargando} onClick={() => actividadGetPage(false)}>Ver más</button>
+          <div className="tw:flex tw:justify-center tw:mt-3">
+            <Boton id="acMas" variante="secundario" cargando={cargando} onClick={() => actividadGetPage(false)}>Ver más</Boton>
+          </div>
         )}
-      </div>
+      </Card>
     </div>
   );
 }

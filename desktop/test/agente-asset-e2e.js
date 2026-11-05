@@ -64,7 +64,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     await w.waitForSelector('[data-orden]'); await w.click('[data-orden]'); await w.waitForSelector('text=Generar y enviar a firmar');
     ok(/MARIA GONZALEZ ROJAS/.test(await txt('#modalCard')) && /CV-9004/.test(await txt('#modalCard')), 'el botón «Generar orden de visita» muestra lo que se enviará');
     await w.click('#mOk'); await w.waitForSelector('text=Orden de visita enviada a firmar');
-    await w.waitForFunction(() => document.querySelectorAll('.ag-ord.ok').length === 2);
+    await w.waitForFunction(() => document.querySelectorAll('#view-agenda [data-orden-ok]').length === 2);
     ok(true, 'orden generada desde la Agenda');
     await shot('aa3-agenda.png');
     await w.click('#nav [data-view="inicio"]'); await w.waitForSelector('#view-inicio .hoy-agenda'); ok(/Agenda de hoy/.test(await txt('#view-inicio')), '«Hoy» muestra la agenda de hoy');

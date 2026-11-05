@@ -28,7 +28,7 @@ const assert = (c, m) => { if (!c) throw new Error('FALLA: ' + m); console.log('
     await w.evaluate(() => window._rx.actualizar({}));
     assert(await w.isVisible('#rx-prueba h1'), 'actualizar() vuelve a renderizar sin errores');
 
-    assert(await w.evaluate(() => getComputedStyle(document.querySelector('#rx-prueba .rx-fin .im-bar')).flexWrap === 'wrap'), 'se aplica react-ui.css');
+    assert(await w.evaluate(() => getComputedStyle(document.querySelector('#rx-prueba .rx-fin #finTipo').parentElement).flexWrap === 'wrap'), 'se aplica react-ui.css');
 
     await w.evaluate(() => window._rx.desmontar());
     assert(await w.evaluate(() => document.getElementById('rx-prueba').childElementCount === 0), 'desmontar() limpia el elemento');

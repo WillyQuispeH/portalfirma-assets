@@ -1,13 +1,21 @@
 // Negocios: el tablero por etapas (Ventas / Arriendos), con resumen, búsqueda y «Cerrados».
 // Arrastrar una tarjeta a otra columna mueve el negocio de etapa.
+// Hecha con el kit: CabeceraPagina, Boton, Tabs, Buscador, Kpi, Card y EstadoVacio; las columnas y tarjetas del
+// tablero siguen con sus clases ng-* de styles.css.
 //
 // La ficha del negocio y «Nuevo negocio» siguen en src/renderer/negocios.js; se llaman por utils/app.ts.
-// Los id ngNew, ngTipo, ngVer y las clases ng-board, ng-col[data-e], ng-card los usan las pruebas y Aprende.
+// Los id ngNew, ngTipo (data-t), ngVer (data-v), ngQ y las clases ng-kpis, ng-board, ng-col[data-e], ng-card y
+// ng-cerrados los usan las pruebas y Aprende.
 import { useEffect, useMemo, useState } from 'react';
 import { useNegocio } from '../../../store/hooks/useNegocio.hook';
 import { abrirNegocio, esMiembro, nuevoNegocio, toast } from '../../../utils/app';
 import { montos } from '../../../utils/formato';
 import Buscador from '../../ui/Buscador';
+import CabeceraPagina from '../../ui/CabeceraPagina';
+import Boton from '../../ui/Boton';
+import Tabs from '../../ui/Tabs';
+import Card from '../../ui/Card';
+import EstadoVacio from '../../ui/EstadoVacio';
 import Icono from '../../ui/Icono';
 import Kpi from '../../ui/Kpi';
 import NegocioCard from './NegocioCard';
@@ -55,31 +63,22 @@ export default function Negocios({ tipo: tipoInicial }: INegociosProps) {
 
   return (
     <div className="im-wrap ng-wrap">
-      <div className="im-head fx-negocios">
-        <div>
-          <h1>Negocios</h1>
-          <p className="muted">Cada etapa dice qué falta. Arrastra una tarjeta para moverla; cuando un documento queda firmado, el negocio avanza solo.</p>
-        </div>
-        <button className="primary" id="ngNew" onClick={() => nuevoNegocio({ tipo: f.tipo })}><Icono nombre="plus" tam={15} /> Nuevo negocio</button>
+      <CabeceraPagina
+        titulo="Negocios"
+        ilustracion={{ imagen: 'img/formas/negocios.svg', tinte: '#3d9cf0' }}
+        subtitulo="Cada etapa dice qué falta. Arrastra una tarjeta para moverla; cuando un documento queda firmado, el negocio avanza solo."
+        acciones={<Boton id="ngNew" icono="plus" onClick={() => nuevoNegocio({ tipo: f.tipo })}>Nuevo negocio</Boton>}
+      />
+
+      <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-3 tw:mb-4">
+        <Tabs id="ngTipo" dato="t" etiqueta="Tipo de negocio" valor={f.tipo} alCambiar={(tipo) => negocioSetFiltros({ tipo })}
+          opciones={[['venta', 'Ventas', cuenta('venta')], ['arriendo', 'Arriendos', cuenta('arriendo')]]} />
+        <Buscador kit id="ngQ" valor={f.q} alCambiar={(q) => negocioSetFiltros({ q })} espera={180} placeholder="Buscar por propiedad, cliente o RUT" />
+        <Tabs id="ngVer" dato="v" etiqueta="Abiertos o cerrados" valor={f.ver} alCambiar={(ver) => negocioSetFiltros({ ver })}
+          opciones={[['abiertos', 'Abiertos'], ['cerrados', 'Cerrados']]} />
       </div>
 
-      <div className="im-bar">
-        <div className="im-seg ng-big" id="ngTipo" role="group" aria-label="Tipo de negocio">
-          {(['venta', 'arriendo'] as const).map((t) => (
-            <button key={t} data-t={t} className={f.tipo === t ? 'on' : ''} onClick={() => negocioSetFiltros({ tipo: t })}>
-              {t === 'venta' ? 'Ventas' : 'Arriendos'} <i>{cuenta(t)}</i>
-            </button>
-          ))}
-        </div>
-        <Buscador id="ngQ" valor={f.q} alCambiar={(q) => negocioSetFiltros({ q })} espera={180} placeholder="Buscar por propiedad, cliente o RUT" />
-        <div className="im-seg" id="ngVer" role="group" aria-label="Abiertos o cerrados">
-          {(['abiertos', 'cerrados'] as const).map((v) => (
-            <button key={v} data-v={v} className={f.ver === v ? 'on' : ''} onClick={() => negocioSetFiltros({ ver: v })}>{v === 'abiertos' ? 'Abiertos' : 'Cerrados'}</button>
-          ))}
-        </div>
-      </div>
-
-      {error && <p className="error">No se pudieron leer los negocios: {error}</p>}
+      {error && <p role="alert" className="tw:text-red-softink">No se pudieron leer los negocios: {error}</p>}
 
       {cargado && (
         <>
@@ -107,7 +106,8 @@ export default function Negocios({ tipo: tipoInicial }: INegociosProps) {
                     <div className="ng-drop">
                       {enEtapa.length
                         ? enEtapa.map((n) => <NegocioCard key={n.id} n={n} alAbrir={() => abrirNegocio(n.id)} />)
-                        : <p className="ng-empty">{i === 0 ? 'Crea un negocio o arrastra uno aquí' : 'Sin negocios'}</p>}
+                        : <EstadoVacio compacto className="tw:my-6 tw:mx-1.5 tw:text-center"
+                            texto={i === 0 ? 'Crea un negocio o arrastra uno aquí' : 'Sin negocios'} />}
                     </div>
                   </section>
                 );
@@ -117,7 +117,7 @@ export default function Negocios({ tipo: tipoInicial }: INegociosProps) {
             <div className="ng-cerrados">
               {lista.length
                 ? lista.map((n) => <NegocioCard key={n.id} n={n} alAbrir={() => abrirNegocio(n.id)} />)
-                : <div className="im-empty sm"><p>No hay negocios cerrados todavía.</p></div>}
+                : <Card className="tw:col-span-full"><EstadoVacio icono="briefcase" texto="No hay negocios cerrados todavía." /></Card>}
             </div>
           )}
         </>

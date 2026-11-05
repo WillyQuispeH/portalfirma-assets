@@ -1,17 +1,15 @@
-// Un movimiento de la Actividad. Las clases ac-it y data-clase las usa test/vista-e2e.js.
+// Un movimiento de la Actividad (fila de lista, con los tonos del kit). La clase ac-it y data-clase/data-ir los usan
+// test/actividad-e2e.js y test/vista-e2e.js.
 import Icono from '../../ui/Icono';
+import { SUAVE, type TTono } from '../../ui/tonos';
+import { cx } from '../../../utils/cx';
 import { hora } from './fechas';
 import type { IActividadItem, TActividadClase } from '../../../store/interfaces/actividad.interface';
 
 const ICONO: Record<TActividadClase, string> = { propiedad: 'house', negocio: 'briefcase', persona: 'user', agenda: 'calendar', otro: 'clock' };
 
-// color del ícono según a qué se refiere
-const COLOR: Partial<Record<TActividadClase, string>> = {
-  propiedad: 'tw:bg-brand-soft tw:text-brand',
-  negocio: 'tw:bg-[var(--warn-soft)] tw:text-[var(--hint)]',
-  agenda: 'tw:bg-[#e8f6ee] tw:text-[#178a48] tw:dark:bg-ok-soft tw:dark:text-ok',
-  persona: 'tw:bg-[#f0ecff] tw:text-[#6a4bd6] tw:dark:bg-[#2a2350] tw:dark:text-[#b9a6ff]',
-};
+// color del ícono según a qué se refiere (tonos del kit)
+const TONO: Record<TActividadClase, TTono> = { propiedad: 'azul', negocio: 'amarillo', agenda: 'verde', persona: 'lavanda', otro: 'gris' };
 
 interface IActividadItemProps {
   item: IActividadItem;
@@ -21,9 +19,9 @@ interface IActividadItemProps {
 export default function ActividadItem({ item: a, alAbrir }: IActividadItemProps) {
   return (
     <button
-      className="ac-it tw:w-full tw:m-0 tw:flex tw:items-center tw:gap-3 tw:px-2 tw:py-[9px] tw:rounded-[10px] tw:border-0 tw:bg-transparent tw:text-left tw:text-text tw:cursor-pointer tw:hover:bg-bg"
+      className="ac-it tw:w-full tw:m-0 tw:flex tw:items-center tw:gap-3 tw:px-3 tw:py-2 tw:rounded-xl tw:border-0 tw:bg-transparent tw:text-left tw:text-text tw:font-[inherit] tw:cursor-pointer tw:hover:bg-hover tw:focus-visible:outline-2 tw:focus-visible:outline-lav-edge"
       data-clase={a.clase} data-ir={a.ir || ''} onClick={alAbrir}>
-      <span className={`tw:w-7 tw:h-7 tw:flex-none tw:grid tw:place-items-center tw:rounded-[9px] ${COLOR[a.clase] || 'tw:bg-bg tw:text-muted'}`}>
+      <span className={cx('tw:w-8 tw:h-8 tw:flex-none tw:grid tw:place-items-center tw:rounded-[10px]', SUAVE[TONO[a.clase] ?? 'gris'])}>
         <Icono nombre={a.nota ? 'edit' : ICONO[a.clase] || 'clock'} tam={14} />
       </span>
       <span className="tw:min-w-0 tw:flex tw:flex-col">

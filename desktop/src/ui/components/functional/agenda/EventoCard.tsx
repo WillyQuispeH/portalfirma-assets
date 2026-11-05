@@ -1,7 +1,14 @@
 // Un evento de la agenda: hora, tipo, datos, orden de visita y acciones (hecho, reprogramar, cancelar).
-// Las clases ag-ev, ag-ord y los atributos data-* los usan las pruebas e2e y el recorrido de Aprende.
+// Hecho con el kit (Boton, Badge, Input) sobre una caja táctil como Card.
+// La clase ag-ev y los atributos data-ev, data-orden, data-orden-ok, data-hecho, data-repro, data-canc,
+// data-reprogramar y data-estado los usan las pruebas e2e y el recorrido de Aprende.
 import { useState } from 'react';
 import Icono from '../../ui/Icono';
+import Boton from '../../ui/Boton';
+import Badge from '../../ui/Badge';
+import Input from '../../ui/Input';
+import { cx } from '../../../utils/cx';
+import { SUAVE, type TTono } from '../../ui/tonos';
 import type { IEvento, IEventoCambios, TEventoTipo } from '../../../store/interfaces/evento.interface';
 
 export const TIPOS: Record<TEventoTipo, [string, string]> = {
@@ -10,11 +17,7 @@ export const TIPOS: Record<TEventoTipo, [string, string]> = {
 };
 
 // color del ícono según el tipo
-const COLOR_TIPO: Partial<Record<TEventoTipo, string>> = {
-  visita: 'tw:bg-[color-mix(in_srgb,#ffe600_30%,var(--card))] tw:text-[#6b5b00] tw:dark:text-[#ffe066]',
-  firma: 'tw:bg-ok-soft tw:text-ok',
-  llamada: 'tw:bg-[color-mix(in_srgb,#6a2fe0_12%,var(--card))] tw:text-[#6a2fe0] tw:dark:text-[#b69cff]',
-};
+const TONO_TIPO: Partial<Record<TEventoTipo, TTono>> = { visita: 'amarillo', firma: 'verde', llamada: 'lavanda' };
 
 interface IEventoCardProps {
   evento: IEvento;
@@ -27,45 +30,55 @@ export default function EventoCard({ evento: e, alActualizar, alPedirOrden }: IE
   const [reprogramando, setReprogramando] = useState(false);
   const [fecha, setFecha] = useState(e.fecha);
   const [hora, setHora] = useState(e.hora || '');
+  const [guardando, setGuardando] = useState(false);
   const programado = e.estado === 'programado';
   const detalle = [e.prop?.codigo, e.lugar, e.personas.map((c) => c.nombre).join(', ')].filter(Boolean).join(' · ');
 
   const guardarFecha = async () => {
-    if (await alActualizar({ fecha, hora }, 'Evento reprogramado.')) setReprogramando(false);
+    setGuardando(true);
+    const ok = await alActualizar({ fecha, hora }, 'Evento reprogramado.');
+    setGuardando(false);
+    if (ok) setReprogramando(false);
   };
 
   return (
-    <div data-ev={e.id} className={`ag-ev tw:flex tw:items-center tw:gap-3.5 tw:bg-card tw:border tw:border-line tw:rounded-[14px] tw:px-3.5 tw:py-3 tw:mb-2 ${programado ? '' : 'tw:opacity-[.62]'}`}>
-      <span className="tw:font-bold tw:text-[15px] tw:w-[52px] tw:text-center tw:text-text">{e.hora || '—'}</span>
-      <span className={`tw:w-9 tw:h-9 tw:rounded-[10px] tw:grid tw:place-items-center tw:flex-none ${COLOR_TIPO[e.tipo] || 'tw:bg-brand-soft tw:text-brand'}`}>
+    <div data-ev={e.id} className={cx(
+      'ag-ev tw:flex tw:items-center tw:gap-3.5 tw:mb-2 tw:px-3.5 tw:py-3 tw:rounded-2xl tw:bg-card',
+      'tw:border tw:border-solid tw:border-edge tw:border-b-[3px] tw:border-b-edge-b',
+      !programado && 'tw:opacity-[.62]',
+    )}>
+      <span className="tw:w-[52px] tw:flex-none tw:text-center tw:text-[15px] tw:font-bold tw:tabular-nums tw:text-text">{e.hora || '—'}</span>
+      <span className={cx('tw:grid tw:place-items-center tw:flex-none tw:w-9 tw:h-9 tw:rounded-xl', SUAVE[TONO_TIPO[e.tipo] ?? 'azul'])}>
         <Icono nombre={ic} tam={16} />
       </span>
 
-      <span className="tw:flex-1 tw:flex tw:flex-col tw:gap-0.5 tw:min-w-0">
-        <b className={e.estado === 'cancelado' ? 'tw:line-through' : ''}>{e.titulo}</b>
-        {detalle && <small className="tw:text-muted">{detalle}</small>}
+      <span className="tw:flex-1 tw:flex tw:flex-col tw:items-start tw:gap-0.5 tw:min-w-0">
+        <b className={cx('tw:text-sm tw:font-semibold', e.estado === 'cancelado' && 'tw:line-through')}>{e.titulo}</b>
+        {detalle && <small className="tw:text-xs tw:text-muted">{detalle}</small>}
         {e.tipo === 'visita' && (e.orden?.operacion
-          ? <i className="ag-ord ok"><Icono nombre="check" tam={12} /> Orden de visita · operación {e.orden.operacion}</i>
-          : programado && <button className="ag-ord" data-orden={e.id} onClick={alPedirOrden}><Icono nombre="sign" tam={12} /> Generar orden de visita</button>)}
+          ? <span data-orden-ok={e.id} className="tw:mt-1"><Badge tono="verde" icono="check">Orden de visita · operación {e.orden.operacion}</Badge></span>
+          : programado && <Boton variante="secundario" tamano="sm" icono="sign" className="tw:mt-1" data-orden={e.id} onClick={alPedirOrden}>Generar orden de visita</Boton>)}
         {reprogramando && (
-          <span className="ng-inl tw:mt-2 tw:items-center tw:gap-2 tw:self-start" data-reprogramar={e.id}>
-            <input type="date" value={fecha} onChange={(ev) => setFecha(ev.target.value)} aria-label="Nueva fecha" className="tw:w-[170px] tw:flex-none" />
-            <input type="time" value={hora} onChange={(ev) => setHora(ev.target.value)} aria-label="Nueva hora" className="tw:w-[120px] tw:flex-none" />
-            <button className="primary small" onClick={guardarFecha}>Guardar</button>
-            <button className="ghost small" onClick={() => { setReprogramando(false); setFecha(e.fecha); setHora(e.hora || ''); }}>Cancelar</button>
+          <span className="tw:flex tw:flex-wrap tw:items-center tw:gap-2 tw:mt-2" data-reprogramar={e.id}>
+            <Input type="date" value={fecha} onChange={(ev) => setFecha(ev.target.value)} aria-label="Nueva fecha" clasesCampo="tw:w-[170px] tw:flex-none" />
+            <Input type="time" value={hora} onChange={(ev) => setHora(ev.target.value)} aria-label="Nueva hora" clasesCampo="tw:w-[120px] tw:flex-none" />
+            <Boton tamano="sm" cargando={guardando} onClick={guardarFecha}>Guardar</Boton>
+            <Boton variante="fantasma" tamano="sm" onClick={() => { setReprogramando(false); setFecha(e.fecha); setHora(e.hora || ''); }}>Cancelar</Boton>
           </span>
         )}
       </span>
 
-      <span className="tw:flex tw:gap-0.5">
+      <span className="tw:flex tw:flex-none tw:gap-0.5">
         {programado ? (
           <>
-            <button className="ghost small" data-hecho={e.id} title="Marcar como hecho" onClick={() => alActualizar({ estado: 'hecho' }, 'Marcado como hecho.')}><Icono nombre="check" tam={15} /></button>
-            <button className="ghost small" data-repro={e.id} title="Reprogramar" onClick={() => setReprogramando((v) => !v)}><Icono nombre="clock" tam={15} /></button>
-            <button className="ghost small" data-canc={e.id} title="Cancelar" onClick={() => alActualizar({ estado: 'cancelado' }, 'Evento cancelado.')}><Icono nombre="x" tam={15} /></button>
+            <Boton variante="fantasma" tamano="sm" icono="check" data-hecho={e.id} title="Marcar como hecho" aria-label="Marcar como hecho" onClick={() => alActualizar({ estado: 'hecho' }, 'Marcado como hecho.')} />
+            <Boton variante="fantasma" tamano="sm" icono="clock" data-repro={e.id} title="Reprogramar" aria-label="Reprogramar" aria-expanded={reprogramando} onClick={() => setReprogramando((v) => !v)} />
+            <Boton variante="fantasma" tamano="sm" icono="x" data-canc={e.id} title="Cancelar" aria-label="Cancelar el evento" onClick={() => alActualizar({ estado: 'cancelado' }, 'Evento cancelado.')} />
           </>
         ) : (
-          <span className={`im-st ${e.estado === 'hecho' ? 'ok' : 'off'}`}>{e.estado === 'hecho' ? 'Hecho' : 'Cancelado'}</span>
+          <span data-estado={e.estado}>
+            <Badge tono={e.estado === 'hecho' ? 'verde' : 'gris'}>{e.estado === 'hecho' ? 'Hecho' : 'Cancelado'}</Badge>
+          </span>
         )}
       </span>
     </div>

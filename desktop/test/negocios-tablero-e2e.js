@@ -29,7 +29,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     const nA = await call('negGuardar', { tipo: 'arriendo', propId: pA.id, clienteId: cli.id }); // el último que se movió
 
     await tablero();
-    ok(/on/.test(await w.getAttribute('#ngTipo [data-t="arriendo"]', 'class')) && await tarjetas() === 1, 'abre donde está lo último que se movió (Arriendos)');
+    ok(await w.getAttribute('#ngTipo [data-t="arriendo"]', 'aria-selected') === 'true' && await tarjetas() === 1, 'abre donde está lo último que se movió (Arriendos)');
     ok(/Arriendos 1/.test(await txt('#ngTipo')) && /Ventas 1/.test(await txt('#ngTipo')), 'cuenta los abiertos de cada tipo');
     ok((await w.$$('#view-negocios .ng-col')).length >= 5 && !!(await w.$(`.ng-col[data-e="interes"] .ng-card[data-n="${nA.id}"]`)), 'columnas por etapa, el negocio en «Interesado»');
 
@@ -44,7 +44,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
       await w.click('#ngBack'); await w.waitForSelector('#view-negocios #ngTipo');
     }
     await w.waitForSelector(`.ng-card[data-n="${nV.id}"]`);
-    ok(/on/.test(await w.getAttribute('#ngTipo [data-t="venta"]', 'class')), 'ficha y volver (3 veces): sigue en Ventas');
+    ok(await w.getAttribute('#ngTipo [data-t="venta"]', 'aria-selected') === 'true', 'ficha y volver (3 veces): sigue en Ventas');
 
     await w.click('#ngVer [data-v="cerrados"]'); await w.waitForSelector('#view-negocios .ng-cerrados');
     ok(await tarjetas() === 1 && /Perdido: Compró otra/.test(await txt('#view-negocios .ng-cerrados')), '«Cerrados» muestra el perdido con su motivo');

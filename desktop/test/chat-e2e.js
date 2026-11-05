@@ -43,7 +43,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     const etapa0 = await w.$eval('.lz-steps li.ahora b', (e) => e.textContent);
     await w.click('[data-lz="avanzar"]'); await w.waitForFunction((e0) => document.querySelector('.lz-steps li.ahora b')?.textContent !== e0, etapa0, { timeout: 10000 });
     ok(/Negocio en «/.test(await ultimoBot()), `un toque en el lienzo mueve el negocio (${etapa0} → ${await w.$eval('.lz-steps li.ahora b', (e) => e.textContent)})`);
-    await w.click('#nav [data-view="negocios"]'); await w.waitForSelector('.ng-board'); ok(/Arriendos 1/.test((await txt('#ngTipo')).replace(/\s+/g, ' ')) && (await w.$$('.ng-card')).length === 1, 'el tablero de Negocios ya lo tiene, en su pestaña');
+    await w.click('#nav [data-view="negocios"]'); await w.waitForSelector('.ng-board'); ok(/Arriendos 1/.test((await w.innerText('#ngTipo')).replace(/\s+/g, ' ')) && (await w.$$('.ng-card')).length === 1, 'el tablero de Negocios ya lo tiene, en su pestaña');
     await w.click('#nav [data-view="agente"]'); await w.waitForSelector('#view-agente .ag.ag-full');
 
     // Conversaciones
