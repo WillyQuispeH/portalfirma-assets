@@ -1,0 +1,17 @@
+node_modules/
+dist/
+test/*.png
+.DS_Store
+# credenciales: se entregan aparte (ver CREDENCIALES.md)
+build/ia/clave.bin
+build/google/oauth.json
+build/portalfirma/api.json
+build/mercadolibre/app.json
+CREDENCIALES.md
+
+# interfaz React compilada por Vite (yarn build:ui)
+src/renderer/react/
+
+# salidas de las pruebas (se generan al correrlas)
+test/out-*.pdf
+test/*.log

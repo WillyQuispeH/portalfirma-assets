@@ -1,0 +1,9 @@
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Credenciales: .env (desarrollo) y .env.production nunca se suben
+.env
+.env.*
+

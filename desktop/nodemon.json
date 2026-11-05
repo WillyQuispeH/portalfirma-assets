@@ -1,0 +1,13 @@
+{
+  "watch": [
+    "src"
+  ],
+  "ext": "js,html,css,json",
+  "ignore": [
+    "src/renderer/vendor/**",
+    "src/ui/**"
+  ],
+  "exec": "electron .",
+  "delay": 500,
+  "signal": "SIGKILL"
+}

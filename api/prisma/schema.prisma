@@ -1,0 +1,334 @@
+// Base de datos de PortalFirma Asset (PostgreSQL, esquema `app`). Tablas y columnas en snake_case; modelos en español.
+// Cambios: editar este archivo y correr `yarn db:migrar <nombre>` (crea la migración y la aplica en asset_dev).
+//
+// Criterios para todas las tablas de datos (escalabilidad):
+//  · cada fila lleva corredora_id y los índices empiezan por él: cada consulta toca solo los datos de su corredora;
+//  · actualizado_en indexado junto a corredora_id: la app de escritorio sincroniza solo lo que cambió (delta);
+//  · eliminado_en (borrado lógico): la sincronización sabe qué quitar;
+//  · version: control de concurrencia optimista (dos personas editando lo mismo no se pisan sin saberlo);
+//  · id_legado: el id que tenía en el JSON local de la app, para reconectar lo que aún vive ahí (negocios, eventos);
+//  · búsqueda por parecido con pg_trgm (índice GIN) sobre un texto normalizado, rápida aunque haya muchos datos.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [pg_trgm]
+}
+
+/// La empresa (corredora de propiedades). Todo dato de la app pertenece a una corredora.
+model Corredora {
+  id              String      @id @default(uuid()) @db.Uuid
+  nombre          String
+  rut             String?     @unique
+  /// siguiente número del código de propiedad (PF-1001, PF-1002…); se toma con UPDATE … RETURNING (atómico)
+  siguienteCodigo Int         @default(1001) @map("siguiente_codigo")
+  creadoEn        DateTime    @default(now()) @map("creado_en")
+  actualizadoEn   DateTime    @updatedAt @map("actualizado_en")
+  usuarios        Usuario[]
+  propiedades     Propiedad[]
+  personas        Persona[]
+  actividad       Actividad[]
+
+  @@map("corredoras")
+}
+
+enum Rol {
+  ADMIN
+  CORREDOR
+
+  @@map("rol")
+}
+
+/// Persona que inicia sesión en la app. El email es único en todo el sistema (se guarda en minúsculas).
+/// Reemplaza a los «corredores» que la app guardaba en cada equipo: el captador de una propiedad es un usuario.
+model Usuario {
+  id             String      @id @default(uuid()) @db.Uuid
+  corredoraId    String      @map("corredora_id") @db.Uuid
+  email          String      @unique
+  nombre         String
+  hashClave      String      @map("hash_clave")
+  rol            Rol         @default(CORREDOR)
+  activo         Boolean     @default(true)
+  telefono       String?
+  /// usuario de wechatia al que corresponde (para tomar el «propietario» de cada contacto allá)
+  wechatiaId     String?     @map("wechatia_id")
+  wechatiaNombre String?     @map("wechatia_nombre")
+  ultimoIngreso  DateTime?   @map("ultimo_ingreso")
+  creadoEn       DateTime    @default(now()) @map("creado_en")
+  actualizadoEn  DateTime    @updatedAt @map("actualizado_en")
+  corredora      Corredora   @relation(fields: [corredoraId], references: [id], onDelete: Restrict)
+  sesiones       Sesion[]
+  captaciones    Propiedad[] @relation("captador")
+
+  @@index([corredoraId])
+  @@map("usuarios")
+}
+
+/// Una sesión abierta en un equipo. Guarda solo el hash del token de renovación; se rota en cada renovación.
+model Sesion {
+  id          String    @id @default(uuid()) @db.Uuid
+  usuarioId   String    @map("usuario_id") @db.Uuid
+  hashRenovar String    @map("hash_renovar")
+  dispositivo String?
+  ip          String?
+  creadoEn    DateTime  @default(now()) @map("creado_en")
+  usadoEn     DateTime  @default(now()) @map("usado_en")
+  expiraEn    DateTime  @map("expira_en")
+  revocadaEn  DateTime? @map("revocada_en")
+  usuario     Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId])
+  @@map("sesiones")
+}
+
+// ============================================================================ cartera
+
+enum TipoPropiedad {
+  casa
+  departamento
+  oficina
+  sitio
+  local_comercial
+  industrial
+  agricola
+  parcela
+  estacionamiento
+  terreno_construccion
+  bodega
+
+  @@map("tipo_propiedad")
+}
+
+enum EstadoOperacion {
+  disponible
+  reservada
+  vendida
+  arrendada
+  no_disponible
+
+  @@map("estado_operacion")
+}
+
+enum Moneda {
+  UF
+  CLP
+  USD
+
+  @@map("moneda")
+}
+
+/// Una propiedad de la cartera. Lo que se filtra u ordena va en columnas con índice; la ficha extendida (~130 datos
+/// de ficha-campos.js) va en `ficha` (JSONB): agregar un dato a la ficha no requiere migrar la tabla.
+model Propiedad {
+  id               String           @id @default(uuid()) @db.Uuid
+  corredoraId      String           @map("corredora_id") @db.Uuid
+  codigo           String
+  titulo           String
+  tipo             TipoPropiedad    @default(casa)
+  venta            Boolean          @default(false)
+  arriendo         Boolean          @default(false)
+  precioVenta      Decimal?         @map("precio_venta") @db.Decimal(16, 2)
+  monedaVenta      Moneda?          @map("moneda_venta")
+  precioArriendo   Decimal?         @map("precio_arriendo") @db.Decimal(16, 2)
+  monedaArriendo   Moneda?          @map("moneda_arriendo")
+  estadoVenta      EstadoOperacion? @map("estado_venta")
+  estadoArriendo   EstadoOperacion? @map("estado_arriendo")
+  direccion        String?
+  unidad           String?
+  comuna           String?
+  region           String?
+  rol              String?
+  lat              Float?
+  lng              Float?
+  placeId          String?          @map("place_id")
+  supTotal         Decimal?         @map("sup_total") @db.Decimal(12, 2)
+  supUtil          Decimal?         @map("sup_util") @db.Decimal(12, 2)
+  dormitorios      Int?
+  banos            Int?
+  estacionamientos Int?
+  bodegas          Int?
+  amoblado         Boolean          @default(false)
+  gastosComunes    Decimal?         @map("gastos_comunes") @db.Decimal(14, 2)
+  descripcion      String?
+  notasInternas    String?          @map("notas_internas")
+  tituloPortal     String?          @map("titulo_portal")
+  portalBarrio     String?          @map("portal_barrio")
+  etiquetas        String[]         @default([])
+  /// ficha completa (ficha-campos.js). Los datos del dueño (propietario*) se ocultan a quien no captó la propiedad
+  ficha            Json             @default("{}")
+  /// estado de la publicación en cada portal (publicaciones.js / mercadolibre.js); se normaliza con ese módulo
+  portales         Json             @default("{}")
+  /// interesados llegados desde los portales; se normaliza al pasar Leads a la base
+  leadsPortal      Json             @default("[]") @map("leads_portal")
+  captadorId       String?          @map("captador_id") @db.Uuid
+  /// corredor que figura en el sistema de origen (p. ej. Portalfirma), solo informativo
+  corredorOrigen   Json?            @map("corredor_origen")
+  archivada        Boolean          @default(false)
+  /// de dónde vino (portalfirma…) y su id allá: reimportar actualiza en vez de duplicar
+  origenSistema    String?          @map("origen_sistema")
+  origenId         String?          @map("origen_id")
+  origenDatos      Json?            @map("origen_datos")
+  /// campos editados en Asset: una nueva importación no los pisa
+  editados         String[]         @default([])
+  /// texto normalizado (sin tildes, minúsculas) de código, título, dirección, unidad y comuna, para buscar
+  busqueda         String           @default("")
+  idLegado         String?          @map("id_legado")
+  version          Int              @default(1)
+  creadoPorId      String?          @map("creado_por_id") @db.Uuid
+  creadoEn         DateTime         @default(now()) @map("creado_en")
+  actualizadoEn    DateTime         @updatedAt @map("actualizado_en")
+  eliminadoEn      DateTime?        @map("eliminado_en")
+
+  corredora  Corredora            @relation(fields: [corredoraId], references: [id], onDelete: Restrict)
+  captador   Usuario?             @relation("captador", fields: [captadorId], references: [id], onDelete: SetNull)
+  fotos      PropiedadFoto[]
+  documentos PropiedadDocumento[]
+  vinculos   PropiedadPersona[]
+
+  @@unique([corredoraId, codigo])
+  @@unique([corredoraId, origenSistema, origenId])
+  @@unique([corredoraId, idLegado])
+  @@index([corredoraId, actualizadoEn])
+  @@index([corredoraId, archivada, tipo])
+  @@index([corredoraId, comuna])
+  @@index([corredoraId, captadorId])
+  @@index([corredoraId, venta, estadoVenta])
+  @@index([corredoraId, arriendo, estadoArriendo])
+  @@index([busqueda(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@index([ficha(ops: JsonbPathOps)], type: Gin)
+  @@map("propiedades")
+}
+
+/// Fotos de una propiedad, en orden. `url`: https (portales o almacenamiento propio).
+model PropiedadFoto {
+  id          String    @id @default(uuid()) @db.Uuid
+  propiedadId String    @map("propiedad_id") @db.Uuid
+  url         String
+  orden       Int       @default(0)
+  destacada   Boolean   @default(false)
+  creadoEn    DateTime  @default(now()) @map("creado_en")
+  propiedad   Propiedad @relation(fields: [propiedadId], references: [id], onDelete: Cascade)
+
+  @@index([propiedadId, orden])
+  @@map("propiedad_fotos")
+}
+
+/// Documentos de una propiedad (mandato, escritura, planos…): metadatos; el archivo va en el almacenamiento de objetos.
+model PropiedadDocumento {
+  id                  String    @id @default(uuid()) @db.Uuid
+  propiedadId         String    @map("propiedad_id") @db.Uuid
+  nombre              String
+  tipo                String    @default("otro")
+  tamano              Int?
+  claveAlmacenamiento String?   @map("clave_almacenamiento")
+  subidoPorId         String?   @map("subido_por_id") @db.Uuid
+  creadoEn            DateTime  @default(now()) @map("creado_en")
+  propiedad           Propiedad @relation(fields: [propiedadId], references: [id], onDelete: Cascade)
+
+  @@index([propiedadId])
+  @@map("propiedad_documentos")
+}
+
+// ============================================================================ personas (CRM)
+
+enum TipoPersona {
+  natural
+  juridica
+
+  @@map("tipo_persona")
+}
+
+enum RolVinculo {
+  propietario
+  arrendatario
+  comprador
+  codeudor
+  interesado
+  proveedor
+
+  @@map("rol_vinculo")
+}
+
+/// Personas y empresas de la corredora (propietarios, interesados, compradores…). El RUT es único por corredora,
+/// pero puede faltar (un interesado que aún no lo da).
+model Persona {
+  id            String       @id @default(uuid()) @db.Uuid
+  corredoraId   String       @map("corredora_id") @db.Uuid
+  nombre        String
+  /// RUT normalizado (sin puntos ni guion, DV en mayúscula): para buscar y para la unicidad
+  rut           String?
+  rutFormato    String?      @map("rut_formato")
+  tipo          TipoPersona  @default(natural)
+  email         String?
+  telefono      String?
+  direccion     String?
+  estadoCivil   String?      @map("estado_civil")
+  profesion     String?
+  nacionalidad  String?      @default("chilena")
+  roles         RolVinculo[] @default([])
+  notas         String?
+  /// datos sin columna propia (corredor asignado del lead, id del lead…)
+  extra         Json         @default("{}")
+  busqueda      String       @default("")
+  idLegado      String?      @map("id_legado")
+  version       Int          @default(1)
+  creadoEn      DateTime     @default(now()) @map("creado_en")
+  actualizadoEn DateTime     @updatedAt @map("actualizado_en")
+  eliminadoEn   DateTime?    @map("eliminado_en")
+
+  corredora Corredora          @relation(fields: [corredoraId], references: [id], onDelete: Restrict)
+  vinculos  PropiedadPersona[]
+
+  @@unique([corredoraId, rut])
+  @@unique([corredoraId, idLegado])
+  @@index([corredoraId, actualizadoEn])
+  @@index([corredoraId, telefono])
+  @@index([corredoraId, email])
+  @@index([busqueda(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@map("personas")
+}
+
+/// Vínculo persona ↔ propiedad con su rol (una persona puede tener varios roles en la misma propiedad).
+model PropiedadPersona {
+  propiedadId String     @map("propiedad_id") @db.Uuid
+  personaId   String     @map("persona_id") @db.Uuid
+  rol         RolVinculo
+  desde       DateTime   @default(now())
+  propiedad   Propiedad  @relation(fields: [propiedadId], references: [id], onDelete: Cascade)
+  persona     Persona    @relation(fields: [personaId], references: [id], onDelete: Restrict)
+
+  @@id([propiedadId, personaId, rol])
+  @@index([personaId])
+  @@map("propiedad_personas")
+}
+
+// ============================================================================ actividad (historial)
+
+/// Historial de lo que pasa (propiedades, personas, negocios, agenda…). Crece mucho: id secuencial (bigint) e índices
+/// por entidad y por fecha. Si llega a millones de filas por corredora, se particiona por fecha.
+model Actividad {
+  id          BigInt    @id @default(autoincrement())
+  corredoraId String    @map("corredora_id") @db.Uuid
+  /// propiedad | persona | negocio | evento | otro
+  entidadTipo String    @map("entidad_tipo")
+  /// id de la entidad (texto: sirve también para lo que aún vive en el JSON local, como negocios y eventos)
+  entidadId   String    @map("entidad_id")
+  /// otra entidad relacionada (p. ej. la persona en «X vinculado como propietario»)
+  ref2        String?
+  /// nota | lead | null (automática)
+  tipo        String?
+  texto       String
+  usuarioId   String?   @map("usuario_id") @db.Uuid
+  fecha       DateTime  @default(now())
+  corredora   Corredora @relation(fields: [corredoraId], references: [id], onDelete: Restrict)
+
+  @@index([corredoraId, entidadId, fecha(sort: Desc)])
+  @@index([corredoraId, ref2, fecha(sort: Desc)])
+  @@index([corredoraId, fecha(sort: Desc)])
+  @@map("actividad")
+}

@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self' data: blob:; font-src 'self' data:; img-src 'self' data: blob: https: pffoto:; media-src 'self' blob: pffoto:; frame-src https://api.wechatia.com https://*.wechatia.com https://*.leadconnectorhq.com https://*.msgsndr.com https://js.stripe.com" />
+  <title>PortalFirma Asset</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="oficina.css" />
+  <link rel="stylesheet" href="oficina-anim.css" />
+  <link rel="stylesheet" href="react/react-ui.css" />
+  <script src="tema.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><img src="assets/logo.png" alt="Portalfirma" class="brand-logo" /><span class="brand-studio">Asset<svg class="brand-casa" viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="bcG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5b7cfa"/><stop offset=".55" stop-color="#3346c7"/><stop offset="1" stop-color="#7c3aed"/></linearGradient></defs><path d="M3 11.2 12 4l9 7.2" fill="none" stroke="url(#bcG)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5.6 10v8.6c0 .8.6 1.4 1.4 1.4h10c.8 0 1.4-.6 1.4-1.4V10L12 5.2Z" fill="url(#bcG)"/><rect x="10.2" y="14" width="3.6" height="6" rx=".8" fill="#fff"/><rect x="15.2" y="11.6" width="2.2" height="2.2" rx=".4" fill="#fff" opacity=".85"/><path d="M16.4 6.2V4.6h1.9v3.1" fill="url(#bcG)"/></svg></span></div>
+    <nav id="nav">
+      <button class="tab tab-ag" data-view="agente">Agente</button>
+      <button class="tab active" data-view="inicio">Hoy</button>
+      <button class="tab" data-view="cartera">Cartera</button>
+      <button class="tab" data-view="personas">Personas</button>
+      <button class="tab" data-view="leads">Leads</button>
+      <button class="tab" data-view="negocios">Negocios</button>
+      <button class="tab" data-view="agenda">Agenda</button>
+      <button class="tab" data-view="publicaciones">Publicaciones</button>
+      <button class="tab" data-view="postventa">Postventa</button>
+      <button class="tab" data-view="arriendos">Arriendos</button>
+      <button class="tab" data-view="finanzas">Finanzas</button>
+      <button class="tab tab-doc" data-view="home">Gestión documental</button>
+    </nav>
+    <div class="doc-tabs" id="docTabs"></div>
+    <!-- «Iniciar sesión» o el menú del usuario (React: src/ui/components/functional/cuenta) -->
+    <div id="account" class="account"></div>
+  </header>
+
+  <main id="app">
+    <!-- Login -->
+    <!-- Inicio -->
+    <section id="view-inicio" class="view"></section>
+    <section id="view-cartera" class="view hidden"></section>
+    <section id="view-personas" class="view hidden"></section>
+    <section id="view-negocios" class="view hidden"></section>
+    <section id="view-agenda" class="view hidden"></section>
+    <section id="view-agente" class="view hidden"></section>
+    <section id="view-publicaciones" class="view hidden"></section>
+    <section id="view-actividad" class="view hidden"></section>
+    <section id="view-postventa" class="view hidden"></section>
+    <section id="view-leads" class="view hidden"></section>
+    <section id="view-arriendos" class="view hidden"></section><!-- React: src/ui/components/functional/arriendos -->
+    <section id="view-finanzas" class="view hidden"></section>
+    <section id="view-aprende" class="view hidden"></section>
+    <section id="view-home" class="view hidden"><div class="home" id="homeBody"></div></section>
+
+    <!-- Conecta tu cuenta de Portalfirma (React: src/ui/components/functional/cuenta/InicioSesion.tsx; app.js la monta) -->
+    <section id="view-login" class="view center hidden"></section>
+
+    <!-- Enviar a firmar (React: src/ui/components/functional/gestion/enviar-a-firmar; app.js monta las cuatro) -->
+    <section id="view-drop" class="view hidden"></section>
+    <section id="view-working" class="view center hidden"></section>
+    <section id="view-review" class="view hidden"></section>
+    <section id="view-done" class="view hidden"></section>
+
+    <!-- Mis operaciones (React: src/ui/components/functional/gestion/operaciones) -->
+    <section id="view-ops" class="view hidden"></section>
+    <!-- Plazos y vencimientos -->
+    <section id="view-plazos" class="view hidden"></section>
+    <section id="view-recientes" class="view hidden"></section>
+    <!-- Carga masiva -->
+    <section id="view-bulk" class="view hidden"></section>
+    <section id="view-flujos" class="view hidden"></section>
+    <section id="view-expedientes" class="view hidden"></section>
+    <section id="view-escrituras" class="view hidden"></section>
+    <!-- Editor PDF -->
+    <section id="view-editor" class="view hidden"><div id="edBody"></div></section>
+
+    <!-- Notaría virtual -->
+    <section id="view-tpl" class="view hidden"><div id="tplBody"></div></section>
+  </main>
+
+  <div id="modal" class="modal hidden"><div class="modal-card" id="modalCard"></div></div>
+  <div id="toast" class="toast hidden"></div>
+  <div id="globalBusy" class="global-busy hidden" role="status" aria-live="polite"><i class="bk-spin"></i><span></span></div>
+  <div id="dragOverlay" class="drag-overlay hidden"><div>Suelta el documento</div></div>
+  <script src="react/react-ui.js"></script>
+  <script src="vendor/pdf.min.js"></script>
+  <script src="vendor/pdf-lib.min.js"></script>
+  <script src="vendor/fontkit.umd.min.js"></script>
+  <script src="vendor/tesseract/tesseract.min.js"></script>
+  <script src="icons.js"></script>
+  <script src="fonts.js"></script>
+  <script src="app.js"></script>
+  <script src="operaciones.js"></script>
+  <script src="masiva.js"></script>
+  <script src="flujos.js"></script>
+  <script src="expedientes.js"></script>
+  <script src="plazos-reglas.js"></script>
+  <script src="plazos.js"></script>
+  <script src="notarial.js"></script>
+  <script src="materias.js"></script>
+  <script src="escrituras.js"></script>
+  <script src="agente.js"></script>
+  <script src="direcciones.js"></script>
+  <script src="inmo.js"></script>
+  <script src="actividad.js"></script>
+  <script src="postventa.js"></script>
+  <script src="leads.js"></script>
+  <script src="etapas.js"></script>
+  <script src="ficha-bloques.js"></script>
+  <script src="formatos.js"></script>
+  <script src="oficina-geo.js"></script>
+  <script src="oficina-lienzo.js"></script>
+  <script src="oficina.js"></script>
+  <script src="dictado.js"></script>
+  <script src="negocios.js"></script>
+  <script src="agenda.js"></script>
+  <script src="gestion.js"></script>
+  <script src="lienzo.js"></script>
+  <script src="publicaciones.js"></script>
+  <script src="home.js"></script>
+</body>
+</html>
