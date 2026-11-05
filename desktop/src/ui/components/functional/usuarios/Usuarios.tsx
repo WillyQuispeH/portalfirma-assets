@@ -1,10 +1,11 @@
 // Usuarios de la corredora (reemplaza a «Corredores» y a «¿Quién usa este equipo?»). Va en el modal de la app (ancho).
 //  · Administrador: lista completa, agregar usuario con clave inicial, editar nombre, rol, teléfono y si está activo,
-//    asignar una clave nueva y vincular cada uno con su usuario de wechatia (o traerlos y vincular por correo).
+//    asignar una clave nueva, vincular cada uno con su usuario de wechatia (o traerlos y vincular por correo) y ver
+//    sus conversaciones con el Agente y lo que el Agente hizo (ConversacionesUsuario, solo lectura).
 //  · Corredor: ve el equipo (nombre, contacto y rol), sin editar.
 // Con el kit: Boton, Input, Select, Switch, Badge, Avatar y EstadoVacio (va dentro del modal antiguo de la app, por eso
 // la cabecera es propia y no CabeceraPagina).
-// Los id (#usrPanel, #usrNuevo, #usrForm, #usrNombre…, [data-usr], [data-usr-ed], [data-usr-clave]) los usan las pruebas.
+// Los id (#usrPanel, #usrNuevo, #usrForm, #usrNombre…, [data-usr], [data-usr-ed], [data-usr-clave], [data-usr-conv]) los usan las pruebas.
 import { useEffect, useState, type FormEvent } from 'react';
 import Boton from '../../ui/Boton';
 import Input from '../../ui/Input';
@@ -14,6 +15,7 @@ import Switch from '../../ui/Switch';
 import Icono from '../../ui/Icono';
 import Avatar from '../../ui/Avatar';
 import EstadoVacio from '../../ui/EstadoVacio';
+import ConversacionesUsuario from './ConversacionesUsuario';
 import { useUsuario } from '../../../store/hooks/useUsuario.hook';
 import { useAcceso } from '../../../store/hooks/useAcceso.hook';
 import { usePerfil } from '../../../store/hooks/usePerfil.hook';
@@ -34,6 +36,7 @@ export default function Usuarios() {
   const admin = !!perfil?.esAdmin; const yo = { id: perfil?.usuarioId || '' };
   const { lista, cargando, error, wechatia, usuarioGetAll, usuarioWechatia } = useUsuario();
   const [modo, setModo] = useState<TModo>(null);
+  const [verAgente, setVerAgente] = useState<IUsuario | null>(null);
   const [trayendo, setTrayendo] = useState(false);
   const [listoPerfil, setListoPerfil] = useState(false);
   useEffect(() => { perfilGet().then(() => setListoPerfil(true)); }, [perfilGet]);
@@ -59,7 +62,7 @@ export default function Usuarios() {
 
       {error && <p role="alert" className="tw:m-0 tw:text-red-softink tw:text-sm" id="usrErrLista">{error}</p>}
       <ul className="tw:list-none tw:m-0 tw:p-0 tw:flex tw:flex-col tw:gap-2" id="usrLista">
-        {lista.map((u) => <Fila key={u.id} u={u} yo={yo.id} admin={admin} onEditar={() => setModo({ tipo: 'editar', u })} onClave={() => setModo({ tipo: 'clave', u })} />)}
+        {lista.map((u) => <Fila key={u.id} u={u} yo={yo.id} admin={admin} onEditar={() => setModo({ tipo: 'editar', u })} onClave={() => setModo({ tipo: 'clave', u })} onAgente={() => setVerAgente(u)} />)}
         {!lista.length && !cargando && <li><EstadoVacio icono="users" texto="Aún no hay usuarios." /></li>}
         {cargando && !lista.length && <li><EstadoVacio compacto texto="Cargando…" /></li>}
       </ul>
@@ -67,6 +70,8 @@ export default function Usuarios() {
       {admin && modo?.tipo === 'nuevo' && <FormNuevo onListo={() => { listo(); toast('Usuario agregado. Ya puede entrar con su correo y la clave inicial.'); }} onCancelar={() => setModo(null)} />}
       {admin && modo?.tipo === 'editar' && <FormEditar key={modo.u.id} u={modo.u} yo={yo.id} wechatia={wechatia} onListo={() => { listo(); toast('Usuario guardado.'); }} onCancelar={() => setModo(null)} />}
       {admin && modo?.tipo === 'clave' && <FormClave key={modo.u.id} u={modo.u} onListo={() => { setModo(null); toast(`Clave nueva asignada a ${modo.u.nombre}. Sus sesiones abiertas se cerraron.`); }} onCancelar={() => setModo(null)} />}
+
+      {admin && verAgente && <ConversacionesUsuario u={verAgente} onCerrar={() => setVerAgente(null)} />}
 
       {admin && wechatia && (
         <p className="tw:m-0 tw:text-[13px] tw:text-muted" id="usrWcInfo">
@@ -85,7 +90,7 @@ export default function Usuarios() {
   );
 }
 
-function Fila({ u, yo, admin, onEditar, onClave }: { u: IUsuario; yo: string; admin: boolean; onEditar: () => void; onClave: () => void }) {
+function Fila({ u, yo, admin, onEditar, onClave, onAgente }: { u: IUsuario; yo: string; admin: boolean; onEditar: () => void; onClave: () => void; onAgente: () => void }) {
   return (
     <li data-usr={u.id} className={`tw:flex tw:items-center tw:gap-3 tw:p-3 tw:rounded-xl tw:border tw:border-solid tw:border-edge tw:border-b-2 tw:border-b-edge-b tw:bg-card ${u.activo ? '' : 'tw:opacity-60'}`}>
       <Avatar nombre={u.nombre} />
@@ -104,6 +109,7 @@ function Fila({ u, yo, admin, onEditar, onClave }: { u: IUsuario; yo: string; ad
       {admin && <div className="tw:flex tw:gap-1 tw:flex-none">
         <Boton variante="fantasma" tamano="sm" data-usr-ed={u.id} onClick={onEditar}>Editar</Boton>
         <Boton variante="fantasma" tamano="sm" data-usr-clave={u.id} onClick={onClave}>Clave</Boton>
+        <Boton variante="fantasma" tamano="sm" data-usr-conv={u.id} onClick={onAgente}>Conversaciones</Boton>
       </div>}
     </li>
   );

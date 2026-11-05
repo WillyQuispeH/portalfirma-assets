@@ -23,11 +23,26 @@ let emitT = null;
 const changed = () => { persist(); clearTimeout(emitT); emitT = setTimeout(() => emit(state()), 80); };
 const state = () => ({ items, paused, running: active, sending, coolUntil });
 const uid = () => 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+// Huellas (sha1) de los archivos ya enviados a firmar desde la carga masiva: para no enviar dos veces el mismo. Con la
+// cuenta de Asset son de toda la corredora (colección envios_masivos, id = huella), así otro equipo tampoco lo repite;
+// las que este equipo tenía guardadas se suben una vez. En modo de prueba quedan en el equipo (store › bulkSentHashes).
+const enviadas = () => { const inmo = require('./inmo'); const l = inmo.API ? inmo.registros('envios_masivos') : null; return new Set([...(store.get('bulkSentHashes') || []), ...(l || []).map((x) => x.id)]); };
+function anotarEnviada(hash, datos) {
+  const inmo = require('./inmo'); const l = inmo.API ? inmo.registros('envios_masivos') : null;
+  if (l && inmo.usuario()) { if (!l.some((x) => x.id === hash)) { l.push({ id: hash, ...datos }); inmo.guardar(); } return; }
+  store.set('bulkSentHashes', [...new Set([...(store.get('bulkSentHashes') || []), hash])].slice(-2000));
+}
+require('./inmo').alCargar?.(async () => {
+  const h = store.get('bulkSentHashes'); if (!Array.isArray(h) || !h.length) return null;
+  const items = h.filter((x) => /^[\w-]{6,64}$/.test(x)).map((id) => ({ id, legado: true }));
+  for (let i = 0; i < items.length; i += 200) await require('./asset').llamar('POST', '/registros/envios_masivos/importar', { items: items.slice(i, i + 200) });
+  store.set('bulkSentHashes', undefined); return null;
+});
 const sha = (file) => new Promise((res, rej) => { const h = crypto.createHash('sha1'); fs.createReadStream(file).on('data', (d) => h.update(d)).on('end', () => res(h.digest('hex'))).on('error', rej); });
 
 async function add(paths) {
   const known = new Set(items.map((x) => x.hash));
-  const sent = new Set(store.get('bulkSentHashes') || []);
+  const sent = enviadas();
   for (const entry of paths) {
     // Cada entrada es una ruta, o {path, signers, flow} cuando viene de un flujo documental (firmantes ya definidos)
     const p = typeof entry === 'string' ? entry : entry.path;
@@ -131,7 +146,6 @@ async function send(ids, { email, protocolization = 'none', typeSign = 'simple' 
   const list = items.filter((x) => ids.includes(x.id) && x.status === 'ready');
   if (!list.length) throw new Error('No hay documentos listos para enviar.');
   sending = true; cancelSend = false; changed();
-  const sentHashes = new Set(store.get('bulkSentHashes') || []);
   const history = store.get('history') || [];
   try {
     for (const it of list) {
@@ -145,12 +159,12 @@ async function send(ids, { email, protocolization = 'none', typeSign = 'simple' 
         const msg = typeof r?.message === 'string' ? r.message : '';
         if (op == null) throw new Error(/status code (\d+)/.test(msg) ? `Portalfirma no pudo crear la operación (error ${/status code (\d+)/.exec(msg)[1]}). Revisa «Mis operaciones» antes de reintentar.` : msg || 'Portalfirma no devolvió el número de operación.');
         it.status = 'sent'; it.operation = op; it.error = '';
-        if (it.hash) sentHashes.add(it.hash);
+        if (it.hash) anotarEnviada(it.hash, { operacion: op, nombre: it.name, fecha: new Date().toISOString() });
         // «Mis operaciones»: con la cuenta de Asset va a la base (firmas); en modo de prueba, al historial local
         { const inmo = require('./inmo'); if (inmo.API) inmo.registrarEnvio({ operation: op, name: it.name, origen: 'masiva', bulk: true }); else history.unshift({ operation: op, name: it.name, date: new Date().toISOString(), bulk: true }); }
         try { onSent(it); } catch {}
       } catch (e) { it.status = 'send_error'; it.error = e.message || String(e); }
-      store.set('bulkSentHashes', [...sentHashes].slice(-2000)); store.set('history', history.slice(0, 500));
+      if (!require('./inmo').API) store.set('history', history.slice(0, 500));
       changed();
     }
   } finally { sending = false; changed(); }

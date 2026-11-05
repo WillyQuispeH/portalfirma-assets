@@ -41,14 +41,33 @@ const model = (id) => models().find((m) => m.id === id);
 const modelList = () => models().map(({ texto, ...m }) => m);
 
 // ---------- recetas ----------
-const recipes = () => store.get('flujos') || [];
+// Con la cuenta de Asset las recetas son de toda la corredora (colección «flujos» en la base): se arman una vez y le
+// sirven a todo el equipo. Las ejecuciones (más abajo) quedan en este equipo: apuntan a los PDF generados aquí y a su
+// cola de carga masiva, y llevan nombre y RUT de cada fila de la nómina.
+let inmoMod = null; const inmo = () => (inmoMod ||= require('./inmo'));
+const enApi = () => inmo().API;
+const SERV = ['version', 'creado', 'actualizado'];
+const limpia = (x) => Object.fromEntries(Object.entries(x).filter(([k]) => !SERV.includes(k)));
+const recipes = () => (enApi() ? inmo().registros('flujos').map(limpia).sort((a, b) => String(b.updated).localeCompare(String(a.updated))) : store.get('flujos') || []);
 function saveRecipe(r) {
-  const list = recipes(); const now = new Date().toISOString();
+  const now = new Date().toISOString();
   const clean = { id: r.id || uid('r'), name: String(r.name || 'Receta').trim().slice(0, 80), modelId: r.modelId, mapping: r.mapping || {}, opts: r.opts || {}, updated: now, created: r.created || now };
-  const i = list.findIndex((x) => x.id === clean.id); if (i >= 0) list[i] = { ...list[i], ...clean }; else list.unshift(clean);
+  if (enApi()) { const l = inmo().registros('flujos'); const x = l.find((y) => y.id === clean.id); if (x) Object.assign(x, clean); else l.push(clean); inmo().guardar(); return clean; }
+  const list = recipes(); const i = list.findIndex((x) => x.id === clean.id); if (i >= 0) list[i] = { ...list[i], ...clean }; else list.unshift(clean);
   store.set('flujos', list); return clean;
 }
-function deleteRecipe(id) { store.set('flujos', recipes().filter((x) => x.id !== id)); return recipes(); }
+function deleteRecipe(id) {
+  if (enApi()) { const l = inmo().registros('flujos'); const i = l.findIndex((x) => x.id === id); if (i >= 0) { l.splice(i, 1); inmo().guardar(); } return recipes(); }
+  store.set('flujos', recipes().filter((x) => x.id !== id)); return recipes();
+}
+// las recetas que este equipo tenía se suben una vez
+inmo().alCargar(async () => {
+  if (!enApi()) return null;
+  const l = store.get('flujos') || []; if (!l.length) return null;
+  await require('./asset').llamar('POST', '/registros/flujos/importar', { items: l.slice(0, 200) });
+  store.set('flujos', undefined);
+  return `Se ${l.length === 1 ? 'subió 1 receta' : `subieron ${l.length} recetas`} de Flujos que estaban solo en este computador.`;
+});
 
 // ---------- nómina ----------
 function readNomina(file) {

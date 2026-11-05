@@ -33,3 +33,8 @@ export interface IUsuarioCambios {
 
 export interface IUsuarioWechatia { id: string; nombre: string; email: string; telefono: string }
 export interface IWechatiaUsuarios { usuarios: IUsuarioWechatia[]; error?: string; vinculados?: number }
+
+// Conversaciones y acciones del Agente de un usuario (el administrador las lee: /v1/agente, src/conversaciones.js)
+export interface IConversacionResumen { id: string; titulo: string; fijada: boolean; resumen: string; actualizado: string; n: number }
+export interface IConversacion extends IConversacionResumen { items: { k?: string; text?: string }[] }
+export interface IAccionAgente { t: string; canal: 'app' | 'whatsapp'; tool: string; action: string | null; ok: boolean; resumen: string }

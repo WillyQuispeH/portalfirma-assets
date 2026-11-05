@@ -141,6 +141,7 @@ function crear({ store, inmo, agenda, est, mock = false, fetchFn = (...a) => fet
     } catch { mapaCampos = {}; } // sin permiso para leer campos: se usa la clave del campo
     return mapaCampos;
   }
+  const anotarPlantilla = (telefono) => { const k = String(telefono || '').replace(/\D/g, '').slice(-9); const m = store.get('waPlantillaEnv') || {}; m[k] = Date.now(); store.set('waPlantillaEnv', m); };
   async function enviarPlantilla({ telefono, nombre, etiqueta, campos }) {
     const { contactId, loc } = await contacto(telefono, nombre);
     const ids = await camposIds(loc);
@@ -150,7 +151,7 @@ function crear({ store, inmo, agenda, est, mock = false, fetchFn = (...a) => fet
     // si la etiqueta quedó puesta de un envío anterior, se quita primero para que el flujo vuelva a dispararse
     try { await api('DELETE', `/contacts/${contactId}/tags`, { version: '2021-07-28', body: { tags: [etiqueta] } }); } catch {}
     await api('POST', `/contacts/${contactId}/tags`, { version: '2021-07-28', permiso: PERM, body: { tags: [etiqueta] } });
-    { const k = String(telefono || '').replace(/\D/g, '').slice(-9); const m = store.get('waPlantillaEnv') || {}; m[k] = Date.now(); store.set('waPlantillaEnv', m); }   // la plantilla la envía wechatia en segundos: no es un mensaje «a mano»
+    anotarPlantilla(telefono);   // la plantilla la envía wechatia en segundos: no es un mensaje «a mano»
     return { contactId, etiqueta };
   }
   // clave propia de WhatsApp (integración «Postventa»): se prueba leyendo una conversación antes de guardarla
@@ -257,7 +258,9 @@ function crear({ store, inmo, agenda, est, mock = false, fetchFn = (...a) => fet
     return out;
   }
 
-  return { estado, configurar, reservas, sincronizar, api, locationId, estadoWa, configurarWa, enviarWhatsApp, enviarPlantilla, estadoMensaje, WIDGET };
+  // la clave con que este equipo usa el WhatsApp de wechatia: se sube al servidor para los programados (wa-programados.js)
+  const credencialesWa = () => { const tk = store.getSecret('wechatiaWaToken') || token(); return tk && locationId() ? { token: tk, locationId: locationId() } : null; };
+  return { estado, configurar, reservas, sincronizar, api, locationId, estadoWa, configurarWa, enviarWhatsApp, enviarPlantilla, estadoMensaje, credencialesWa, anotarPropio, anotarPlantilla, WIDGET };
 }
 
 module.exports = { crear, widgetId, local };

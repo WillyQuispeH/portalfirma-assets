@@ -22,13 +22,13 @@ datasource db {
 
 /// La empresa (corredora de propiedades). Todo dato de la app pertenece a una corredora.
 model Corredora {
-  id              String      @id @default(uuid()) @db.Uuid
+  id              String               @id @default(uuid()) @db.Uuid
   nombre          String
-  rut             String?     @unique
+  rut             String?              @unique
   /// siguiente número del código de propiedad (PF-1001, PF-1002…); se toma con UPDATE … RETURNING (atómico)
-  siguienteCodigo Int         @default(1001) @map("siguiente_codigo")
-  creadoEn        DateTime    @default(now()) @map("creado_en")
-  actualizadoEn   DateTime    @updatedAt @map("actualizado_en")
+  siguienteCodigo Int                  @default(1001) @map("siguiente_codigo")
+  creadoEn        DateTime             @default(now()) @map("creado_en")
+  actualizadoEn   DateTime             @updatedAt @map("actualizado_en")
   usuarios        Usuario[]
   propiedades     Propiedad[]
   personas        Persona[]
@@ -39,6 +39,11 @@ model Corredora {
   firmas          Firma[]
   registros       Registro[]
   contadores      Contador[]
+  conexiones      Conexion[]
+  conversaciones  AgenteConversacion[]
+  registroAgente  AgenteRegistro[]
+  casosReglas     ReglaCaso[]
+  waProgramados   WaProgramado[]
 
   @@map("corredoras")
 }
@@ -53,27 +58,30 @@ enum Rol {
 /// Persona que inicia sesión en la app. El email es único en todo el sistema (se guarda en minúsculas).
 /// Reemplaza a los «corredores» que la app guardaba en cada equipo: el captador de una propiedad es un usuario.
 model Usuario {
-  id             String      @id @default(uuid()) @db.Uuid
-  corredoraId    String      @map("corredora_id") @db.Uuid
-  email          String      @unique
+  id             String               @id @default(uuid()) @db.Uuid
+  corredoraId    String               @map("corredora_id") @db.Uuid
+  email          String               @unique
   nombre         String
-  hashClave      String      @map("hash_clave")
-  rol            Rol         @default(CORREDOR)
-  activo         Boolean     @default(true)
+  hashClave      String               @map("hash_clave")
+  rol            Rol                  @default(CORREDOR)
+  activo         Boolean              @default(true)
   telefono       String?
   /// usuario de wechatia al que corresponde (para tomar el «propietario» de cada contacto allá)
-  wechatiaId     String?     @map("wechatia_id")
-  wechatiaNombre String?     @map("wechatia_nombre")
-  ultimoIngreso  DateTime?   @map("ultimo_ingreso")
-  creadoEn       DateTime    @default(now()) @map("creado_en")
-  actualizadoEn  DateTime    @updatedAt @map("actualizado_en")
-  corredora      Corredora   @relation(fields: [corredoraId], references: [id], onDelete: Restrict)
+  wechatiaId     String?              @map("wechatia_id")
+  wechatiaNombre String?              @map("wechatia_nombre")
+  ultimoIngreso  DateTime?            @map("ultimo_ingreso")
+  creadoEn       DateTime             @default(now()) @map("creado_en")
+  actualizadoEn  DateTime             @updatedAt @map("actualizado_en")
+  corredora      Corredora            @relation(fields: [corredoraId], references: [id], onDelete: Restrict)
   sesiones       Sesion[]
-  captaciones    Propiedad[] @relation("captador")
-  negocios       Negocio[]   @relation("negocioCorredor")
-  eventos        Evento[]    @relation("eventoCorredor")
-  leads          Lead[]      @relation("leadCorredor")
-  firmasEnviadas Firma[]     @relation("firmaEnviadaPor")
+  captaciones    Propiedad[]          @relation("captador")
+  negocios       Negocio[]            @relation("negocioCorredor")
+  eventos        Evento[]             @relation("eventoCorredor")
+  leads          Lead[]               @relation("leadCorredor")
+  firmasEnviadas Firma[]              @relation("firmaEnviadaPor")
+  conexiones     Conexion[]           @relation("conexionUsuario")
+  conversaciones AgenteConversacion[]
+  registroAgente AgenteRegistro[]
 
   @@index([corredoraId])
   @@map("usuarios")
@@ -573,4 +581,195 @@ model Contador {
 
   @@id([corredoraId, serie])
   @@map("contadores")
+}
+
+// ============================================================================ conexiones (integraciones)
+
+/// Una sesión con un servicio externo: OAuth (Portalfirma, Portal Inmobiliario/Mercado Libre, Google Drive…) o una
+/// clave de API (wechatia, Google Maps). Vive SOLO en el servidor: la app de escritorio nunca ve los tokens, pide a la
+/// API que llame al servicio. Una por proveedor y dueño: de un usuario (usuario_id) o de toda la corredora (null).
+/// Los secretos van cifrados (AES-256-GCM, llave CONEXIONES_CLAVE del .env; ver src/conexiones/cifrado.ts).
+model Conexion {
+  id            String    @id @default(uuid()) @db.Uuid
+  corredoraId   String    @map("corredora_id") @db.Uuid
+  /// dueño de la sesión; null = de toda la corredora
+  usuarioId     String?   @map("usuario_id") @db.Uuid
+  /// el id del usuario o «corredora»: para que haya una sola sesión por proveedor y dueño
+  dueno         String
+  /// portalfirma | mercadolibre | google_drive | wechatia | google_maps… (lista en src/conexiones/proveedores.ts)
+  proveedor     String
+  /// oauth | clave
+  tipo          String    @default("oauth")
+  /// activa | vencida (hay que volver a conectar) | revocada | error
+  estado        String    @default("activa")
+  /// cuenta al otro lado: id y nombre o correo («conectado como …»)
+  cuentaId      String?   @map("cuenta_id")
+  cuentaNombre  String?   @map("cuenta_nombre")
+  alcance       String?
+  /// cifrados: token de acceso y de renovación (o la clave, en tipo «clave»)
+  accesoCif     String?   @map("acceso_cif")
+  renovarCif    String?   @map("renovar_cif")
+  expiraEn      DateTime? @map("expira_en")
+  /// datos no secretos del proveedor (p. ej. locationId de wechatia)
+  datos         Json      @default("{}")
+  ultimoError   String?   @map("ultimo_error")
+  conectadoPor  String?   @map("conectado_por") @db.Uuid
+  conectadoEn   DateTime  @default(now()) @map("conectado_en")
+  renovadoEn    DateTime? @map("renovado_en")
+  usadoEn       DateTime? @map("usado_en")
+  creadoEn      DateTime  @default(now()) @map("creado_en")
+  actualizadoEn DateTime  @updatedAt @map("actualizado_en")
+
+  corredora Corredora @relation(fields: [corredoraId], references: [id], onDelete: Restrict)
+  usuario   Usuario?  @relation("conexionUsuario", fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([corredoraId, proveedor, dueno])
+  @@index([proveedor, estado, expiraEn])
+  @@map("conexiones")
+}
+
+/// Una autorización OAuth en curso: el usuario está en la página del proveedor. Se busca por `state` cuando el
+/// proveedor vuelve al callback; dura 10 minutos y se usa una sola vez.
+model OauthPendiente {
+  state          String   @id
+  corredoraId    String   @map("corredora_id") @db.Uuid
+  usuarioId      String   @map("usuario_id") @db.Uuid
+  proveedor      String
+  /// para quién queda la sesión: el usuario o toda la corredora
+  deCorredora    Boolean  @default(false) @map("de_corredora")
+  verificadorCif String   @map("verificador_cif")
+  creadoEn       DateTime @default(now()) @map("creado_en")
+  expiraEn       DateTime @map("expira_en")
+
+  @@index([expiraEn])
+  @@map("oauth_pendientes")
+}
+
+/// El registro de Asset como aplicación en cada proveedor OAuth que lo crea solo (registro dinámico, p. ej.
+/// Portalfirma). Uno por proveedor y dirección de retorno. Google y Mercado Libre vienen del .env.
+model OauthCliente {
+  proveedor   String
+  redirectUri String   @map("redirect_uri")
+  /// información del cliente (client_id; client_secret cifrado si lo hay)
+  clienteCif  String   @map("cliente_cif")
+  creadoEn    DateTime @default(now()) @map("creado_en")
+
+  @@id([proveedor, redirectUri])
+  @@map("oauth_clientes")
+}
+
+// ============================================================================ agente
+
+/// Una conversación con el Agente (chat de la app o el hilo «WhatsApp»). Es de su usuario: solo él la escribe; el
+/// administrador de la corredora puede leerla. El id lo pone la app (k…). `datos` lleva lo que se ve en el chat
+/// (items), lo que necesita el modelo para seguir (messages), el contexto del lienzo (ctx) y el resumen.
+model AgenteConversacion {
+  usuarioId     String    @map("usuario_id") @db.Uuid
+  id            String
+  corredoraId   String    @map("corredora_id") @db.Uuid
+  titulo        String    @default("")
+  fijada        Boolean   @default(false)
+  datos         Json      @default("{}")
+  version       Int       @default(1)
+  creadoEn      DateTime  @default(now()) @map("creado_en")
+  actualizadoEn DateTime  @updatedAt @map("actualizado_en")
+  eliminadoEn   DateTime? @map("eliminado_en")
+
+  corredora Corredora @relation(fields: [corredoraId], references: [id], onDelete: Restrict)
+  usuario   Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@id([usuarioId, id])
+  @@index([usuarioId, actualizadoEn])
+  @@index([corredoraId, actualizadoEn])
+  @@map("agente_conversaciones")
+}
+
+/// Lo que hizo el Agente (cada herramienta que cambió algo, o que el usuario canceló): para saber qué hizo y por
+/// orden de quién. Solo se agrega; lo ve su usuario y el administrador de la corredora.
+model AgenteRegistro {
+  id          BigInt   @id @default(autoincrement())
+  corredoraId String   @map("corredora_id") @db.Uuid
+  usuarioId   String   @map("usuario_id") @db.Uuid
+  fecha       DateTime @default(now())
+  /// app | whatsapp
+  canal       String   @default("app")
+  herramienta String
+  accion      String?
+  ok          Boolean  @default(true)
+  resumen     String   @default("")
+
+  corredora Corredora @relation(fields: [corredoraId], references: [id], onDelete: Restrict)
+  usuario   Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId, fecha])
+  @@index([corredoraId, fecha])
+  @@map("agente_registro")
+}
+
+// ============================================================================ plataforma (compartido por todas las corredoras)
+
+/// Un caso de aprendizaje de reglas notariales: un documento donde el cliente corrigió la detección (materia o actos).
+/// La app tacha los datos personales antes de mandarlo. Cada corredora ve y borra solo los suyos; el revisor de la
+/// plataforma (PLATAFORMA_REVISORES) los ve todos, sin saber de qué corredora vienen. Uno por documento (clave).
+model ReglaCaso {
+  id          String   @id
+  corredoraId String   @map("corredora_id") @db.Uuid
+  usuarioId   String?  @map("usuario_id") @db.Uuid
+  /// huella del documento: si se corrige de nuevo el mismo, se reemplaza
+  clave       String
+  datos       Json     @default("{}")
+  creadoEn    DateTime @default(now()) @map("creado_en")
+
+  corredora Corredora @relation(fields: [corredoraId], references: [id], onDelete: Cascade)
+
+  @@unique([corredoraId, clave])
+  @@index([creadoEn])
+  @@map("reglas_casos")
+}
+
+/// Documentos de la plataforma, uno por clave (p. ej. «reglas_notariales»: las reglas aprobadas y las propuestas).
+/// Todas las corredoras los leen; los cambia el revisor de la plataforma, con `version` para no pisarse.
+model PlataformaDocumento {
+  clave          String   @id
+  datos          Json     @default("{}")
+  version        Int      @default(1)
+  actualizadoPor String?  @map("actualizado_por") @db.Uuid
+  actualizadoEn  DateTime @updatedAt @map("actualizado_en")
+
+  @@map("plataforma_documentos")
+}
+
+/// WhatsApp programados: los envía el servidor a su hora (con la clave de wechatia de la corredora), aunque la app
+/// esté cerrada. Los crea el usuario (por el Agente) y solo él los ve. `estado`: programado → enviando → enviado |
+/// no_entregado | fallido; o cancelado. Se toman con FOR UPDATE SKIP LOCKED: nunca salen dos veces.
+/// `avisadoEn`: la app del usuario ya hizo lo suyo con el resultado (avisarle y anotarlo en el lead).
+model WaProgramado {
+  corredoraId   String    @map("corredora_id") @db.Uuid
+  id            String
+  usuarioId     String    @map("usuario_id") @db.Uuid
+  telefono      String
+  nombre        String    @default("")
+  personaId     String?   @map("persona_id")
+  texto         String
+  cuando        DateTime
+  estado        String    @default("programado")
+  /// la plantilla aprobada por Meta que se usa si la persona no ha escrito en 24 h: { id, nombre, etiqueta, campos }
+  plantilla     Json?
+  /// messageId, contactId, plantilla usada, error, entrega
+  resultado     Json      @default("{}")
+  enviadoEn     DateTime? @map("enviado_en")
+  /// hasta cuándo se revisa si WhatsApp lo entregó (Meta puede rechazarlo minutos después)
+  revisarHasta  DateTime? @map("revisar_hasta")
+  avisadoEn     DateTime? @map("avisado_en")
+  version       Int       @default(1)
+  creadoEn      DateTime  @default(now()) @map("creado_en")
+  actualizadoEn DateTime  @updatedAt @map("actualizado_en")
+
+  corredora Corredora @relation(fields: [corredoraId], references: [id], onDelete: Cascade)
+
+  @@id([corredoraId, id])
+  @@index([estado, cuando])
+  @@index([revisarHasta])
+  @@index([usuarioId, actualizadoEn])
+  @@map("wa_programados")
 }

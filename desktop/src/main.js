@@ -511,8 +511,9 @@ handle('escr:readPriv', async (paths) => { const out = []; for (const f of paths
 // Lectura con IA de un PDF o una imagen (incluida en el valor del trámite: no descuenta tokens)
 handle('ai:leerDoc', (args) => ai.leerDocumento(args));
 handle('escr:read', async (paths) => { const out = []; for (const f of paths) out.push(await escrRead(f)); return out; });
-handle('escr:cfg', () => store.get('escrNotaria') || null);
-handle('escr:setCfg', (c) => { store.set('escrNotaria', c); return true; });
+// notaría y datos para las escrituras: de toda la corredora (corredora_config › escrNotaria; lo de este equipo se sube solo)
+handle('escr:cfg', () => inmo.ajusteCorredora('escrNotaria') || null);
+handle('escr:setCfg', (c) => { inmo.guardarAjusteCorredora('escrNotaria', c); return true; });
 handle('escr:saveDocx', async (kind, data, notaria, suggested) => {
   const X = require('./escrituras-docx');
   const buf = kind === 'caratula' ? await X.caratulaDocx(data, notaria) : await X.escrituraDocx(data, notaria);
@@ -540,7 +541,7 @@ handle('not:iniciar', (payload, files) => notarias.iniciar(pfapi, payload, files
 // Agente Portalfirma: conversa y usa todas las herramientas del MCP con la sesión de Studio
 const agente = require('./agente').crear({ pf, ai: require('./ai'), emit: (e) => toUI('agent:event', e) });
 if (process.env.PF_MOCK === '1') { global.__agente = agente; global.__pfMock = pf; }
-handle('agent:send', (texto) => agente.enviar(texto, { email: store.get('payerEmail') || '' }));
+handle('agent:send', (texto) => agente.enviar(texto, { email: inmo.ajusteCorredora('payerEmail') || '' }));
 handle('agent:confirm', (id, r) => agente.responder(id, r));
 handle('agent:attach', (name, bytes) => agente.adjuntar(String(name), bytes));
 handle('agent:pick', async () => {
@@ -551,6 +552,7 @@ handle('agent:unattach', (name) => agente.quitar(String(name)));
 handle('agent:reset', () => agente.reiniciar());
 // Conversaciones guardadas (barra izquierda del Agente)
 const convs = require('./conversaciones');
+global.__convs = convs; global.__agenteRegistro = require('./agente-registro'); // las pruebas e2e los usan (app.evaluate); al cargarse, el registro sube lo pendiente al iniciar sesión
 handle('conv:listar', (q) => convs.listar(q));
 handle('conv:abrir', (id) => { const c = convs.obtener(id); agente.restaurar(c.messages); return { ...c, messages: undefined }; });
 handle('conv:guardar', (id, o) => convs.guardar(id, { ...(o || {}), messages: agente.mensajes() }));
@@ -558,6 +560,10 @@ handle('conv:nueva', () => { agente.reiniciar(); return convs.nuevoId(); });
 handle('conv:renombrar', (id, t) => convs.renombrar(id, t));
 handle('conv:fijar', (id, v) => convs.fijar(id, v));
 handle('conv:borrar', (id) => convs.borrar(id));
+// el administrador lee las conversaciones y el registro del Agente de otro usuario de su corredora (solo lectura)
+handle('conv:deUsuario', (usuarioId) => { permisos.permiso('usuarios'); return convs.deUsuario(usuarioId); });
+handle('conv:abrirDe', (usuarioId, id) => { permisos.permiso('usuarios'); return convs.abrirDe(usuarioId, id); });
+handle('agent:logDe', (usuarioId) => { permisos.permiso('usuarios'); return require('./agente-registro').deUsuario(usuarioId); });
 handle('agent:tools', () => agente.herramientas());
 handle('agent:log', () => agente.actividad());
 // Aprendizaje de reglas: casos corregidos → propuestas de la IA → aprobación de Portalfirma
@@ -571,8 +577,9 @@ handle('reglas:probar', (p) => reglas.probar(p || {}));
 handle('reglas:decidir', (d) => reglas.decidir(d || {}));
 handle('reglas:activar', (d) => reglas.activar(d || {}));
 handle('reglas:eliminar', (id) => reglas.eliminar(id));
+handle('reglas:permisos', () => reglas.permisos());
 handle('reglas:exportar', async () => {
-  const data = JSON.stringify(reglas.exportar(), null, 2);
+  const data = JSON.stringify(await reglas.exportar(), null, 2);
   if (process.env.PF_SAVE_DIR) { const f = path.join(process.env.PF_SAVE_DIR, 'reglas-notariales.json'); fs.writeFileSync(f, data); return f; }
   const r = await dialog.showSaveDialog(win, { defaultPath: 'reglas-notariales.json', filters: [{ name: 'JSON', extensions: ['json'] }] });
   if (r.canceled || !r.filePath) return null; fs.writeFileSync(r.filePath, data); return r.filePath;
@@ -670,8 +677,8 @@ handle('history:list', () => { // los envíos que fallaron (sin número de opera
   store.set('history', h); return h;
 });
 
-handle('prefs:get', () => ({ payerEmail: store.get('payerEmail') || '', serverUrl: pf.serverUrl(), mock: process.env.PF_MOCK === '1' }));
-handle('prefs:set', (p) => { if (p.payerEmail !== undefined) store.set('payerEmail', p.payerEmail); return true; });
+handle('prefs:get', () => ({ payerEmail: inmo.ajusteCorredora('payerEmail') || '', serverUrl: pf.serverUrl(), mock: process.env.PF_MOCK === '1' }));
+handle('prefs:set', (p) => { if (p.payerEmail !== undefined) inmo.guardarAjusteCorredora('payerEmail', String(p.payerEmail || '').trim()); return true; });
 handle('open:url', (u) => { if (process.env.PF_MOCK === '1') { (global.__abiertos ||= []).push(u); return true; } if (/^https:\/\//.test(u)) shell.openExternal(u); return true; }); // en pruebas no se abre el navegador
 // Enlaces dentro de un PDF (el usuario ya confirmó en la app)
 handle('open:link', (u) => { if (/^(https?:|mailto:)/i.test(String(u))) shell.openExternal(String(u)); return true; });
@@ -753,7 +760,7 @@ async function htmlAPdf(html, { cabecera = '' } = {}) {
   finally { try { pw.destroy(); } catch {} try { fs.rmSync(dir, { recursive: true, force: true }); } catch {} }
 }
 // 0.16.15 · formatos propios de la corredora (mandatos de The Living…): se llenan con la ficha y se firman en Portalfirma
-const formatos = require('./formatos').crear({ inmo, pf, firmas, negocios, mock: !!process.env.PF_MOCK, pagador: () => store.get('payerEmail') || (process.env.PF_MOCK ? 'demo@portalfirma.cl' : ''), renderPdf: htmlAPdf, cambiarPropiedad, dir: () => { const d = process.env.PF_INMO_DIR || path.join(app.getPath('userData'), 'inmo'); fs.mkdirSync(d, { recursive: true }); return d; } });
+const formatos = require('./formatos').crear({ inmo, pf, firmas, negocios, mock: !!process.env.PF_MOCK, pagador: () => inmo.ajusteCorredora('payerEmail') || (process.env.PF_MOCK ? 'demo@portalfirma.cl' : ''), renderPdf: htmlAPdf, cambiarPropiedad, dir: () => { const d = process.env.PF_INMO_DIR || path.join(app.getPath('userData'), 'inmo'); fs.mkdirSync(d, { recursive: true }); return d; } });
 handle('fmt:estado', () => formatos.estado());
 handle('fmt:configurar', (o) => formatos.configurar(o || {}));
 handle('fmt:deHito', (propId, hito) => formatos.deHito(inmo.obtener(propId), hito));
@@ -775,7 +782,7 @@ handle('dir:buscar', (t) => dirs.buscarLibre(t));
 // calendario de reservas (wechatia): widget dentro de Asset + reservas a la agenda con la clave de la API
 const reservas = require('./reservas').crear({ store, inmo, agenda, est, mock: !!process.env.PF_MOCK });
 handle('res:estado', () => reservas.estado());
-handle('res:configurar', (o) => reservas.configurar(o || {}));
+handle('res:configurar', async (o) => { const r = await reservas.configurar(o || {}); if (o?.token) waProg.subirClave({ forzar: true }).catch(() => {}); return r; });
 handle('res:sincronizar', async (pend) => { const r = await reservas.sincronizar(pend || null); if (r.cita && !r.cita.ok && r.cita.permiso) toUI('agent:event', { type: 'aviso', texto: r.cita.error }); if (r.nuevas || r.actualizadas || r.canceladas) toUI('agent:event', { type: 'datos', que: 'agenda' }); return r; });
 // Postventa (MVP): unidades entregadas, reclamos con garantía y atención por WhatsApp vía wechatia
 const postventa = require('./postventa').crear({ dir: () => { const d = process.env.PF_INMO_DIR || path.join(app.getPath('userData'), 'inmo'); fs.mkdirSync(d, { recursive: true }); return d; }, wa: require('./postventa').whatsappWechatia(reservas), ia: (o) => require('./ai').redactarCorto(o), inmo });
@@ -798,7 +805,7 @@ handle('pv:importar', async (ruta) => {
 });
 handle('pv:plantilla', async () => { const r = await dialog.showSaveDialog(win, { title: 'Guardar plantilla de unidades', defaultPath: 'plantilla-unidades-postventa.xlsx', filters: [{ name: 'Excel', extensions: ['xlsx'] }] }); if (r.canceled || !r.filePath) return null; const f = /\.xlsx$/i.test(r.filePath) ? r.filePath : r.filePath + '.xlsx'; fs.writeFileSync(f, postventa.plantillaXLSX()); shell.showItemInFolder(f); return f; });
 handle('pv:config', () => ({ ...postventa.config(), ...reservas.estadoWa() }));
-handle('pv:claveWa', (o) => reservas.configurarWa(o || {}));
+handle('pv:claveWa', async (o) => { const r = await reservas.configurarWa(o || {}); if (o?.token) waProg.subirClave({ forzar: true }).catch(() => {}); return r; });
 handle('pv:configurar', (o) => postventa.configurar(o || {}));
 handle('pv:chats', () => postventa.chats());
 // Apariencia: claro, oscuro o como el sistema (cambia prefers-color-scheme en la ventana)
@@ -864,7 +871,7 @@ const PLANTILLAS_WA = {
   enlace_firma: { nombre: 'asset_enlace_firma', etiqueta: 'asset-enlace-firma', campos: ['documento', 'enlace'], uso: 'mandar el enlace de un documento pendiente de firma' },
   seguimiento_lead: { nombre: 'asset_seguimiento_lead', etiqueta: 'asset-seguimiento-lead', campos: ['remitente', 'propiedad'], uso: 'seguimiento a un interesado («tu interés en {propiedad}»)' },
 };
-const plantillasActivas = () => store.get('waPlantillas') || {};
+const plantillasActivas = () => inmo.ajusteCorredora('waPlantillas') || {};
 function datosPlantilla(a) {
   // 0.16.18 · una confirmación o recordatorio de visita va con su plantilla (propiedad, fecha y hora), no como primer contacto
   const esVisita = a.propiedad && a.fecha && a.hora && (!a.plantilla || a.plantilla === 'primer_contacto');
@@ -923,12 +930,18 @@ async function enviarWaCliente(x) {
 assetTools.push({ name: 'asset_enviar_whatsapp', modo: 'confirmar',
   description: 'Envía un WhatsApp a un cliente o a cualquier persona desde el número de la empresa: avisos, recordatorios de visita, pedir que se comunique, mandar un enlace. Ahora, o programado con «cuando» (p. ej. un recordatorio mañana a las 09:00). Busca el celular en el CRM por nombre o RUT; si no está, pásalo en «telefono». Redacta tú el mensaje completo, cordial y en nombre del usuario. Ojo: WhatsApp solo entrega texto libre si esa persona le escribió al número de la empresa en las últimas 24 h; si no, sale la plantilla aprobada que corresponda (indica siempre «plantilla» y sus datos), o, si aún no está activa, la herramienta devuelve un enlace para que el usuario lo mande desde su propio WhatsApp. NUNCA digas que enviaste o programaste un WhatsApp sin usar esta herramienta.',
   parameters: { type: 'object', properties: { para: { type: 'string', description: 'Persona del CRM: nombre, RUT o id' }, telefono: { type: 'string', description: 'Celular, si no está en el CRM (+56 9 …)' }, nombre: { type: 'string', description: 'Nombre del destinatario, si se da el celular' }, texto: { type: 'string', description: 'El mensaje completo que se envía' }, cuando: { type: 'string', description: 'Opcional: AAAA-MM-DD HH:MM para programarlo; vacío = ahora' }, plantilla: { type: 'string', enum: Object.keys(PLANTILLAS_WA), description: 'La plantilla aprobada que corresponde, por si esa persona no ha escrito en 24 h: ' + Object.entries(PLANTILLAS_WA).map(([k, p]) => `${k} = ${p.uso} (datos: ${p.campos.join(', ')})`).join('; ') }, motivo: { type: 'string', description: 'primer_contacto: por qué le escribes, en pocas palabras («la visita a Zenteno 864»)' }, propiedad: { type: 'string', description: 'recordatorio_visita / seguimiento_lead: la propiedad, como dirección corta' }, fecha: { type: 'string', description: 'recordatorio_visita: «el viernes 6 de noviembre»' }, hora: { type: 'string', description: 'recordatorio_visita: «12:30»' }, documento: { type: 'string', description: 'enlace_firma: nombre del documento' }, enlace: { type: 'string', description: 'enlace_firma: el enlace para firmar' }, remitente: { type: 'string', description: 'Quién escribe (por defecto, el corredor configurado)' } }, required: ['texto'] },
-  preparar: async (a) => { if (!reservas.estadoWa().conectado) throw new Error('El WhatsApp de la empresa no está conectado (Agente › WhatsApp).'); const d = destinoWa(a); const c = cuandoOk(a.cuando); a.__d = d; a.__c = c;
+  preparar: async (a) => { const c = cuandoOk(a.cuando);
+    // programado con la cuenta de Asset: lo envía el servidor (necesita la clave en el servidor, no en este equipo)
+    if (c && waProg.enApi()) { if (!(await waProg.listo())) throw new Error('El WhatsApp de la empresa no está conectado en el servidor de Asset (Agente › WhatsApp): sin eso no se pueden programar mensajes.'); }
+    else if (!reservas.estadoWa().conectado) throw new Error('El WhatsApp de la empresa no está conectado (Agente › WhatsApp).');
+    const d = destinoWa(a); a.__d = d; a.__c = c;
     return { titulo: c ? `Programar un WhatsApp para ${d.nombre || d.telefono}` : `Enviar un WhatsApp a ${d.nombre || d.telefono}`, detalle: [`Para: ${d.nombre ? d.nombre + ' · ' : ''}${d.telefono}`, `Mensaje: ${a.texto}`, ...(c ? [`Se envía el ${c.slice(8, 10)}/${c.slice(5, 7)} a las ${c.slice(11)}`] : [])], aviso: 'Sale desde el WhatsApp de la empresa. Si esa persona no le ha escrito a tu número en las últimas 24 h, WhatsApp puede no entregarlo (exige una plantilla aprobada).' }; },
   run: async (a) => { const d = a.__d || destinoWa(a); const c = a.__c !== undefined ? a.__c : cuandoOk(a.cuando);
     // 0.16.8 · el último enlace de firma enviado a una persona: el asistente de clientes puede reenviarlo si lo pide
-    if (a.enlace && d.personaId) { const ef = store.get('enlacesFirma') || {}; ef[d.personaId] = { documento: a.documento || '', enlace: a.enlace, fecha: new Date().toISOString() }; store.set('enlacesFirma', ef); }
-    if (c) { const l = store.get('waProgramados') || []; const it = { id: 'wp' + Date.now().toString(36), ...d, texto: a.texto, cuando: c, estado: 'programado', creado: new Date().toISOString(), pl: Object.fromEntries(['plantilla', 'motivo', 'propiedad', 'fecha', 'hora', 'documento', 'enlace', 'remitente'].filter((k) => a[k]).map((k) => [k, a[k]])) }; l.push(it); store.set('waProgramados', l.slice(-200)); return { ok: true, programado: { para: d.nombre || d.telefono, cuando: c } }; }
+    if (a.enlace && d.personaId) inmo.guardarEnlaceFirma(d.personaId, { documento: a.documento || '', enlace: a.enlace, fecha: new Date().toISOString() });
+    if (c) { const l = store.get('waProgramados') || []; const it = { id: 'wp' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), ...d, texto: a.texto, cuando: c, estado: 'programado', creado: new Date().toISOString(), pl: Object.fromEntries(['plantilla', 'motivo', 'propiedad', 'fecha', 'hora', 'documento', 'enlace', 'remitente'].filter((k) => a[k]).map((k) => [k, a[k]])) };
+      if (waProg.enApi()) { await waProg.programar({ ...it, plantilla: plantillaProgramada(it) }); return { ok: true, programado: { para: d.nombre || d.telefono, cuando: c }, nota: 'Lo envía el servidor de Asset a esa hora, aunque la app esté cerrada.' }; }
+      l.push(it); store.set('waProgramados', l.slice(-200)); return { ok: true, programado: { para: d.nombre || d.telefono, cuando: c } }; }
     try { const r = await enviarWaCliente({ ...d, texto: a.texto }); if (r.duplicado) return { ok: true, yaEnviado: true, nota: 'Ese mismo mensaje ya se le envió hace unos minutos: no lo repetí. No vuelvas a intentarlo.' }; alLead(d, a.texto, a.plantilla || null); return { ok: true, enviado: { para: d.nombre || d.telefono, estado: r.estado === 'enviado' ? 'enviado (WhatsApp aún no confirma la entrega; si la rechaza, te aviso)' : r.estado } }; }
     catch (e) {
       if (e.code === 'FUERA_24H' || /24 horas/.test(e.message)) return fueraDe24(d, a);
@@ -970,13 +983,38 @@ assetTools.push({ name: 'asset_plantillas_whatsapp', modo: 'escribir',
   description: 'Ve o cambia qué plantillas de WhatsApp (aprobadas por Meta en wechatia) usa Asset cuando un cliente no ha escrito en 24 h. Úsala cuando el usuario diga que Meta ya aprobó una plantilla («ya se aprobaron las plantillas, actívalas») o pregunte cuáles están activas. Sin «activar» ni «desactivar», solo muestra el estado.',
   parameters: { type: 'object', properties: { activar: { type: 'array', items: { type: 'string', enum: [...Object.keys(PLANTILLAS_WA), 'todas'] } }, desactivar: { type: 'array', items: { type: 'string', enum: [...Object.keys(PLANTILLAS_WA), 'todas'] } } } },
   run: async (a) => { const c = { ...plantillasActivas() }; const exp = (l) => (l || []).includes('todas') ? Object.keys(PLANTILLAS_WA) : (l || []);
-    for (const k of exp(a.activar)) c[k] = true; for (const k of exp(a.desactivar)) c[k] = false; store.set('waPlantillas', c);
+    for (const k of exp(a.activar)) c[k] = true; for (const k of exp(a.desactivar)) c[k] = false; inmo.guardarAjusteCorredora('waPlantillas', c);
     return { ok: true, plantillas: Object.entries(PLANTILLAS_WA).map(([k, p]) => ({ plantilla: p.nombre, uso: p.uso, activa: !!c[k] })), nota: 'Para que salga de verdad, en wechatia tiene que estar publicado el flujo de esa plantilla (etiqueta añadida → enviar plantilla → quitar etiqueta).' }; } });
-// los WhatsApp programados salen a su hora (mientras Asset esté abierto); el resultado se le avisa al ejecutivo
+// WhatsApp programados. Con la cuenta de Asset los envía el servidor (wa-programados.js): aquí solo se traen los
+// resultados para anotarlos en el lead y avisarle al ejecutivo. En modo de prueba salen de este equipo (mientras
+// Asset esté abierto), como antes.
+// la plantilla que corresponde si la persona no ha escrito en 24 h (el servidor la usa si la corredora la tiene activa)
+function plantillaProgramada(it) { const { id, P, campos } = datosPlantilla({ ...(it.pl || {}), texto: it.texto }); return { id, nombre: P.nombre, etiqueta: P.etiqueta, campos: Object.fromEntries(Object.entries(campos).map(([k, v]) => [k, v == null ? '' : String(v)])) }; }
+function alProgramado(x) {
+  const r = x.resultado || {}; const d = { telefono: x.telefono, nombre: x.nombre, personaId: x.personaId };
+  if (x.estado === 'enviado') {
+    if (r.messageId) reservas.anotarPropio(r.messageId); if (r.plantilla) reservas.anotarPlantilla(x.telefono);
+    alLead(d, r.plantilla ? `(Plantilla ${r.plantilla}) ${Object.values(x.plantilla?.campos || {}).filter(Boolean).join(' · ')}` : x.texto, x.plantilla?.id || null);
+    const t = `Le envié a ${x.nombre || x.telefono} el WhatsApp programado${r.plantilla ? ` (con la plantilla ${r.plantilla}, porque no había escrito en 24 h)` : ''}: «${x.texto.slice(0, 120)}»`;
+    toUI('agent:event', { type: 'aviso', texto: t }); try { waAgente.avisar?.(t); } catch {}
+  } else if (x.estado === 'no_entregado') avisarNoEntregado(x, r.error);
+  else {
+    try { const l = leads.porTelefono(x.telefono); if (l) leads.registrarWa(l.id, { de: 'agente', texto: x.texto, fallido: r.error || 'No se envió' }); } catch {}
+    const t = `No pude enviarle a ${x.nombre || x.telefono} el WhatsApp programado: ${r.error || 'error desconocido'}
+Envíaselo tú desde tu WhatsApp (se abre con el mensaje listo): ${enlaceWa(x.telefono, x.texto)}`;
+    if (x.personaId) { try { inmo.registrar(x.personaId, `No se envió el WhatsApp programado: ${r.error || ''}`.trim()); inmo.guardar(); } catch {} }
+    toUI('agent:event', { type: 'aviso', texto: t }); try { waAgente.avisar?.(t); } catch {}
+  }
+}
+const waProg = require('./wa-programados').crear({ credenciales: () => reservas.credencialesWa(), alResultado: alProgramado, plantillaDe: plantillaProgramada });
+global.__waProg = waProg; global.__assetTool = (n) => assetTools.find((t) => t.name === n); // las pruebas e2e los usan (app.evaluate)
+// al iniciar sesión: la clave de este equipo al servidor (si la corredora aún no la tiene) y lo programado aquí, arriba
+inmo.alCargar(async () => { try { await waProg.subirClave(); } catch {} try { await waProg.subirLocales(); } catch (e) { console.warn('[programados] no se subieron los locales:', e.message); } return null; });
 let enviandoProgramados = false;
 setInterval(async () => {
   if (enviandoProgramados) return;   // 0.16.18 · una sola ronda a la vez (si no, los envíos lentos se repetían)
-  enviandoProgramados = true; try { await enviarProgramados(); } finally { enviandoProgramados = false; }
+  enviandoProgramados = true;
+  try { if (waProg.enApi()) await waProg.traer(); else await enviarProgramados(); } catch (e) { if (waProg.enApi()) console.warn('[programados]', e.message); } finally { enviandoProgramados = false; }
 }, process.env.PF_MOCK === '1' ? 3000 : 30000).unref?.();
 async function enviarProgramados() {
   const l = store.get('waProgramados') || []; const ahora = new Date(); const hhmm = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
@@ -1033,7 +1071,11 @@ handle('usr:crear', (o) => equipo.crear(o || {}));
 handle('usr:editar', (id, o) => equipo.editar(id, o || {}));
 handle('usr:clave', (id, clave) => equipo.clave(id, clave));
 handle('usr:wechatia', () => equipo.usuariosWechatia({ admin: permisos.esAdmin() }));
-const leads = require('./leads').crear({ dir: leadsDir, ai: require('./ai'), inmo, broker: () => ({ nombre: (store.get('waAgente') || {}).nombre || store.get('leadsBroker') || '' }), emit: (e) => toUI('agent:event', e), corredores: () => equipo.lista() });
+// el nombre de quien usa Asset (para reconocer sus mensajes en los chats importados): el de su cuenta; en modo de
+// prueba, el último que dio la pantalla de Leads
+const miNombre = () => (inmo.API && inmo.usuario()?.nombre) || store.get('leadsBroker') || '';
+inmo.alCargar(async () => { if (store.get('leadsBroker') !== undefined) store.set('leadsBroker', undefined); return null; });
+const leads = require('./leads').crear({ dir: leadsDir, ai: require('./ai'), inmo, broker: () => ({ nombre: (store.get('waAgente') || {}).nombre || miNombre() }), emit: (e) => toUI('agent:event', e), corredores: () => equipo.lista() });
 global.__leads = leads; // para las pruebas e2e (app.evaluate)
 setTimeout(() => { try { leads.repararDuplicados(); } catch {} try { leads.sincronizarTodos(); } catch {} }, 3000); // 0.16.23 · leads anteriores quedan como persona
 handle('leads:asignar', (id, corredorId) => leads.asignar(id, corredorId || null, 'manual'));
@@ -1058,16 +1100,16 @@ handle('leads:derivar', async (id) => {
 handle('leads:listar', (o) => { const c = permisos.corredorActual(); return leads.listar({ ...(o || {}), ...(c ? { soloDe: c } : {}) }); });
 // al abrir un lead, primero los mensajes que llegaron a otros equipos
 handle('leads:obtener', async (id) => { try { await leads.traerMensajes(id); } catch {} const l = leads.obtener(id); if (!permisos.verLead(l)) throw new Error('Ese lead es de otro corredor.'); try { const pz = l?.telefono ? clientesWa.pausa(l.telefono) : null; if (pz) l.pausaHasta = pz; } catch {} return l; });
-handle('leads:analizar', async (o) => { if (o?.miNombre) store.set('leadsBroker', String(o.miNombre).slice(0, 80));
+handle('leads:analizar', async (o) => { if (o?.miNombre && !(inmo.API && inmo.usuario())) store.set('leadsBroker', String(o.miNombre).slice(0, 80));
   // 0.16.21 · un .zip puede ser un chat de WhatsApp o la descarga de Instagram: se reconoce por lo que trae
   if (/\.zip$/i.test(o?.ruta || '') || o?.canal === 'instagram') { try { return await leads.analizarInstagram(o || {}); } catch (e) { if (o?.canal === 'instagram' || e.code !== 'NO_IG') throw e; } }
   return leads.analizar(o || {}); });
-handle('leads:importarInstagram', (o) => leads.importarInstagram({ brokerNombre: store.get('leadsBroker') || '', ...(o || {}) }));
+handle('leads:importarInstagram', (o) => leads.importarInstagram({ brokerNombre: miNombre(), ...(o || {}) }));
 handle('leads:consentimientos', () => leads.consentimientos());
 // 0.16.22 · observador en vivo: Instagram, Facebook y correo desde wechatia, solo lectura
 const observador = require('./observador').crear({ res: reservas, leads, store, corredores: equipo, emit: (e) => toUI('agent:event', e) });
 handle('obs:estado', () => observador.estado());
-handle('obs:configurar', (o) => { const r = observador.configurar({ autorizadoPor: store.get('leadsBroker') || '', ...(o || {}) }); if (r.activo) observador.revisar().catch(() => {}); return r; });
+handle('obs:configurar', (o) => { const r = observador.configurar({ autorizadoPor: miNombre(), ...(o || {}) }); if (r.activo) observador.revisar().catch(() => {}); return r; });
 handle('obs:revisar', async () => { const r = await observador.revisar({ forzar: true }); return { ...r, estado: observador.estado() }; });
 setTimeout(() => observador.revisar().catch(() => {}), 20000); setInterval(() => observador.revisar().catch(() => {}), 2 * 60000);
 handle('leads:importar', (o) => leads.importar(o || {}));

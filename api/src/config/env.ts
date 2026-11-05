@@ -16,6 +16,23 @@ const esquema = z.object({
   R2_BUCKET: z.string().min(1),
   /** dominio público del bucket (las fotos se sirven desde ahí) */
   R2_DOMAIN: z.url().transform((u) => u.replace(/\/+$/, '')),
+  // integraciones (src/conexiones): llave AES-256 para cifrar los tokens de servicios externos (32 bytes en base64)
+  CONEXIONES_CLAVE: z
+    .string()
+    .refine((v) => Buffer.from(v, 'base64').length === 32, 'deben ser 32 bytes en base64 (crypto.randomBytes(32))'),
+  /** dirección pública de la API (sin /v1): los proveedores OAuth vuelven a <esta>/v1/conexiones/callback/<proveedor> */
+  API_URL_PUBLICA: z.url().transform((u) => u.replace(/\/+$/, '')),
+  /** servidor MCP de Portalfirma (firma digital y plantillas) */
+  PORTALFIRMA_MCP_URL: z.url().default('https://mcp.portalfirma.cl/api/mcp'),
+  /** credencial del servicio de archivos de Portalfirma (cabecera «id» de /api/file/getById); sin ella no se bajan PDFs */
+  PORTALFIRMA_ARCHIVOS_ID: z.string().optional(),
+  /** correos (separados por coma) de quienes revisan lo de la plataforma: casos y reglas notariales de todas las corredoras */
+  PLATAFORMA_REVISORES: z
+    .string()
+    .default('')
+    .transform((v) => v.split(',').map((x) => x.trim().toLowerCase()).filter(Boolean)),
+  /** cada cuántos segundos revisa el servidor los WhatsApp programados que tocan (0 = no los envía esta API) */
+  PROGRAMADOS_CADA_SEG: z.coerce.number().int().min(0).max(3600).default(30),
 });
 
 export type Env = z.infer<typeof esquema>;

@@ -9,7 +9,7 @@ const { app } = require('electron');
 const store = require('./store');
 
 const DESARROLLO = 'http://localhost:3000/v1';
-const PRODUCCION = ''; // TODO: URL pública de la API cuando esté desplegada (https://…/v1)
+const PRODUCCION = 'https://asset.matchoncard.cl/v1'; // temporal, hasta habilitar asset.portalfirma.cl
 const CLAVE = 'assetSesion';
 
 const err = (m, code, status) => Object.assign(new Error(m), { code, status });

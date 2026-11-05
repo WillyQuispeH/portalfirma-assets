@@ -239,7 +239,7 @@ const DOCS = {
 // colección. Cada módulo trabaja sobre registros(coleccion) (una lista en memoria, sincronizada) y llama a guardar():
 // lo que cambió se encola como PUT del documento entero, igual que negocios y eventos.
 // En PF_MOCK, registros() devuelve null y cada módulo sigue con su archivo local.
-const COLECCIONES = ['pv_proyectos', 'pv_unidades', 'pv_reclamos', 'pv_contratistas', 'pv_chats', 'pv_config', 'plazos', 'expedientes', 'corredora_config', 'consentimientos', 'perfil'];
+const COLECCIONES = ['pv_proyectos', 'pv_unidades', 'pv_reclamos', 'pv_contratistas', 'pv_chats', 'pv_config', 'plazos', 'expedientes', 'corredora_config', 'consentimientos', 'perfil', 'flujos', 'enlaces_firma', 'envios_masivos'];
 for (const c of COLECCIONES) DOCS['reg:' + c] = { lista: () => (R.reg[c] ||= []), pref: `r:${c}:`, ruta: '/registros/' + c, que: c.startsWith('pv_') ? 'postventa' : c, nombre: 'un registro' };
 const registros = (c) => { if (!COLECCIONES.includes(c)) throw err('Colección desconocida: ' + c); return API ? (R.reg[c] ||= []) : null; };
 /** El siguiente número de una serie (folios): lo da el servidor, así dos equipos no repiten. */
@@ -1100,6 +1100,36 @@ function guardarConfig(parcial) {
   if (Object.keys(resto).length) Object.assign(regUnico('corredora_config', 'corredora', {}), resto);
   guardarTodo(); return config();
 }
+// Ajustes de la corredora que antes estaban en cada equipo (store): correo pagador de las recargas (payerEmail) y
+// plantillas de WhatsApp activas (waPlantillas). Se leen de la configuración de la corredora; si ahí no están y este
+// equipo los tenía, se suben una vez (cuando ya cargó lo del servidor) y se borran del equipo.
+function ajusteCorredora(k) {
+  const v = config()?.[k]; if (v !== undefined) return v;
+  const st = require('./store'); const loc = st.get(k);
+  if (loc !== undefined && API && R.listo && R.usuario) { guardarConfig({ [k]: loc }); st.set(k, undefined); }
+  return loc;
+}
+const guardarAjusteCorredora = (k, v) => { if (API && R.usuario) { guardarConfig({ [k]: v }); require('./store').set(k, undefined); } else require('./store').set(k, v); return v; };
+// Último enlace de firma enviado a cada persona (lo usa el asistente de WhatsApp para responder «¿dónde firmo?»).
+// Con la cuenta de Asset es de toda la corredora (colección enlaces_firma, id = personaId).
+function enlaceFirma(personaId) {
+  if (!personaId) return null;
+  if (!API || !R.usuario) return (require('./store').get('enlacesFirma') || {})[personaId] || null;
+  const x = registros('enlaces_firma').find((y) => y.id === personaId); return x ? sinServidor(x) : null;
+}
+function guardarEnlaceFirma(personaId, datos) {
+  if (!personaId) return;
+  if (!API || !R.usuario) { const st = require('./store'); const ef = st.get('enlacesFirma') || {}; ef[personaId] = datos; st.set('enlacesFirma', ef); return; }
+  const l = registros('enlaces_firma'); const x = l.find((y) => y.id === personaId);
+  if (x) { for (const k of Object.keys(sinServidor(x))) delete x[k]; Object.assign(x, datos, { id: personaId }); } else l.push({ id: personaId, ...datos });
+  guardarTodo();
+}
+alCargar(async () => {
+  const st = require('./store'); const ef = st.get('enlacesFirma'); if (!ef || !Object.keys(ef).length) return null;
+  const items = Object.entries(ef).map(([id, d]) => ({ id, ...d }));
+  for (let i = 0; i < items.length; i += 200) await asset().llamar('POST', '/registros/enlaces_firma/importar', { items: items.slice(i, i + 200) });
+  st.set('enlacesFirma', undefined); return null;
+});
 // la configuración local de este equipo (salvo el corredor, que ahora es de cada cuenta) se sube una vez
 alCargar(async () => {
   const d = db(); if (d.configSubida || !d.config) return null;
@@ -1195,7 +1225,7 @@ async function actividadTodas({ q = '', clase = '', desde = 0, limite = 60 } = {
 function exportarDatos() { return { ...clonar(db()), propiedades: clonar(P()), personas: clonar(C()) }; }
 const _reset = () => { cache = null; };
 
-module.exports = { personaDesdeLead, esEmpresa, eventos, negocios, personaPorId, registrar, obtener, parchear, todas, config, guardarConfig, registrarLead, guardar: guardarTodo, TIPOS, ESTADOS, ROLES, validRut, fmtRut, listar, resumen, guardarPropiedad, archivarPropiedad, guardarPersona, borrarPersona, vincular, desvincular,
+module.exports = { personaDesdeLead, esEmpresa, eventos, negocios, personaPorId, registrar, obtener, parchear, todas, config, guardarConfig, ajusteCorredora, guardarAjusteCorredora, enlaceFirma, guardarEnlaceFirma, registrarLead, guardar: guardarTodo, TIPOS, ESTADOS, ROLES, validRut, fmtRut, listar, resumen, guardarPropiedad, archivarPropiedad, guardarPersona, borrarPersona, vincular, desvincular,
   nota, actividadDe, actividadTodas, agregarDocumentos, quitarDocumento, docPath, mostrarCarpeta, subirFotos, importarPF, desdePF, exportarDatos, _reset,
   // repositorio (sesión de Asset y sincronización)
   API, configurar, iniciar, cerrar, sincronizar, registros, folio, alCargar, subirArchivoRegistro, bajarArchivoRegistro, borrarArchivosRegistro, firmasDe, todasLasFirmas, agregarFirma, actualizarFirma, firmaDeOperacion, historialEnvios, registrarEnvio, leadsLista: () => R.leads, encolarMensajes, subirR2, recargarLead: (id) => recargarDoc('lead', id), esperarCola, usuario, listo, asignarCaptador, asignarVarios };

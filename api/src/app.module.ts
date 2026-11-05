@@ -18,7 +18,15 @@ import { NegociosController, NegociosService } from './negocios/negocios';
 import { EventosController, EventosService } from './agenda/eventos';
 import { LeadsController, LeadsService } from './leads/leads';
 import { FirmasController, FirmasService } from './firmas/firmas';
+import { AgenteController, AgenteService } from './agente/agente';
+import { ReglasNotarialesController, ReglasNotarialesService } from './plataforma/reglas-notariales';
+import { CifradoService } from './conexiones/cifrado';
+import { ConexionesController, ConexionesService } from './conexiones/conexiones';
+import { PortalfirmaOAuth } from './conexiones/portalfirma.oauth';
+import { PortalfirmaController, PortalfirmaService } from './conexiones/portalfirma';
 import { ContadoresController, RegistrosController, RegistrosService } from './registros/registros';
+import { WechatiaController, WechatiaService } from './whatsapp/wechatia';
+import { ProgramadosController, ProgramadosService } from './whatsapp/programados';
 
 @Module({
   imports: [
@@ -41,6 +49,12 @@ import { ContadoresController, RegistrosController, RegistrosService } from './r
     FirmasController,
     RegistrosController,
     ContadoresController,
+    ConexionesController,
+    PortalfirmaController,
+    AgenteController,
+    ReglasNotarialesController,
+    WechatiaController,
+    ProgramadosController,
   ],
   // el límite de intentos va antes que la sesión: un login fallido también cuenta
   providers: [
@@ -52,6 +66,14 @@ import { ContadoresController, RegistrosController, RegistrosService } from './r
     LeadsService,
     FirmasService,
     RegistrosService,
+    CifradoService,
+    PortalfirmaOAuth,
+    ConexionesService,
+    PortalfirmaService,
+    AgenteService,
+    ReglasNotarialesService,
+    WechatiaService,
+    ProgramadosService,
   ],
 })
 export class AppModule {}

@@ -71,7 +71,7 @@ function crear({ store, inmo, agenda, docs = null, leads = null, ai, wa, avisarC
     if (per.id) try { const hoy = H.hoy(); visitas = agenda.listar({ personaId: per.id }).filter((e) => e.fecha >= hoy && e.estado !== 'cancelado').slice(0, 5).map((e) => ({ fecha: e.fecha, hora: e.hora, tipo: e.tipo, propiedad: props.find((p) => p.id === e.propId)?.titulo || props.find((p) => p.id === e.propId)?.direccion || null, estado: e.estado })); } catch {}
     const firmas = [];
     for (const p of props) for (const f of (p.firmas || []).slice(0, 10)) if ((f.firmantes || []).some((s) => (per.id && s.personaId === per.id) || (s.rut && per.rut && dig(s.rut) === dig(per.rut)))) firmas.push({ documento: f.plantilla, operacion: f.operacion, fecha: String(f.fecha || '').slice(0, 10), estado: f.estado });
-    const enl = per.id ? (store.get('enlacesFirma') || {})[per.id] || null : null;
+    const enl = per.id ? inmo.enlaceFirma(per.id) : null;
     const busca = per.lead?.busqueda && Object.keys(per.lead.busqueda).length ? per.lead.busqueda : null;
     return { cliente: { nombre: per.nombre, ...(busca ? { loQueBusca: busca } : {}) }, corredor: corredor().nombre, propiedades, visitasAgendadas: visitas, documentosEnFirma: firmas.slice(0, 6), ultimoEnlaceDeFirma: enl };
   }

@@ -82,7 +82,7 @@ CANAL WHATSAPP: el usuario te escribe desde su celular (texto o notas de voz tra
 // ---------------------------------------------------------------- sesión de conversación
 function crear({ pf, ai, emit, canal = 'app', filtro = null }) {
   const S = { messages: [], adjuntos: [], tools: null, pend: new Map(), busy: false, locales: [] };
-  const log = (e) => { const l = store.get('agentLog') || []; l.unshift({ t: new Date().toISOString(), ...e }); store.set('agentLog', l.slice(0, 300)); };
+  const log = (e) => require('./agente-registro').registrar(e, canal === 'whatsapp' ? 'whatsapp' : 'app');
   async function herramientas() { if (!S.tools) { try { S.tools = await pf.listTools(); } catch (e) { if (!S.locales.length) throw e; return []; } } return S.tools; } // sin sesión, quedan las de Asset
   const local = (name) => S.locales.find((t) => t.name === name);
   // Lo que el lienzo debe mostrar después de una acción (la firma, el negocio, la propiedad o el día de la agenda)
@@ -204,7 +204,7 @@ function crear({ pf, ai, emit, canal = 'app', filtro = null }) {
     // Los botones de la app usan las mismas herramientas que el agente (una sola lógica)
     async prepararLocal(name, args) { const t = local(name); if (!t) throw new Error('Herramienta desconocida: ' + name); return t.preparar ? t.preparar(args) : null; },
     async ejecutarLocal(name, args) { const t = local(name); if (!t) throw new Error('Herramienta desconocida: ' + name); if (t.preparar && !args.__orden) await t.preparar(args); const out = await t.run(args); if (out) delete out.efectos; if (t.modo !== 'leer') log({ tool: name, ok: true, resumen: t.description.split('.')[0] + ' (desde la app)' }); return out; },
-    actividad: () => (store.get('agentLog') || []).slice(0, 100),
+    actividad: () => require('./agente-registro').recientes(100),
     _estado: () => S,
   };
 }

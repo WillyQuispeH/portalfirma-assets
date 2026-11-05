@@ -6,6 +6,7 @@
 //  · archivos: sus documentos pueden tener archivos en R2 (subida firmada, descarga con link firmado), bajo
 //    c/<corredora>/r/<colección>/<usuario o «todos»>/<id del registro>/;
 //  · soloAdmin: escribirla es del administrador.
+// payerEmail (correo de las recargas) y waPlantillas (plantillas de WhatsApp activas) van en corredora_config.
 // Contadores: POST /v1/contadores/:serie → el siguiente número de la serie (folios), atómico.
 import {
   BadRequestException,
@@ -53,6 +54,9 @@ export const COLECCIONES: Record<string, IColeccion> = {
   // la corredora
   corredora_config: { max: 128 * KB },
   consentimientos: { max: 16 * KB }, // quién autorizó importar mensajes de una cuenta (registro legal)
+  flujos: { max: 64 * KB }, // recetas de flujos documentales (modelo + cómo llenarlo desde una nómina + firmantes)
+  enlaces_firma: { max: 8 * KB }, // último enlace de firma enviado a cada persona (id = personaId): lo usa el asistente
+  envios_masivos: { max: 4 * KB }, // huella (sha1) de cada archivo enviado a firmar en la carga masiva: no se envía dos veces
   // cada usuario
   perfil: { max: 32 * KB, porUsuario: true }, // datos propios para los documentos (RUT del corredor…); id «perfil-<usuario>»
 };
