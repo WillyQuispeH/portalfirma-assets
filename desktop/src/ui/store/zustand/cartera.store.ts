@@ -2,8 +2,9 @@
 // y la selección para asignar captador. Los filtros quedan guardados aquí, así al volver se ve lo mismo.
 import { create } from 'zustand';
 import { propiedadService } from '../services/propiedad.service';
+import { personaService } from '../services/persona.service';
 import type { ICartera, TCaptaciones, TPropiedadEstado, TPropiedadTipo } from '../interfaces/propiedad.interface';
-import type { TPersonaRol } from '../interfaces/persona.interface';
+import type { IPersona, TPersonaRol } from '../interfaces/persona.interface';
 
 export type TFiltroEspecial = '' | 'enCaptacion' | 'sinProp' | 'sinFotos' | 'reservadas' | 'leads';
 
@@ -35,6 +36,8 @@ interface ICarteraState {
   carteraGetAll: () => Promise<void>;
   carteraSetFiltros: (f: Partial<IFiltrosCartera>) => void;
   personasSetFiltros: (f: Partial<IFiltrosPersonas>) => void;
+  /** crea o edita una persona y recarga la lista; devuelve la persona guardada o el error */
+  personaGuardar: (datos: Partial<IPersona>) => Promise<{ persona?: IPersona; error?: string }>;
   seleccionIniciar: () => void;
   seleccionAlternar: (id: string) => void;
   seleccionFijar: (ids: string[]) => void;
@@ -67,6 +70,13 @@ export const useCarteraStore = create<ICarteraState>((set, get) => ({
 
   carteraSetFiltros: (f) => set((s) => ({ filtros: { ...s.filtros, ...f } })),
   personasSetFiltros: (f) => set((s) => ({ filtrosPersonas: { ...s.filtrosPersonas, ...f } })),
+  personaGuardar: async (datos) => {
+    try {
+      const persona = await personaService.guardar(datos as IPersona);
+      void useCarteraStore.getState().carteraGetAll();
+      return { persona };
+    } catch (e) { return { error: (e as Error).message }; }
+  },
 
   // al entrar al modo, si no hay filtro de captador, se muestran las que no tienen
   seleccionIniciar: () => set((s) => ({ seleccion: [], filtros: s.filtros.captador ? s.filtros : { ...s.filtros, captador: '_sin' } })),

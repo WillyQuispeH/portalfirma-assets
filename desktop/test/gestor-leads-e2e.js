@@ -37,16 +37,16 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     ok(/Pasó de Ana Rivas a Beto Soto/.test(await txt('.ld-hist')), 'reasignar a mano queda en el historial');
     await shot('gl1-lead.png');
     // persona guardada sin RUT, con su corredor y el historial
-    await w.click('#ldPersona'); await w.waitForSelector('.im-pt h1');
-    ok(/Valentina Paz/.test(await txt('.im-pt h1')) && /Sin RUT todavía/.test(await txt('.im-pt')) && /Beto Soto/.test(await txt('.im-dl')), 'queda en Personas sin RUT, como interesada, con su corredor');
-    ok(/Llegó como interesado por Instagram/.test(await txt('.im-act')) && /Pasó de Ana Rivas a Beto Soto/.test(await txt('.im-act')), 'el historial de la persona registra la llegada y el cambio de corredor');
+    await w.click('#ldPersona'); await w.waitForSelector('#view-personas h1');
+    ok(/Valentina Paz/.test(await txt('#view-personas h1')) && /Sin RUT todavía/.test(await txt('#view-personas header')) && /Beto Soto/.test(await txt('[data-datos]')), 'queda en Personas sin RUT, como interesada, con su corredor');
+    ok(/Llegó como interesado por Instagram/.test(await txt('[data-historial]')) && /Pasó de Ana Rivas a Beto Soto/.test(await txt('[data-historial]')), 'el historial de la persona registra la llegada y el cambio de corredor');
     await shot('gl2-persona.png');
     // llegan más datos: se agregan a la persona (sin pisar lo que ya tenía)
     await app.evaluate(() => { global.__waMock.msgs.ig1.push({ id: 'i2', direction: 'inbound', messageType: 'TYPE_INSTAGRAM', body: 'Mi celular es +56 9 6543 2100 y mi correo vale.paz@gmail.com', dateAdded: new Date().toISOString() }); });
-    await pfc('obsRevisar'); await w.click('#pLead'); await w.waitForSelector('#ldCor'); await w.click('#ldPersona'); await w.waitForSelector('.im-pt h1');
-    ok(/6543/.test(await txt('.im-dl')) && /vale.paz@gmail.com/.test(await txt('.im-dl')) && /Se agregó su teléfono, correo/.test(await txt('.im-act')), 'el celular y el correo que dio después se agregan a la persona y quedan en su historial');
+    await pfc('obsRevisar'); await w.click('#pLead'); await w.waitForSelector('#ldCor'); await w.click('#ldPersona'); await w.waitForSelector('#view-personas h1');
+    ok(/6543/.test(await txt('[data-datos]')) && /vale.paz@gmail.com/.test(await txt('[data-datos]')) && /Se agregó su teléfono, correo/.test(await txt('[data-historial]')), 'el celular y el correo que dio después se agregan a la persona y quedan en su historial');
     // en wechatia no cambió el dueño: se respeta la asignación hecha en Asset
-    ok(/Beto Soto/.test(await txt('.im-dl')), 'si wechatia no cambia el dueño, se respeta lo asignado en Asset');
+    ok(/Beto Soto/.test(await txt('[data-datos]')), 'si wechatia no cambia el dueño, se respeta lo asignado en Asset');
     // wechatia cambia el dueño → se actualiza
     await app.evaluate(() => { global.__waMock.convs[0].assignedTo = 'u-ana'; }); // igual que antes: no cambia
     await app.evaluate(() => { global.__waMock.convs[0].assignedTo = 'u-beto'; }); await pfc('obsRevisar');

@@ -63,14 +63,14 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     await w.waitForSelector('h1:has-text("Local comercial en Ñuñoa")'); ok(/PF-1001/.test(await txt('.im-ft')), 'propiedad nueva con código correlativo');
 
     // Personas
-    await w.click('#nav [data-view="personas"]'); await w.waitForSelector('.im-table');
-    ok((await w.$$('.im-table button.im-tr')).length === 3, 'CRM con 3 personas');
-    await w.click('#cRol [data-r="interesado"]'); ok((await w.$$('.im-table button.im-tr')).length === 1, 'filtro por rol');
+    await w.click('#nav [data-view="personas"]'); await w.waitForSelector('#view-personas tr[data-c]');
+    ok((await w.$$('#view-personas tr[data-c]')).length === 3, 'CRM con 3 personas');
+    await w.click('#cRol [data-r="interesado"]'); ok((await w.$$('#view-personas tr[data-c]')).length === 1, 'filtro por rol');
     await w.click('#cRol [data-r=""]'); await shot('pr3-personas.png');
-    await w.click('.im-tr:has-text("JUAN PEREZ SOTO")'); await w.waitForSelector('.im-pp');
-    ok((await w.$$('.im-pp')).length === 2, 'la persona muestra sus 2 propiedades');
-    await w.click('#pDel'); await w.click('#mOk'); await w.waitForTimeout(300);
-    ok(/No se puede eliminar/.test(await txt('#toast')), 'no se elimina una persona vinculada');
+    await w.click('tr[data-c]:has-text("JUAN PEREZ SOTO")'); await w.waitForSelector('#view-personas [data-p]');
+    ok((await w.$$('#view-personas [data-p]')).length === 2, 'la persona muestra sus 2 propiedades');
+    await w.click('#pDel'); await w.click('#mOk'); await w.waitForSelector('[role=dialog] [role=alert]');
+    ok(/No se puede eliminar/.test(await txt('[role=dialog] [role=alert]')), 'no se elimina una persona vinculada'); await w.click('#mCancel');
     await w.click('#pEdit'); await w.fill('#cf_rut', '22.222.222-2'); await w.click('#mOk'); ok(/Ya existe MARIA/.test(await txt('#cfErr')), 'RUT único en el CRM'); await w.click('#mCancel');
 
     // Inicio con datos

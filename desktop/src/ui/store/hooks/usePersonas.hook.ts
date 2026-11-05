@@ -12,5 +12,9 @@ export function usePersonas() {
     filtros: s.filtrosPersonas,
     personasGetAll: s.carteraGetAll,
     personasSetFiltros: s.personasSetFiltros,
+    personaGuardar: s.personaGuardar,
   })));
 }
+
+// Fuera de React (el controlador del formulario de persona)
+export const personasEstado = () => useCarteraStore.getState();

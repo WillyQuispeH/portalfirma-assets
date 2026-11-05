@@ -24,3 +24,13 @@ export const ROL: Record<TPersonaRol, string> = {
   propietario: 'Propietario', arrendatario: 'Arrendatario', comprador: 'Comprador',
   codeudor: 'Codeudor', interesado: 'Interesado', proveedor: 'Proveedor',
 };
+
+// qué significa cada rol y su ícono (para elegirlos con SeleccionTarjetas)
+export const ROL_DETALLE: Record<TPersonaRol, { descripcion: string; icono: string }> = {
+  propietario: { descripcion: 'Dueño de una propiedad de la cartera', icono: 'key' },
+  arrendatario: { descripcion: 'Arrienda una propiedad', icono: 'house' },
+  comprador: { descripcion: 'Compra o está comprando', icono: 'coins' },
+  codeudor: { descripcion: 'Respalda un arriendo o una compra', icono: 'sign' },
+  interesado: { descripcion: 'Consulta o busca propiedad', icono: 'search' },
+  proveedor: { descripcion: 'Presta servicios a la corredora', icono: 'briefcase' },
+};

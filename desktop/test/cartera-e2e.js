@@ -74,19 +74,19 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
 
     // Personas
     await w.click('#nav [data-view="personas"]'); await w.waitForSelector('#view-personas:not(.hidden) #cQ'); await w.waitForTimeout(300);
-    const filas = () => w.$$eval('#view-personas .im-tr[data-c]', (x) => x.length);
-    ok(await filas() === 2 && /2 en tu CRM/.test(await txt('#view-personas .im-head')), 'lista las personas');
-    ok(/1$/.test((await txt(`.im-tr[data-c="${dueno.id}"]`)).trim()), 'cuenta sus propiedades');
-    await w.click('#cRol [data-r="comprador"]'); await w.waitForFunction(() => document.querySelectorAll('#view-personas .im-tr[data-c]').length === 1);
-    ok(!!(await w.$(`.im-tr[data-c="${cli.id}"]`)), 'filtro por rol');
-    await w.click('#cRol [data-r=""]'); await w.fill('#cQ', '11111111'); await w.waitForFunction(() => document.querySelectorAll('#view-personas .im-tr[data-c]').length === 1);
-    ok(!!(await w.$(`.im-tr[data-c="${dueno.id}"]`)), 'busca por RUT sin puntos ni guion');
+    const filas = () => w.$$eval('#view-personas tr[data-c]', (x) => x.length);
+    ok(await filas() === 2 && /2 en tu CRM/.test(await txt('#view-personas header')), 'lista las personas');
+    ok(/1$/.test((await txt(`tr[data-c="${dueno.id}"]`)).trim()), 'cuenta sus propiedades');
+    await w.click('#cRol [data-r="comprador"]'); await w.waitForFunction(() => document.querySelectorAll('#view-personas tr[data-c]').length === 1);
+    ok(!!(await w.$(`tr[data-c="${cli.id}"]`)), 'filtro por rol');
+    await w.click('#cRol [data-r=""]'); await w.fill('#cQ', '11111111'); await w.waitForFunction(() => document.querySelectorAll('#view-personas tr[data-c]').length === 1);
+    ok(!!(await w.$(`tr[data-c="${dueno.id}"]`)), 'busca por RUT sin puntos ni guion');
     for (let i = 0; i < 2; i++) {
-      await w.click(`.im-tr[data-c="${dueno.id}"]`); await w.waitForSelector('#view-personas #pBack');
+      await w.click(`tr[data-c="${dueno.id}"]`); await w.waitForSelector('#view-personas #pBack');
       await w.click('#pBack'); await w.waitForSelector('#view-personas #cQ');
     }
     ok((await w.inputValue('#cQ')) === '11111111', 'ir a la persona y volver conserva la búsqueda');
-    await w.click('#cNew'); await w.waitForSelector('#modalCard #mOk'); await w.click('#mCancel');
+    await w.click('#cNew'); await w.waitForSelector('[role=dialog] #mOk'); await w.click('#mCancel');
     ok(true, '«Nueva persona» abre el formulario');
 
     // el Agente refresca la pantalla visible (AssetRefrescar vuelve a montar la lista)

@@ -87,6 +87,41 @@ html[data-theme="dark"] {
 }
 
 /* ---------------------------------------------------------------------------
+ * Botón degradado (components/ui/Boton.tsx): el relleno y el borde (también el inferior grueso que se hunde al
+ * presionar) son degradados. Dos fondos en capas: el relleno ocupa la zona interior (padding-box) y el degradado
+ * del borde va detrás (border-box) y se asoma solo por el borde, que es transparente. Así se conservan el radio,
+ * el grosor de cada lado y la animación de presionar.
+ * ------------------------------------------------------------------------- */
+:root {
+  /* principal: el degradado de marca del botón principal de siempre (--grad de styles.css), con borde más oscuro */
+  --ui-brand-grad: var(--grad);
+  --ui-brand-edge-grad: linear-gradient(90deg, #2678c8 0%, #2a37bd 55%, #4f1db8 100%);
+  --ui-green-grad: linear-gradient(135deg, #c9eec4 0%, #9fda98 100%);
+  --ui-green-edge-grad: linear-gradient(90deg, #6fbb6b 0%, #43963f 100%);
+  --ui-red-grad: linear-gradient(135deg, #ffdbd5 0%, #ffb6ac 100%);
+  --ui-red-edge-grad: linear-gradient(90deg, #e68d82 0%, #c7574b 100%);
+  --ui-card-grad: linear-gradient(180deg, var(--card) 0%, var(--ui-sunken) 100%);
+  --ui-card-edge-grad: linear-gradient(90deg, var(--ui-edge-b) 0%, color-mix(in srgb, var(--text) 38%, transparent) 100%);
+}
+html[data-theme="dark"] {
+  --ui-brand-edge-grad: linear-gradient(90deg, #1f64a8 0%, #222d9e 55%, #42189a 100%);
+  --ui-green-grad: linear-gradient(135deg, #b5e2b0 0%, #8fcf88 100%);
+  --ui-green-edge-grad: linear-gradient(90deg, #5aa557 0%, #3a8536 100%);
+  --ui-red-grad: linear-gradient(135deg, #fbcac3 0%, #f2a59b 100%);
+  --ui-red-edge-grad: linear-gradient(90deg, #d4736a 0%, #b34d43 100%);
+  --ui-card-grad: linear-gradient(180deg, #34373e 0%, #2a2d33 100%);
+  --ui-card-edge-grad: linear-gradient(90deg, #1d1f24 0%, #0f1013 100%);
+}
+@utility boton-brand { border-color: transparent; background: var(--ui-brand-grad) padding-box, var(--ui-brand-edge-grad) border-box; }
+@utility boton-green { border-color: transparent; background: var(--ui-green-grad) padding-box, var(--ui-green-edge-grad) border-box; }
+@utility boton-red { border-color: transparent; background: var(--ui-red-grad) padding-box, var(--ui-red-edge-grad) border-box; }
+@utility boton-card { border-color: transparent; background: var(--ui-card-grad) padding-box, var(--ui-card-edge-grad) border-box; }
+
+/* Modal del kit (components/ui/Modal.tsx): el fondo aparece y la ventana sube un poco al abrir. */
+@keyframes modal-fondo { from { opacity: 0; } }
+@keyframes modal-entra { from { opacity: 0; transform: translateY(8px) scale(.985); } }
+
+/* ---------------------------------------------------------------------------
  * Firmas presenciales (gestion/firmas-presenciales): la raíz de la pantalla lleva la clase .es.
  * Define el borde suave, la sombra y el radio que usan sus piezas (var(--es-line), var(--es-soft), var(--es-r))
  * y ajusta los elementos comunes de la app que hay adentro (títulos, botones, campos, etiquetas). Queda como CSS

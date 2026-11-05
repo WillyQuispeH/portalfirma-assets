@@ -2,6 +2,7 @@
 //   <Tabs opciones={[['reclamos', 'Reclamos', 4], ['unidades', 'Unidades']]} valor={tab} alCambiar={setTab} />
 //   <Tabs variante="linea" … />       (subrayado, para separar secciones de una ficha)
 // Cada opción: [valor, texto, cuenta?, icono?]. El contenido de cada pestaña lo dibuja quien la usa.
+// `dato`: nombre de un atributo data-* con el valor de cada pestaña (p. ej. 'r' → data-r="interesado"), para las pruebas.
 import { useRef, type KeyboardEvent } from 'react';
 import Icono from './Icono';
 import { cx } from '../../utils/cx';
@@ -15,10 +16,11 @@ interface ITabsProps<T extends string> {
   variante?: 'segmentos' | 'linea';
   etiqueta?: string; // para lectores de pantalla
   id?: string;
+  dato?: string;
   className?: string;
 }
 
-export default function Tabs<T extends string>({ opciones, valor, alCambiar, variante = 'segmentos', etiqueta, id, className }: ITabsProps<T>) {
+export default function Tabs<T extends string>({ opciones, valor, alCambiar, variante = 'segmentos', etiqueta, id, dato, className }: ITabsProps<T>) {
   const lista = useRef<HTMLDivElement>(null);
 
   const teclado = (e: KeyboardEvent<HTMLDivElement>) => {
@@ -41,7 +43,7 @@ export default function Tabs<T extends string>({ opciones, valor, alCambiar, var
       {opciones.map(([v, texto, cuenta, icono]) => {
         const on = v === valor;
         return (
-          <button key={v} type="button" role="tab" aria-selected={on} tabIndex={on ? 0 : -1} data-tab={v}
+          <button key={v} type="button" role="tab" aria-selected={on} tabIndex={on ? 0 : -1} data-tab={v} {...(dato ? { [`data-${dato}`]: v } : {})}
             onClick={() => alCambiar(v)}
             className={cx(
               'tw:inline-flex tw:items-center tw:gap-2 tw:m-0 tw:text-sm tw:font-semibold tw:cursor-pointer tw:whitespace-nowrap tw:transition-colors tw:duration-100',

@@ -168,33 +168,9 @@ async function abrirPersona(id) {
   IM.persona = id; window.ReactUI.montar('FichaPersona', el, { id, vez: IM.vez });
   try { await cargar(); } catch {}
 }
-function formPersona(c, opt = {}) {
-  const n = !c; c = c || { tipo: 'natural', roles: opt.rol ? [opt.rol] : [], nacionalidad: 'chilena', ...(opt.pre || {}) };
-  const v = (k) => esc(c[k] ?? ''); const inp = (k, l, t = 'text', ph = '') => `<label>${l}<input id="cf_${k}" type="${t}" value="${v(k)}" placeholder="${ph}" /></label>`;
-  modal(`<div class="im-form"><h2>${n ? 'Nueva persona' : 'Editar persona'}</h2><div class="im-fg">
-    <label class="s2">Nombre completo o razón social<input id="cf_nombre" value="${v('nombre')}" /></label>${inp('rut', 'RUT o Rol Único Tributario', 'text', 'Ej.: 12.345.678-9')}
-    <label>Tipo<select id="cf_tipo"><option value="natural">Persona natural</option><option value="juridica" ${c.tipo === 'juridica' ? 'selected' : ''}>Persona jurídica</option></select></label>
-    ${inp('email', 'Correo', 'email')}${inp('telefono', 'Teléfono', 'tel', '+56 9 …')}<label class="s2">Dirección<input id="cf_direccion" value="${v('direccion')}" /></label>
-    ${inp('estadoCivil', 'Estado civil')}${inp('profesion', 'Profesión u oficio')}${inp('nacionalidad', 'Nacionalidad')}
-    <div class="s4"><span class="im-lbl">Roles</span><div class="im-roles">${Object.entries(ROL).map(([k, l]) => `<label class="im-ck"><input type="checkbox" value="${k}" ${c.roles.includes(k) ? 'checked' : ''} /> ${l}</label>`).join('')}</div></div>
-    <label class="s4">Notas<textarea id="cf_notas" rows="2">${v('notas')}</textarea></label></div><p class="error" id="cfErr"></p>
-    <div class="actions"><button class="secondary" id="mCancel">Cancelar</button><button class="primary" id="mOk">${n ? 'Crear persona' : 'Guardar'}</button></div></div>`);
-  $('#modalCard').classList.add('im-wide');
-  const fin = () => { $('#modalCard').classList.remove('im-wide'); closeModal(); };
-  // 0.16.16 · empresa o persona: se sugiere por el RUT (50 millones o más) o la razón social (SpA, Ltda., S.A.…)
-  let tipoTocado = !n; const sugerir = () => { if (tipoTocado) return; const r = Number(String($('#cf_rut').value).replace(/[^0-9kK]/g, '').slice(0, -1)); const emp = r >= 50000000 || /\b(spa|ltda|limitada|s\.\s?a\.?|eirl|sociedad|inversiones|inmobiliaria)\b/i.test($('#cf_nombre').value); $('#cf_tipo').value = emp ? 'juridica' : 'natural'; civ(); };
-  const civ = () => { const j = $('#cf_tipo').value === 'juridica'; ['estadoCivil', 'nacionalidad'].forEach((k) => $('#cf_' + k).closest('label').classList.toggle('hidden', j)); $('#cf_profesion').closest('label').firstChild.textContent = j ? 'Giro' : 'Profesión u oficio'; };
-  $('#cf_tipo').onchange = () => { tipoTocado = true; civ(); }; $('#cf_nombre').addEventListener('input', sugerir); civ();
-  $('#cf_rut').onchange = (e) => { if (validRut(e.target.value)) e.target.value = formatRut(e.target.value); sugerir(); };
-  $('#mCancel').onclick = fin;
-  $('#mOk').onclick = async () => {
-    const o = { id: c.id, roles: [...document.querySelectorAll('.im-roles input:checked')].map((i) => i.value) };
-    for (const k of ['nombre', 'rut', 'tipo', 'email', 'telefono', 'direccion', 'estadoCivil', 'profesion', 'nacionalidad', 'notas']) o[k] = $('#cf_' + k).value;
-    try { const r = await api('inmoPerGuardar', o); fin(); toast(n ? 'Persona creada.' : 'Datos guardados.'); if (opt.despues) return opt.despues(r); abrirPersona(r.id); }
-    catch (e) { $('#cfErr').textContent = e.message; }
-  };
-  $('#cf_nombre').focus();
-}
+// Nueva / Editar persona: en React (src/ui/components/functional/personas/FormPersona.tsx). Se mantiene esta función
+// porque la llaman Leads, Negocios y «Gestionar una propiedad».
+function formPersona(c, opt = {}) { window.__formPersona(c || null, opt); }
 
 // ---------- Importar desde Portalfirma ----------
 function importar() {

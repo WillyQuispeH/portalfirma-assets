@@ -24,12 +24,14 @@ interface ITablaProps<T> {
   alTocarFila?: (fila: T) => void;
   vacio?: ReactNode;
   compacta?: boolean;
+  /** atributos extra de cada fila (p. ej. data-* para las pruebas o para identificarla) */
+  atributosFila?: (fila: T) => Record<string, string>;
   className?: string;
 }
 
 const ALINEAR = { izquierda: 'tw:text-left', centro: 'tw:text-center', derecha: 'tw:text-right' };
 
-export default function Tabla<T>({ columnas, filas, claveFila, alTocarFila, vacio = 'No hay datos.', compacta = false, className }: ITablaProps<T>) {
+export default function Tabla<T>({ columnas, filas, claveFila, alTocarFila, vacio = 'No hay datos.', compacta = false, atributosFila, className }: ITablaProps<T>) {
   const celda = compacta ? 'tw:px-4 tw:py-2' : 'tw:px-5 tw:py-3';
   return (
     <div className={cx('tw:w-full tw:overflow-x-auto', className)}>
@@ -46,7 +48,7 @@ export default function Tabla<T>({ columnas, filas, claveFila, alTocarFila, vaci
         </thead>
         <tbody>
           {filas.length ? filas.map((f) => (
-            <tr key={claveFila(f)} data-fila={claveFila(f)}
+            <tr key={claveFila(f)} data-fila={claveFila(f)} {...atributosFila?.(f)}
               onClick={alTocarFila ? () => alTocarFila(f) : undefined}
               onKeyDown={alTocarFila ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); alTocarFila(f); } } : undefined}
               tabIndex={alTocarFila ? 0 : undefined}

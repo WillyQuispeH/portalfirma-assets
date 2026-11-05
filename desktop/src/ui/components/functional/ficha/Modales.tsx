@@ -1,11 +1,10 @@
-// Formularios en ventana de la ficha y de la persona (en el modal de la app, utils/modal.tsx).
+// Formularios en ventana de la ficha de la propiedad (en el modal de la app, utils/modal.tsx).
 // Los id (#vRol, #vQ, #vList, #vNew, #mCancel, #mOk) los usan las pruebas y el recorrido de Aprende.
 import { useMemo, useState } from 'react';
 import Icono from '../../ui/Icono';
 import { ROL } from '../cartera/catalogos';
 import { useFicha } from '../../../store/hooks/useFicha.hook';
-import { usePersona } from '../../../store/hooks/usePersona.hook';
-import { abrirPersonas, avisar, crearPersona, toast } from '../../../utils/app';
+import { avisar, crearPersona, toast } from '../../../utils/app';
 import { cerrarModal } from '../../../utils/modal';
 import type { IPropiedad } from '../../../store/interfaces/propiedad.interface';
 import type { TPersonaRol } from '../../../store/interfaces/persona.interface';
@@ -67,22 +66,3 @@ export function FinalizarAviso({ op, alConfirmar }: { op: string; alConfirmar: (
   </>;
 }
 
-// Eliminar a la persona del CRM
-export function EliminarPersona({ nombre }: { nombre: string }) {
-  const { personaBorrar } = usePersona();
-  const [borrando, setBorrando] = useState(false);
-  const borrar = async () => {
-    setBorrando(true);
-    const r = await personaBorrar(); cerrarModal();
-    if (r.error) return toast(r.error, 5000);
-    avisar(r); abrirPersonas();
-  };
-  return <>
-    <h2>Eliminar persona</h2>
-    <p>¿Eliminar a <b>{nombre}</b> de tu CRM?</p>
-    <div className="actions">
-      <button className="secondary" id="mCancel" onClick={cerrarModal}>Cancelar</button>
-      <button className="danger" id="mOk" disabled={borrando} onClick={borrar}>Eliminar</button>
-    </div>
-  </>;
-}

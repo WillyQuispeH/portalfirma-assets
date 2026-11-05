@@ -83,13 +83,13 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     await w.click('#fArch'); await w.waitForSelector('#fArch:has-text("Archivar")');
 
     // detalle de la persona
-    await w.click('[data-pane="resumen"] [data-per]'); await w.waitForSelector('#view-personas .im-ficha #pBack');
-    ok(/Rosa Pérez Mena/.test(await txt('#view-personas h1')) && /RUT 11\.111\.111-1/.test(await txt('#view-personas .im-ft')), 'abre la persona desde la ficha');
-    ok((await w.$$('#view-personas .im-pp')).length === 1 && /Prefiere que la llamen/.test(await txt('#view-personas')), 'muestra su propiedad y sus notas');
+    await w.click('[data-pane="resumen"] [data-per]'); await w.waitForSelector('#view-personas #pBack');
+    ok(/Rosa Pérez Mena/.test(await txt('#view-personas h1')) && /RUT 11\.111\.111-1/.test(await txt('#view-personas header')), 'abre la persona desde la ficha');
+    ok((await w.$$('#view-personas [data-p]')).length === 1 && /Prefiere que la llamen/.test(await txt('#view-personas')), 'muestra su propiedad y sus notas');
     await w.waitForSelector('#pDocs h3:has-text("(")'); ok(/Aún no firma documentos/.test(await txt('#pDocs')), 'documentos que firma (dgPersona)');
     await w.fill('#pNotaT', 'Llamó para preguntar por la reserva'); await w.press('#pNotaT', 'Enter');
-    await w.waitForSelector('#view-personas .im-act li.nota'); ok(/Llamó para preguntar/.test(await txt('#view-personas .im-act')), 'nota en el historial de la persona');
-    await w.click('#view-personas .im-pp'); await w.waitForSelector('#view-cartera .im-ficha #fBack');
+    await w.waitForSelector('#view-personas [data-historial] li[data-nota]'); ok(/Llamó para preguntar/.test(await txt('#view-personas [data-historial]')), 'nota en el historial de la persona');
+    await w.click('#view-personas [data-p]'); await w.waitForSelector('#view-cartera .im-ficha #fBack');
     ok(/Casa mediterránea/.test(await txt('.im-ft h1')), 'desde la persona vuelve a la propiedad');
 
     // eliminar persona (formulario en React) y volver a la lista

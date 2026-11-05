@@ -1,5 +1,6 @@
-// Botón táctil: borde inferior grueso que se hunde al presionar.
-//   <Boton>Guardar</Boton>                                  principal (lavanda)
+// Botón táctil: borde inferior grueso que se hunde al presionar. Relleno y borde degradados (utilidades boton-* de
+// styles/globals.css: dos fondos en capas, así el degradado llega también al borde inferior).
+//   <Boton>Guardar</Boton>                                  principal (degradado de marca: azul → violeta)
 //   <Boton variante="secundario" icono="plus">Nuevo</Boton>
 //   <Boton variante="peligro" cargando>Eliminando…</Boton>
 // Acepta todos los atributos de <button> (onClick, type, disabled, id, title…).
@@ -21,7 +22,7 @@ interface IBotonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const BASE = 'tw:relative tw:inline-flex tw:items-center tw:justify-center tw:gap-2 tw:m-0 tw:font-semibold tw:leading-none tw:whitespace-nowrap '
-  + 'tw:rounded-[10px] tw:border tw:border-solid tw:select-none tw:cursor-pointer tw:transition-[transform,background-color,border-width] tw:duration-100 '
+  + 'tw:rounded-[10px] tw:border tw:border-solid tw:select-none tw:cursor-pointer tw:transition-[transform,filter,border-width] tw:duration-100 '
   + 'tw:focus-visible:outline-2 tw:focus-visible:outline-offset-2 tw:focus-visible:outline-lav-edge '
   + 'tw:disabled:cursor-default tw:disabled:opacity-55';
 
@@ -29,10 +30,10 @@ const BASE = 'tw:relative tw:inline-flex tw:items-center tw:justify-center tw:ga
 const TACTIL = 'tw:border-b-[3px] tw:enabled:active:border-b tw:enabled:active:translate-y-[2px]';
 
 const VARIANTE: Record<TBotonVariante, string> = {
-  principal: `${TACTIL} tw:bg-lav tw:border-lav-edge tw:text-lav-ink tw:enabled:hover:brightness-[1.04]`,
-  secundario: `${TACTIL} tw:bg-card tw:border-edge tw:border-b-edge-b tw:text-text tw:enabled:hover:bg-sunken`,
-  peligro: `${TACTIL} tw:bg-red tw:border-red-edge tw:text-red-ink tw:enabled:hover:brightness-[1.04]`,
-  exito: `${TACTIL} tw:bg-green tw:border-green-edge tw:text-green-ink tw:enabled:hover:brightness-[1.04]`,
+  principal: `${TACTIL} tw:boton-brand tw:text-white tw:enabled:hover:brightness-[1.06]`,
+  secundario: `${TACTIL} tw:boton-card tw:text-text tw:enabled:hover:brightness-[0.97]`,
+  peligro: `${TACTIL} tw:boton-red tw:text-red-ink tw:enabled:hover:brightness-[1.05]`,
+  exito: `${TACTIL} tw:boton-green tw:text-green-ink tw:enabled:hover:brightness-[1.05]`,
   fantasma: 'tw:bg-transparent tw:border-transparent tw:text-muted tw:enabled:hover:bg-hover tw:enabled:hover:text-text',
 };
 

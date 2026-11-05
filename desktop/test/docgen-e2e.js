@@ -50,7 +50,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÃ“: ' + m); console.log('  â
     const neg = await w.evaluate((id) => window.pf.negObtener(id).then((r) => r.data), ids.n);
     ok(neg.firmas?.reserva?.operacion === op, 'el negocio queda esperando esa firma para avanzar');
     // 2. ficha de la persona: sus documentos
-    await w.evaluate((id) => window.Inmo.abrirPersona(id), ids.c); await w.waitForSelector('#pDocs .im-doc');
+    await w.evaluate((id) => window.Inmo.abrirPersona(id), ids.c); await w.waitForSelector('#pDocs [data-doc]');
     ok(/Comprobante de pago de reserva/.test(await txt('#pDocs')) && /CV-9002/.test(await txt('#pDocs')) && (await w.$$('#pDocs [data-pdf]')).length === 1, 'en la ficha de Juan aparece el comprobante, con su PDF');
     await w.click('#pDocs [data-pdf]'); await w.waitForTimeout(300);
     ok((await app.evaluate(() => global.__abiertos)).includes(f.archivo), 'y se abre el PDF guardado');

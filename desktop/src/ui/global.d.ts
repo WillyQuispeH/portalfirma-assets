@@ -115,6 +115,8 @@ declare global {
     Tema?: { get: () => string; set: (t: string) => Promise<void> }; // src/renderer/tema.js
     // lo que app.js le pide a la pantalla «Conecta tu cuenta de Portalfirma» (#view-login)
     __cuenta: { motivo: (t?: string) => void; aviso: (t?: string) => void };
+    // Nueva / Editar persona en React (components/functional/personas/controlador.tsx); lo usa Inmo.formPersona
+    __formPersona: (c?: object | null, opt?: { rol?: string; pre?: object; despues?: (c: { id: string }) => void }) => void;
     // la cuenta de Asset (components/functional/acceso/controlador.tsx)
     __acceso: {
       esperar: () => Promise<void>;

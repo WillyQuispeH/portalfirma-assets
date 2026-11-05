@@ -15,9 +15,9 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     await w.evaluate(() => window.Inmo.cartera()); await w.waitForSelector('.im-card'); await w.waitForTimeout(300);
     ok(/formas\/cartera\.svg/.test(await w.evaluate(() => getComputedStyle(document.querySelector('.im-head')).backgroundImage)), 'Cartera con su diseño de formas');
     await shot('ap2-cartera.png');
-    for (const [fn, sel, svg] of [['window.Inmo.personas()', '.im-table', 'personas'], ['window.Negocios.abrir()', '.ng-board', 'negocios'], ['window.Inmo.portales()', '#coWa', 'portales']]) {
+    for (const [fn, sel, svg] of [['window.Inmo.personas()', '#cTabla', 'personas'], ['window.Negocios.abrir()', '.ng-board', 'negocios'], ['window.Inmo.portales()', '#coWa', 'portales']]) {
       await w.evaluate(fn); await w.waitForSelector(sel);
-      ok(new RegExp('formas/' + svg + '\\.svg').test(await w.evaluate(() => [...document.querySelectorAll('.im-head')].filter((x) => x.offsetParent).map((x) => getComputedStyle(x).backgroundImage).join())), `${svg[0].toUpperCase() + svg.slice(1)} con su diseño`);
+      ok(new RegExp('formas/' + svg + '\\.svg').test(await w.evaluate(() => [...document.querySelectorAll('.im-head, [data-cabecera]')].filter((x) => x.offsetParent).map((x) => getComputedStyle(x).backgroundImage).join())), `${svg[0].toUpperCase() + svg.slice(1)} con su diseño`);
     }
     await shot('ap3-negocios-portales.png');
 

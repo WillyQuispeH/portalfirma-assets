@@ -48,7 +48,8 @@ function show(view) {
 function toast(msg, ms = 2600) { const t = $('#toast'); t.textContent = msg; t.classList.remove('hidden'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.add('hidden'), ms); }
 // Si React tenía un formulario en el modal (src/ui/utils/modal.tsx), se desmonta antes de escribir o al cerrar
 function modal(html) { window.ReactUI?.liberarModal(); $('#modalCard').innerHTML = html; $('#modal').classList.remove('hidden'); }
-function closeModal() { $('#modal').classList.add('hidden'); $('#modalCard').classList.remove('im-wide'); window.ReactUI?.liberarModal(); }
+// al cerrar también se vacía: si no, sus botones (#mOk, #mCancel…) quedan ocultos en la página y chocan con los de otra ventana
+function closeModal() { $('#modal').classList.add('hidden'); $('#modalCard').classList.remove('im-wide'); window.ReactUI?.liberarModal(); $('#modalCard').innerHTML = ''; }
 async function api(fn, ...args) {
   const r = await pf[fn](...args);
   if (!r.ok) {

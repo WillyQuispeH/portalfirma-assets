@@ -23,6 +23,7 @@ import { instalarAsistenteLegal } from './components/functional/gestion/asistent
 import { instalarNotaria } from './components/functional/gestion/notaria-virtual/controlador';
 import { instalarCuenta } from './components/functional/cuenta/controlador';
 import { instalarAcceso } from './components/functional/acceso/controlador';
+import { instalarFormPersona } from './components/functional/personas/controlador';
 import { instalarWhatsApp } from './components/functional/whatsapp/controlador';
 import { instalarUsuarios } from './components/functional/usuarios/controlador';
 import { instalarAyuda } from './components/functional/ayuda/controlador';
@@ -79,6 +80,7 @@ instalarNotaria();
 // La cuenta de Portalfirma (window.Usuario, window.ApiDiag y el botón de arriba a la derecha) y el Agente por WhatsApp
 instalarAcceso(); // primero: la pantalla de ingreso a Asset tapa todo hasta que hay sesión
 instalarCuenta();
+instalarFormPersona();
 instalarWhatsApp();
 instalarUsuarios();
 // La Ayuda (botón «?», guías, recorridos guiados) y «Aprende a usarla»: window.Ayuda y window.Aprende
