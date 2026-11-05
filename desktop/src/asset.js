@@ -39,7 +39,8 @@ async function pedir(metodo, ruta, cuerpo, token) {
   if (!r.ok) {
     const m = Array.isArray(d?.message) ? d.message.join('. ') : d?.message;
     // el código de la API (DUP_RUT, EN_USO, VERSION…) pasa tal cual para que quien llama lo distinga
-    throw err(r.status === 429 ? 'Demasiados intentos. Espera un minuto y vuelve a intentar.' : m || `El servidor respondió ${r.status}.`, r.status === 401 ? 'NEEDS_ASSET_LOGIN' : d?.code || 'API', r.status);
+    // el código de la API y sus datos (p. ej. el id del lead que ya existe en un DUPLICADO) van en el error
+    throw Object.assign(err(r.status === 429 ? 'Demasiados intentos. Espera un minuto y vuelve a intentar.' : m || `El servidor respondió ${r.status}.`, r.status === 401 ? 'NEEDS_ASSET_LOGIN' : d?.code || 'API', r.status), { datos: d });
   }
   return d;
 }

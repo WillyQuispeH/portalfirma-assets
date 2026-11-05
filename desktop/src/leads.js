@@ -6,8 +6,10 @@
 //    pregunta por varias propiedades o por ninguna en particular («busco 2D en Ñuñoa»).
 //  · La IA lee la conversación y deja la búsqueda (operación, tipo, comunas, presupuesto, dormitorios…), un
 //    resumen, el estado sugerido y la próxima acción. Volver a importar el mismo chat agrega solo lo nuevo.
-//  · Todo vive en este computador: <inmo>/leads/indice.json, <inmo>/leads/<id>.json (mensajes) y
-//    <inmo>/leads/<id>/ (fotos y audios), servidos a la pantalla como pffoto://l/<id>/<archivo>.
+//  · Con la cuenta de Asset (API), cada lead vive en la base y su conversación en la tabla lead_mensajes; las fotos
+//    y audios van a R2. En este computador queda una copia: <inmo>/leads/<id>.json (mensajes) y <inmo>/leads/<id>/
+//    (fotos y audios recibidos aquí, servidos a la pantalla como pffoto://l/<id>/<archivo>). Ver «con la API de Asset».
+//  · En modo de prueba (PF_MOCK) todo vive en este computador: además, <inmo>/leads/indice.json con los leads.
 const fs = require('fs'); const path = require('path'); const crypto = require('crypto');
 
 const ESTADOS = [['nuevo', 'Nuevo'], ['contactado', 'Contactado'], ['visita', 'Visita agendada'], ['negociando', 'Negociando'], ['ganado', 'Ganado'], ['perdido', 'Perdido']];
@@ -93,12 +95,22 @@ function crear({ dir, ai, inmo = null, broker = () => ({ nombre: '' }), emit = (
   const dMedia = (id) => { const d = path.join(base(), id); fs.mkdirSync(d, { recursive: true }); return d; };
   let cache = null;
   const pareceId = (x) => /^[a-z0-9]{12,}$/i.test(String(x || '').trim()) && /\d/.test(x) && /[a-z]/i.test(x); // id de wechatia, no un nombre
-  const db = () => { if (cache) return cache; try { cache = JSON.parse(fs.readFileSync(fIndice(), 'utf8')); } catch { cache = { leads: [] }; } cache.leads ||= [];
+  const enApi = () => !!inmo?.API && typeof inmo.leadsLista === 'function';
+  const db = () => {
+    if (cache) return cache;
+    let f = {}; try { f = JSON.parse(fs.readFileSync(fIndice(), 'utf8')); } catch {}
+    // con la API, los leads son la copia sincronizada; los del índice local (de antes) esperan a subirse
+    if (enApi()) { cache = { ...f, leads: inmo.leadsLista(), legado: f.leads || [] }; return cache; }
+    cache = { leads: [], ...f };
     for (const l of cache.leads) { if (pareceId(l.nombre)) l.nombre = ''; if (pareceId(l.chatCon)) l.chatCon = l.telefono || ''; } return cache; };
   const escribir = (f, o) => { const t = f + '.tmp'; fs.writeFileSync(t, JSON.stringify(o)); fs.renameSync(t, f); };
-  const save = () => escribir(fIndice(), db());
+  const save = () => {
+    if (!enApi()) return escribir(fIndice(), db());
+    const { leads, legado, ...resto } = db(); escribir(fIndice(), { ...resto, ...(legado?.length ? { leads: legado } : {}) }); // índice de wechatia, consentimientos
+    inmo.guardar(); // los leads que cambiaron, a la API
+  };
   const lead = (id) => { const l = db().leads.find((x) => x.id === id); if (!l) throw err('Ese lead ya no existe.'); return l; };
-  const mensajesDe = (id) => { try { return JSON.parse(fs.readFileSync(fMsgs(id), 'utf8')).mensajes || []; } catch { return []; } };
+  const mensajesDe = (id) => leerConv(id).mensajes;
   const clave = (m) => crypto.createHash('sha1').update(`${m.fecha}|${m.autor}|${m.texto.slice(0, 200)}|${m.archivo || ''}`).digest('hex').slice(0, 16);
   const pendientes = new Map(); // análisis previos a importar (token → chat leído)
   // ---------- 0.16.23 · gestor de leads: persona siempre guardada, corredor dueño e historial ----------
@@ -124,6 +136,97 @@ function crear({ dir, ai, inmo = null, broker = () => ({ nombre: '' }), emit = (
   function registrarEvento(id, texto, tipo = 'info') { const l = lead(id); evento(l, texto, tipo); sync(l, texto); l.actualizado = now(); save(); emit({ type: 'datos', que: 'leads', id }); return vista(l); }
   // leads anteriores a 0.16.23: quedan como persona
   async function sincronizarTodos() { let n = 0; for (const l of [...db().leads]) if (!l.personaId || !inmo?.personaPorId?.(l.personaId)) { if (await syncAhora(l)) n++; } return n; }
+
+  // ---------- con la API de Asset ----------
+  // Los leads viven en la base (inmo.leadsLista(): la copia sincronizada; save() → inmo.guardar() encola lo que cambió).
+  // La conversación queda en <id>.json como copia local: { mensajes, sv: { k: huella de lo que tiene el servidor },
+  // desde: marca para traer solo lo nuevo }. Lo que cambia aquí se encola (inmo.encolarMensajes) y enviarMensajes lo
+  // manda, subiendo antes a R2 las fotos y audios que aún están solo en este equipo.
+  const api = (...a) => require('./asset').llamar(...a);
+  const enc = encodeURIComponent;
+  const estable = (v) => (Array.isArray(v) ? v.map(estable) : v && typeof v === 'object' ? Object.fromEntries(Object.keys(v).sort().filter((k) => v[k] !== undefined && v[k] !== null).map((k) => [k, estable(v[k])])) : v);
+  const huella = (m) => crypto.createHash('sha1').update(JSON.stringify(estable({ ...m, url: undefined, actualizado: undefined }))).digest('hex').slice(0, 16);
+  const MIME = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif', heic: 'image/heic', opus: 'audio/ogg', ogg: 'audio/ogg', m4a: 'audio/mp4', mp3: 'audio/mpeg', aac: 'audio/aac', amr: 'audio/amr', wav: 'audio/wav', mp4: 'video/mp4', mov: 'video/quicktime', '3gp': 'video/3gpp', pdf: 'application/pdf', vcf: 'text/vcard' };
+  const mimeDe = (f) => MIME[path.extname(String(f)).slice(1).toLowerCase()] || 'application/octet-stream';
+  const ARCH_MAX = 25 * 1024 * 1024;
+  function leerConv(id) { try { const c = JSON.parse(fs.readFileSync(fMsgs(id), 'utf8')); return { mensajes: c.mensajes || [], sv: c.sv || {}, desde: c.desde || null }; } catch { return { mensajes: [], sv: {}, desde: null }; } }
+  // guarda la conversación; con la API, encola los mensajes nuevos o cambiados
+  function guardarMsgs(id, mensajes) {
+    const c = leerConv(id); escribir(fMsgs(id), { mensajes, sv: c.sv, desde: c.desde });
+    if (enApi()) inmo.encolarMensajes(id, mensajes.filter((m) => m.k && c.sv[m.k] !== huella(m)).map((m) => m.k));
+  }
+  async function enviarMensajes(id, ks) {
+    const set = new Set(ks); const sel = leerConv(id).mensajes.filter((m) => set.has(m.k)); if (!sel.length) return;
+    // fotos y audios que están solo en este equipo → R2
+    const subir = sel.filter((m) => m.media && !m.mediaUrl).map((m) => { const f = path.join(base(), id, m.media); let st = null; try { st = fs.statSync(f); } catch {} return st && st.size > 0 && st.size <= ARCH_MAX ? { m, f } : null; }).filter(Boolean);
+    for (let i = 0; i < subir.length; i += 50) {
+      const t = subir.slice(i, i + 50).map((x) => ({ ...x, buf: fs.readFileSync(x.f), tipo: mimeDe(x.f) }));
+      const { subidas } = await api('POST', `/leads/${enc(id)}/archivos/subidas`, { archivos: t.map((x) => ({ tipo: x.tipo, tamano: x.buf.length })) });
+      for (const [j, x] of t.entries()) { await inmo.subirR2(subidas[j].subida, x.buf, x.tipo); x.m.mediaUrl = subidas[j].url; }
+    }
+    const limpio = (m) => { const o = {}; for (const [k, v] of Object.entries(m)) if (v !== undefined && k !== 'url') o[k] = v; if (o.autor) o.autor = String(o.autor).slice(0, 200); if (o.texto) o.texto = String(o.texto).slice(0, 20000); return o; };
+    for (let i = 0; i < sel.length; i += 500) await api('POST', `/leads/${enc(id)}/mensajes`, { items: sel.slice(i, i + 500).map(limpio) });
+    // queda como enviado (sobre lo último del archivo: pudo cambiar mientras se enviaba)
+    const c = leerConv(id); const env = new Map(sel.map((m) => [m.k, m])); const otraVez = [];
+    for (const m of c.mensajes) { const e = env.get(m.k); if (!e) continue; if (e.mediaUrl && !m.mediaUrl) m.mediaUrl = e.mediaUrl; c.sv[m.k] = huella(e); if (huella(m) !== c.sv[m.k]) otraVez.push(m.k); }
+    escribir(fMsgs(id), c);
+    if (otraVez.length) inmo.encolarMensajes(id, otraVez);
+  }
+  /** Trae de la base los mensajes nuevos o cambiados (p. ej. los que recibió otro equipo). Devuelve cuántos. */
+  async function traerMensajes(id) {
+    if (!enApi() || !db().leads.some((l) => l.id === id)) return 0;
+    let c = leerConv(id); const llegados = []; let cursor = null; let marca = null;
+    do {
+      const r = await api('GET', `/leads/${enc(id)}/mensajes?limite=1000${c.desde ? '&desde=' + enc(c.desde) : ''}${cursor ? '&cursor=' + enc(cursor) : ''}`);
+      marca ||= r.servidorEn; llegados.push(...(r.items || [])); cursor = r.siguiente;
+    } while (cursor);
+    c = leerConv(id); const porK = new Map(c.mensajes.map((m) => [m.k, m])); let n = 0;
+    for (const { actualizado, ...s } of llegados) {
+      const loc = porK.get(s.k);
+      if (loc && c.sv[s.k] !== huella(loc)) continue; // cambio local que aún no se envía: gana el local
+      const m = Object.fromEntries(Object.entries({ ...s, ...(loc?.media ? { media: loc.media } : {}) }).filter(([, v]) => v !== null));
+      if (!loc || huella(loc) !== huella(m)) n++;
+      porK.set(s.k, m); c.sv[s.k] = huella(m);
+    }
+    const desde = marca ? new Date(new Date(marca).getTime() - 5000).toISOString() : c.desde;
+    escribir(fMsgs(id), { mensajes: [...porK.values()].sort((a, b) => String(a.fecha).localeCompare(String(b.fecha))), sv: c.sv, desde });
+    return n;
+  }
+  // los leads del índice local de antes (indice.json › leads) se suben una vez; sus conversaciones van a la cola
+  async function subirLocales() {
+    if (!enApi()) return null; const d = db(); const viejos = d.legado || []; if (!viejos.length) return null;
+    const mapeo = {}; const rechazados = []; let nuevos = 0;
+    for (let i = 0; i < viejos.length; i += 100) {
+      const r = await api('POST', '/leads/importar', { items: viejos.slice(i, i + 100) });
+      Object.assign(mapeo, r.mapeo || {}); rechazados.push(...(r.rechazados || [])); nuevos += r.nuevos || 0;
+    }
+    const malos = new Set(rechazados.map((x) => x.id));
+    for (const x of viejos) {
+      if (malos.has(x.id)) continue;
+      const dest = mapeo[x.id] || x.id; if (dest !== x.id) moverConv(x.id, dest);
+      const c = leerConv(dest); c.sv = {}; escribir(fMsgs(dest), c); // todo se manda (el servidor no duplica por k)
+      inmo.encolarMensajes(dest, c.mensajes.map((m) => m.k).filter(Boolean));
+    }
+    escribir(path.join(base(), 'indice.respaldo.json'), { fecha: now(), leads: viejos, rechazados });
+    d.legado = []; save();
+    const unidos = Object.keys(mapeo).length;
+    return nuevos || unidos ? `Se subieron al servidor ${nuevos} ${nuevos === 1 ? 'lead' : 'leads'} que estaban solo en este computador${unidos ? ` (${unidos} ya existían y se juntaron con su conversación)` : ''}.${rechazados.length ? ` ${rechazados.length} no se pudieron subir (quedaron respaldados).` : ''}` : null;
+  }
+  // la conversación (y sus archivos) de un lead pasa a otro id
+  function moverConv(de, a) {
+    const ca = leerConv(a); const cd = leerConv(de); const ya = new Set(ca.mensajes.map((m) => m.k));
+    escribir(fMsgs(a), { ...ca, mensajes: [...ca.mensajes, ...cd.mensajes.filter((m) => !ya.has(m.k))].sort((x, y) => String(x.fecha).localeCompare(String(y.fecha))) });
+    fs.rmSync(fMsgs(de), { force: true });
+    const md = path.join(base(), de); if (fs.existsSync(md)) { for (const f of fs.readdirSync(md)) { try { fs.renameSync(path.join(md, f), path.join(dMedia(a), f)); } catch {} } fs.rmSync(md, { recursive: true, force: true }); }
+  }
+  // el servidor rechazó un lead nuevo porque el cliente ya tiene uno (lo recibió otro equipo): se juntan aquí
+  async function alDuplicado(idLocal, dup) {
+    const d = db(); const local = d.leads.find((x) => x.id === idLocal); if (!local) return;
+    if (dup.visible && d.leads.some((x) => x.id === dup.id)) { fusionar(dup.id, idLocal); }
+    else { d.leads.splice(d.leads.indexOf(local), 1); fs.rmSync(fMsgs(idLocal), { force: true }); save(); } // es de otro corredor
+    emit({ type: 'datos', que: 'leads' });
+  }
+  if (inmo?.configurar) inmo.configurar({ leads: { subirLocales, enviarMensajes, alDuplicado } });
 
   // 1) analizar: lee el archivo y muestra qué trae, sin guardar nada
   async function analizar(o = {}) {
@@ -179,7 +282,7 @@ function crear({ dir, ai, inmo = null, broker = () => ({ nombre: '' }), emit = (
       }
     }
     const todos = [...previos, ...agregados].sort((a, b) => a.fecha.localeCompare(b.fecha));
-    escribir(fMsgs(l.id), { mensajes: todos });
+    guardarMsgs(l.id, todos);
     l.mensajes = todos.length; const u = todos.at(-1); l.ultimo = u ? { fecha: u.fecha, de: u.de, texto: resumenMsg(u) } : null;
     l.links = [...new Set([...(l.links || []), ...todos.flatMap((m) => String(m.texto).match(/https?:\/\/[^\s<>()]+/g) || [])])].slice(0, 40);
     l.noLeidos = (l.noLeidos || 0) + agregados.length; l.actualizado = now();
@@ -230,7 +333,7 @@ function crear({ dir, ai, inmo = null, broker = () => ({ nombre: '' }), emit = (
         agregados.push(m);
       }
       const todos = [...previos, ...agregados].sort((a, b) => a.fecha.localeCompare(b.fecha));
-      escribir(fMsgs(l.id), { mensajes: todos });
+      guardarMsgs(l.id, todos);
       l.mensajes = todos.length; const u = todos.at(-1); l.ultimo = u ? { fecha: u.fecha, de: u.de, texto: resumenMsg(u) } : null;
       l.links = [...new Set([...(l.links || []), ...todos.flatMap((m) => String(m.texto).match(/https?:\/\/[^\s<>()]+/g) || [])])].slice(0, 40);
       l.noLeidos = (l.noLeidos || 0) + agregados.length; l.actualizado = now();
@@ -278,7 +381,7 @@ function crear({ dir, ai, inmo = null, broker = () => ({ nombre: '' }), emit = (
     }
     if (!agregados.length && !nuevo) { if (!l.personaId) { sync(l); save(); } return { id: l.id, nuevo, agregados: 0, delCliente: false }; }
     const todos = [...previos, ...agregados].sort((a, b) => a.fecha.localeCompare(b.fecha));
-    escribir(fMsgs(l.id), { mensajes: todos });
+    guardarMsgs(l.id, todos);
     l.mensajes = todos.length; const u = todos.at(-1); l.ultimo = u ? { fecha: u.fecha, de: u.de === 'cliente' ? 'cliente' : 'broker', texto: resumenMsg(u) } : null;
     l.links = [...new Set([...(l.links || []), ...agregados.flatMap((m) => String(m.texto).match(/https?:\/\/[^\s<>()]+/g) || [])])].slice(0, 40);
     l.noLeidos = (l.noLeidos || 0) + agregados.filter((m) => m.de === 'cliente').length; l.actualizado = now();
@@ -292,7 +395,7 @@ function crear({ dir, ai, inmo = null, broker = () => ({ nombre: '' }), emit = (
   function fusionar(destId, origenId) {
     if (destId === origenId) return; const d = db(); const a = lead(destId); const b = d.leads.find((x) => x.id === origenId); if (!b) return;
     const ma = mensajesDe(a.id); const ya = new Set(ma.map((m) => m.k)); const todos = [...ma, ...mensajesDe(b.id).filter((m) => !ya.has(m.k))].sort((x, y) => x.fecha.localeCompare(y.fecha));
-    escribir(fMsgs(a.id), { mensajes: todos }); a.mensajes = todos.length; const u = todos.at(-1); a.ultimo = u ? { fecha: u.fecha, de: u.de === 'cliente' ? 'cliente' : 'broker', texto: resumenMsg(u) } : a.ultimo;
+    guardarMsgs(a.id, todos); a.mensajes = todos.length; const u = todos.at(-1); a.ultimo = u ? { fecha: u.fecha, de: u.de === 'cliente' ? 'cliente' : 'broker', texto: resumenMsg(u) } : a.ultimo;
     for (const k of ['nombre', 'telefono', 'email', 'rut', 'perfil', 'resumen', 'corredorId']) if (!a[k] && b[k]) a[k] = b[k];
     a.canales = [...(a.canales || []), ...(b.canales || []).filter((c) => !(a.canales || []).some((x) => x.conv === c.conv))];
     a.ig ||= b.ig; a.links = [...new Set([...(a.links || []), ...(b.links || [])])].slice(0, 40); a.propiedades = [...new Set([...(a.propiedades || []), ...(b.propiedades || [])])];
@@ -302,7 +405,7 @@ function crear({ dir, ai, inmo = null, broker = () => ({ nombre: '' }), emit = (
     evento(a, `Se unió con la conversación de ${b.nombre || b.chatCon || 'otro contacto'} (era la misma persona)`, 'canal');
     // la persona que se creó solo por el lead duplicado se quita (si no está vinculada a nada)
     if (b.personaId && b.personaId !== a.personaId && inmo?.personaPorId) { try { const p = inmo.personaPorId(b.personaId); if (p && p.leadId === b.id) { if (!a.personaId) a.personaId = p.id, p.leadId = a.id; else inmo.borrarPersona(p.id).catch(() => {}); } } catch {} }
-    d.leads = d.leads.filter((x) => x.id !== b.id); try { fs.rmSync(fMsgs(b.id), { force: true }); const mb = path.join(base(), b.id); if (fs.existsSync(mb)) { for (const f of fs.readdirSync(mb)) fs.renameSync(path.join(mb, f), path.join(dMedia(a.id), f)); fs.rmSync(mb, { recursive: true, force: true }); } } catch {}
+    d.leads.splice(d.leads.indexOf(b), 1); try { fs.rmSync(fMsgs(b.id), { force: true }); const mb = path.join(base(), b.id); if (fs.existsSync(mb)) { for (const f of fs.readdirSync(mb)) fs.renameSync(path.join(mb, f), path.join(dMedia(a.id), f)); fs.rmSync(mb, { recursive: true, force: true }); } } catch {}
     a.actualizado = now(); sync(a); save();
   }
   // leads duplicados de antes de 0.16.24 (mismos mensajes de wechatia en dos leads): se fusionan
@@ -337,7 +440,7 @@ function crear({ dir, ai, inmo = null, broker = () => ({ nombre: '' }), emit = (
  "email": string o null, "rut": string o null, "telefono": "celular que el cliente haya dado" o null, "perfil": "quién es: para quién busca, familia o socios, trabajo o giro, motivo y urgencia, forma de pago (contado, crédito, subsidio), lo que se sepa; 1 a 3 frases" o null, "estadoSugerido": "nuevo"|"contactado"|"visita"|"negociando"|"ganado"|"perdido", "proximaAccion": {"texto": "acción concreta para el broker", "fecha": "YYYY-MM-DD" o null}}
 Reglas: «lucas» = miles de pesos (290 lucas = 290000 CLP). Usa solo lo que dice la conversación; si no se dijo, null. Si el cliente cambió de idea, usa lo último. «visita» si quedaron de ir a ver una propiedad; «perdido» si dijo que ya no busca o encontró otra.`;
   async function analizarConIA(id) {
-    const l = lead(id); const ms = mensajesDe(id);
+    const l = lead(id); try { await traerMensajes(id); } catch {} const ms = mensajesDe(id);
     const lineas = ms.map((m) => `[${m.fecha.slice(8, 10)}/${m.fecha.slice(5, 7)} ${m.fecha.slice(11, 16)}] ${m.de === 'cliente' ? 'Cliente' : 'Broker'}: ${(m.texto || (m.transcripcion ? '(audio) ' + m.transcripcion : '(' + m.tipo + ')')).replace(/\s*\n\s*/g, ' ')}`);
     let conv = lineas.join('\n'); if (conv.length > 14000) conv = '…\n' + conv.slice(-14000);
     const r = await ai.chat({ system: SISTEMA, messages: [{ role: 'user', content: `EXTRAER_LEAD\nHoy: ${now().slice(0, 10)}\nCONVERSACION:\n${conv}` }], json: true, action: 'lead' });
@@ -378,7 +481,7 @@ Reglas: «lucas» = miles de pesos (290 lucas = 290000 CLP). Usa solo lo que dic
   function obtener(id, { marcarLeido = true } = {}) {
     const l = lead(id); if (marcarLeido && l.noLeidos) { l.noLeidos = 0; save(); }
     const props = inmo ? (l.propiedades || []).map((pid) => { try { const p = inmo.todas().find((x) => x.id === pid); return p ? { id: p.id, codigo: p.codigo, titulo: p.titulo, comuna: p.comuna, foto: (p.fotos || [])[0] || null } : null; } catch { return null; } }).filter(Boolean) : [];
-    return { ...vista(l), propiedadesInfo: props, mensajesLista: mensajesDe(id).map((m) => ({ ...m, url: m.media ? `pffoto://l/${encodeURIComponent(id)}/${encodeURIComponent(m.media)}` : null })) };
+    return { ...vista(l), propiedadesInfo: props, mensajesLista: mensajesDe(id).map((m) => ({ ...m, url: m.media && fs.existsSync(path.join(base(), id, m.media)) ? `pffoto://l/${encodeURIComponent(id)}/${encodeURIComponent(m.media)}` : m.mediaUrl || null })) };
   }
   function actualizar(id, c = {}) {
     const l = lead(id); const antes = l.estado;
@@ -408,7 +511,7 @@ Reglas: «lucas» = miles de pesos (290 lucas = 290000 CLP). Usa solo lo que dic
     const l = db().leads.find((x) => x.id === idOTel) || porTelefono(idOTel); if (!l || !String(texto || '').trim()) return null;
     const m = { fecha: fechaLocal(), autor: autor || (de === 'cliente' ? (l.nombre || l.chatCon || l.telefono) : de === 'agente' ? 'Fernanda (asistente)' : broker().nombre || 'Tú'), texto: String(texto).slice(0, 4000), tipo: 'texto', de, wa: true, ...(fallido ? { fallido: String(fallido).slice(0, 300) } : {}) };
     m.k = clave(m); const todos = [...mensajesDe(l.id), m];
-    escribir(fMsgs(l.id), { mensajes: todos });
+    guardarMsgs(l.id, todos);
     l.mensajes = todos.length; l.ultimo = { fecha: m.fecha, de: de === 'cliente' ? 'cliente' : 'broker', texto: resumenMsg(m) }; l.wa = true; l.atiende ||= 'agente';
     if (de === 'cliente') l.noLeidos = (l.noLeidos || 0) + 1;
     l.actualizado = now(); save(); emit({ type: 'datos', que: 'leads', id: l.id });
@@ -427,11 +530,11 @@ Reglas: «lucas» = miles de pesos (290 lucas = 290000 CLP). Usa solo lo que dic
   // 0.16.18 · WhatsApp rechazó un mensaje que ya figuraba como enviado: queda marcado «No entregado»
   function marcarFallido(telefono, texto, motivo = '') { const l = porTelefono(telefono); if (!l) return false; const ms = mensajesDe(l.id); const t = String(texto || '').trim().slice(0, 200);
     const m = [...ms].reverse().find((x) => x.de !== 'cliente' && String(x.texto || '').trim().slice(0, 200) === t && !x.fallido); if (!m) return false;
-    m.fallido = String(motivo || 'WhatsApp no lo entregó').slice(0, 300); escribir(fMsgs(l.id), { mensajes: ms }); emit({ type: 'datos', que: 'leads', id: l.id }); return true; }
+    m.fallido = String(motivo || 'WhatsApp no lo entregó').slice(0, 300); guardarMsgs(l.id, ms); emit({ type: 'datos', que: 'leads', id: l.id }); return true; }
   // ¿la persona escribió en las últimas 24 h? (lo que Asset tiene registrado de la conversación)
   function escribioEn24(telefono) { const l = porTelefono(telefono); if (!l) return false; const lim = Date.now() - 24 * 36e5;
     return mensajesDe(l.id).some((m) => m.de === 'cliente' && new Date(String(m.fecha).replace(' ', 'T')).getTime() > lim); }
-  return { fusionar, repararDuplicados, asignar, registrarEvento, sincronizarTodos, registrarCanal, consentir, analizarInstagram, importarInstagram, consentimientos, marcarFallido, escribioEn24, porTelefono, registrarWa, atencion, crearDesdeWa, analizar, importar, analizarConIA, listar, obtener, actualizar, borrar, mediaDir, ESTADOS, ORIGENES, _db: db };
+  return { traerMensajes, subirLocales, fusionar, repararDuplicados, asignar, registrarEvento, sincronizarTodos, registrarCanal, consentir, analizarInstagram, importarInstagram, consentimientos, marcarFallido, escribioEn24, porTelefono, registrarWa, atencion, crearDesdeWa, analizar, importar, analizarConIA, listar, obtener, actualizar, borrar, mediaDir, ESTADOS, ORIGENES, _db: db };
 }
 
 module.exports = { crear, parsear, leerExportacion, nombreDelChat, ESTADOS };

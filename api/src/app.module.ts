@@ -16,6 +16,7 @@ import { PropiedadesService } from './propiedades/propiedades.service';
 import { ArchivosModule } from './archivos/archivos';
 import { NegociosController, NegociosService } from './negocios/negocios';
 import { EventosController, EventosService } from './agenda/eventos';
+import { LeadsController, LeadsService } from './leads/leads';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { EventosController, EventosService } from './agenda/eventos';
     ActividadController,
     NegociosController,
     EventosController,
+    LeadsController,
   ],
   // el límite de intentos va antes que la sesión: un login fallido también cuenta
   providers: [
@@ -42,6 +44,7 @@ import { EventosController, EventosService } from './agenda/eventos';
     PersonasService,
     NegociosService,
     EventosService,
+    LeadsService,
   ],
 })
 export class AppModule {}

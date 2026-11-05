@@ -51,6 +51,15 @@ export class AlmacenamientoService {
     return `c/${corredoraId}/p/${propiedadId}/${carpeta}/${r}${randomUUID()}${e ? '.' + e : ''}`;
   }
 
+  /** Clave de un archivo de la conversación de un lead (foto, audio, video o documento que mandó el cliente). */
+  claveLead(corredoraId: string, leadId: string, ext: string) {
+    const e = ext
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '')
+      .slice(0, 8);
+    return `c/${corredoraId}/l/${leadId.replace(/[^\w-]/g, '')}/${randomUUID()}${e ? '.' + e : ''}`;
+  }
+
   /** URL firmada para un PUT con ese tipo y tamaño exactos (R2 rechaza otro tamaño). */
   urlSubida(clave: string, tipo: string, tamano: number) {
     return getSignedUrl(

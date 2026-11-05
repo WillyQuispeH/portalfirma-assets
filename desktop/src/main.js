@@ -1037,6 +1037,7 @@ handle('usr:editar', (id, o) => equipo.editar(id, o || {}));
 handle('usr:clave', (id, clave) => equipo.clave(id, clave));
 handle('usr:wechatia', () => equipo.usuariosWechatia({ admin: permisos.esAdmin() }));
 const leads = require('./leads').crear({ dir: leadsDir, ai: require('./ai'), inmo, broker: () => ({ nombre: (store.get('waAgente') || {}).nombre || store.get('leadsBroker') || '' }), emit: (e) => toUI('agent:event', e), corredores: () => equipo.lista() });
+global.__leads = leads; // para las pruebas e2e (app.evaluate)
 setTimeout(() => { try { leads.repararDuplicados(); } catch {} try { leads.sincronizarTodos(); } catch {} }, 3000); // 0.16.23 · leads anteriores quedan como persona
 handle('leads:asignar', (id, corredorId) => leads.asignar(id, corredorId || null, 'manual'));
 // 0.16.23 · derivar: se le avisa al corredor dueño por WhatsApp con los datos del lead y un enlace para escribirle
@@ -1058,7 +1059,8 @@ handle('leads:derivar', async (id) => {
     return { ok: false, motivo: e.message, enlace: enlaceWa(c.celular, texto) }; }
 });
 handle('leads:listar', (o) => { const c = permisos.corredorActual(); return leads.listar({ ...(o || {}), ...(c ? { soloDe: c } : {}) }); });
-handle('leads:obtener', (id) => { const l = leads.obtener(id); if (!permisos.verLead(l)) throw new Error('Ese lead es de otro corredor.'); try { const pz = l?.telefono ? clientesWa.pausa(l.telefono) : null; if (pz) l.pausaHasta = pz; } catch {} return l; });
+// al abrir un lead, primero los mensajes que llegaron a otros equipos
+handle('leads:obtener', async (id) => { try { await leads.traerMensajes(id); } catch {} const l = leads.obtener(id); if (!permisos.verLead(l)) throw new Error('Ese lead es de otro corredor.'); try { const pz = l?.telefono ? clientesWa.pausa(l.telefono) : null; if (pz) l.pausaHasta = pz; } catch {} return l; });
 handle('leads:analizar', async (o) => { if (o?.miNombre) store.set('leadsBroker', String(o.miNombre).slice(0, 80));
   // 0.16.21 · un .zip puede ser un chat de WhatsApp o la descarga de Instagram: se reconoce por lo que trae
   if (/\.zip$/i.test(o?.ruta || '') || o?.canal === 'instagram') { try { return await leads.analizarInstagram(o || {}); } catch (e) { if (o?.canal === 'instagram' || e.code !== 'NO_IG') throw e; } }

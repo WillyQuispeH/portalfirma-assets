@@ -17,7 +17,7 @@
 //    (firmas enviadas, y documentos o fotos de antes de R2 que aún no se suben) queda local, en datos.json › extrasProp
 //    (por id de propiedad), y se suma a la copia.
 //  · Modo de prueba (PF_MOCK=1): todo en el JSON local de siempre (userData/inmo/datos.json), sin servidor.
-//    Negocios y eventos de la agenda también van a la API (PUT del documento completo; ver «negocios y eventos»).
+//    Negocios, eventos de la agenda y leads también van a la API (PUT del documento completo; ver «negocios y eventos»).
 // En los dos modos siguen locales: la configuración y la última importación.
 'use strict';
 const fs = require('fs'); const path = require('path');
@@ -87,12 +87,13 @@ function limpiarProp(o) {
 // ============================================================================ repositorio (copia en memoria)
 
 // usuario: el de la sesión de Asset · base: lo último que mandó el servidor de cada propiedad ('p:id'), persona ('c:id'),
-// negocio ('n:id') y evento ('e:id')
-const R = { usuario: null, props: [], pers: [], negs: [], evs: [], base: new Map(), marca: null, listo: false, cargando: null };
+// negocio ('n:id'), evento ('e:id') y lead ('l:id')
+const R = { usuario: null, props: [], pers: [], negs: [], evs: [], leads: [], base: new Map(), marca: null, listo: false, cargando: null };
 const P = () => (API ? R.props : db().propiedades);
 const C = () => (API ? R.pers : db().personas);
 // ganchos que pone main.js: avisar en pantalla, avisar que cambiaron datos y el nombre de un usuario del equipo
-const H = { avisar: () => {}, cambio: () => {}, nombreUsuario: () => null };
+// leads (los pone leads.js): subir lo local de antes, enviar mensajes de la conversación y resolver un lead duplicado
+const H = { avisar: () => {}, cambio: () => {}, nombreUsuario: () => null, leads: null };
 const configurar = (o = {}) => { Object.assign(H, o); };
 
 // campos de la propiedad que guarda la API (los demás, salvo los que maneja el servidor, quedan en extrasProp)
@@ -227,7 +228,21 @@ function recibirPer(x, vieja = null) {
 const DOCS = {
   neg: { lista: () => R.negs, pref: 'n:', ruta: '/negocios', que: 'negocios', nombre: 'un negocio' },
   ev: { lista: () => R.evs, pref: 'e:', ruta: '/eventos', que: 'agenda', nombre: 'un evento de la agenda' },
+  lead: { lista: () => R.leads, pref: 'l:', ruta: '/leads', que: 'leads', nombre: 'un lead' },
 };
+// mensajes de la conversación de un lead: { tipo: 'msgs', lead, ks } (los envía leads.js, que tiene la conversación)
+function encolarMensajes(lead, ks) {
+  if (!API || !ks.length) return;
+  const ya = cola.find((x) => x.tipo === 'msgs' && x.lead === lead && !x.enviando);
+  if (ya) { ya.ks = [...new Set([...ya.ks, ...ks])]; persistirCola(); return; }
+  cola.push({ tipo: 'msgs', lead, ks: [...new Set(ks)] }); persistirCola(); procesar();
+}
+async function enviarMensajes(op) {
+  if (!H.leads?.enviarMensajes) return;
+  // el lead nuevo va antes que su conversación
+  if (!R.base.has('l:' + op.lead) && R.leads.some((l) => l.id === op.lead)) await enviarDoc('lead', op.lead);
+  await H.leads.enviarMensajes(op.lead, op.ks);
+}
 const SERV_DOC = new Set(['version', 'creado', 'actualizado', 'creadoPorId']);
 function docIgual(a, b) {
   for (const k of new Set([...Object.keys(a || {}), ...Object.keys(b || {})])) if (!SERV_DOC.has(k) && !igual(a?.[k], b?.[k])) return false;
@@ -297,7 +312,8 @@ function persistirCola() {
   if (!API) return;
   const ops = [];
   for (const op of cola) {
-    if (op.tipo === 'act' || op.tipo === 'raw') ops.push(op.tipo === 'act' ? { tipo: 'act', a: op.a } : { tipo: 'raw', metodo: op.metodo, ruta: op.ruta, cuerpo: op.cuerpo, que: op.que });
+    if (op.tipo === 'msgs') ops.push({ tipo: 'msgs', lead: op.lead, ks: op.ks });
+    else if (op.tipo === 'act' || op.tipo === 'raw') ops.push(op.tipo === 'act' ? { tipo: 'act', a: op.a } : { tipo: 'raw', metodo: op.metodo, ruta: op.ruta, cuerpo: op.cuerpo, que: op.que });
     else if (op.tipo === 'prop' || op.tipo === 'per') { // lo pendiente, como PATCH listo para mandar
       const x = (op.tipo === 'prop' ? R.props : R.pers).find((y) => y.id === op.id); const b = R.base.get((op.tipo === 'prop' ? 'p:' : 'c:') + op.id);
       if (!x || !b) continue; const dif = op.tipo === 'prop' ? diferenciaProp(x, b) : diferenciaPer(x, b);
@@ -340,6 +356,7 @@ async function procesar() {
           cola.splice(0, n);
         } else if (op.tipo === 'raw') { recibirRespuesta(op.ruta, await asset().llamar(op.metodo, op.ruta, op.cuerpo)); cola.shift(); }
         else if (DOCS[op.tipo]) { await enviarDoc(op.tipo, op.id); cola.shift(); }
+        else if (op.tipo === 'msgs') { await enviarMensajes(op); cola.shift(); }
         else { await enviarDiferencia(op.tipo, op.id); cola.shift(); }
         persistirCola(); espera = 0;
       } catch (e) {
@@ -358,6 +375,7 @@ function recibirRespuesta(ruta, x) {
   if (!x || typeof x !== 'object' || !x.id) return;
   if (/^\/propiedades\//.test(ruta)) recibirProp(x); else if (/^\/personas\//.test(ruta)) recibirPer(x);
   else if (/^\/negocios\//.test(ruta)) recibirDoc('neg', x); else if (/^\/eventos\//.test(ruta)) recibirDoc('ev', x);
+  else if (/^\/leads\/[^/]+$/.test(ruta)) recibirDoc('lead', x);
 }
 // manda lo que cambió de una propiedad o persona (contra lo último que mandó el servidor) con su versión
 async function enviarDiferencia(tipo, id) {
@@ -372,7 +390,14 @@ async function enviarDiferencia(tipo, id) {
 async function fallo(op, e) {
   const conflicto = e.status === 409;
   if (op.tipo === 'act') { console.warn('[inmo] historial no registrado:', e.message); return; }
-  const tipoDoc = DOCS[op.tipo] ? op.tipo : /^\/negocios\//.test(op.ruta || '') ? 'neg' : /^\/eventos\//.test(op.ruta || '') ? 'ev' : null;
+  if (op.tipo === 'msgs') { if (e.status !== 404 && e.status !== 403) console.warn('[inmo] mensajes de un lead sin enviar:', e.message); return; }
+  // un lead nuevo de un cliente que ya tiene lead (lo recibió otro equipo): leads.js lo une al que existe
+  if ((op.tipo === 'lead' || /^\/leads\//.test(op.ruta || '')) && e.code === 'DUPLICADO' && H.leads?.alDuplicado) {
+    const id = op.id || decodeURIComponent(String(op.ruta).split('/')[2]);
+    try { if (e.datos?.visible) await recargarDoc('lead', e.datos.id); await H.leads.alDuplicado(id, e.datos || {}); } catch (e2) { console.warn('[inmo] lead duplicado:', e2.message); }
+    H.cambio('leads'); return;
+  }
+  const tipoDoc = DOCS[op.tipo] ? op.tipo : /^\/negocios\//.test(op.ruta || '') ? 'neg' : /^\/eventos\//.test(op.ruta || '') ? 'ev' : /^\/leads\//.test(op.ruta || '') ? 'lead' : null;
   if (tipoDoc) {
     const D = DOCS[tipoDoc]; const id = op.id || decodeURIComponent(String(op.ruta).split('/')[2]);
     if (op.metodo === 'DELETE' && e.status === 404) { R.base.delete(D.pref + id); return; }
@@ -414,11 +439,14 @@ async function cargarTodo() {
   R.pers.length = 0; for (const x of b.items) { R.base.set('c:' + x.id, clonar(x)); R.pers.push(clonar(x)); }
   remapearLegado();
   try { await subirNegociosEventos(); } catch (e) { console.warn('[inmo] negocios y eventos locales sin subir:', e.message); }
-  const [n, e] = await Promise.all([traer('/negocios'), traer('/eventos')]);
+  try { const t = await H.leads?.subirLocales?.(); if (t) H.avisar(t); } catch (e) { console.warn('[inmo] leads locales sin subir:', e.message); }
+  const [n, e, ld] = await Promise.all([traer('/negocios'), traer('/eventos'), traer('/leads')]);
   R.negs.length = 0; for (const x of n.items) if (!x.eliminado) { R.base.set('n:' + x.id, clonar(x)); R.negs.push(clonar(x)); }
   R.evs.length = 0; for (const x of e.items) if (!x.eliminado) { R.base.set('e:' + x.id, clonar(x)); R.evs.push(clonar(x)); }
+  R.leads.length = 0; for (const x of ld.items) if (!x.eliminado) { R.base.set('l:' + x.id, clonar(x)); R.leads.push(clonar(x)); }
   R.negs.sort((x, y) => String(y.creado).localeCompare(String(x.creado)));
-  R.marca = { p: marcaDe(a.marca), c: marcaDe(b.marca), n: marcaDe(n.marca), e: marcaDe(e.marca) }; R.listo = true;
+  R.leads.sort((x, y) => String(y.creado).localeCompare(String(x.creado)));
+  R.marca = { p: marcaDe(a.marca), c: marcaDe(b.marca), n: marcaDe(n.marca), e: marcaDe(e.marca), l: marcaDe(ld.marca) }; R.listo = true;
 }
 let sincronizando = null;
 function sincronizar() {
@@ -484,7 +512,7 @@ async function iniciar(u) {
   const antes = R.usuario;
   R.usuario = u ? { id: u.id, rol: u.rol, nombre: u.nombre, corredoraId: u.corredoraId } : null;
   if (!API || !u) return;
-  if (antes && (antes.corredoraId !== u.corredoraId || antes.id !== u.id)) { R.listo = false; R.base.clear(); R.props.length = 0; R.pers.length = 0; R.negs.length = 0; R.evs.length = 0; }
+  if (antes && (antes.corredoraId !== u.corredoraId || antes.id !== u.id)) { R.listo = false; R.base.clear(); R.props.length = 0; R.pers.length = 0; R.negs.length = 0; R.evs.length = 0; R.leads.length = 0; }
   const g = leerCola();
   if (g?.ops?.length && !cola.length) { if (g.usuarioId === u.id) cola.push(...g.ops); else escribirCola(null); }
   if (!R.listo) { try { await (R.cargando ||= cargarTodo().finally(() => { R.cargando = null; })); } catch (e) { H.avisar(`No se pudo cargar la cartera desde el servidor: ${e.message}`); } }
@@ -498,7 +526,7 @@ async function cerrar() {
   if (API) {
     await esperarCola(4000); persistirCola();
     for (const op of cola) if (op.tipo === 'fn') op.rechazar(err('Se cerró la sesión de PortalFirma Asset.', 'NEEDS_ASSET_LOGIN'));
-    cola.length = 0; if (reloj) { clearInterval(reloj); reloj = null; } R.listo = false; R.base.clear(); R.props.length = 0; R.pers.length = 0; R.negs.length = 0; R.evs.length = 0; }
+    cola.length = 0; if (reloj) { clearInterval(reloj); reloj = null; } R.listo = false; R.base.clear(); R.props.length = 0; R.pers.length = 0; R.negs.length = 0; R.evs.length = 0; R.leads.length = 0; }
   R.usuario = null;
 }
 const usuario = () => R.usuario;
@@ -1013,4 +1041,4 @@ const _reset = () => { cache = null; };
 module.exports = { personaDesdeLead, esEmpresa, eventos, negocios, personaPorId, registrar, obtener, parchear, todas, config, guardarConfig, registrarLead, guardar: guardarTodo, TIPOS, ESTADOS, ROLES, validRut, fmtRut, listar, resumen, guardarPropiedad, archivarPropiedad, guardarPersona, borrarPersona, vincular, desvincular,
   nota, actividadDe, actividadTodas, agregarDocumentos, quitarDocumento, docPath, mostrarCarpeta, subirFotos, importarPF, desdePF, exportarDatos, _reset,
   // repositorio (sesión de Asset y sincronización)
-  API, configurar, iniciar, cerrar, sincronizar, esperarCola, usuario, listo, asignarCaptador, asignarVarios };
+  API, configurar, iniciar, cerrar, sincronizar, leadsLista: () => R.leads, encolarMensajes, subirR2, recargarLead: (id) => recargarDoc('lead', id), esperarCola, usuario, listo, asignarCaptador, asignarVarios };

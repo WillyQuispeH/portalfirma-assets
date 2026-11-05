@@ -35,6 +35,7 @@ model Corredora {
   actividad       Actividad[]
   negocios        Negocio[]
   eventos         Evento[]
+  leads           Lead[]
 
   @@map("corredoras")
 }
@@ -68,6 +69,7 @@ model Usuario {
   captaciones    Propiedad[] @relation("captador")
   negocios       Negocio[]   @relation("negocioCorredor")
   eventos        Evento[]    @relation("eventoCorredor")
+  leads          Lead[]      @relation("leadCorredor")
 
   @@index([corredoraId])
   @@map("usuarios")
@@ -290,6 +292,7 @@ model Persona {
   corredora Corredora          @relation(fields: [corredoraId], references: [id], onDelete: Restrict)
   vinculos  PropiedadPersona[]
   negocios  Negocio[]
+  leads     Lead[]
 
   @@unique([corredoraId, rut])
   @@unique([corredoraId, idLegado])
@@ -413,4 +416,71 @@ model Evento {
   @@index([corredoraId, negocioId])
   @@index([personaIds], type: Gin)
   @@map("eventos")
+}
+
+// ============================================================================ leads
+
+/// Un lead: la persona que escribió (WhatsApp, Instagram, correo, chat importado…) y lo que se sabe de ella (leads.js de
+/// la app). Como negocios y eventos: id de la app, a cargo de un corredor, columnas para filtrar y el resto en `datos`.
+/// Para no duplicar al mismo cliente cuando dos equipos lo reciben a la vez, un lead nuevo no puede repetir una
+/// conversación (`convIds`) ni un teléfono (`telefonoNorm`, últimos 9 dígitos) de otro lead vivo.
+model Lead {
+  id            String    @id
+  corredoraId   String    @map("corredora_id") @db.Uuid
+  /// nuevo | contactado | visita | negociando | ganado | perdido
+  estado        String    @default("nuevo")
+  /// chat | whatsapp | instagram | facebook | email | portal | web | referido | otro
+  origen        String    @default("otro")
+  corredorId    String?   @map("corredor_id") @db.Uuid
+  personaId     String?   @map("persona_id") @db.Uuid
+  telefonoNorm  String?   @map("telefono_norm")
+  email         String?
+  /// conversaciones de wechatia (canales[].conv)
+  convIds       String[]  @default([]) @map("conv_ids")
+  /// fecha del último mensaje (hora local de la conversación, AAAA-MM-DDTHH:MM:SS)
+  ultimoEn      String?   @map("ultimo_en")
+  datos         Json      @default("{}")
+  version       Int       @default(1)
+  creadoPorId   String?   @map("creado_por_id") @db.Uuid
+  creadoEn      DateTime  @default(now()) @map("creado_en")
+  actualizadoEn DateTime  @updatedAt @map("actualizado_en")
+  eliminadoEn   DateTime? @map("eliminado_en")
+
+  corredora Corredora     @relation(fields: [corredoraId], references: [id], onDelete: Restrict)
+  corredor  Usuario?      @relation("leadCorredor", fields: [corredorId], references: [id], onDelete: SetNull)
+  persona   Persona?      @relation(fields: [personaId], references: [id], onDelete: SetNull)
+  mensajes  LeadMensaje[]
+
+  @@index([corredoraId, actualizadoEn])
+  @@index([corredoraId, corredorId, estado])
+  @@index([corredoraId, telefonoNorm])
+  @@index([convIds], type: Gin)
+  @@map("leads")
+}
+
+/// Un mensaje de la conversación de un lead. `k` es la clave que le da la app (hash del contenido, o «wc<id>» si vino
+/// de wechatia): volver a mandarlo no lo duplica. Fotos y audios van a R2 (`mediaUrl`).
+model LeadMensaje {
+  id            BigInt   @id @default(autoincrement())
+  leadId        String   @map("lead_id")
+  corredoraId   String   @map("corredora_id") @db.Uuid
+  k             String
+  /// hora local de la conversación (AAAA-MM-DDTHH:MM:SS), como la escribe WhatsApp
+  fecha         String
+  /// cliente | broker | agente | corredor
+  de            String?
+  autor         String?
+  texto         String   @default("")
+  /// texto | imagen | audio | video | documento | contacto | omitido | sistema
+  tipo          String   @default("texto")
+  mediaUrl      String?  @map("media_url")
+  /// el resto (archivo, transcripción, canal, asunto, «no entregado»…)
+  datos         Json     @default("{}")
+  creadoEn      DateTime @default(now()) @map("creado_en")
+  actualizadoEn DateTime @updatedAt @map("actualizado_en")
+  lead          Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@unique([leadId, k])
+  @@index([leadId, actualizadoEn])
+  @@map("lead_mensajes")
 }
