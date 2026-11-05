@@ -1,6 +1,6 @@
 // Negocios: el tablero por etapas (Ventas / Arriendos), con resumen, búsqueda y «Cerrados».
 // Arrastrar una tarjeta a otra columna mueve el negocio de etapa.
-// Hecha con el kit: CabeceraPagina, Boton, Tabs, Buscador, Kpi, Card y EstadoVacio; las columnas y tarjetas del
+// Hecha con el kit: Layout (cabecera y barra), Boton, Tabs, Buscador, Kpi, Card y EstadoVacio; las columnas y tarjetas del
 // tablero siguen con sus clases ng-* de styles.css.
 //
 // La ficha del negocio y «Nuevo negocio» siguen en src/renderer/negocios.js; se llaman por utils/app.ts.
@@ -11,7 +11,7 @@ import { useNegocio } from '../../../store/hooks/useNegocio.hook';
 import { abrirNegocio, esMiembro, nuevoNegocio, toast } from '../../../utils/app';
 import { montos } from '../../../utils/formato';
 import Buscador from '../../ui/Buscador';
-import CabeceraPagina from '../../ui/CabeceraPagina';
+import Layout from '../../ui/Layout';
 import Boton from '../../ui/Boton';
 import Tabs from '../../ui/Tabs';
 import Card from '../../ui/Card';
@@ -62,22 +62,20 @@ export default function Negocios({ tipo: tipoInicial }: INegociosProps) {
   };
 
   return (
-    <div className="im-wrap ng-wrap">
-      <CabeceraPagina
-        titulo="Negocios"
-        ilustracion={{ imagen: 'img/formas/negocios.svg', tinte: '#3d9cf0' }}
-        subtitulo="Cada etapa dice qué falta. Arrastra una tarjeta para moverla; cuando un documento queda firmado, el negocio avanza solo."
-        acciones={<Boton id="ngNew" icono="plus" onClick={() => nuevoNegocio({ tipo: f.tipo })}>Nuevo negocio</Boton>}
-      />
-
-      <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-3 tw:mb-4">
+    <Layout
+      className="ng-wrap"
+      titulo="Negocios"
+      ilustracion={{ imagen: 'img/formas/negocios.svg', tinte: '#3d9cf0' }}
+      subtitulo="Cada etapa dice qué falta. Arrastra una tarjeta para moverla; cuando un documento queda firmado, el negocio avanza solo."
+      acciones={<Boton id="ngNew" icono="plus" onClick={() => nuevoNegocio({ tipo: f.tipo })}>Nuevo negocio</Boton>}
+      barra={<>
         <Tabs id="ngTipo" dato="t" etiqueta="Tipo de negocio" valor={f.tipo} alCambiar={(tipo) => negocioSetFiltros({ tipo })}
           opciones={[['venta', 'Ventas', cuenta('venta')], ['arriendo', 'Arriendos', cuenta('arriendo')]]} />
         <Buscador kit id="ngQ" valor={f.q} alCambiar={(q) => negocioSetFiltros({ q })} espera={180} placeholder="Buscar por propiedad, cliente o RUT" />
         <Tabs id="ngVer" dato="v" etiqueta="Abiertos o cerrados" valor={f.ver} alCambiar={(ver) => negocioSetFiltros({ ver })}
           opciones={[['abiertos', 'Abiertos'], ['cerrados', 'Cerrados']]} />
-      </div>
-
+      </>}
+    >
       {error && <p role="alert" className="tw:text-red-softink">No se pudieron leer los negocios: {error}</p>}
 
       {cargado && (
@@ -122,6 +120,6 @@ export default function Negocios({ tipo: tipoInicial }: INegociosProps) {
           )}
         </>
       )}
-    </div>
+    </Layout>
   );
 }

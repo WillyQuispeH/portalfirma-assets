@@ -1,7 +1,13 @@
 // Formularios en ventana de la ficha de la propiedad (en el modal de la app, utils/modal.tsx).
-// Los id (#vRol, #vQ, #vList, #vNew, #mCancel, #mOk) los usan las pruebas y el recorrido de Aprende.
+// Con el kit: Select, Input, Boton, ItemLista y Avatar.
+// Los id (#vRol, #vQ, #vList con [data-c], #vNew, #mCancel, #mOk) los usan las pruebas y el recorrido de Aprende.
 import { useMemo, useState } from 'react';
-import Icono from '../../ui/Icono';
+import Boton from '../../ui/Boton';
+import Select from '../../ui/Select';
+import Input from '../../ui/Input';
+import ItemLista from '../../ui/ItemLista';
+import Avatar from '../../ui/Avatar';
+import EstadoVacio from '../../ui/EstadoVacio';
 import { ROL } from '../cartera/catalogos';
 import { useFicha } from '../../../store/hooks/useFicha.hook';
 import { avisar, crearPersona, toast } from '../../../utils/app';
@@ -28,27 +34,23 @@ export function VincularPersona({ p, rolInicial = 'propietario' }: { p: IPropied
   const nueva = () => crearPersona({ rol, despues: async (c) => { const r = await fichaVincular(c.id, rol); if (r.error) toast(r.error, 4000); } });
 
   return (
-    <div className="im-form">
-      <h2>Vincular persona</h2>
-      <p className="muted small">{p.codigo} · {p.titulo}</p>
-      <label>Rol en la propiedad
-        <select id="vRol" value={rol} onChange={(e) => setRol(e.target.value)}>
-          {Object.entries(ROL).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-        </select>
-      </label>
-      <label>Buscar en tu CRM<input id="vQ" placeholder="Nombre o RUT" autoComplete="off" autoFocus value={q} onChange={(e) => setQ(e.target.value)} /></label>
-      <div className="im-vl" id="vList">
-        {lista.length ? lista.map((c) => (
-          <button key={c.id} className="im-vi" data-c={c.id} onClick={() => vincular(c.id)}>
-            <span className="im-av">{c.nombre[0]}</span>
-            <span><b>{c.nombre}</b><small>{c.rut} · {c.roles.map((r) => ROL[r]).join(', ') || 'sin rol'}</small></span>
-          </button>
-        )) : <p className="muted small">No hay coincidencias. Crea la persona nueva.</p>}
+    <div className="tw:flex tw:flex-col tw:gap-4">
+      <div>
+        <h2 className="tw:m-0 tw:text-xl tw:font-bold">Vincular persona</h2>
+        <p className="tw:mt-1 tw:mb-0 tw:text-[13px] tw:text-muted">{p.codigo} · {p.titulo}</p>
       </div>
-      <div className="actions">
-        <button className="ghost" id="vNew" onClick={nueva}><Icono nombre="plus" tam={14} /> Crear persona nueva</button>
-        <span className="spacer" />
-        <button className="secondary" id="mCancel" onClick={cerrarModal}>Cancelar</button>
+      <Select id="vRol" etiqueta="Rol en la propiedad" value={rol} onChange={(e) => setRol(e.target.value)} opciones={Object.entries(ROL)} />
+      <Input id="vQ" etiqueta="Buscar en tu CRM" icono="search" placeholder="Nombre o RUT" autoComplete="off" autoFocus value={q} onChange={(e) => setQ(e.target.value)} />
+      <div id="vList" className="tw:-mx-3 tw:max-h-[300px] tw:overflow-auto tw:flex tw:flex-col">
+        {lista.length ? lista.map((c) => (
+          <ItemLista key={c.id} data-c={c.id} alTocar={() => vincular(c.id)} media={<Avatar nombre={c.nombre} />}
+            titulo={c.nombre} detalle={`${c.rut} · ${c.roles.map((r) => ROL[r]).join(', ') || 'sin rol'}`} />
+        )) : <EstadoVacio compacto texto="No hay coincidencias. Crea la persona nueva." className="tw:px-3" />}
+      </div>
+      <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
+        <Boton id="vNew" variante="fantasma" icono="plus" onClick={nueva}>Crear persona nueva</Boton>
+        <span className="tw:flex-1" />
+        <Boton id="mCancel" variante="secundario" onClick={cerrarModal}>Cancelar</Boton>
       </div>
     </div>
   );
@@ -56,13 +58,14 @@ export function VincularPersona({ p, rolInicial = 'propietario' }: { p: IPropied
 
 // Finalizar un aviso de Portal Inmobiliario (no se puede reactivar)
 export function FinalizarAviso({ op, alConfirmar }: { op: string; alConfirmar: () => void }) {
-  return <>
-    <h2>Finalizar el aviso</h2>
-    <p>El aviso de {op} se cierra en Portal Inmobiliario y Mercado Libre. <b>No se puede reactivar</b>: para volver a publicar se crea un aviso nuevo, que usa otra publicación del paquete.</p>
-    <div className="actions">
-      <button className="secondary" id="mCancel" onClick={cerrarModal}>Cancelar</button>
-      <button className="danger" id="mOk" onClick={() => { cerrarModal(); alConfirmar(); }}>Finalizar aviso</button>
+  return (
+    <div className="tw:flex tw:flex-col tw:gap-4">
+      <h2 className="tw:m-0 tw:text-xl tw:font-bold">Finalizar el aviso</h2>
+      <p className="tw:m-0 tw:text-sm tw:leading-relaxed">El aviso de {op} se cierra en Portal Inmobiliario y Mercado Libre. <b>No se puede reactivar</b>: para volver a publicar se crea un aviso nuevo, que usa otra publicación del paquete.</p>
+      <div className="tw:flex tw:justify-end tw:gap-2">
+        <Boton id="mCancel" variante="secundario" onClick={cerrarModal}>Cancelar</Boton>
+        <Boton id="mOk" variante="peligro" onClick={() => { cerrarModal(); alConfirmar(); }}>Finalizar aviso</Boton>
+      </div>
     </div>
-  </>;
+  );
 }
-

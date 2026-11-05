@@ -8,12 +8,12 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
   const txt = (s) => w.textContent(s).then((t) => t || '');
   const shot = (n) => w.screenshot({ path: path.resolve(__dirname, n) });
   try {
-    await w.setViewportSize({ width: 1440, height: 900 }); await w.waitForSelector('#view-inicio .im-hero');
+    await w.setViewportSize({ width: 1440, height: 900 }); await w.waitForSelector('#view-inicio [data-cabecera]');
     ok(/inicio-propiedades\.jpg/.test(await w.evaluate(() => getComputedStyle(document.querySelector('#view-inicio .hoy-bg')).backgroundImage)), 'el inicio usa la imagen entregada');
     await w.click('#view-inicio [data-do="importar"]'); await w.waitForSelector('text=Cartera actualizada', { timeout: 15000 }); await w.click('#mOk'); await w.waitForSelector('.im-card');
     await w.evaluate(() => window.Inmo.inicio()); await w.waitForSelector('#view-inicio .hoy-ks'); await w.waitForTimeout(700); await shot('ap1-inicio.png');
     await w.evaluate(() => window.Inmo.cartera()); await w.waitForSelector('.im-card'); await w.waitForTimeout(300);
-    ok(/formas\/cartera\.svg/.test(await w.evaluate(() => getComputedStyle(document.querySelector('.im-head')).backgroundImage)), 'Cartera con su diseño de formas');
+    ok(/formas\/cartera\.svg/.test(await w.evaluate(() => getComputedStyle(document.querySelector('#view-cartera [data-cabecera]')).backgroundImage)), 'Cartera con su diseño de formas');
     await shot('ap2-cartera.png');
     for (const [fn, sel, svg] of [['window.Inmo.personas()', '#cTabla', 'personas'], ['window.Negocios.abrir()', '.ng-board', 'negocios'], ['window.Inmo.portales()', '#coWa', 'portales']]) {
       await w.evaluate(fn); await w.waitForSelector(sel);
@@ -28,7 +28,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     await w.click('#hpAprende'); await w.waitForSelector('.ap-grid');
     ok((await w.$$('.ap-card')).length === 10 && /0 de 10/.test(await txt('#view-aprende')), '10 lecciones, una por panel, con avance');
     await shot('ap4-aprende.png');
-    await w.click('#apStart'); await w.waitForSelector('.ap-pasos'); ok(/Inicio/.test(await txt('.ap-hero')), 'empieza por la primera lección');
+    await w.click('#apStart'); await w.waitForSelector('.ap-pasos'); ok(/Inicio/.test(await txt('#view-aprende [data-cabecera]')), 'empieza por la primera lección');
     await w.click('[data-go="cartera"]'); await w.waitForSelector('text=Lección 2 de 10');
     await shot('ap5-leccion.png');
     await w.click('#apVivo'); await w.waitForSelector('.tour-tip', { timeout: 8000 });

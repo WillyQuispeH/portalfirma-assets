@@ -1,67 +1,69 @@
 // Pestañas «Unidades» y «Contratistas» de Postventa: tablas simples, con importar la planilla y agregar.
-import Icono from '../../ui/Icono';
+// Con el kit: Card, Tabla, Boton y EstadoVacio. Los id pvPlant, pvImp, pvCtN y la clase pv-unidades (la tabla de
+// cada proyecto) los usa test/postventa-e2e.js.
 import { usePostventa } from '../../../store/hooks/usePostventa.hook';
 import { nuevoContratista, toast } from '../../../utils/app';
+import Card from '../../ui/Card';
+import Tabla from '../../ui/Tabla';
+import Boton from '../../ui/Boton';
+import EstadoVacio from '../../ui/EstadoVacio';
 import { fmt } from './comun';
+import type { IPvContratista, IPvUnidad } from '../../../store/interfaces/postventa.interface';
 
 const aviso = (r: { mensaje?: string; error?: string }, ms = 6000) => { if (r.error) toast(r.error, 9000); else if (r.mensaje) toast(r.mensaje, ms); };
+
+const COL_UNIDADES = [
+  { clave: 'unidad', titulo: 'Unidad', render: (u: IPvUnidad) => <b className="tw:font-semibold">{u.torre ? u.torre + '-' : ''}{u.numero}</b> },
+  {
+    clave: 'propietario', titulo: 'Propietario',
+    render: (u: IPvUnidad) => <>{u.propietario?.nombre || ''}<small className="tw:block tw:text-xs tw:text-muted">{u.propietario?.rut || ''}</small></>,
+  },
+  { clave: 'celular', titulo: 'Celular', render: (u: IPvUnidad) => u.propietario?.telefono || '—' },
+  { clave: 'dom', titulo: 'Recepción DOM', render: (u: IPvUnidad) => <span className="tw:tabular-nums">{fmt(u.recepcionDOM)}</span> },
+  { clave: 'cbr', titulo: 'Inscripción CBR', render: (u: IPvUnidad) => <span className="tw:tabular-nums">{fmt(u.inscripcionCBR)}</span> },
+];
+
+const COL_CONTRATISTAS = [
+  { clave: 'nombre', titulo: 'Nombre', render: (c: IPvContratista) => <b className="tw:font-semibold">{c.nombre}</b> },
+  { clave: 'especialidad', titulo: 'Especialidad', render: (c: IPvContratista) => c.especialidad || '' },
+  { clave: 'telefono', titulo: 'Celular', render: (c: IPvContratista) => c.telefono || '' },
+];
 
 export function Unidades() {
   const { proyectos, unidades, unidadesPlantilla, unidadesImportar } = usePostventa();
   return (
-    <div className="im-box">
-      <div className="pv-uh">
-        <div>
-          <h3>Unidades entregadas</h3>
-          <p className="muted small">Carga la planilla Excel (un dato por celda) con proyecto, torre, número, propietario, RUT, celular y las fechas de <b>recepción municipal</b> y de <b>inscripción en el CBR</b>: con ellas se calcula la garantía de cada reclamo.</p>
-        </div>
-        <span className="ga-inl">
-          <button className="ghost small" id="pvPlant" onClick={async () => aviso(await unidadesPlantilla(), 3000)}><Icono nombre="download" tam={14} /> Plantilla Excel</button>
-          <button className="primary small" id="pvImp" onClick={async () => aviso(await unidadesImportar())}><Icono nombre="upload" tam={14} /> Importar planilla</button>
-        </span>
-      </div>
-      {proyectos && (proyectos.length ? proyectos.map((p) => {
+    <>
+      <Card
+        titulo="Unidades entregadas"
+        accion={<span className="tw:flex tw:flex-wrap tw:gap-2">
+          <Boton variante="secundario" tamano="sm" icono="download" id="pvPlant" onClick={async () => aviso(await unidadesPlantilla(), 3000)}>Plantilla Excel</Boton>
+          <Boton tamano="sm" icono="upload" id="pvImp" onClick={async () => aviso(await unidadesImportar())}>Importar planilla</Boton>
+        </span>}
+      >
+        <p className="tw:m-0 tw:text-[13px] tw:text-muted tw:leading-relaxed">Carga la planilla Excel (un dato por celda) con proyecto, torre, número, propietario, RUT, celular y las fechas de <b>recepción municipal</b> y de <b>inscripción en el CBR</b>: con ellas se calcula la garantía de cada reclamo.</p>
+        {proyectos && !proyectos.length && <EstadoVacio icono="building" texto="Aún no hay unidades. Descarga la plantilla, complétala y súbela." className="tw:pb-4" />}
+      </Card>
+      {proyectos?.map((p) => {
         const l = unidades.filter((u) => u.proyectoId === p.id);
         return (
-          <div key={p.id}>
-            <h4 className="pv-sub">{p.nombre} <i className="muted">({l.length})</i></h4>
-            <div className="pv-tbl">
-              <table>
-                <thead><tr><th>Unidad</th><th>Propietario</th><th>Celular</th><th>Recepción DOM</th><th>Inscripción CBR</th></tr></thead>
-                <tbody>{l.map((u) => (
-                  <tr key={u.id}>
-                    <td>{u.torre ? u.torre + '-' : ''}{u.numero}</td>
-                    <td>{u.propietario?.nombre || ''}<small>{u.propietario?.rut || ''}</small></td>
-                    <td>{u.propietario?.telefono || '—'}</td>
-                    <td>{fmt(u.recepcionDOM)}</td>
-                    <td>{fmt(u.inscripcionCBR)}</td>
-                  </tr>
-                ))}</tbody>
-              </table>
-            </div>
-          </div>
+          <Card key={p.id} titulo={p.nombre} subtitulo={`${l.length} ${l.length === 1 ? 'unidad' : 'unidades'}`} relleno={false}>
+            <Tabla className="pv-unidades" compacta columnas={COL_UNIDADES} filas={l} claveFila={(u) => u.id} />
+          </Card>
         );
-      }) : <p className="muted pv-vac">Aún no hay unidades. Descarga la plantilla, complétala y súbela.</p>)}
-    </div>
+      })}
+    </>
   );
 }
 
 export function Contratistas() {
   const { contratistas: cs, contratistasGetAll } = usePostventa();
+  const nuevo = async () => { if (await nuevoContratista()) contratistasGetAll(); };
   return (
-    <div className="im-box">
-      <div className="pv-uh">
-        <h3>Contratistas</h3>
-        <button className="primary small" id="pvCtN" onClick={async () => { if (await nuevoContratista()) contratistasGetAll(); }}><Icono nombre="plus" tam={14} /> Nuevo</button>
-      </div>
-      {cs && (cs.length ? (
-        <div className="pv-tbl">
-          <table>
-            <thead><tr><th>Nombre</th><th>Especialidad</th><th>Celular</th></tr></thead>
-            <tbody>{cs.map((c) => <tr key={c.id}><td>{c.nombre}</td><td>{c.especialidad || ''}</td><td>{c.telefono || ''}</td></tr>)}</tbody>
-          </table>
-        </div>
-      ) : <p className="muted pv-vac">Agrega a los maestros y empresas que hacen las reparaciones.</p>)}
-    </div>
+    <Card titulo="Contratistas" relleno={false}
+      accion={<Boton tamano="sm" icono="plus" id="pvCtN" onClick={nuevo}>Nuevo</Boton>}>
+      {cs && (cs.length
+        ? <Tabla compacta columnas={COL_CONTRATISTAS} filas={cs} claveFila={(c) => c.id} />
+        : <EstadoVacio icono="users" texto="Agrega a los maestros y empresas que hacen las reparaciones." />)}
+    </Card>
   );
 }

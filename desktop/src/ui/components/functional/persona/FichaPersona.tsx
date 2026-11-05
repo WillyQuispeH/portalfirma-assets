@@ -1,6 +1,6 @@
 // Detalle de una persona del CRM: datos, propiedades vinculadas, documentos que firma e historial con notas.
 // Se abre con Inmo.abrirPersona(id) (src/renderer/inmo.js), que la monta en #view-personas, el mismo contenedor de la
-// lista. Hecha con el kit: CabeceraPagina, Avatar, Badge, Boton, Card, ListaDatos, ItemLista, LineaTiempo, Input,
+// lista. Hecha con el kit: Layout (cabecera con «volver»), Avatar, Badge, Boton, Card, ListaDatos, ItemLista, LineaTiempo, Input,
 // ModalConfirmar; «Editar» abre FormPersona.
 // Las pruebas usan #pBack, #pEdit, #pDel (y #mOk/#mCancel al confirmar), #pDocs (con data-doc y data-pdf),
 // #pNota/#pNotaT, [data-p] en cada propiedad, [data-datos] y el historial [data-historial] con li[data-nota].
@@ -8,11 +8,11 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { ROL } from '../cartera/catalogos';
 import { TONO_ROL } from '../personas/Personas';
 import { abrirFormPersona } from '../personas/controlador';
-import { copiarCorreo, estadoFirma, whatsapp } from '../ficha/comun';
+import { TONO_FIRMA, copiarCorreo, estadoFirma, whatsapp } from '../ficha/comun';
 import { usePersona } from '../../../store/hooks/usePersona.hook';
 import { abrirFicha, abrirLead, abrirPersonas, avisar, toast } from '../../../utils/app';
 import { fecha, fechaHora } from '../../../utils/formato';
-import CabeceraPagina from '../../ui/CabeceraPagina';
+import Layout from '../../ui/Layout';
 import Avatar from '../../ui/Avatar';
 import Badge from '../../ui/Badge';
 import Boton from '../../ui/Boton';
@@ -24,10 +24,6 @@ import Input from '../../ui/Input';
 import EstadoVacio from '../../ui/EstadoVacio';
 import Icono from '../../ui/Icono';
 import { ModalConfirmar } from '../../ui/Modal';
-import type { TTono } from '../../ui/tonos';
-
-// estado de un documento enviado a firmar → tono de su etiqueta
-const TONO_FIRMA: Record<string, TTono> = { ok: 'verde', wait: 'amarillo', bad: 'rojo' };
 
 function Documentos({ id }: { id: string }) {
   const { documentos, personaPdfAbrir } = usePersona();
@@ -96,27 +92,26 @@ export default function FichaPersona({ id, vez }: IFichaPersonaProps) {
   // la persona ya no está (eliminada): vuelve a la lista
   useEffect(() => { if (cargado && !error && !c) abrirPersonas(); }, [cargado, error, c]);
 
-  if (!c) return <div className="im-wrap">{error ? <p role="alert" className="tw:text-red-softink">No se pudo leer la persona: {error}</p> : <EstadoVacio compacto texto="Cargando…" />}</div>;
+  if (!c) return <Layout>{error ? <p role="alert" className="tw:text-red-softink">No se pudo leer la persona: {error}</p> : <EstadoVacio compacto texto="Cargando…" />}</Layout>;
 
   const props = propiedades.flatMap((p) => (p.vinculos || []).filter((v) => v.personaId === c.id).map((v) => ({ p, rol: v.rol })));
   const empresa = c.tipo === 'juridica';
 
   return (
-    <div className="im-wrap">
-      <CabeceraPagina
-        volver={{ texto: 'Personas', alTocar: abrirPersonas, id: 'pBack' }}
-        antes={<Avatar nombre={c.nombre} tamano="xl" />}
-        sobretitulo={`${empresa ? 'Persona jurídica' : 'Persona natural'} · ${c.rut ? 'RUT ' + c.rut : 'Sin RUT todavía'}`}
-        titulo={c.nombre}
-        subtitulo={c.roles.length
-          ? <span className="tw:flex tw:flex-wrap tw:gap-1 tw:mt-1">{c.roles.map((r) => <Badge key={r} tono={TONO_ROL[r]}>{ROL[r]}</Badge>)}</span>
-          : 'Sin rol'}
-        acciones={<>
-          <Boton id="pEdit" variante="secundario" icono="edit" onClick={() => abrirFormPersona(c)}>Editar</Boton>
-          <Boton id="pDel" variante="peligro" icono="trash" onClick={() => setBorrar(true)}>Eliminar</Boton>
-        </>}
-      />
-
+    <Layout
+      tinte="#6a2fe0"
+      volver={{ texto: 'Personas', alTocar: abrirPersonas, id: 'pBack' }}
+      antes={<Avatar nombre={c.nombre} tamano="xl" />}
+      sobretitulo={`${empresa ? 'Persona jurídica' : 'Persona natural'} · ${c.rut ? 'RUT ' + c.rut : 'Sin RUT todavía'}`}
+      titulo={c.nombre}
+      subtitulo={c.roles.length
+        ? <span className="tw:flex tw:flex-wrap tw:gap-1 tw:mt-1">{c.roles.map((r) => <Badge key={r} tono={TONO_ROL[r]}>{ROL[r]}</Badge>)}</span>
+        : 'Sin rol'}
+      acciones={<>
+        <Boton id="pEdit" variante="secundario" icono="edit" onClick={() => abrirFormPersona(c)}>Editar</Boton>
+        <Boton id="pDel" variante="peligro" icono="trash" onClick={() => setBorrar(true)}>Eliminar</Boton>
+      </>}
+    >
       <div className="tw:grid tw:gap-4 tw:lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] tw:items-start">
         <div className="tw:grid tw:gap-4">
           <Card titulo="Datos">
@@ -166,6 +161,6 @@ export default function FichaPersona({ id, vez }: IFichaPersonaProps) {
           if (r.error) throw new Error(r.error);
           avisar(r); abrirPersonas();
         }} />
-    </div>
+    </Layout>
   );
 }

@@ -1,15 +1,21 @@
 // Leads: la bandeja de conversaciones (WhatsApp, Instagram, correo) con KPIs, filtros y lista.
+// Hecha con el kit: Layout (cabecera con ilustración y, en la barra, los KPIs que filtran), Boton, Buscador y Select.
 //
 // La conversación y la ficha del lead (columnas #ldChat y #ldFicha) siguen en src/renderer/leads.js:
 // React deja esos dos contenedores vacíos y nunca dibuja dentro. Puente en los dos sentidos:
 //  - React → leads.js: mostrarLead() con el elegido y los datos de la lista (los usa la ficha).
 //  - leads.js → React: el evento «pf:leads» (al guardar, asignar, importar…) pide recargar la lista.
-// Los id ldQ, ldChips, ldKs, ldItems, ldOrigen, ldBroker, ldFile, ldFileIg los usan las pruebas y leads.js.
+// Los id ldQ, ldChips (con data-f en cada filtro), ldKs, ldItems, ldOrigen, ldBroker, ldFile, ldFileIg, ldCorBtn,
+// ldCuentas, ldImp2, ldIg2 y la clase .ld-vacio los usan las pruebas y leads.js.
 import { useEffect, useRef } from 'react';
 import { useLead } from '../../../store/hooks/useLead.hook';
 import { leadsComoExportar, leadsComoInstagram, leadsCuentas, leadsImportar, mostrarLead, rutaDe } from '../../../utils/app';
+import { cx } from '../../../utils/cx';
 import { abrirUsuarios } from '../usuarios/controlador';
+import Layout from '../../ui/Layout';
+import Boton from '../../ui/Boton';
 import Buscador from '../../ui/Buscador';
+import Select from '../../ui/Select';
 import Icono from '../../ui/Icono';
 import LeadItem from './LeadItem';
 import { FILTROS } from './formato';
@@ -18,6 +24,23 @@ import type { TLeadFiltro } from '../../../store/interfaces/lead.interface';
 interface ILeadsProps {
   sel?: string | null; // al abrir un lead desde otra pantalla o después de importar
   filtro?: TLeadFiltro;
+}
+
+// un KPI que además filtra la lista (el Kpi del kit no se puede tocar): mismo aspecto que una Card del kit
+function KpiFiltro({ n, t, s, on, alTocar, filtro }: { n?: number; t: string; s?: string; on: boolean; alTocar: () => void; filtro: TLeadFiltro }) {
+  return (
+    <button type="button" data-f={filtro} aria-pressed={on} onClick={alTocar}
+      className={cx(
+        'tw:flex tw:flex-col tw:items-start tw:gap-0.5 tw:m-0 tw:px-5 tw:py-3 tw:text-left tw:rounded-2xl tw:cursor-pointer',
+        'tw:border tw:border-solid tw:border-b-[3px] tw:transition-colors tw:duration-100',
+        'tw:focus-visible:outline-2 tw:focus-visible:outline-offset-2 tw:focus-visible:outline-lav-edge',
+        on ? 'tw:bg-lav-soft tw:border-lav-edge tw:text-lav-softink' : 'tw:bg-card tw:border-edge tw:border-b-edge-b tw:text-text tw:hover:bg-hover',
+      )}>
+      <b className="tw:text-2xl tw:font-bold tw:leading-tight tw:tabular-nums">{n ?? 0}</b>
+      <span className={cx('tw:text-sm tw:font-semibold', !on && 'tw:text-muted')}>{t}</span>
+      {s && <small className={cx('tw:text-xs', on ? 'tw:opacity-80' : 'tw:text-muted')}>{s}</small>}
+    </button>
+  );
 }
 
 export default function Leads({ sel: selInicial, filtro: filtroInicial }: ILeadsProps) {
@@ -57,60 +80,71 @@ export default function Leads({ sel: selInicial, filtro: filtroInicial }: ILeads
   };
 
   const k = datos?.kpis;
-  const Kpi = ({ n, t, s, filtro }: { n?: number; t: string; s?: string; filtro: TLeadFiltro }) => (
-    <button className={`pv-k ld-k ${f.filtro === filtro ? 'on' : ''}`} data-f={filtro} onClick={() => leadSetFiltros({ filtro })}>
-      <b>{n ?? 0}</b><span>{t}</span>{s && <small>{s}</small>}
-    </button>
-  );
+  const kpi = (filtro: TLeadFiltro) => ({ filtro, on: f.filtro === filtro, alTocar: () => leadSetFiltros({ filtro }) });
+  const cajaFiltro = 'tw:h-9 tw:pl-2.5 tw:pr-7 tw:text-[13px]';
+  // las tres columnas con el borde de una Card del kit (react-ui.css va después de styles.css: gana a .ld-lista…)
+  const columna = 'tw:rounded-2xl tw:border-edge tw:border-b-[3px] tw:border-b-edge-b';
 
   return (
-    <div className="im-wrap ld-wrap">
-      <div className="pv-h">
-        <div>
-          <h1>Leads</h1>
-          <p className="muted">Tus conversaciones con clientes por WhatsApp, Instagram y correo: qué buscan, en qué quedaron y qué sigue.</p>
-        </div>
-        <span className="spacer" />
-        <button className="secondary" id="ldCorBtn" title="El equipo de la corredora: a quién pertenece cada lead" onClick={abrirUsuarios}><Icono nombre="users" tam={15} /> Usuarios</button>
-        <button className="secondary" id="ldCuentas" onClick={leadsCuentas}><Icono nombre="link" tam={15} /> Cuentas e historial</button>
-        <button className="secondary" id="ldComo" onClick={leadsComoExportar}><Icono nombre="help" tam={15} /> Cómo exportar un chat</button>
-        <button className="primary" id="ldImp" onClick={() => archivo.current?.click()}><Icono nombre="upload" tam={15} /> Importar chat</button>
+    <Layout
+      className="ld-wrap"
+      titulo="Leads"
+      ilustracion={{ imagen: 'img/formas/personas.svg', tinte: '#13a35b' }}
+      subtitulo="Tus conversaciones con clientes por WhatsApp, Instagram y correo: qué buscan, en qué quedaron y qué sigue."
+      acciones={<>
+        <Boton id="ldImp" icono="upload" onClick={() => archivo.current?.click()}>Importar chat</Boton>
+        <Boton variante="secundario" id="ldCuentas" icono="link" onClick={leadsCuentas}>Cuentas e historial</Boton>
+        <Boton variante="secundario" id="ldComo" icono="help" onClick={leadsComoExportar}>Cómo exportar un chat</Boton>
+        <Boton variante="secundario" id="ldCorBtn" icono="users" title="El equipo de la corredora: a quién pertenece cada lead" onClick={abrirUsuarios}>Usuarios</Boton>
         <input ref={archivo} type="file" id="ldFile" accept=".txt,.zip,text/plain,application/zip" className="hidden" onChange={(e) => importar(e.target)} />
         <input ref={archivoIg} type="file" id="ldFileIg" accept=".zip,application/zip" className="hidden" onChange={(e) => importar(e.target, 'instagram')} />
-      </div>
-
-      <div className="pv-ks ld-ks" id="ldKs">
-        <Kpi n={k?.abiertos} t="abiertos" filtro="abiertos" />
-        <Kpi n={k?.nuevos} t="nuevos" s="sin trabajar" filtro="nuevo" />
-        <Kpi n={k?.seguimiento} t="por seguir" s="sin respuesta o acción vencida" filtro="seguimiento" />
-        <Kpi n={k?.visitas} t="con visita" s="agendada" filtro="visita" />
-      </div>
-
-      {error && <p className="error">No se pudieron leer los leads: {error}</p>}
+      </>}
+      barra={
+        <div id="ldKs" className="tw:grid tw:w-full tw:grid-cols-2 tw:lg:grid-cols-4 tw:gap-3">
+          <KpiFiltro n={k?.abiertos} t="abiertos" {...kpi('abiertos')} />
+          <KpiFiltro n={k?.nuevos} t="nuevos" s="sin trabajar" {...kpi('nuevo')} />
+          <KpiFiltro n={k?.seguimiento} t="por seguir" s="sin respuesta o acción vencida" {...kpi('seguimiento')} />
+          <KpiFiltro n={k?.visitas} t="con visita" s="agendada" {...kpi('visita')} />
+        </div>
+      }
+    >
+      {error && <p role="alert" className="tw:m-0 tw:text-red-softink">No se pudieron leer los leads: {error}</p>}
 
       <div className="ld-cols">
-        <div className="ld-lista">
-          <div className="ld-fil">
-            <Buscador id="ldQ" clase="ac-q" valor={f.q} alCambiar={(q) => leadSetFiltros({ q })} espera={200} placeholder="Nombre, teléfono, comuna o mensaje" />
-            <div className="ga-chips ld-chips" id="ldChips">
-              {FILTROS.map(([k2, t]) => <button key={k2} data-f={k2} className={f.filtro === k2 ? 'on' : ''} onClick={() => leadSetFiltros({ filtro: k2 as TLeadFiltro })}>{t}</button>)}
+        <div className={cx('ld-lista', columna)}>
+          <div className="tw:flex tw:flex-col tw:gap-2.5 tw:p-3 tw:border-0 tw:border-b tw:border-solid tw:border-edge">
+            <Buscador kit id="ldQ" className="tw:w-full" valor={f.q} alCambiar={(q) => leadSetFiltros({ q })} espera={200} placeholder="Nombre, teléfono, comuna o mensaje" />
+            {/* fichas de una sola opción (Chips del kit es de selección múltiple y Tabs no cabe en esta columna) */}
+            <div id="ldChips" role="group" aria-label="Estado del lead" className="tw:flex tw:flex-wrap tw:gap-1.5">
+              {FILTROS.map(([k2, t]) => {
+                const on = f.filtro === k2;
+                return (
+                  <button key={k2} type="button" data-f={k2} aria-pressed={on} onClick={() => leadSetFiltros({ filtro: k2 as TLeadFiltro })}
+                    className={cx(
+                      'tw:inline-flex tw:items-center tw:h-7 tw:m-0 tw:px-2.5 tw:rounded-full tw:text-[12.5px] tw:font-semibold tw:cursor-pointer',
+                      'tw:border tw:border-solid tw:transition-colors tw:duration-100 tw:focus-visible:outline-2 tw:focus-visible:outline-offset-1 tw:focus-visible:outline-lav-edge',
+                      on ? 'tw:bg-lav-soft tw:text-lav-softink tw:border-lav-edge' : 'tw:bg-card tw:text-muted tw:border-edge tw:hover:text-text tw:hover:bg-hover',
+                    )}>
+                    {t}
+                  </button>
+                );
+              })}
             </div>
-            <div className="ld-sel">
-              <select id="ldOrigen" value={f.origen} onChange={(e) => leadSetFiltros({ origen: e.target.value })}>
-                <option value="">Todos los orígenes</option>
-                {Object.entries(datos?.origenes || {}).map(([k2, t]) => <option key={k2} value={k2}>{t}</option>)}
-              </select>
+            <div className="tw:flex tw:gap-2">
+              <Select id="ldOrigen" aria-label="Origen" clasesCampo="tw:flex-1 tw:min-w-0" className={cajaFiltro}
+                value={f.origen} onChange={(e) => leadSetFiltros({ origen: e.target.value })}
+                vacia="Todos los orígenes" opciones={Object.entries(datos?.origenes || {})} />
               {datos?.corredores.length ? (
-                <select id="ldBroker" value={f.broker} onChange={(e) => leadSetFiltros({ broker: e.target.value })}>
-                  <option value="">Todos los corredores</option>
+                <Select id="ldBroker" aria-label="Corredor" clasesCampo="tw:flex-1 tw:min-w-0" className={cajaFiltro}
+                  value={f.broker} onChange={(e) => leadSetFiltros({ broker: e.target.value })} vacia="Todos los corredores">
                   <option value="_sin">Sin corredor{datos.sinCorredor ? ` (${datos.sinCorredor})` : ''}</option>
                   {datos.corredores.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-                </select>
+                </Select>
               ) : (
-                <select id="ldBroker" value={f.broker} onChange={(e) => leadSetFiltros({ broker: e.target.value })} className={(datos?.brokers.length || 0) < 2 ? 'hidden' : ''}>
-                  <option value="">Todos los brokers</option>
-                  {(datos?.brokers || []).map((b) => <option key={b} value={b}>{b}</option>)}
-                </select>
+                <Select id="ldBroker" aria-label="Broker" className={cajaFiltro}
+                  clasesCampo={cx('tw:flex-1 tw:min-w-0', (datos?.brokers.length || 0) < 2 && 'hidden')}
+                  value={f.broker} onChange={(e) => leadSetFiltros({ broker: e.target.value })}
+                  vacia="Todos los brokers" opciones={(datos?.brokers || []).map((b): [string, string] => [b, b])} />
               )}
             </div>
           </div>
@@ -124,30 +158,33 @@ export default function Leads({ sel: selInicial, filtro: filtroInicial }: ILeads
         {hayLeads ? (
           <>
             {/* los llena src/renderer/leads.js (detalle): React no dibuja dentro */}
-            <div className="ld-chat" id="ldChat" key="chat" />
-            <div className="ld-ficha" id="ldFicha" key="ficha" />
+            <div className={cx('ld-chat', columna)} id="ldChat" key="chat" />
+            <div className={cx('ld-ficha', columna)} id="ldFicha" key="ficha" />
           </>
         ) : cargado && (
           <>
-            <div className="ld-chat" key="vacio">
-              <div className="ld-vacio">
-                <Icono nombre="whatsapp" tam={36} />
-                <h2>Guarda aquí tus conversaciones con clientes</h2>
-                <p className="muted">Exporta un chat de WhatsApp o el historial de Instagram y arrástralo a esta ventana. Asset lo ordena, entiende qué busca el cliente y te dice qué sigue.</p>
-                <div className="ld-pasos">
-                  <div><b>iPhone</b><span>Abre el chat › toca el nombre arriba › <i>Exportar chat</i> › <i>Sin archivos</i> o <i>Incluir archivos</i>.</span></div>
-                  <div><b>Android</b><span>Abre el chat › ⋮ › <i>Más</i> › <i>Exportar chat</i> › <i>Sin archivos</i> o <i>Incluir archivos</i>.</span></div>
+            <div className={cx('ld-chat', columna)} key="vacio">
+              {/* los botones van fuera de .ld-vacio: su regla «.ld-vacio svg» pintaría de verde los íconos del kit */}
+              <div className="tw:flex tw:flex-col tw:items-center tw:m-auto tw:pb-7">
+                <div className="ld-vacio tw:pb-3">
+                  <Icono nombre="whatsapp" tam={36} />
+                  <h2>Guarda aquí tus conversaciones con clientes</h2>
+                  <p className="muted">Exporta un chat de WhatsApp o el historial de Instagram y arrástralo a esta ventana. Asset lo ordena, entiende qué busca el cliente y te dice qué sigue.</p>
+                  <div className="ld-pasos">
+                    <div><b>iPhone</b><span>Abre el chat › toca el nombre arriba › <i>Exportar chat</i> › <i>Sin archivos</i> o <i>Incluir archivos</i>.</span></div>
+                    <div><b>Android</b><span>Abre el chat › ⋮ › <i>Más</i> › <i>Exportar chat</i> › <i>Sin archivos</i> o <i>Incluir archivos</i>.</span></div>
+                  </div>
                 </div>
-                <div className="row tw:justify-center">
-                  <button className="primary" id="ldImp2" onClick={() => archivo.current?.click()}><Icono nombre="upload" tam={15} /> Importar chat</button>
-                  <button className="secondary" id="ldIg2" onClick={leadsComoInstagram}><Icono nombre="instagram" tam={15} /> Historial de Instagram</button>
+                <div className="tw:flex tw:flex-wrap tw:justify-center tw:gap-2">
+                  <Boton id="ldImp2" icono="upload" onClick={() => archivo.current?.click()}>Importar chat</Boton>
+                  <Boton variante="secundario" id="ldIg2" icono="instagram" onClick={leadsComoInstagram}>Historial de Instagram</Boton>
                 </div>
               </div>
             </div>
-            <div className="ld-ficha" key="vacio-ficha" />
+            <div className={cx('ld-ficha', columna)} key="vacio-ficha" />
           </>
         )}
       </div>
-    </div>
+    </Layout>
   );
 }

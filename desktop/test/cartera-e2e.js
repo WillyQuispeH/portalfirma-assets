@@ -31,7 +31,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
 
     await w.click('#nav [data-view="personas"]'); await cartera();
     ok(await tarjetas() === 3, 'muestra las 3 propiedades');
-    ok(/3 propiedades/.test(await txt('#view-cartera .im-head')), 'cuenta las propiedades activas');
+    ok(/3 propiedades/.test(await txt('#view-cartera [data-cabecera]')), 'cuenta las propiedades activas');
     const casa = await txt(`.im-card[data-id="${pV.id}"]`);
     ok(/UF 12\.500/.test(casa) && /Larraín 6000 · La Reina/.test(casa) && /Disponible/.test(casa), 'la tarjeta muestra precio, dirección y estado');
     ok(/\$650\.000\/mes/.test(await txt(`.im-card[data-id="${pA.id}"]`)) && /depto\. 502/.test(await txt(`.im-card[data-id="${pA.id}"]`)), 'arriendo en pesos por mes y la unidad');

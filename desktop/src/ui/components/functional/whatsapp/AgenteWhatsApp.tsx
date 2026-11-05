@@ -1,9 +1,10 @@
 // Agente por WhatsApp: conectar el WhatsApp de la empresa (wechatia), vincular el celular del usuario con un
 // código y decidir si este computador responde. Lo hecho por WhatsApp queda en la conversación «WhatsApp» del Agente.
 // Va en el modal de la app (ancho). Los id (#waAg, #waKey, #waVin, #waAct…) los usan las pruebas; los estilos son
-// las clases wa-* de styles.css.
+// las clases wa-* de styles.css; los botones son Boton del kit.
 import { useEffect, useRef, useState } from 'react';
 import Icono from '../../ui/Icono';
+import Boton from '../../ui/Boton';
 import { useWhatsApp } from '../../../store/hooks/useWhatsApp.hook';
 import { useCuenta } from '../../../store/hooks/useCuenta.hook';
 import { cerrarModal } from '../../../utils/modal';
@@ -57,7 +58,7 @@ export default function AgenteWhatsApp() {
           <div className="wa-f">
             <input id="waKey" ref={clave} type="password" autoComplete="off" spellCheck={false} placeholder="Clave (pit-…)" />
             <input id="waLoc" ref={cuenta} defaultValue={e.locationId || ''} placeholder="Cuenta de wechatia (location)" spellCheck={false} />
-            <button className="primary small" id="waKeyOk" disabled={conectando} onClick={conectar}>Conectar</button>
+            <Boton tamano="sm" id="waKeyOk" cargando={conectando} onClick={conectar}>Conectar</Boton>
           </div>
           <p className="error" id="waKeyErr">{errClave}</p>
         </>}
@@ -66,14 +67,14 @@ export default function AgenteWhatsApp() {
       <div className={`wa-paso ${e.telefono ? 'ok' : ''} ${paso1 ? '' : 'off'}`}><span className="wa-n">{e.telefono ? <Icono nombre="check" tam={14} /> : '2'}</span><div><b>Tu celular</b>
         {e.telefono ? <>
           <small>Vinculado: <b>{fmtTel(e.telefono)}</b>. Solo los mensajes de este celular los atiende tu Asset.</small>
-          <div className="wa-f"><button className="ghost small" id="waDes" onClick={desvincular}>Desvincular</button></div>
+          <div className="wa-f"><Boton variante="fantasma" tamano="sm" id="waDes" onClick={desvincular}>Desvincular</Boton></div>
         </> : e.codigo ? <>
           <small>Desde tu celular, envía este mensaje por WhatsApp al número de la empresa <b>{e.numeroEmpresa}</b>:</small>
-          <div className="wa-cod"><b>{e.codigo}</b><button className="secondary small" id="waCopy" onClick={copiar}>Copiar</button></div>
+          <div className="wa-cod"><b>{e.codigo}</b><Boton variante="secundario" tamano="sm" id="waCopy" onClick={copiar}>Copiar</Boton></div>
           <p className="muted small"><span className="spinner sm" /> Esperando tu mensaje… (se revisa cada pocos segundos)</p>
         </> : <>
           <small>Asset te da un código; lo envías desde tu celular y queda vinculado a tu cuenta.</small>
-          <div className="wa-f"><button className="primary small" id="waVin" disabled={!paso1} onClick={vincular}>Vincular mi celular</button></div>
+          <div className="wa-f"><Boton tamano="sm" id="waVin" disabled={!paso1} onClick={vincular}>Vincular mi celular</Boton></div>
         </>}
       </div></div>
 
@@ -89,7 +90,7 @@ export default function AgenteWhatsApp() {
             onKeyDown={(ev) => { if (ev.key === 'Enter') (ev.target as HTMLInputElement).blur(); }} />
         </label>
       </details>
-      <div className="actions"><button className="secondary" id="mCancel" onClick={cerrarModal}>Cerrar</button></div>
+      <div className="actions"><Boton variante="secundario" id="mCancel" onClick={cerrarModal}>Cerrar</Boton></div>
     </div>
   );
 }

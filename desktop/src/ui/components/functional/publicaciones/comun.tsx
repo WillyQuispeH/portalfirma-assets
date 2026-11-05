@@ -7,6 +7,9 @@ const ST: Record<string, [string, string]> = {
   active: ['Activo', 'ok'], publicada: ['Publicado', 'ok'], en_feed: ['En el feed', 'wait'], pendiente: ['En espera', 'res'],
   paused: ['Pausado', 'res'], under_review: ['En revisión', 'wait'], closed: ['Finalizado', ''], retirada: ['Retirado', ''], vencida: ['Vencido', 'bad'],
 };
+// borde de una Card del kit para las tarjetas que conservan su grilla de styles.css (react-ui.css va después y gana)
+export const BORDE_CARD = 'tw:rounded-2xl tw:border-edge tw:border-b-[3px] tw:border-b-edge-b';
+
 export const VIA = { api: 'API', feed: 'Feed diario', acuerdo: 'Acuerdo comercial' };
 
 export const fmt = (n: number | null | undefined) => (n == null ? '—' : Number(n).toLocaleString('es-CL'));

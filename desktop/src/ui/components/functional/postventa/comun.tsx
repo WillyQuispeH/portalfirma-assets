@@ -2,6 +2,9 @@
 import { abrirUrl } from '../../../utils/app';
 import type { IPvMensaje } from '../../../store/interfaces/postventa.interface';
 
+// borde de una Card del kit para las cajas que conservan su estilo de styles.css (react-ui.css va después y gana)
+export const BORDE_CARD = 'tw:rounded-2xl tw:border-edge tw:border-b-[3px] tw:border-b-edge-b';
+
 // '2026-03-15' -> '15/03/2026'
 export const fmt = (f?: string | null) => (f ? f.split('-').reverse().join('/') : '—');
 

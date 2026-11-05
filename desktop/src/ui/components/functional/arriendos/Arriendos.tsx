@@ -1,25 +1,26 @@
 // Arriendos y cobranza: la etapa 3 de Asset, todavía en construcción. Mientras tanto, lleva a «Plazos y
 // vencimientos» (Gestión documental), donde ya se ordenan los contratos por vencimiento.
+// Hecha con el kit: Layout (cabecera con ilustración), Card e ItemLista.
 // La prueba propiedades-e2e usa «Etapa 3» y [data-act="plazos"].
+import Layout from '../../ui/Layout';
+import Card from '../../ui/Card';
+import ItemLista from '../../ui/ItemLista';
 import Icono from '../../ui/Icono';
 import { abrirPlazos } from '../../../utils/app';
 
 export default function Arriendos() {
   return (
-    <div className="im-wrap">
-      <div className="im-soon">
-        <span className="im-eic"><Icono nombre="key" tam={36} /></span>
-        <small>Etapa 3 · en construcción</small>
-        <h1>Arriendos y cobranza</h1>
-        <p>Cobro mensual con enlace Flow o transferencia, reajuste IPC/UF, morosidad, liquidación al propietario, garantía, renovación y término, con avisos por WhatsApp.</p>
-        <h3>Mientras tanto, desde Gestión documental</h3>
-        <div className="im-soonb">
-          <button className="im-at" data-act="plazos" onClick={abrirPlazos}>
-            <span><b>Plazos y vencimientos</b><small>Tus contratos ordenados por vencimiento</small></span>
-            <Icono nombre="chevR" tam={16} />
-          </button>
-        </div>
-      </div>
-    </div>
+    <Layout
+      titulo="Arriendos y cobranza"
+      sobretitulo="Etapa 3 · en construcción"
+      ilustracion={{ imagen: 'img/formas/cartera.svg', tinte: '#d6336c' }}
+      subtitulo="Cobro mensual con enlace Flow o transferencia, reajuste IPC/UF, morosidad, liquidación al propietario, garantía, renovación y término, con avisos por WhatsApp."
+    >
+      <Card titulo="Mientras tanto, desde Gestión documental">
+        <ItemLista data-act="plazos" alTocar={abrirPlazos} flecha className="tw:-mx-3"
+          media={<span className="tw:grid tw:place-items-center tw:size-10 tw:rounded-xl tw:bg-lav-soft tw:text-lav-softink"><Icono nombre="calendar" tam={18} /></span>}
+          titulo="Plazos y vencimientos" detalle="Tus contratos ordenados por vencimiento" />
+      </Card>
+    </Layout>
   );
 }

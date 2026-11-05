@@ -33,8 +33,8 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
       const e2 = await w.evaluate((p) => window.pf.pvImportar(p), una);
       ok(!e2.ok && /una sola columna/.test(e2.error?.message || e2.error || ''), 'si todo viene en una sola columna, explica el problema y pide la plantilla Excel');
     }
-    await w.evaluate(() => window.Postventa.abrir('unidades')); await w.waitForSelector('.pv-tbl tbody tr');
-    ok(/Ana Rojas Vera/.test(await txt('.pv-tbl')) && /10\/03\/2025/.test(await txt('.pv-tbl')) && /02\/06\/2025/.test(await txt('.pv-tbl')), 'lista unidades con propietario, recepción DOM e inscripción CBR');
+    await w.evaluate(() => window.Postventa.abrir('unidades')); await w.waitForSelector('.pv-unidades tbody tr');
+    ok(/Ana Rojas Vera/.test(await txt('.pv-unidades')) && /10\/03\/2025/.test(await txt('.pv-unidades')) && /02\/06\/2025/.test(await txt('.pv-unidades')), 'lista unidades con propietario, recepción DOM e inscripción CBR');
 
     // 2. WhatsApp: conectar y activar la respuesta automática
     await w.click('#pvTabs [data-t="whatsapp"]'); await w.waitForSelector('#pvKey');

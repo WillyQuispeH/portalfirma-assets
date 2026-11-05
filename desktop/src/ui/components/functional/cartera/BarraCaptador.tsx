@@ -1,6 +1,9 @@
 // Barra del modo «Asignar captador»: cuántas hay elegidas, elegir todas o ninguna, a quién y asignar.
-// Los id imBulk* los usa test/acceso-e2e.js.
+// Hecha con el kit (Boton y Select); la barra fija (.im-bulk) sigue en styles.css.
+// Los id imBulk* y la clase im-bulk los usa test/acceso-e2e.js.
 import { useState } from 'react';
+import Boton from '../../ui/Boton';
+import Select from '../../ui/Select';
 import type { ICorredorResumen } from '../../../store/interfaces/perfil.interface';
 
 interface IBarraCaptadorProps {
@@ -20,17 +23,16 @@ export default function BarraCaptador({ elegidas, enLista, corredores, alElegirT
   return (
     <div className="im-bulk">
       <b id="imBulkN">{elegidas} seleccionada{elegidas === 1 ? '' : 's'}</b>
-      <button className="ghost small" id="imBulkAll" onClick={alElegirTodas}>Seleccionar las {enLista} de la lista</button>
-      <button className="ghost small" id="imBulkNone" onClick={alElegirNinguna}>Ninguna</button>
-      <span className="spacer" />
-      <label>Captada por
-        <select id="imBulkCor" value={corredor} onChange={(e) => setCorredor(e.target.value)}>
-          {corredores.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-          <option value="">— quitar captador —</option>
-        </select>
-      </label>
-      <button className="primary small" id="imBulkOk" disabled={!elegidas} onClick={() => alAsignar(corredor, nombre)}>Asignar</button>
-      <button className="secondary small" id="imBulkX" onClick={alCancelar}>Cancelar</button>
+      <Boton id="imBulkAll" variante="fantasma" tamano="sm" onClick={alElegirTodas}>Seleccionar las {enLista} de la lista</Boton>
+      <Boton id="imBulkNone" variante="fantasma" tamano="sm" onClick={alElegirNinguna}>Ninguna</Boton>
+      <span className="tw:flex-1" />
+      <span className="tw:text-[13px] tw:text-muted">Captada por</span>
+      <Select id="imBulkCor" aria-label="Captada por" value={corredor} onChange={(e) => setCorredor(e.target.value)} className="tw:h-8">
+        {corredores.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+        <option value="">— quitar captador —</option>
+      </Select>
+      <Boton id="imBulkOk" tamano="sm" disabled={!elegidas} onClick={() => alAsignar(corredor, nombre)}>Asignar</Boton>
+      <Boton id="imBulkX" variante="secundario" tamano="sm" onClick={alCancelar}>Cancelar</Boton>
     </div>
   );
 }

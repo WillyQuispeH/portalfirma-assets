@@ -16,7 +16,7 @@ export default function Textarea({ etiqueta, ayuda, error, clasesCampo, classNam
   return (
     <Campo id={idCampo} etiqueta={etiqueta} ayuda={ayuda} error={error} className={clasesCampo}>
       <textarea id={idCampo} rows={rows} aria-invalid={!!error || undefined} aria-describedby={error || ayuda ? `${idCampo}-msj` : undefined}
-        className={cx(CAJA, 'tw:h-auto tw:py-2.5 tw:leading-relaxed tw:resize-y', error && CAJA_ERROR, className)} {...resto} />
+        className={cx(CAJA, 'tw:h-auto tw:py-2.5 tw:font-[inherit] tw:leading-relaxed tw:resize-y', error && CAJA_ERROR, className)} {...resto} />
     </Campo>
   );
 }

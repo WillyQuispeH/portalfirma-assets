@@ -12,7 +12,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÃ“: ' + m); console.log('  â
     const r = await window.pf.assetEjecutar('asset_orden_visita', { propiedad: p.id, visitante: juan.id, fecha: f, hora: '10:00' }); return { pre: pre.data, r: r.ok ? r.data : null, error: r.error }; }, [cod, man]);
   const ultima = () => app.evaluate(() => { const l = global.__pfMock._ordenes || []; return JSON.parse(JSON.stringify(l[l.length - 1] || null)); });
   try {
-    await w.waitForSelector('#view-inicio .im-hero'); await w.click('#view-inicio [data-do="importar"]'); await w.waitForSelector('text=Cartera actualizada', { timeout: 15000 }); await w.click('#mOk');
+    await w.waitForSelector('#view-inicio [data-cabecera]'); await w.click('#view-inicio [data-do="importar"]'); await w.waitForSelector('text=Cartera actualizada', { timeout: 15000 }); await w.click('#mOk');
     let x = await orden('CV-9002');
     ok(x.r?.operacion && (await ultima()).property_id === '00000000-0000-4000-8000-000000000002' && !(await ultima()).values.codigo_propiedad_nosigner, 'propiedad asignada en Portalfirma: va con property_id y Portalfirma llena los datos de la propiedad');
     x = await orden('CV-9001'); const o = await ultima();

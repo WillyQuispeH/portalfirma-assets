@@ -1,17 +1,22 @@
 // Pestaña «Avisos»: totales, cada aviso con su rendimiento y recomendaciones, y las disponibles sin publicar.
-// Clases pb-av, pb-met, pb-pts y data-mas los usa test/publicaciones-e2e.js.
+// Clases pb-av, pb-met, pb-pts, pb-empty y data-mas los usa test/publicaciones-e2e.js.
+// Con el kit: Kpi, Card, Boton y EstadoVacio; el aviso conserva su grilla (.pb-av de styles.css) con el borde de una Card.
 import { useState } from 'react';
 import Icono from '../../ui/Icono';
+import Boton from '../../ui/Boton';
+import Card from '../../ui/Card';
+import Kpi from '../../ui/Kpi';
+import EstadoVacio from '../../ui/EstadoVacio';
 import { abrirFicha, abrirUrl, ajustarPrecioAviso, elegirParaPublicar, publicarPropiedad } from '../../../utils/app';
 import { monto } from '../../../utils/formato';
-import { Anillo, Estado, Foto, fmt, hace } from './comun';
+import { Anillo, BORDE_CARD, Estado, Foto, fmt, hace } from './comun';
 import type { IAviso, IPanelPublicaciones } from '../../../store/interfaces/publicacion.interface';
 
 function Aviso({ f }: { f: IAviso }) {
   const [sinFoto, setSinFoto] = useState(false);
   const dif = f.comparables?.dif;
   return (
-    <article className="pb-av" data-prop={f.propId} data-op={f.op}>
+    <article className={`pb-av ${BORDE_CARD}`} data-prop={f.propId} data-op={f.op}>
       <span className="ga-ph"><Foto url={f.foto} fallo={sinFoto} alFallar={() => setSinFoto(true)} /></span>
       <div className="pb-avt">
         <small>{f.codigo} · {f.op === 'venta' ? 'Venta' : 'Arriendo'} · {f.comuna || ''}</small>
@@ -38,8 +43,8 @@ function Aviso({ f }: { f: IAviso }) {
             <Icono nombre={r.tipo === 'precio' ? 'coins' : r.tipo === 'calidad' ? 'sparkle' : 'chart'} tam={14} />
             <span><b>{r.t}</b> {r.accion}</span>
             {r.tipo === 'precio'
-              ? <button className="secondary small" data-precio onClick={() => ajustarPrecioAviso(f.propId, f.op)}>Ajustar precio</button>
-              : <button className="secondary small" data-mejorar onClick={() => publicarPropiedad(f.propId, f.op, 1)}>Mejorar aviso</button>}
+              ? <Boton variante="secundario" tamano="sm" data-precio onClick={() => ajustarPrecioAviso(f.propId, f.op)}>Ajustar precio</Boton>
+              : <Boton variante="secundario" tamano="sm" data-mejorar onClick={() => publicarPropiedad(f.propId, f.op, 1)}>Mejorar aviso</Boton>}
           </p>
         )) : (
           <p className="pb-rec ok">
@@ -49,8 +54,8 @@ function Aviso({ f }: { f: IAviso }) {
         )}
       </div>
       <div className="pb-acts">
-        <button className="ghost small" data-mas onClick={() => publicarPropiedad(f.propId, f.op, 2)}><Icono nombre="export" tam={14} /> Más portales</button>
-        <button className="ghost small" data-ficha onClick={() => abrirFicha(f.propId)}><Icono nombre="file" tam={14} /> Ficha</button>
+        <Boton variante="fantasma" tamano="sm" icono="export" data-mas onClick={() => publicarPropiedad(f.propId, f.op, 2)}>Más portales</Boton>
+        <Boton variante="fantasma" tamano="sm" icono="file" data-ficha onClick={() => abrirFicha(f.propId)}>Ficha</Boton>
       </div>
     </article>
   );
@@ -61,10 +66,10 @@ export default function Avisos({ d }: { d: IPanelPublicaciones }) {
   const kpis: [string, string | number, string][] = [['Avisos', t.avisos, 'export'], ['Visitas', fmt(t.visitas), 'search'], ['Contactos', fmt(t.contactos), 'phone'], ['Interesados nuevos', t.nuevos, 'users'], ['Alertas', t.alertas, 'alert']];
   return (
     <>
-      <div className="pb-kpis">
-        {kpis.map(([k, v, ic]) => <div key={k} className={`pb-kpi ${k === 'Alertas' && v ? 'bad' : ''}`}><Icono nombre={ic} tam={16} /><b>{v}</b><small>{k}</small></div>)}
+      <div className="ng-kpis pb-kpis">
+        {kpis.map(([k, v, ic]) => <Kpi key={k} icono={ic} valor={v} texto={k} alerta={k === 'Alertas' && !!v} />)}
       </div>
-      <p className="muted small pb-sync">
+      <p className="pb-sync tw:-mt-2 tw:mb-0 tw:mx-0.5 tw:text-xs tw:text-muted">
         {d.sync
           ? `Datos de los portales ${hace(d.sync)}. Portal Inmobiliario: últimos 30 días. Chilepropiedades: acumulado.`
           : 'Pulsa «Actualizar» para traer visitas, contactos e interesados desde los portales.'}
@@ -72,16 +77,15 @@ export default function Avisos({ d }: { d: IPanelPublicaciones }) {
       {d.avisos.length ? (
         <div className="pb-list">{d.avisos.map((f) => <Aviso key={`${f.propId}-${f.op}`} f={f} />)}</div>
       ) : (
-        <div className="pb-empty">
-          <Icono nombre="export" tam={30} />
-          <b>Todavía no hay avisos publicados</b>
-          <p>Elige una propiedad y pulsa «Publicar»: Asset revisa el aviso, te ayuda a mejorarlo y lo lleva a los portales.</p>
-          <button className="primary" id="pbNew2" onClick={elegirParaPublicar}>Publicar una propiedad</button>
-        </div>
+        <Card relleno={false}>
+          {/* .pb-empty (la busca la prueba) sin el marco punteado de styles.css: el marco lo pone la Card */}
+          <EstadoVacio className="pb-empty tw:bg-transparent tw:border-0 tw:rounded-none" icono="export" titulo="Todavía no hay avisos publicados"
+            texto="Elige una propiedad y pulsa «Publicar»: Asset revisa el aviso, te ayuda a mejorarlo y lo lleva a los portales."
+            accion={<Boton id="pbNew2" icono="export" onClick={elegirParaPublicar}>Publicar una propiedad</Boton>} />
+        </Card>
       )}
       {d.sinPublicar.length > 0 && (
-        <section className="pb-sec">
-          <h3>Disponibles sin publicar <i>{d.sinPublicar.length}</i></h3>
+        <Card titulo="Disponibles sin publicar" subtitulo={`${d.sinPublicar.length} ${d.sinPublicar.length === 1 ? 'propiedad' : 'propiedades'}: elige una para publicarla`}>
           <div className="pb-sp">
             {d.sinPublicar.slice(0, 12).map((x) => (
               <button key={x.propId} data-pub={x.propId} onClick={() => publicarPropiedad(x.propId)}>
@@ -89,7 +93,7 @@ export default function Avisos({ d }: { d: IPanelPublicaciones }) {
               </button>
             ))}
           </div>
-        </section>
+        </Card>
       )}
     </>
   );

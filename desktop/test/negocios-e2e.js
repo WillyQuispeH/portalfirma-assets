@@ -10,7 +10,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÃ“: ' + m); console.log('  â
   const shot = (n) => w.screenshot({ path: path.resolve(__dirname, n) });
   const estado = (cod, campo) => w.evaluate(([c, k]) => window.pf.inmoListar().then((r) => r.data.propiedades.find((p) => p.codigo === c)[k]), [cod, campo]);
   try {
-    await w.setViewportSize({ width: 1500, height: 920 }); await w.waitForSelector('#view-inicio .im-hero');
+    await w.setViewportSize({ width: 1500, height: 920 }); await w.waitForSelector('#view-inicio [data-cabecera]');
     await w.click('#view-inicio [data-do="importar"]'); await w.waitForSelector('text=Cartera actualizada', { timeout: 15000 }); await w.click('#mOk'); await w.waitForSelector('.im-card');
 
     await w.click('#nav [data-view="negocios"]'); await w.waitForSelector('.ng-board');

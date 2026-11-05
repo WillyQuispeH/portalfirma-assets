@@ -1,12 +1,12 @@
 // Personas: el CRM, un registro por RUT, con búsqueda por nombre, RUT o correo y filtro por rol (con cuántas hay
-// de cada uno). Hecha con el kit: CabeceraPagina, Boton, Buscador, Tabs, Card, Tabla, Avatar, Badge y EstadoVacio.
+// de cada uno). Hecha con el kit: Layout (cabecera y barra), Boton, Buscador, Tabs, Card, Tabla, Avatar, Badge y EstadoVacio.
 // «Nueva persona» abre FormPersona (controlador.tsx); el detalle, FichaPersona (Inmo.abrirPersona en inmo.js).
 // Los id cQ, cRol (con data-r en cada rol), cNew, cTabla y data-c en cada fila los usan las pruebas e2e y Aprende.
 import { useEffect, useMemo } from 'react';
 import { usePersonas } from '../../../store/hooks/usePersonas.hook';
 import { abrirPersona } from '../../../utils/app';
 import Buscador from '../../ui/Buscador';
-import CabeceraPagina from '../../ui/CabeceraPagina';
+import Layout from '../../ui/Layout';
 import Boton from '../../ui/Boton';
 import Tabs, { type TTabOpcion } from '../../ui/Tabs';
 import Card from '../../ui/Card';
@@ -83,19 +83,16 @@ export default function Personas() {
   ];
 
   return (
-    <div className="im-wrap">
-      <CabeceraPagina
-        titulo="Personas"
-        ilustracion={{ imagen: 'img/formas/personas.svg', tinte: '#6a2fe0' }}
-        subtitulo={`${personas.length} en tu CRM · un registro por RUT, se reutiliza en cada contrato`}
-        acciones={<Boton id="cNew" icono="plus" onClick={() => abrirFormPersona()}>Nueva persona</Boton>}
-      />
-
-      <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-3 tw:mb-4">
+    <Layout
+      titulo="Personas"
+      ilustracion={{ imagen: 'img/formas/personas.svg', tinte: '#6a2fe0' }}
+      subtitulo={`${personas.length} en tu CRM · un registro por RUT, se reutiliza en cada contrato`}
+      acciones={<Boton id="cNew" icono="plus" onClick={() => abrirFormPersona()}>Nueva persona</Boton>}
+      barra={<>
         <Buscador kit id="cQ" valor={f.q} alCambiar={(q) => personasSetFiltros({ q })} espera={180} placeholder="Buscar por nombre, RUT o correo" />
         <Tabs id="cRol" dato="r" etiqueta="Rol" opciones={roles} valor={f.rol} alCambiar={(rol) => personasSetFiltros({ rol })} className="tw:max-w-full tw:overflow-x-auto" />
-      </div>
-
+      </>}
+    >
       {error && <p role="alert" className="tw:text-red-softink">No se pudieron leer las personas: {error}</p>}
 
       {cargado && (personas.length ? (
@@ -111,6 +108,6 @@ export default function Personas() {
             accion={<Boton icono="plus" onClick={() => abrirFormPersona()}>Nueva persona</Boton>} />
         </Card>
       ))}
-    </div>
+    </Layout>
   );
 }

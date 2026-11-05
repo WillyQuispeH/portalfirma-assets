@@ -9,7 +9,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÃ“: ' + m); console.log('  â
   const txt = (s) => w.textContent(s).then((t) => (t || '').replace(/\s+/g, ' '));
   const shot = (n) => w.screenshot({ path: path.resolve(__dirname, n) });
   try {
-    await w.setViewportSize({ width: 1500, height: 940 }); await w.waitForSelector('#view-inicio .im-hero');
+    await w.setViewportSize({ width: 1500, height: 940 }); await w.waitForSelector('#view-inicio [data-cabecera]');
     await w.click('#view-inicio [data-do="importar"]'); await w.waitForSelector('text=Cartera actualizada', { timeout: 15000 }); await w.click('#mOk');
     const ids = await w.evaluate(async () => { const d = (await window.pf.inmoListar()).data; const p = d.propiedades.find((x) => x.codigo === 'CV-9002').id; const ana = (await window.pf.inmoPerGuardar({ nombre: 'ANA ROJAS VERA', rut: '12.345.678-5', telefono: '+56 9 5555 1111' })).data; const ps = [d.personas.find((x) => /JUAN PEREZ/.test(x.nombre)), ana];
       const n1 = (await window.pf.negGuardar({ tipo: 'arriendo', propId: p, clienteId: ps[0].id })).data; const n2 = (await window.pf.negGuardar({ tipo: 'arriendo', propId: p, clienteId: ps[1].id })).data;

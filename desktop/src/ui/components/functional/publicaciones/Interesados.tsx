@@ -1,11 +1,17 @@
 // Pestaña «Interesados»: la bandeja única de consultas de los portales, con filtro, búsqueda,
 // responder (WhatsApp o correo), cambiar estado y agendar visita.
-// Los id pbFl, pbQ, pbAdd y la clase pb-ld los usa test/publicaciones-e2e.js.
+// Los id pbFl (con data-f en cada estado), pbQ, pbAdd y la clase pb-ld los usa test/publicaciones-e2e.js.
+// Con el kit: Tabs, Buscador, Boton, Select, Card y EstadoVacio; la fila conserva .pb-ld de styles.css con el borde de una Card.
 import Buscador from '../../ui/Buscador';
 import Icono from '../../ui/Icono';
+import Boton from '../../ui/Boton';
+import Select from '../../ui/Select';
+import Card from '../../ui/Card';
+import Tabs, { type TTabOpcion } from '../../ui/Tabs';
+import EstadoVacio from '../../ui/EstadoVacio';
 import { agendarVisitaInteresado, agregarInteresado, toast } from '../../../utils/app';
 import { usePublicacion } from '../../../store/hooks/usePublicacion.hook';
-import { hace } from './comun';
+import { BORDE_CARD, hace } from './comun';
 import type { IInteresado, TInteresadoEstado } from '../../../store/interfaces/publicacion.interface';
 
 const LST: Record<TInteresadoEstado, string> = { nuevo: 'Nuevos', contactado: 'Contactados', visita: 'Con visita', descartado: 'Descartados' };
@@ -16,7 +22,7 @@ const aviso = (r: { mensaje?: string; error?: string }) => { if (r.error) toast(
 function Fila({ l }: { l: IInteresado }) {
   const { interesadoSetEstado, interesadoResponder } = usePublicacion();
   return (
-    <article className={`pb-ld ${l.estado}`} data-prop={l.propId} data-lead={l.id}>
+    <article className={`pb-ld ${l.estado} ${BORDE_CARD}`} data-prop={l.propId} data-lead={l.id}>
       <span className="ga-av">{(l.nombre || '?').trim()[0] || '?'}</span>
       <div className="pb-ldt">
         <b>{l.nombre || 'Sin nombre'}</b>
@@ -26,16 +32,16 @@ function Fila({ l }: { l: IInteresado }) {
         <small>{[l.telefono, l.email].filter(Boolean).join(' · ')}</small>
       </div>
       <div className="pb-lda">
-        <select data-est value={l.estado} onChange={async (e) => aviso(await interesadoSetEstado(l.propId, l.id, e.target.value as TInteresadoEstado))}>
-          {(Object.keys(LST) as TInteresadoEstado[]).map((k) => <option key={k} value={k}>{UNO[k]}</option>)}
-        </select>
+        <Select data-est aria-label="Estado" className="tw:h-8 tw:text-[12.5px]" value={l.estado}
+          onChange={async (e) => aviso(await interesadoSetEstado(l.propId, l.id, e.target.value as TInteresadoEstado))}
+          opciones={(Object.keys(LST) as TInteresadoEstado[]).map((k): [string, string] => [k, UNO[k]])} />
         {l.telefono
-          ? <button className="primary small" data-wa onClick={async () => aviso(await interesadoResponder(l.propId, l.id, 'wa', l.codigo))}><Icono nombre="whatsapp" tam={14} /> Responder</button>
-          : l.email && <button className="primary small" data-mail onClick={async () => aviso(await interesadoResponder(l.propId, l.id, 'mail', l.codigo))}><Icono nombre="mail" tam={14} /> Responder</button>}
-        <button className="secondary small" data-visita
+          ? <Boton tamano="sm" icono="whatsapp" data-wa onClick={async () => aviso(await interesadoResponder(l.propId, l.id, 'wa', l.codigo))}>Responder</Boton>
+          : l.email && <Boton tamano="sm" icono="mail" data-mail onClick={async () => aviso(await interesadoResponder(l.propId, l.id, 'mail', l.codigo))}>Responder</Boton>}
+        <Boton variante="secundario" tamano="sm" icono="calendar" data-visita
           onClick={() => agendarVisitaInteresado(l, async () => { await interesadoSetEstado(l.propId, l.id, 'visita'); })}>
-          <Icono nombre="calendar" tam={14} /> Agendar visita
-        </button>
+          Agendar visita
+        </Boton>
       </div>
     </article>
   );
@@ -43,26 +49,26 @@ function Fila({ l }: { l: IInteresado }) {
 
 export default function Interesados() {
   const { interesados: r, filtro, q, interesadosSetFiltro } = usePublicacion();
+  const estados: TTabOpcion<TInteresadoEstado | ''>[] = [
+    ...(Object.keys(LST) as TInteresadoEstado[]).map((k): TTabOpcion<TInteresadoEstado> => [k, LST[k], r?.cuenta[k] || 0]),
+    ['', 'Todos'],
+  ];
   return (
     <>
-      <div className="pb-lbar">
-        <div className="im-seg" id="pbFl" role="group" aria-label="Estado">
-          {(Object.keys(LST) as TInteresadoEstado[]).map((k) => (
-            <button key={k} data-f={k} className={filtro === k ? 'on' : ''} onClick={() => interesadosSetFiltro({ filtro: k })}>{LST[k]} <i>{r?.cuenta[k] || 0}</i></button>
-          ))}
-          <button data-f="" className={!filtro ? 'on' : ''} onClick={() => interesadosSetFiltro({ filtro: '' })}>Todos</button>
-        </div>
-        <Buscador id="pbQ" valor={q} alCambiar={(v) => interesadosSetFiltro({ q: v.trim() })} espera={300} placeholder="Buscar por nombre, teléfono o propiedad" />
-        <button className="secondary" id="pbAdd" onClick={agregarInteresado}><Icono nombre="plus" tam={14} /> Agregar interesado</button>
+      <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-3">
+        <Tabs id="pbFl" dato="f" etiqueta="Estado" opciones={estados} valor={filtro} alCambiar={(f) => interesadosSetFiltro({ filtro: f })}
+          className="tw:max-w-full tw:overflow-x-auto" />
+        <Buscador kit id="pbQ" className="tw:flex-1 tw:min-w-[220px]" valor={q} alCambiar={(v) => interesadosSetFiltro({ q: v.trim() })} espera={300} placeholder="Buscar por nombre, teléfono o propiedad" />
+        <Boton variante="secundario" id="pbAdd" icono="plus" onClick={agregarInteresado}>Agregar interesado</Boton>
       </div>
       {r && (r.interesados.length ? (
         <div className="pb-leads">{r.interesados.map((l) => <Fila key={l.id} l={l} />)}</div>
       ) : (
-        <div className="pb-empty">
-          <Icono nombre="users" tam={30} />
-          <b>{filtro === 'nuevo' ? 'No hay interesados nuevos' : 'Sin interesados en esta vista'}</b>
-          <p>Los interesados de Portal Inmobiliario y Chilepropiedades llegan solos al pulsar «Actualizar». Los de TOCTOC o Yapo puedes agregarlos con «Agregar interesado».</p>
-        </div>
+        <Card relleno={false}>
+          <EstadoVacio className="pb-empty tw:bg-transparent tw:border-0 tw:rounded-none" icono="users"
+            titulo={filtro === 'nuevo' ? 'No hay interesados nuevos' : 'Sin interesados en esta vista'}
+            texto="Los interesados de Portal Inmobiliario y Chilepropiedades llegan solos al pulsar «Actualizar». Los de TOCTOC o Yapo puedes agregarlos con «Agregar interesado»." />
+        </Card>
       ))}
     </>
   );

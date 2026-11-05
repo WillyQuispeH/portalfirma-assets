@@ -3,8 +3,16 @@
 //
 // La acción de cada paso, «Empezar algo nuevo» y la «luz guía» de los botones siguen en
 // src/renderer/etapas.js; se llaman por utils/app.ts. Los id hoy* los usan las pruebas (oficina, etapas).
+// Armada con Layout (cabecera, orden y espaciado) y el kit (Badge, Boton, EstadoVacio). El fondo sigue siendo la foto
+// desenfocada (.hoy-bg) y los botones .gl dentro de <span class="luz"> (con data-def el recomendado) se mantienen:
+// Etapas.luz() los busca bajo la raíz. Las tarjetas de vidrio (.gl-card, .hoy-*) son el diseño propio de esta pantalla.
 import { useEffect, useRef } from 'react';
 import Icono from '../../ui/Icono';
+import Layout from '../../ui/Layout';
+import Badge from '../../ui/Badge';
+import Boton from '../../ui/Boton';
+import EstadoVacio from '../../ui/EstadoVacio';
+import type { TTono } from '../../ui/tonos';
 import { useHoy } from '../../../store/hooks/useHoy.hook';
 import {
   abrirActividad, abrirAgenda, abrirFicha, abrirNegocio, abrirOficina, accionPaso, avisarAyuda, empezarAlgoNuevo,
@@ -21,6 +29,7 @@ function venceTxt(v: string | null | undefined, hoy: string) {
   return v === hoy ? 'Vence hoy' : v < hoy ? `Venció el ${fdm(v)}` : `Plazo: ${fdm(v)}`;
 }
 const ESTADO_NEG: Record<IHoyNegocio['estado'], string> = { atencion: 'Atención', tetoca: 'Te toca', esperando: 'Esperando', cerrado: 'Cerrado' };
+const TONO_NEG: Record<IHoyNegocio['estado'], TTono> = { atencion: 'rojo', tetoca: 'amarillo', esperando: 'gris', cerrado: 'verde' };
 
 function Segmentos({ ss }: { ss: IHoySegmento[] }) {
   return <span className="et-segs">{ss.map((s, i) => <span key={i}><i className={s.completa ? 'ok' : s.fail ? 'fail' : ''} style={{ width: `${s.pct}%` }} /></span>)}</span>;
@@ -69,29 +78,35 @@ export default function Hoy() {
 
   return (
     <>
+      {/* el fondo es la foto desenfocada (.hoy-bg), en vez del tinte del Layout */}
       <div className="hoy-bg" aria-hidden="true" />
-      <div className="im-wrap hoy" ref={raiz}>
-        <div className="hoy-h im-hero">
-          <div><h1>{nombre ? `Hola, ${nombre}` : 'Hoy'}</h1><p>{fecha[0].toUpperCase() + fecha.slice(1)}</p></div>
-          <span className="spacer" />
+      {/* raiz: la «luz guía» (Etapas.luz) busca aquí los .luz y su .luz[data-def] */}
+      <Layout
+        ref={raiz}
+        fondo={false}
+        className="hoy"
+        titulo={nombre ? `Hola, ${nombre}` : 'Hoy'}
+        subtitulo={fecha[0].toUpperCase() + fecha.slice(1)}
+        acciones={<>
           {hayOficina() && <span className="luz"><button className="gl" id="hoyOficina" onClick={abrirOficina}>Ver la oficina</button></span>}
           <span className="luz"><button className="gl" id="hoyActividad" title="Todo lo que pasó en la cartera" onClick={abrirActividad}><Icono nombre="clock" tam={14} /> Actividad</button></span>
           <span className="luz"><button className="gl" id="hoyNuevo" onClick={empezarAlgoNuevo}><Icono nombre="plus" tam={14} /> Empezar algo nuevo</button></span>
-          <span className={`hoy-est ${tranquilo ? 'ok' : 'fail'}`}>
+          <Badge tono={tranquilo ? 'verde' : 'rojo'} punto className="tw:h-8 tw:px-3.5 tw:text-[13px]">
             {tranquilo
               ? `Todo en orden · ${r.tetoca.length} ${r.tetoca.length === 1 ? 'pendiente' : 'pendientes'} en plazo`
               : `${r.atencion.length} ${r.atencion.length === 1 ? 'cosa necesita' : 'cosas necesitan'} tu atención`}
-          </span>
-        </div>
-
+          </Badge>
+        </>}
+      >
         {!hayCartera && (
-          <div className="gl-card hoy-vacio">
-            <h2>Trae tu cartera</h2>
-            <p className="muted">Importa las propiedades que ya tienes en Portalfirma o crea la primera.</p>
-            <div className="hoy-bt">
-              <span className="luz" data-def=""><button className="gl azul" data-do="importar" onClick={importarCartera}><Icono nombre="download" tam={15} /> Importar desde Portalfirma</button></span>
-              <span className="luz"><button className="gl" data-do="nuevaProp" onClick={nuevaPropiedad}><Icono nombre="plus" tam={15} /> Nueva propiedad</button></span>
-            </div>
+          <div className="gl-card">
+            <EstadoVacio icono="house" titulo="Trae tu cartera" texto="Importa las propiedades que ya tienes en Portalfirma o crea la primera."
+              accion={(
+                <div className="hoy-bt">
+                  <span className="luz" data-def=""><button className="gl azul" data-do="importar" onClick={importarCartera}><Icono nombre="download" tam={15} /> Importar desde Portalfirma</button></span>
+                  <span className="luz"><button className="gl" data-do="nuevaProp" onClick={nuevaPropiedad}><Icono nombre="plus" tam={15} /> Nueva propiedad</button></span>
+                </div>
+              )} />
           </div>
         )}
 
@@ -111,13 +126,13 @@ export default function Hoy() {
             )}
 
             <section>
-              <h2 className="hoy-sec">Te toca a ti{r.tetoca.length > 0 && <> <span className="hoy-cnt">{r.tetoca.length}</span></>}</h2>
+              <h2 className="hoy-sec">Te toca a ti{r.tetoca.length > 0 && <> <Badge className="tw:ml-1 tw:h-5 tw:px-2">{r.tetoca.length}</Badge></>}</h2>
               {r.tetoca.length ? (
                 <>
                   <div className="gl-card hoy-list">
                     {r.tetoca.slice(0, verTodos ? 99 : MAX).map((x, i) => <Item key={`t${i}`} x={x} i={i} tipo="tetoca" destacado={i === 0 && tranquilo} hoy={r.hoy} alTerminar={recargar} />)}
                   </div>
-                  {masToca > 0 && <button className="hoy-mas" id="hoyMas" onClick={hoyAlternarTodos}>{verTodos ? 'Ver menos' : `Ver ${masToca} más`}</button>}
+                  {masToca > 0 && <Boton variante="fantasma" tamano="sm" id="hoyMas" className="tw:self-start tw:mt-1" onClick={hoyAlternarTodos}>{verTodos ? 'Ver menos' : `Ver ${masToca} más`}</Boton>}
                 </>
               ) : <div className="gl-card hoy-nada">Nada pendiente de tu parte. Lo demás está en manos de otros o ya está logrado.</div>}
             </section>
@@ -138,7 +153,7 @@ export default function Hoy() {
               {eventos.length ? eventos.map((e) => (
                 <button key={e.id} className="hoy-ev" data-ev="1" onClick={abrirAgenda}>
                   <b>{e.hora || '—'}</b><span>{e.titulo}<small>{e.lugar || ''}</small></span>
-                  {e.tipo === 'visita' && (e.orden?.operacion ? <i className="hoy-b cerrado">Con orden</i> : <i className="hoy-b tetoca">Sin orden</i>)}
+                  {e.tipo === 'visita' && (e.orden?.operacion ? <Badge tono="verde">Con orden</Badge> : <Badge tono="amarillo">Sin orden</Badge>)}
                 </button>
               )) : <p className="hoy-nada">Nada agendado para hoy.</p>}
             </div>
@@ -146,7 +161,7 @@ export default function Hoy() {
             {r.negocios.length ? r.negocios.map((n, i) => (
               <span key={i} className="luz blk">
                 <button className="gl-card hoy-neg" data-hneg={i} onClick={() => abrirItem(n)}>
-                  <span className="hoy-nr"><small>{n.codigo} · {n.op}</small><span className="spacer" /><i className={`hoy-b ${n.estado}`}>{ESTADO_NEG[n.estado]}</i></span>
+                  <span className="hoy-nr"><small>{n.codigo} · {n.op}</small><span className="spacer" /><Badge tono={TONO_NEG[n.estado]}>{ESTADO_NEG[n.estado]}</Badge></span>
                   <b>{n.titulo}</b>
                   <small>{[n.cliente, n.etapa].filter(Boolean).join(' · ')}</small>
                   <Segmentos ss={n.segs} />
@@ -155,7 +170,7 @@ export default function Hoy() {
             )) : <div className="gl-card hoy-nada">Cuando tengas propiedades en captación o negocios abiertos, aparecen aquí con su avance.</div>}
           </aside>
         </div>
-      </div>
+      </Layout>
     </>
   );
 }

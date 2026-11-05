@@ -1,9 +1,18 @@
 // Pestaña «Resumen» de la ficha: la captación, la galería, las características, la comercialización,
-// las personas vinculadas y lo último del historial.
+// las personas vinculadas y lo último del historial. Con el kit: Card, Boton, Select, ListaDatos, ItemLista y Avatar.
+// Las pruebas usan #fCapt, .im-gmain, #fDrive, [data-caracteristicas], .im-desc, .im-com con [data-est],
+// #fVinc, [data-pv] (data-per, data-wa, data-mail, data-unl) y [data-go="historial"].
 import { useEffect, useRef, useState } from 'react';
 import Icono from '../../ui/Icono';
+import Boton from '../../ui/Boton';
+import Card from '../../ui/Card';
+import Select from '../../ui/Select';
+import ListaDatos from '../../ui/ListaDatos';
+import ItemLista from '../../ui/ItemLista';
+import Avatar from '../../ui/Avatar';
+import EstadoVacio from '../../ui/EstadoVacio';
 import { ESTADO, ROL } from '../cartera/catalogos';
-import { Fila, ListaActividad, copiarCorreo, num, precio, whatsapp } from './comun';
+import { ListaActividad, copiarCorreo, num, precio, whatsapp } from './comun';
 import { VincularPersona } from './Modales';
 import { useFicha, type TFichaTab } from '../../../store/hooks/useFicha.hook';
 import { abrirPersona, avisar, bloqueCaptacion, fichaCompleta, fotosDesdeDrive, toast } from '../../../utils/app';
@@ -44,7 +53,9 @@ function Galeria({ p }: { p: IPropiedad }) {
           </div>
         )}
       </> : <div className="im-gmain vacia">{sinFoto}<span className="im-gnote">Sin fotos todavía</span></div>}
-      <button className="secondary small im-gdrive" id="fDrive" onClick={() => fotosDesdeDrive(p.id)}><Icono nombre="drive" tam={14} /> Fotos desde Drive</button>
+      <span className="tw:absolute tw:right-2.5 tw:top-2.5">
+        <Boton id="fDrive" variante="secundario" tamano="sm" icono="drive" onClick={() => fotosDesdeDrive(p.id)}>Fotos desde Drive</Boton>
+      </span>
     </div>
   );
 }
@@ -53,22 +64,26 @@ function Caracteristicas({ p }: { p: IPropiedad }) {
   const vacia = [p.supTotal, p.supUtil, p.dormitorios, p.banos, p.estacionamientos, p.bodegas, p.gastosComunes].every((x) => x == null || (x as unknown) === '') && !p.amoblado && !p.corredor;
   const { fichaRecargar } = useFicha();
   return (
-    <div className="im-box"><h3>Características</h3>
-      {vacia && <p className="muted small im-vacio">Sin características todavía · <a href="#" id="fCarVacio" onClick={(e) => { e.preventDefault(); fichaCompleta(p.id, () => { fichaRecargar(); }); }}>Completar ficha</a></p>}
-      <dl className="im-dl">
-        <Fila k="Superficie total" v={p.supTotal != null ? num(p.supTotal) + ' m²' : ''} />
-        <Fila k="Superficie útil" v={p.supUtil != null ? num(p.supUtil) + ' m²' : ''} />
-        <Fila k="Dormitorios" v={p.dormitorios} />
-        <Fila k="Baños" v={p.banos} />
-        <Fila k="Estacionamientos" v={p.estacionamientos} />
-        <Fila k="Bodegas" v={p.bodegas} />
-        <Fila k="Gastos comunes" v={p.gastosComunes != null ? '$' + num(p.gastosComunes) : ''} />
-        <Fila k="Amoblado" v={p.amoblado ? 'Sí' : ''} />
-        <Fila k="Corredor" v={p.corredor ? <>{p.corredor.nombre}{p.corredor.email && <><br /><span className="muted small">{p.corredor.email}</span></>}</> : ''} />
-      </dl>
-      {p.descripcion && <><h3 style={{ marginTop: 14 }}>Descripción</h3><p className="im-desc">{p.descripcion}</p></>}
-      {p.notasInternas && <><h3 style={{ marginTop: 14 }}>Notas internas</h3><p className="im-desc">{p.notasInternas}</p></>}
-    </div>
+    <Card titulo="Características">
+      {vacia && (
+        <p className="tw:m-0 tw:text-[13px] tw:text-muted">Sin características todavía · <a href="#" id="fCarVacio" onClick={(e) => { e.preventDefault(); fichaCompleta(p.id, () => { fichaRecargar(); }); }}>Completar ficha</a></p>
+      )}
+      <div data-caracteristicas>
+        <ListaDatos datos={[
+          ['Superficie total', p.supTotal != null ? num(p.supTotal) + ' m²' : ''],
+          ['Superficie útil', p.supUtil != null ? num(p.supUtil) + ' m²' : ''],
+          ['Dormitorios', p.dormitorios],
+          ['Baños', p.banos],
+          ['Estacionamientos', p.estacionamientos],
+          ['Bodegas', p.bodegas],
+          ['Gastos comunes', p.gastosComunes != null ? '$' + num(p.gastosComunes) : ''],
+          ['Amoblado', p.amoblado ? 'Sí' : ''],
+          ['Corredor', p.corredor ? <>{p.corredor.nombre}{p.corredor.email && <small className="tw:block tw:text-xs tw:text-muted">{p.corredor.email}</small>}</> : ''],
+        ]} />
+      </div>
+      {p.descripcion && <><h4 className="tw:mt-4 tw:mb-1.5 tw:text-sm tw:font-bold">Descripción</h4><p className="im-desc">{p.descripcion}</p></>}
+      {p.notasInternas && <><h4 className="tw:mt-4 tw:mb-1.5 tw:text-sm tw:font-bold">Notas internas</h4><p className="im-desc">{p.notasInternas}</p></>}
+    </Card>
   );
 }
 
@@ -83,13 +98,12 @@ function Comercializacion({ p }: { p: IPropiedad }) {
     return (
       <div className="im-com">
         <span><small>{op === 'venta' ? 'Venta' : 'Arriendo mensual'}</small><b>{precio(op === 'venta' ? p.precioVenta : p.precioArriendo) || 'Sin precio'}</b></span>
-        <select data-est={campo} value={p[campo] || estados[0]} onChange={(e) => cambiar(campo, e.target.value)}>
-          {estados.map((o) => <option key={o} value={o}>{ESTADO[o][0]}</option>)}
-        </select>
+        <Select data-est={campo} aria-label={op === 'venta' ? 'Estado de la venta' : 'Estado del arriendo'} value={p[campo] || estados[0]}
+          onChange={(e) => cambiar(campo, e.target.value)} opciones={estados.map((o): [string, string] => [o, ESTADO[o][0]])} />
       </div>
     );
   };
-  return <div className="im-box"><h3>Comercialización</h3>{p.venta && fila('venta')}{p.arriendo && fila('arriendo')}</div>;
+  return <Card titulo="Comercialización">{p.venta && fila('venta')}{p.arriendo && fila('arriendo')}</Card>;
 }
 
 function PersonasVinculadas({ p }: { p: IPropiedad }) {
@@ -97,41 +111,46 @@ function PersonasVinculadas({ p }: { p: IPropiedad }) {
   const vincs = (p.vinculos || []).map((v) => ({ ...v, c: personas.find((x) => x.id === v.personaId) })).filter((v) => v.c);
   const quitar = async (personaId: string, rol: string) => { const r = await fichaDesvincular(personaId, rol); if (r.error) toast(r.error, 4000); };
   return (
-    <div className="im-box">
-      <div className="im-bh"><h3>Personas</h3><button className="secondary small" id="fVinc" onClick={() => abrirModal(<VincularPersona p={p} />)}><Icono nombre="plus" tam={13} /> Vincular</button></div>
-      {vincs.length ? vincs.map(({ c, rol }) => c && (
-        <div className="im-pv" key={`${c.id}-${rol}`}>
-          <span className="im-av">{c.nombre.trim()[0] || '?'}</span>
-          <span className="im-pvt">
-            {c.reservado ? <b><Icono nombre="lock" tam={12} /> {c.nombre}</b> : <b data-per={c.id} onClick={() => abrirPersona(c.id)}>{c.nombre}</b>}
-            <small>{ROL[rol as TPersonaRol] || rol}{c.rut ? ' · ' + c.rut : c.reservado ? ' · lo ve quien captó la propiedad' : ''}</small>
-          </span>
-          {c.telefono && <button className="ghost small" title="WhatsApp" data-wa={c.telefono} onClick={() => whatsapp(c.telefono!)}><Icono nombre="whatsapp" tam={15} /></button>}
-          {c.email && <button className="ghost small" title="Copiar correo" data-mail={c.email} onClick={() => copiarCorreo(c.email)}><Icono nombre="mail" tam={15} /></button>}
-          {!c.reservado && <button className="ghost small" title="Quitar vínculo" data-unl={c.id} data-rol={rol} onClick={() => quitar(c.id, rol)}><Icono nombre="x" tam={14} /></button>}
+    <Card titulo="Personas" accion={<Boton id="fVinc" variante="secundario" tamano="sm" icono="plus" onClick={() => abrirModal(<VincularPersona p={p} />)}>Vincular</Boton>}>
+      {vincs.length ? (
+        <div className="tw:-mx-3 tw:flex tw:flex-col">
+          {vincs.map(({ c, rol }) => c && (
+            <ItemLista key={`${c.id}-${rol}`} data-pv=""
+              media={<Avatar nombre={c.nombre} />}
+              titulo={c.reservado
+                ? <span className="tw:inline-flex tw:items-center tw:gap-1"><Icono nombre="lock" tam={12} /> {c.nombre}</span>
+                : <span data-per={c.id} onClick={() => abrirPersona(c.id)} className="tw:cursor-pointer tw:hover:text-brand">{c.nombre}</span>}
+              detalle={`${ROL[rol as TPersonaRol] || rol}${c.rut ? ' · ' + c.rut : c.reservado ? ' · lo ve quien captó la propiedad' : ''}`}
+              derecha={<>
+                {c.telefono && <Boton variante="fantasma" tamano="sm" icono="whatsapp" title="WhatsApp" aria-label="WhatsApp" data-wa={c.telefono} onClick={() => whatsapp(c.telefono!)} />}
+                {c.email && <Boton variante="fantasma" tamano="sm" icono="mail" title="Copiar correo" aria-label="Copiar correo" data-mail={c.email} onClick={() => copiarCorreo(c.email)} />}
+                {!c.reservado && <Boton variante="fantasma" tamano="sm" icono="x" title="Quitar vínculo" aria-label="Quitar vínculo" data-unl={c.id} data-rol={rol} onClick={() => quitar(c.id, rol)} />}
+              </>} />
+          ))}
         </div>
-      )) : <p className="muted small">Sin personas vinculadas. Agrega al propietario para poder firmar el mandato.</p>}
-    </div>
+      ) : <EstadoVacio compacto texto="Sin personas vinculadas. Agrega al propietario para poder firmar el mandato." />}
+    </Card>
   );
 }
 
 export default function Resumen({ p, irA, version }: { p: IPropiedad; irA: (t: TFichaTab) => void; version: number }) {
   const { actividad } = useFicha();
-  return <>
-    <Captacion key={p.id} propId={p.id} version={version} />
-    <div className="im-fcols">
-      <div>
-        <Galeria p={p} />
-        <Caracteristicas p={p} />
-      </div>
-      <div>
-        <Comercializacion p={p} />
-        <PersonasVinculadas p={p} />
-        <div className="im-box">
-          <div className="im-bh"><h3>Lo último</h3><button className="ghost small" data-go="historial" onClick={() => irA('historial')}>Ver todo</button></div>
-          <ListaActividad items={actividad.slice(0, 5)} />
+  return (
+    <div className="tw:flex tw:flex-col tw:gap-4">
+      <Captacion key={p.id} propId={p.id} version={version} />
+      <div className="tw:grid tw:gap-4 tw:lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)] tw:items-start">
+        <div className="tw:grid tw:gap-4 tw:min-w-0">
+          <Galeria p={p} />
+          <Caracteristicas p={p} />
+        </div>
+        <div className="tw:grid tw:gap-4 tw:min-w-0">
+          <Comercializacion p={p} />
+          <PersonasVinculadas p={p} />
+          <Card titulo="Lo último" accion={<Boton variante="fantasma" tamano="sm" data-go="historial" onClick={() => irA('historial')}>Ver todo</Boton>}>
+            <div className="tw:max-h-[360px] tw:overflow-auto"><ListaActividad items={actividad.slice(0, 5)} /></div>
+          </Card>
         </div>
       </div>
     </div>
-  </>;
+  );
 }

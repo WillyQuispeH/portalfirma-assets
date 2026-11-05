@@ -10,7 +10,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
   const shot = (n) => w.screenshot({ path: path.resolve(__dirname, n) });
   const ml = () => app.evaluate(() => JSON.parse(JSON.stringify(global.__mlMock)));
   try {
-    await w.setViewportSize({ width: 1440, height: 900 }); await w.waitForSelector('#view-inicio .im-hero');
+    await w.setViewportSize({ width: 1440, height: 900 }); await w.waitForSelector('#view-inicio [data-cabecera]');
     await w.click('#view-inicio [data-do="importar"]'); await w.waitForSelector('text=Cartera actualizada', { timeout: 15000 }); await w.click('#mOk'); await w.waitForSelector('.im-card');
     await w.click('.im-card:has-text("CV-9001")'); await w.waitForSelector('.im-ftabs'); await w.evaluate((k) => window.Inmo.fichaTab(k), 'portales'); await w.waitForSelector('#fPI');
     ok(/No publicado/.test(await txt('#fPI')) && await w.isVisible('#fPI [data-pi="publicar"]'), 'la ficha muestra el bloque Portal Inmobiliario sin publicar');
@@ -34,17 +34,17 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     await w.click('#fPI [data-pi="publicar"]'); await w.waitForSelector('#piTit');
     ok(await w.isEnabled('#mOk') && /3 de 12 recomendadas/.test(await txt('#modalCard')) && /12 o más/.test(await txt('#modalCard')), 'con todo listo deja publicar y advierte sobre la calidad (fotos)');
     await w.fill('#piTit', 'Casa con piscina y jardín en Chicureo'); await shot('pi2-publicar.png');
-    await w.click('#mOk'); await w.waitForSelector('#fPI .im-st.ok');
+    await w.click('#mOk'); await w.waitForSelector('#fPI [data-st="ok"]');
     let s = await ml(); const it = Object.values(s.items).find((x) => x.title === 'Casa con piscina y jardín en Chicureo');
     ok(it && it.attributes.some((a) => a.id === 'CMG_SITE' && a.value_name === 'POI') && it.currency_id === 'CLF' && it.price === 18500, 'aviso creado con CMG_SITE (sale en Portal Inmobiliario), en UF (CLF)');
     ok(it.seller_contact.country_code2 === '56' && it.seller_contact.phone2 === '934800626' && it.seller_custom_field === 'CV-9001', 'WhatsApp obligatorio en el formato de la API y código de la propiedad');
     ok(it.attributes.some((a) => a.id === 'BEDROOMS' && a.value_name === '4') && it.attributes.some((a) => a.id === 'TOTAL_AREA' && a.value_name === '800 m²'), 'atributos de la ficha (dormitorios, superficie)');
-    ok(/Activo/.test(await txt('#fPI')) && /Publicada en Portal Inmobiliario/.test(await txt('.im-act')), 'la ficha muestra el aviso activo y queda en el historial');
+    ok(/Activo/.test(await txt('#fPI')) && /Publicada en Portal Inmobiliario/.test(await txt('[data-pane="historial"] [data-historial]')), 'la ficha muestra el aviso activo y queda en el historial');
 
     // La ficha manda: estado y precio
-    await w.evaluate((k) => window.Inmo.fichaTab(k), 'resumen'); await w.selectOption('[data-est="estadoVenta"]', 'reservada'); await w.waitForTimeout(800); await w.evaluate((k) => window.Inmo.fichaTab(k), 'portales'); await w.waitForSelector('#fPI .im-st.res', { timeout: 8000 });
+    await w.evaluate((k) => window.Inmo.fichaTab(k), 'resumen'); await w.selectOption('[data-est="estadoVenta"]', 'reservada'); await w.waitForTimeout(800); await w.evaluate((k) => window.Inmo.fichaTab(k), 'portales'); await w.waitForSelector('#fPI [data-st="res"]', { timeout: 8000 });
     ok((await ml()).items[it.id].status === 'paused', 'reservar la propiedad pausa el aviso');
-    await w.evaluate((k) => window.Inmo.fichaTab(k), 'resumen'); await w.selectOption('[data-est="estadoVenta"]', 'disponible'); await w.waitForTimeout(800); await w.evaluate((k) => window.Inmo.fichaTab(k), 'portales'); await w.waitForSelector('#fPI .im-st.ok', { timeout: 8000 });
+    await w.evaluate((k) => window.Inmo.fichaTab(k), 'resumen'); await w.selectOption('[data-est="estadoVenta"]', 'disponible'); await w.waitForTimeout(800); await w.evaluate((k) => window.Inmo.fichaTab(k), 'portales'); await w.waitForSelector('#fPI [data-st="ok"]', { timeout: 8000 });
     ok((await ml()).items[it.id].status === 'active', 'volver a disponible lo reactiva');
     await w.click('#fEdit'); await w.fill('#pf_precioVenta', '17900'); await w.click('#mOk'); await w.waitForTimeout(1500);
     ok((await ml()).items[it.id].price === 17900, 'cambiar el precio en la ficha actualiza el aviso');
@@ -56,14 +56,14 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     // (el Inicio clásico con «Requieren atención» ya no se muestra: el inicio es La oficina u Hoy; el filtro sigue en la cartera)
     await w.evaluate(() => window.Inmo.cartera({ especial: 'leads', op: 'todas' })); await w.waitForSelector('#view-cartera .im-chips'); await w.waitForSelector('.im-card');
     ok(/Con interesados nuevos/.test(await txt('#view-cartera .im-chips')) && (await w.$$('.im-card')).length === 1 && /CV-9001/.test(await txt('.im-card')), 'la cartera filtra la propiedad con interesados nuevos (1)');
-    await w.click('.im-card'); await w.waitForSelector('.im-new');
+    await w.click('.im-card'); await w.waitForSelector('[data-nuevo]');
     const fic = await txt('#view-cartera');
     ok(/Rosa Fuentes Lara/.test(fic) && /solicitud de visita/.test(fic) && /Pedro Guest/.test(fic), 'la ficha lista los interesados con su canal');
     ok(/Interesado · 15\.555\.555-6/.test(fic), 'el interesado con RUT entra al CRM vinculado a la propiedad');
     await shot('pi3-interesados.png');
     await w.click('[data-lead]'); await w.fill('#cf_rut', '7.777.777-7'.replace(/7$/, String(dv('7777777')))); await w.click('#mOk');
     // las personas vinculadas están en la pestaña Resumen de la ficha
-    await w.waitForSelector('.im-pv:has-text("Pedro Guest") >> text=Interesado ·', { state: 'attached' }); await w.evaluate((k) => window.Inmo.fichaTab(k), 'resumen'); await w.waitForSelector('.im-pv:has-text("Pedro Guest") >> text=Interesado ·');
+    await w.waitForSelector('[data-pv]:has-text("Pedro Guest") >> text=Interesado ·', { state: 'attached' }); await w.evaluate((k) => window.Inmo.fichaTab(k), 'resumen'); await w.waitForSelector('[data-pv]:has-text("Pedro Guest") >> text=Interesado ·');
     ok(true, 'un interesado sin RUT se agrega al CRM con un clic');
 
     // Migración: avisos existentes publicados por Convecta

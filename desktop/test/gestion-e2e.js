@@ -11,7 +11,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
   const datos = () => w.evaluate(() => window.pf.inmoListar().then((r) => r.data));
   const completar = async () => { for (const i of await w.$$('.ga-form .ga-fs label.falta input')) { const t = await i.getAttribute('type'); const cp = await i.getAttribute('data-cp'); await i.fill(cp === 'rut' ? '12.345.678-5' : t === 'email' ? 'corredor@demo.cl' : t === 'tel' ? '+56 9 5555 4444' : 'Dato de prueba'); } };
   try {
-    await w.setViewportSize({ width: 1440, height: 920 }); await w.waitForSelector('#view-inicio .im-hero');
+    await w.setViewportSize({ width: 1440, height: 920 }); await w.waitForSelector('#view-inicio [data-cabecera]');
     await w.click('#view-inicio [data-do="importar"]'); await w.waitForSelector('text=Cartera actualizada', { timeout: 15000 }); await w.click('#mOk'); await w.waitForSelector('.im-card');
 
     // Pantalla completa
@@ -82,7 +82,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     ok(/comisi/i.test(await w.$$eval('.ag-msg.bot', (x) => x.pop().textContent)) && !/Corredor/.test(await w.$$eval('.ag-msg.bot', (x) => x.pop().textContent.split('me faltan')[1])), 'por chat: prepara el contrato y pide solo lo que falta (los datos del corredor ya quedaron guardados)');
 
     // Desde la ficha
-    await w.evaluate(() => window.Inmo.abrirFicha(window.Inmo._IM.data.propiedades.find((p) => p.codigo === 'CV-9002').id)); await w.evaluate((k) => window.Inmo.fichaTab(k), 'firmas'); await w.waitForSelector('#fFirmasBox .im-doc');
+    await w.evaluate(() => window.Inmo.abrirFicha(window.Inmo._IM.data.propiedades.find((p) => p.codigo === 'CV-9002').id)); await w.evaluate((k) => window.Inmo.fichaTab(k), 'firmas'); await w.waitForSelector('#fFirmasBox [data-doc]');
     ok(/Contrato de Corretaje/.test(await txt('#fFirmasBox')) && /operación/.test(await txt('#fFirmasBox')), 'la ficha muestra «Documentos en firma»');
     await w.click('#fGen'); await w.waitForSelector('#agDrawer .ga-tpl [data-t]', { timeout: 15000 });
     await w.click('#agDrawer .ga-tp:has-text("Contrato de Corretaje")'); await w.waitForSelector('#agDrawer .ga-form [data-rev]', { timeout: 15000 });

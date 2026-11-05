@@ -1,7 +1,12 @@
 // Pestaña «Asistente» de Postventa: cómo habla el asistente con los propietarios, con vista previa al instante.
 // Los id as* y las clases pv-seg (data-k, data-v) los usa test/postventa-e2e.js.
+// Con el kit: Card, Input, Textarea y Boton («Usar emojis» sigue como casilla: la prueba la marca con check).
 import { useEffect, useState } from 'react';
 import Icono from '../../ui/Icono';
+import Card from '../../ui/Card';
+import Input from '../../ui/Input';
+import Textarea from '../../ui/Textarea';
+import Boton from '../../ui/Boton';
 import { muestraAsistente, probarEstiloAsistente, usePostventa } from '../../../store/hooks/usePostventa.hook';
 import { toast } from '../../../utils/app';
 import { Burbujas } from './comun';
@@ -52,43 +57,43 @@ export default function Asistente() {
 
   return (
     <div className="pv-cols wa">
-      <div className="im-box pv-as">
-        <h3><Icono nombre="user" tam={16} /> Cómo habla el asistente</h3>
-        <p className="muted small">Así se presenta y trata a los propietarios por WhatsApp. Los cambios se ven al lado al instante.</p>
-        <div className="pv-f2">
-          <label><span>Nombre del asistente</span><input id="asNom" maxLength={40} placeholder="Ej.: Sofía (vacío = «el asistente»)" {...campo('nombre')} /></label>
-          <label><span>Empresa</span><input id="asEmp" maxLength={60} placeholder="Ej.: Inmobiliaria Los Aromos" {...campo('empresa')} /></label>
+      <Card className="pv-as" titulo={<span className="tw:inline-flex tw:items-center tw:gap-2"><Icono nombre="user" tam={16} /> Cómo habla el asistente</span>}
+        subtitulo="Así se presenta y trata a los propietarios por WhatsApp. Los cambios se ven al lado al instante.">
+        <div className="tw:flex tw:flex-col tw:gap-3.5">
+          <div className="tw:grid tw:grid-cols-1 tw:md:grid-cols-2 tw:gap-3">
+            <Input id="asNom" etiqueta="Nombre del asistente" maxLength={40} placeholder="Ej.: Sofía (vacío = «el asistente»)" {...campo('nombre')} />
+            <Input id="asEmp" etiqueta="Empresa" maxLength={60} placeholder="Ej.: Inmobiliaria Los Aromos" {...campo('empresa')} />
+          </div>
+          <div className="pv-fl"><span>Trato</span><Opciones k="trato" valor={p.trato} opciones={[['tu', 'Tú'], ['usted', 'Usted']]} alCambiar={(k, v) => cambiar(k, v as IPvPersona['trato'])} /></div>
+          <div className="pv-fl"><span>Tono</span><Opciones k="tono" valor={p.tono} opciones={[['cercano', 'Cercano'], ['neutro', 'Neutro'], ['formal', 'Formal']]} alCambiar={(k, v) => cambiar(k, v as IPvPersona['tono'])} /></div>
+          <div className="pv-fl"><span>Respuestas</span><Opciones k="largo" valor={p.largo} opciones={[['breve', 'Breves'], ['normal', 'Completas']]} alCambiar={(k, v) => cambiar(k, v as IPvPersona['largo'])} /></div>
+          <label className="pv-sw tw:m-0">
+            <input type="checkbox" id="asEmo" checked={p.emojis} onChange={(e) => cambiar('emojis', e.target.checked)} />
+            <span><b>Usar emojis</b><small>Uno por mensaje, en los momentos clave (fotos, solicitud registrada, visita).</small></span>
+          </label>
+          <Input id="asHor" maxLength={100} placeholder="Ej.: lunes a viernes de 9:00 a 18:00" {...campo('horario')}
+            etiqueta={<>Horario de atención <small className="tw:font-normal tw:text-muted">(va al final de la solicitud registrada)</small></>} />
+          <Input id="asFir" maxLength={100} placeholder="Ej.: Equipo de Postventa · Inmobiliaria Los Aromos" {...campo('firma')}
+            etiqueta={<>Firma <small className="tw:font-normal tw:text-muted">(al final de la solicitud registrada y de los avisos)</small></>} />
+          <Textarea id="asIns" rows={4} maxLength={1500} placeholder="Ej.: Sé muy amable y empático, el propietario puede estar molesto. No uses la palabra «reclamo», di «solicitud». Nunca prometas fechas." {...campo('instrucciones')}
+            etiqueta={<>Instrucciones propias <small className="tw:font-normal tw:text-muted">(opcional)</small></>}
+            ayuda="Con instrucciones, la IA ajusta cada mensaje a tu estilo sin cambiar folios, fechas ni palabras clave (si los cambia, se envía el mensaje normal). Suma 1 a 2 segundos por respuesta." />
+          {err && <p className="tw:m-0 tw:text-[13px] tw:text-err" role="alert" id="asErr">{err}</p>}
+          <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
+            <Boton id="asOk" cargando={guardando} onClick={guardar}>Guardar</Boton>
+            <Boton variante="secundario" id="asIA" icono="sparkle" disabled={!p.instrucciones.trim() || prueba?.cargando} onClick={probar}>Probar mis instrucciones</Boton>
+            <span className="tw:text-xs tw:text-muted" id="asEst">{estado}</span>
+          </div>
         </div>
-        <div className="pv-fl"><span>Trato</span><Opciones k="trato" valor={p.trato} opciones={[['tu', 'Tú'], ['usted', 'Usted']]} alCambiar={(k, v) => cambiar(k, v as IPvPersona['trato'])} /></div>
-        <div className="pv-fl"><span>Tono</span><Opciones k="tono" valor={p.tono} opciones={[['cercano', 'Cercano'], ['neutro', 'Neutro'], ['formal', 'Formal']]} alCambiar={(k, v) => cambiar(k, v as IPvPersona['tono'])} /></div>
-        <div className="pv-fl"><span>Respuestas</span><Opciones k="largo" valor={p.largo} opciones={[['breve', 'Breves'], ['normal', 'Completas']]} alCambiar={(k, v) => cambiar(k, v as IPvPersona['largo'])} /></div>
-        <label className="pv-sw">
-          <input type="checkbox" id="asEmo" checked={p.emojis} onChange={(e) => cambiar('emojis', e.target.checked)} />
-          <span><b>Usar emojis</b><small>Uno por mensaje, en los momentos clave (fotos, solicitud registrada, visita).</small></span>
-        </label>
-        <label className="pv-fx"><span>Horario de atención <small className="muted">(va al final de la solicitud registrada)</small></span><input id="asHor" maxLength={100} placeholder="Ej.: lunes a viernes de 9:00 a 18:00" {...campo('horario')} /></label>
-        <label className="pv-fx"><span>Firma <small className="muted">(al final de la solicitud registrada y de los avisos)</small></span><input id="asFir" maxLength={100} placeholder="Ej.: Equipo de Postventa · Inmobiliaria Los Aromos" {...campo('firma')} /></label>
-        <label className="pv-fx"><span>Instrucciones propias <small className="muted">(opcional)</small></span>
-          <textarea id="asIns" rows={4} maxLength={1500} placeholder="Ej.: Sé muy amable y empático, el propietario puede estar molesto. No uses la palabra «reclamo», di «solicitud». Nunca prometas fechas." {...campo('instrucciones')} />
-          <small className="muted">Con instrucciones, la IA ajusta cada mensaje a tu estilo sin cambiar folios, fechas ni palabras clave (si los cambia, se envía el mensaje normal). Suma 1 a 2 segundos por respuesta.</small>
-        </label>
-        <p className="error" id="asErr">{err}</p>
-        <div className="ga-inl">
-          <button className="primary" id="asOk" disabled={guardando} onClick={guardar}>Guardar</button>
-          <button className="secondary" id="asIA" disabled={!p.instrucciones.trim() || prueba?.cargando} onClick={probar}><Icono nombre="sparkle" tam={13} /> Probar mis instrucciones</button>
-          <span className="muted small" id="asEst">{estado}</span>
-        </div>
-      </div>
-      <div className="im-box">
-        <h3>Vista previa</h3>
-        <p className="muted small">Una conversación de ejemplo con esta configuración.</p>
+      </Card>
+      <Card titulo="Vista previa" subtitulo="Una conversación de ejemplo con esta configuración.">
         <div id="asPrev">{prev.length > 0 && <Burbujas mensajes={prev} />}</div>
         <div id="asPrevIA">
           {prueba?.cargando && <p className="muted small">Aplicando tus instrucciones…</p>}
-          {prueba?.error && <p className="error">{prueba.error}</p>}
-          {prueba?.texto && <><h4 className="pv-sub">Con tus instrucciones</h4><Burbujas mensajes={[{ dir: 'out', texto: prueba.texto }]} /><p className="muted small">{prueba.nota}</p></>}
+          {prueba?.error && <p role="alert" className="tw:text-[13px] tw:text-err">{prueba.error}</p>}
+          {prueba?.texto && <><h4 className="pv-sub">Con tus instrucciones</h4><Burbujas mensajes={[{ dir: 'out', texto: prueba.texto }]} /><p className="tw:text-xs tw:text-muted">{prueba.nota}</p></>}
         </div>
-      </div>
+      </Card>
     </div>
   );
 }

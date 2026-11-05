@@ -3,7 +3,7 @@
 // El proceso principal ya filtra por perfil: el administrador ve los negocios
 // de todo el equipo y el corredor solo los suyos. La comisión de cada negocio
 // (comisionMonto) la calcula src/negocios.js y va en la moneda del negocio.
-// Hecha con el kit: CabeceraPagina, Boton, Tabs, Kpi, Card, Tabla, Badge y EstadoVacio.
+// Hecha con el kit: Layout (cabecera y barra), Boton, Tabs, Kpi, Card, Tabla, Badge y EstadoVacio.
 // Las pruebas usan .rx-fin, .ng-kpis, #finTipo/#finPeriodo (data-tab), [data-fin="corredores"] y
 // .rx-fin-det con tr[data-id] en cada negocio.
 import { useEffect, useMemo, useState } from 'react';
@@ -13,7 +13,7 @@ import { monto, montos, fecha } from '../../../utils/formato';
 import { abrirNegocio } from '../../../utils/app';
 import Kpi from '../../ui/Kpi';
 import Icono from '../../ui/Icono';
-import CabeceraPagina from '../../ui/CabeceraPagina';
+import Layout from '../../ui/Layout';
 import Boton from '../../ui/Boton';
 import Tabs, { type TTabOpcion } from '../../ui/Tabs';
 import Card from '../../ui/Card';
@@ -68,18 +68,16 @@ export default function Finanzas() {
   ];
 
   return (
-    <div className="im-wrap rx-fin">
-      <CabeceraPagina
-        titulo="Finanzas"
-        subtitulo={`Comisiones ${esAdmin ? 'de todo el equipo' : 'de tus negocios'}, según las condiciones de cada negocio. Montos + IVA.`}
-        acciones={<Boton variante="secundario" onClick={actualizar} cargando={cargando}>Actualizar</Boton>}
-      />
-
-      <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-3 tw:mb-4">
+    <Layout
+      className="rx-fin"
+      titulo="Finanzas"
+      subtitulo={`Comisiones ${esAdmin ? 'de todo el equipo' : 'de tus negocios'}, según las condiciones de cada negocio. Montos + IVA.`}
+      acciones={<Boton variante="secundario" onClick={actualizar} cargando={cargando}>Actualizar</Boton>}
+      barra={<>
         <Tabs id="finTipo" etiqueta="Tipo de negocio" opciones={TIPOS} valor={tipo} alCambiar={setTipo} />
         <Tabs id="finPeriodo" etiqueta="Período" opciones={PERIODOS} valor={periodo} alCambiar={setPeriodo} />
-      </div>
-
+      </>}
+    >
       {cargando && !cargado && <EstadoVacio compacto texto="Cargando los negocios…" />}
       {error && <p role="alert" className="tw:text-red-softink">No se pudieron leer los negocios: {error}</p>}
 
@@ -92,36 +90,34 @@ export default function Finanzas() {
             <Kpi icono="clock" valor={r.sinComision} texto="negocios sin comisión definida" alerta={r.sinComision > 0} />
           </div>
 
-          <div className="tw:grid tw:gap-4">
-            {esAdmin && r.porCorredor.length > 0 && (
-              <div data-fin="corredores">
-                <Card titulo="Por corredor" relleno={false}>
-                  <Tabla columnas={colCorredor} filas={r.porCorredor} claveFila={(c) => c.nombre} />
-                </Card>
-              </div>
+          {esAdmin && r.porCorredor.length > 0 && (
+            <div data-fin="corredores">
+              <Card titulo="Por corredor" relleno={false}>
+                <Tabla columnas={colCorredor} filas={r.porCorredor} claveFila={(c) => c.nombre} />
+              </Card>
+            </div>
+          )}
+
+          <Card titulo="Detalle" relleno={false}>
+            {r.visibles.length === 0 ? (
+              <EstadoVacio icono="coins" texto={`No hay negocios ${periodo === 'todo' ? '' : `cerrados ${textoPeriodo} ni `}en curso.`} />
+            ) : (
+              <Tabla className="rx-fin-det" columnas={colDetalle} filas={r.visibles} claveFila={(n) => n.id}
+                alTocarFila={(n) => abrirNegocio(n.id)} atributosFila={(n) => ({ 'data-id': n.id, title: 'Abrir el negocio' })} />
             )}
+          </Card>
 
-            <Card titulo="Detalle" relleno={false}>
-              {r.visibles.length === 0 ? (
-                <EstadoVacio icono="coins" texto={`No hay negocios ${periodo === 'todo' ? '' : `cerrados ${textoPeriodo} ni `}en curso.`} />
-              ) : (
-                <Tabla className="rx-fin-det" columnas={colDetalle} filas={r.visibles} claveFila={(n) => n.id}
-                  alTocarFila={(n) => abrirNegocio(n.id)} atributosFila={(n) => ({ 'data-id': n.id, title: 'Abrir el negocio' })} />
-              )}
-            </Card>
-
-            <Card>
-              <div className="tw:flex tw:items-start tw:gap-3">
-                <span className="tw:text-muted"><Icono nombre="coins" tam={18} /></span>
-                <div>
-                  <b>Próximamente: facturación y contabilidad</b>
-                  <p className="tw:mt-1 tw:mb-0 tw:text-[13px] tw:text-muted">Facturas y boletas por comisión y administración, emitidas desde aquí. Cada cobro, pago y liquidación generará su asiento contable.</p>
-                </div>
+          <Card>
+            <div className="tw:flex tw:items-start tw:gap-3">
+              <span className="tw:text-muted"><Icono nombre="coins" tam={18} /></span>
+              <div>
+                <b>Próximamente: facturación y contabilidad</b>
+                <p className="tw:mt-1 tw:mb-0 tw:text-[13px] tw:text-muted">Facturas y boletas por comisión y administración, emitidas desde aquí. Cada cobro, pago y liquidación generará su asiento contable.</p>
               </div>
-            </Card>
-          </div>
+            </div>
+          </Card>
         </>
       )}
-    </div>
+    </Layout>
   );
 }

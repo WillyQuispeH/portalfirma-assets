@@ -14,7 +14,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÃ“: ' + m); console.log('  â
   const datos = () => w.evaluate(() => window.pf.inmoListar().then((r) => r.data));
   const man = new Date(Date.now() + 864e5).toISOString().slice(0, 10);
   try {
-    await w.setViewportSize({ width: 1500, height: 920 }); await w.waitForSelector('#view-inicio .im-hero');
+    await w.setViewportSize({ width: 1500, height: 920 }); await w.waitForSelector('#view-inicio [data-cabecera]');
     await w.click('#view-inicio [data-do="importar"]'); await w.waitForSelector('text=Cartera actualizada', { timeout: 15000 }); await w.click('#mOk'); await w.waitForSelector('.im-card');
     await w.click('#agBtn'); await w.waitForSelector('#agDrawer:not(.hidden)');
     ok(/Agente Asset/.test(await txt('#agDrawer')) && !(await w.$('.ag-sug')), 'el Agente Asset abre despejado (sin sugerencias de ejemplo)');

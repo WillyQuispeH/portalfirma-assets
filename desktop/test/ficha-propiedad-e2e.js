@@ -34,12 +34,12 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     ok(true, 'la franja muestra el avance de la captación');
     await w.waitForSelector('#fCapt .et-next', { timeout: 8000 });
     ok(true, 'la captación (Etapas.bloque) se dibuja dentro de la ficha');
-    ok(/Dormitorios 4/.test(await txt('.im-dl')) && /Casa amplia con jardín/.test(await txt('[data-pane="resumen"]')), 'características y descripción');
-    ok(/Rosa Pérez Mena/.test(await txt('[data-pane="resumen"] .im-pv')) && /Propietario · 11\.111\.111-1/.test(await txt('[data-pane="resumen"] .im-pv')), 'personas vinculadas con rol y RUT');
+    ok(/Dormitorios 4/.test(await txt('[data-caracteristicas]')) && /Casa amplia con jardín/.test(await txt('[data-pane="resumen"]')), 'características y descripción');
+    ok(/Rosa Pérez Mena/.test(await txt('[data-pane="resumen"] [data-pv]')) && /Propietario · 11\.111\.111-1/.test(await txt('[data-pane="resumen"] [data-pv]')), 'personas vinculadas con rol y RUT');
 
     // pestañas: con clic y con Inmo.fichaTab
     await w.click('[data-tab="historial"]'); await w.waitForSelector('[data-pane="historial"]:not(.hidden) #fNotaT');
-    ok(!(await visible('[data-pane="resumen"]')) && await w.$eval('[data-tab="historial"]', (b) => b.classList.contains('on')), 'clic en una pestaña muestra solo su panel');
+    ok(!(await visible('[data-pane="resumen"]')) && await w.$eval('[data-tab="historial"]', (b) => b.getAttribute('aria-selected') === 'true'), 'clic en una pestaña muestra solo su panel');
     await w.evaluate(() => window.Inmo.fichaTab('firmas')); await w.waitForSelector('[data-pane="firmas"]:not(.hidden) #fDocs');
     ok(await visible('#fFirmasBox'), 'Inmo.fichaTab("firmas") cambia de pestaña');
     await w.click('.im-sc[data-go="negocios"]'); await w.waitForSelector('[data-pane="negocios"]:not(.hidden)');
@@ -57,8 +57,8 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
 
     // nota en el historial
     await w.click('[data-tab="historial"]'); await w.fill('#fNotaT', 'Visita con Andrés el sábado'); await w.press('#fNotaT', 'Enter');
-    await w.waitForSelector('[data-pane="historial"] .im-act li.nota');
-    ok(/Visita con Andrés el sábado/.test(await txt('[data-pane="historial"] .im-act')) && (await w.inputValue('#fNotaT')) === '', 'agrega la nota y limpia la caja');
+    await w.waitForSelector('[data-pane="historial"] [data-historial] li[data-nota]');
+    ok(/Visita con Andrés el sábado/.test(await txt('[data-pane="historial"] [data-historial]')) && (await w.inputValue('#fNotaT')) === '', 'agrega la nota y limpia la caja');
 
     // vincular persona (formulario en ventana en React)
     await w.click('[data-tab="resumen"]'); await w.click('#fVinc'); await w.waitForSelector('#modalCard #vQ');
@@ -66,9 +66,9 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     await w.waitForFunction(() => document.querySelectorAll('#vList [data-c]').length === 1);
     ok(true, 'el buscador del CRM filtra por nombre');
     await w.click(`#vList [data-c="${cli.id}"]`); await w.waitForSelector('#modal.hidden', { state: 'attached' });
-    await w.waitForSelector('[data-pane="resumen"] .im-pv:has-text("Andrés Soto")');
-    ok(/Comprador/.test(await txt('[data-pane="resumen"] .im-pv:has-text("Andrés Soto")')), 'vincula a la persona con el rol elegido');
-    await w.click(`[data-unl="${cli.id}"]`); await w.waitForFunction(() => ![...document.querySelectorAll('[data-pane="resumen"] .im-pv')].some((x) => /Andrés Soto/.test(x.textContent)));
+    await w.waitForSelector('[data-pane="resumen"] [data-pv]:has-text("Andrés Soto")');
+    ok(/Comprador/.test(await txt('[data-pane="resumen"] [data-pv]:has-text("Andrés Soto")')), 'vincula a la persona con el rol elegido');
+    await w.click(`[data-unl="${cli.id}"]`); await w.waitForFunction(() => ![...document.querySelectorAll('[data-pane="resumen"] [data-pv]')].some((x) => /Andrés Soto/.test(x.textContent)));
     ok(true, 'quitar el vínculo');
 
     // «Datos básicos» sigue en inmo.js: al guardar, la ficha se recarga sin desmontarse

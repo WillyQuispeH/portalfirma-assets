@@ -1,6 +1,8 @@
-// Ficha de la propiedad: encabezado con acciones, franja de resumen y pestañas (Resumen, Propietario, Negocios,
-// Firmas y documentos, Portales, Historial). Se abre con Inmo.abrirFicha(id) (src/renderer/inmo.js), que la
-// monta en #view-cartera, el mismo contenedor de la lista.
+// Ficha de la propiedad: cabecera con «volver» a la cartera y acciones, franja de resumen y pestañas (Resumen,
+// Propietario, Negocios, Firmas y documentos, Portales, Historial). Se abre con Inmo.abrirFicha(id)
+// (src/renderer/inmo.js), que la monta en #view-cartera, el mismo contenedor de la lista.
+// Hecha con el kit: Layout (cabecera con «volver» y acciones), Boton, Tabs, Card, Badge, ItemLista, ListaDatos,
+// LineaTiempo, Select, Input y Textarea.
 //
 // Las pestañas se dibujan todas y se ocultan con .hidden, como antes: las pruebas y el recorrido de Aprende
 // buscan sus elementos aunque no estén a la vista. La pestaña elegida queda en el store (por propiedad) y
@@ -8,7 +10,13 @@
 // Siguen fuera de React: «Datos básicos» y «Nueva persona» (inmo.js), «Ficha completa» (ficha-bloques.js),
 // «Publicar» (publicaciones.js), publicar en Portal Inmobiliario (inmo.js), la captación (etapas.js),
 // las fotos desde Drive (dictado.js) y el Agente (gestion.js). Se llaman por utils/app.ts.
+// Las pruebas y Aprende usan .im-ficha, la cabecera .im-ft (con h1 e .im-code), #fBack, #fPub, #fAg, #fGen,
+// #fFicha, #fEdit, #fArch, #fMapa, #fStrip (.im-sc[data-go], #fStripCapt), .im-ftabs [data-tab] y [data-pane].
 import { useEffect } from 'react';
+import Layout from '../../ui/Layout';
+import Boton from '../../ui/Boton';
+import Tabs, { type TTabOpcion } from '../../ui/Tabs';
+import EstadoVacio from '../../ui/EstadoVacio';
 import Icono from '../../ui/Icono';
 import { ESTADO, TIPO } from '../cartera/catalogos';
 import { direccion } from '../cartera/filtrar';
@@ -23,39 +31,55 @@ import {
   publicarPropiedad, verPropiedadEnAgente,
 } from '../../../utils/app';
 import { fechaHora } from '../../../utils/formato';
+import { cx } from '../../../utils/cx';
 import type { ReactNode } from 'react';
 import type { IPropiedad } from '../../../store/interfaces/propiedad.interface';
 
-function Encabezado({ p }: { p: IPropiedad }) {
+// Acciones de la cabecera
+function Acciones({ p }: { p: IPropiedad }) {
   const { fichaRecargar, fichaArchivar } = useFicha();
-  return (
-    <div className="im-fh">
-      <button className="ghost" id="fBack" onClick={abrirCartera}><Icono nombre="chevL" tam={16} /> Cartera</button>
-      <span className="spacer" />
-      <button className="primary" id="fPub" onClick={() => publicarPropiedad(p.id)}><Icono nombre="export" tam={15} /> Publicar</button>
-      <button className="secondary" id="fAg" onClick={() => verPropiedadEnAgente(p.id, p.codigo)}><Icono nombre="sparkle" tam={15} /> Ver en el Agente</button>
-      <button className="secondary" id="fGen" onClick={() => generarDocumentoPropiedad(p.id)}><Icono nombre="filePlus" tam={15} /> Generar documento</button>
-      <button className="secondary" id="fFicha" onClick={() => fichaCompleta(p.id, () => { fichaRecargar(); })}><Icono nombre="edit" tam={15} /> Ficha completa</button>
-      <button className="secondary" id="fEdit" onClick={() => editarPropiedad(p)}>Datos básicos</button>
-      <button className="ghost" id="fArch" onClick={async () => avisar(await fichaArchivar(!p.archivada))}>{p.archivada ? 'Restaurar' : 'Archivar'}</button>
-    </div>
-  );
+  return <>
+    <Boton id="fPub" icono="export" onClick={() => publicarPropiedad(p.id)}>Publicar</Boton>
+    <Boton id="fAg" variante="secundario" icono="sparkle" onClick={() => verPropiedadEnAgente(p.id, p.codigo)}>Ver en el Agente</Boton>
+    <Boton id="fGen" variante="secundario" icono="filePlus" onClick={() => generarDocumentoPropiedad(p.id)}>Generar documento</Boton>
+    <Boton id="fFicha" variante="secundario" icono="edit" onClick={() => fichaCompleta(p.id, () => { fichaRecargar(); })}>Ficha completa</Boton>
+    <Boton id="fEdit" variante="secundario" onClick={() => editarPropiedad(p)}>Datos básicos</Boton>
+    <Boton id="fArch" variante="fantasma" onClick={async () => avisar(await fichaArchivar(!p.archivada))}>{p.archivada ? 'Restaurar' : 'Archivar'}</Boton>
+  </>;
 }
 
-function Titulo({ p }: { p: IPropiedad }) {
+// Bajo el título: la dirección (con el mapa) y de dónde se importó
+function Subtitulo({ p }: { p: IPropiedad }) {
   const n = p.editados?.length || 0;
+  return <>
+    <span className="tw:flex tw:flex-wrap tw:items-center tw:gap-1">
+      <Icono nombre="pin" tam={14} /> {direccion(p) || 'Sin dirección'}{p.region ? ', ' + p.region : ''}
+      {p.lat != null && <> · <a href="#" id="fMapa" onClick={(e) => { e.preventDefault(); abrirUrl(`https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lng}`); }}>ver en el mapa</a></>}
+    </span>
+    {p.origen && (
+      <span className="tw:flex tw:flex-wrap tw:items-center tw:gap-1 tw:mt-1.5 tw:text-xs">
+        <Icono nombre="link" tam={13} /> Importada desde Portalfirma{p.origen.fuente ? ` (origen ${p.origen.fuente})` : ''} · {fechaHora(p.origen.importado)}
+        {n > 0 && ` · ${n} ${n === 1 ? 'dato editado' : 'datos editados'} aquí se mantienen al actualizar`}
+      </span>
+    )}
+  </>;
+}
+
+// Franja de resumen: cada indicador lleva a su pestaña
+const INDICADOR = 'im-sc tw:flex tw:flex-col tw:items-start tw:gap-0.5 tw:min-w-0 tw:m-0 tw:px-4 tw:py-3 tw:text-left tw:font-[inherit] tw:cursor-pointer '
+  + 'tw:rounded-2xl tw:border tw:border-solid tw:border-edge tw:border-b-[3px] tw:border-b-edge-b tw:bg-card tw:text-text tw:transition-colors tw:duration-100 '
+  + 'tw:hover:bg-hover tw:focus-visible:outline-2 tw:focus-visible:outline-offset-2 tw:focus-visible:outline-lav-edge';
+
+function Indicador({ etiqueta, valor, detalle, tono, idValor, idDetalle, ...resto }: {
+  etiqueta: string; valor: ReactNode; detalle?: ReactNode; tono?: 'ok' | 'wait'; idValor?: string; idDetalle?: string;
+  id?: string; 'data-go': TFichaTab; onClick: () => void;
+}) {
   return (
-    <div className="im-ft">
-      <small className="im-code">{p.codigo || ''} · {TIPO[p.tipo] || p.tipo}{p.rol ? ' · Rol ' + p.rol : ''}</small>
-      <h1>{p.titulo}</h1>
-      <p className="muted"><Icono nombre="pin" tam={14} /> {direccion(p) || 'Sin dirección'}{p.region ? ', ' + p.region : ''}
-        {p.lat != null && <> · <a href="#" id="fMapa" onClick={(e) => { e.preventDefault(); abrirUrl(`https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lng}`); }}>ver en el mapa</a></>}
-      </p>
-      {p.origen && (
-        <p className="im-orig"><Icono nombre="link" tam={13} /> Importada desde Portalfirma{p.origen.fuente ? ` (origen ${p.origen.fuente})` : ''} · {fechaHora(p.origen.importado)}
-          {n > 0 && ` · ${n} ${n === 1 ? 'dato editado' : 'datos editados'} aquí se mantienen al actualizar`}</p>
-      )}
-    </div>
+    <button type="button" className={INDICADOR} {...resto}>
+      <small className="tw:text-xs tw:text-muted">{etiqueta}</small>
+      <b id={idValor} className={cx('tw:text-[15px] tw:font-bold', tono === 'ok' && 'tw:text-green-softink', tono === 'wait' && 'tw:text-yellow-softink')}>{valor}</b>
+      <em id={idDetalle} className="tw:max-w-full tw:truncate tw:not-italic tw:text-xs tw:text-muted">{detalle}</em>
+    </button>
   );
 }
 
@@ -66,29 +90,23 @@ function Franja({ p, irA }: { p: IPropiedad; irA: (t: TFichaTab) => void }) {
   const pub = (['venta', 'arriendo'] as const).filter((o) => p[o] && p.portales?.pi?.[o]?.status === 'active');
   const e = captacion?.etapas[0];
   const op = (o: 'venta' | 'arriendo') => (
-    <button className="im-sc" data-go="resumen" onClick={() => irA('resumen')}>
-      <small>{o === 'venta' ? 'Venta' : 'Arriendo'}</small>
-      <b>{precio(o === 'venta' ? p.precioVenta : p.precioArriendo) || 'Sin precio'}</b>
-      <em>{ESTADO[(o === 'venta' ? p.estadoVenta : p.estadoArriendo) || 'disponible']?.[0] || ''}</em>
-    </button>
+    <Indicador data-go="resumen" onClick={() => irA('resumen')} etiqueta={o === 'venta' ? 'Venta' : 'Arriendo'}
+      valor={precio(o === 'venta' ? p.precioVenta : p.precioArriendo) || 'Sin precio'}
+      detalle={ESTADO[(o === 'venta' ? p.estadoVenta : p.estadoArriendo) || 'disponible']?.[0] || ''} />
   );
   return (
-    <div className="im-strip" id="fStrip">
+    <div id="fStrip" className="tw:grid tw:grid-cols-[repeat(auto-fit,minmax(150px,1fr))] tw:gap-3">
       {p.venta && op('venta')}
       {p.arriendo && op('arriendo')}
-      <button className={`im-sc${captacion && !captacion.actual ? ' ok' : ''}`} data-go="resumen" id="fStripCaptB" onClick={() => irA('resumen')}>
-        <small>Captación</small><b id="fStripCapt">{e ? `${e.ok} de ${e.total}` : '…'}</b><em id="fStripCaptD">{captacion ? (captacion.actual ? captacion.actual.t : 'Completa') : ''}</em>
-      </button>
-      <button className="im-sc" data-go="negocios" onClick={() => irA('negocios')}>
-        <small>Negocios abiertos</small><b>{abiertos.length}</b>
-        <em>{abiertos.length ? [...new Set(abiertos.map((n) => n.etapaInfo?.t))].slice(0, 2).join(' · ') : 'Ninguno'}</em>
-      </button>
-      <button className={`im-sc${enFirma.length ? ' wait' : ''}`} data-go="firmas" onClick={() => irA('firmas')}>
-        <small>En firma</small><b>{enFirma.length}</b><em>{enFirma.length ? enFirma[0].plantilla : 'Nada pendiente'}</em>
-      </button>
-      <button className={`im-sc${pub.length ? ' ok' : ''}`} data-go="portales" onClick={() => irA('portales')}>
-        <small>Portal Inmobiliario</small><b>{pub.length ? 'Publicada' : 'No publicada'}</b><em>{pub.join(' y ')}</em>
-      </button>
+      <Indicador id="fStripCaptB" data-go="resumen" onClick={() => irA('resumen')} etiqueta="Captación" tono={captacion && !captacion.actual ? 'ok' : undefined}
+        idValor="fStripCapt" valor={e ? `${e.ok} de ${e.total}` : '…'}
+        idDetalle="fStripCaptD" detalle={captacion ? (captacion.actual ? captacion.actual.t : 'Completa') : ''} />
+      <Indicador data-go="negocios" onClick={() => irA('negocios')} etiqueta="Negocios abiertos" valor={abiertos.length}
+        detalle={abiertos.length ? [...new Set(abiertos.map((n) => n.etapaInfo?.t))].slice(0, 2).join(' · ') : 'Ninguno'} />
+      <Indicador data-go="firmas" onClick={() => irA('firmas')} etiqueta="En firma" valor={enFirma.length} tono={enFirma.length ? 'wait' : undefined}
+        detalle={enFirma.length ? enFirma[0].plantilla : 'Nada pendiente'} />
+      <Indicador data-go="portales" onClick={() => irA('portales')} etiqueta="Portal Inmobiliario" tono={pub.length ? 'ok' : undefined}
+        valor={pub.length ? 'Publicada' : 'No publicada'} detalle={pub.join(' y ')} />
     </div>
   );
 }
@@ -107,28 +125,35 @@ export default function FichaPropiedad({ id, vez }: IFichaPropiedadProps) {
   // la propiedad ya no está (borrada o fuera del perfil): vuelve a la cartera
   useEffect(() => { if (cargado && !error && !p) abrirCartera(); }, [cargado, error, p]);
 
-  if (!p) return <div className="im-wrap">{error ? <p className="error">No se pudo leer la propiedad: {error}</p> : <p className="muted">Cargando…</p>}</div>;
+  if (!p) return <Layout>{error ? <p role="alert" className="tw:m-0 tw:text-red-softink">No se pudo leer la propiedad: {error}</p> : <EstadoVacio compacto texto="Cargando…" />}</Layout>;
 
   const irA = (t: TFichaTab) => fichaSetTab(p.id, t);
   const abiertos = negocios.filter((n) => n.estado === 'abierto').length;
   const enFirma = (p.firmas || []).filter((f) => f.operacion && !['firmado', 'anulado'].includes(f.estado || '')).length;
-  const TABS: [TFichaTab, ReactNode][] = [
+  const TABS: TTabOpcion<TFichaTab>[] = [
     ['resumen', 'Resumen'],
-    ['propietario', <>Propietario{p.duenoVisible === false && <> <Icono nombre="lock" tam={12} /></>}</>],
-    ['negocios', <>Negocios{abiertos > 0 && <> <b>{abiertos}</b></>}</>],
-    ['firmas', <>Firmas y documentos{enFirma > 0 && <> <b>{enFirma}</b></>}</>],
+    ['propietario', 'Propietario', undefined, p.duenoVisible === false ? 'lock' : undefined],
+    ['negocios', 'Negocios', abiertos || undefined],
+    ['firmas', 'Firmas y documentos', enFirma || undefined],
     ['portales', 'Portales'],
     ['historial', 'Historial'],
   ];
-  const pane = (k: TFichaTab, hijos: ReactNode) => <div className={`im-pane${tab === k ? '' : ' hidden'}`} data-pane={k}>{hijos}</div>;
+  const pane = (k: TFichaTab, hijos: ReactNode) => <div className={cx('im-pane', tab !== k && 'hidden')} data-pane={k}>{hijos}</div>;
 
   return (
-    <div className="im-wrap im-ficha">
-      <Encabezado p={p} />
-      <Titulo p={p} />
-      <Franja p={p} irA={irA} />
-      <div className="im-ftabs" role="tablist">
-        {TABS.map(([k, l]) => <button key={k} className={`im-ftab${k === tab ? ' on' : ''}`} data-tab={k} role="tab" onClick={() => irA(k)}>{l}</button>)}
+    <Layout
+      className="im-ficha"
+      cabeceraClassName="im-ft"
+      volver={{ texto: 'Cartera', alTocar: abrirCartera, id: 'fBack' }}
+      sobretitulo={<span className="im-code">{p.codigo || ''} · {TIPO[p.tipo] || p.tipo}{p.rol ? ' · Rol ' + p.rol : ''}</span>}
+      titulo={p.titulo}
+      subtitulo={<Subtitulo p={p} />}
+      acciones={<Acciones p={p} />}
+    >
+      {/* la franja y las pestañas quedan fijas arriba al bajar por la ficha */}
+      <div data-ficha-fija className="tw:sticky tw:top-0 tw:z-[5] tw:-mx-1 tw:flex tw:flex-col tw:gap-3 tw:px-1 tw:py-2 tw:bg-[color-mix(in_srgb,var(--bg)_90%,transparent)] tw:backdrop-blur-sm">
+        <Franja p={p} irA={irA} />
+        <Tabs variante="linea" etiqueta="Secciones de la ficha" className="im-ftabs tw:max-w-full tw:overflow-x-auto tw:overflow-y-hidden" opciones={TABS} valor={tab} alCambiar={irA} />
       </div>
       {pane('resumen', <Resumen p={p} irA={irA} version={version} />)}
       {pane('propietario', <Propietario p={p} />)}
@@ -136,6 +161,6 @@ export default function FichaPropiedad({ id, vez }: IFichaPropiedadProps) {
       {pane('firmas', <Firmas p={p} />)}
       {pane('portales', <Portales p={p} />)}
       {pane('historial', <Historial />)}
-    </div>
+    </Layout>
   );
 }

@@ -1,12 +1,15 @@
 // Pestaña «Reclamos»: la lista (con las conversaciones de WhatsApp en curso arriba) y el detalle del elegido.
 // El detalle y su «¿Qué sigue?» siguen en src/renderer/postventa.js, en #pvDet: React deja ese contenedor
 // vacío y le avisa qué mostrar (mostrarReclamo / verConversacion). Clases pv-row, data-chat los usan las pruebas.
+// Con el kit: Buscador y Tabs; la lista y el detalle conservan .pv-lista y .pv-det (styles.css) con el borde de una Card.
 import { useEffect } from 'react';
 import Buscador from '../../ui/Buscador';
 import Icono from '../../ui/Icono';
+import Tabs from '../../ui/Tabs';
+import { cx } from '../../../utils/cx';
 import { usePostventa } from '../../../store/hooks/usePostventa.hook';
 import { mostrarReclamo, verConversacion } from '../../../utils/app';
-import { hora } from './comun';
+import { BORDE_CARD, hora } from './comun';
 import type { TPvFiltro } from '../../../store/interfaces/postventa.interface';
 
 const FILTROS: [TPvFiltro, string][] = [['abiertos', 'Abiertos'], ['triage', 'Por revisar'], ['todos', 'Todos']];
@@ -24,12 +27,10 @@ export default function Reclamos() {
 
   return (
     <div className="pv-cols">
-      <div className="pv-lista">
+      <div className={cx('pv-lista', BORDE_CARD)}>
         <div className="pv-fil">
-          <Buscador id="pvQ" clase="ac-q" valor={q} alCambiar={(v) => reclamosSetFiltro({ q: v })} espera={250} placeholder="Folio, unidad, propietario o falla" />
-          <div className="ga-chips">
-            {FILTROS.map(([k, t]) => <button key={k} data-f={k} className={filtro === k ? 'on' : ''} onClick={() => reclamosSetFiltro({ filtro: k })}>{t}</button>)}
-          </div>
+          <Buscador kit id="pvQ" className="tw:w-full" valor={q} alCambiar={(v) => reclamosSetFiltro({ q: v })} espera={250} placeholder="Folio, unidad, propietario o falla" />
+          <Tabs dato="f" etiqueta="Reclamos" opciones={FILTROS} valor={filtro} alCambiar={(k) => reclamosSetFiltro({ filtro: k })} />
         </div>
         {enCurso.length > 0 && (
           <>
@@ -60,7 +61,7 @@ export default function Reclamos() {
         ))}
       </div>
       {/* lo llena src/renderer/postventa.js (detalle y «¿Qué sigue?»): React no dibuja dentro */}
-      <div className="pv-det" id="pvDet" />
+      <div className={cx('pv-det', BORDE_CARD)} id="pvDet" />
     </div>
   );
 }

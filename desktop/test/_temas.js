@@ -7,7 +7,7 @@ const OUT = process.env.SHOTS || __dirname;
   const w = await app.firstWindow(); const errs = []; w.on('pageerror', (e) => errs.push(e.message));
   const shot = (n) => w.screenshot({ path: path.join(OUT, n) });
   try {
-    await w.setViewportSize({ width: 1440, height: 900 }); await w.waitForSelector('#view-inicio .im-hero');
+    await w.setViewportSize({ width: 1440, height: 900 }); await w.waitForSelector('#view-inicio [data-cabecera]');
     await w.click('#view-inicio [data-do="importar"]'); await w.waitForSelector('text=Cartera actualizada', { timeout: 15000 }); await w.click('#mOk');
     await w.evaluate(async () => { const d = (await window.pf.inmoListar()).data; const hoy = new Date(Date.now() - new Date().getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
       for (const [i, p] of d.propiedades.slice(0, 6).entries()) await window.pf.assetEjecutar('asset_crear_evento', { tipo: 'visita', fecha: hoy, hora: `1${i}:00`, propiedad: p.id }); });

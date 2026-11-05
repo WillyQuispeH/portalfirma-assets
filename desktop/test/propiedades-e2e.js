@@ -8,7 +8,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
   const txt = (s) => w.textContent(s).then((t) => t || '');
   const shot = (n) => w.screenshot({ path: path.resolve(__dirname, n) });
   try {
-    await w.setViewportSize({ width: 1440, height: 900 }); await w.waitForSelector('#view-inicio .im-hero'); await w.waitForTimeout(400);
+    await w.setViewportSize({ width: 1440, height: 900 }); await w.waitForSelector('#view-inicio [data-cabecera]'); await w.waitForTimeout(400);
     ok(await w.isVisible('#view-inicio') && await w.isHidden('#view-home'), 'abre en el inicio inmobiliario, no en el documental');
     ok((await w.$$eval('#nav .tab', (x) => x.map((t) => t.textContent.trim()))).join('|') === 'Agente|Hoy|Cartera|Personas|Leads|Negocios|Agenda|Publicaciones|Arriendos|Finanzas|Gestión documental', 'menú inmobiliario con Gestión documental al final');
     ok(/Trae tu cartera/.test(await txt('#view-inicio')), 'sin propiedades: invita a importar o crear');
@@ -38,14 +38,14 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     await w.fill('#cf_nombre', 'Ana Rojas Díaz'); await w.fill('#cf_rut', '12.345.678-9'); await w.click('#mOk');
     ok(/RUT no es válido/.test(await txt('#cfErr')), 'valida el RUT');
     await w.fill('#cf_rut', '123456785'); await w.fill('#cf_email', 'ana@demo.cl'); await w.fill('#cf_telefono', '+56 9 8888 7777'); await w.click('#mOk');
-    await w.waitForSelector('.im-pv:has-text("Ana Rojas Díaz")'); ok(/Interesado · 12\.345\.678-5/.test(await txt('#view-cartera')), 'crea la persona y la vincula como interesada (RUT formateado)');
+    await w.waitForSelector('[data-pv]:has-text("Ana Rojas Díaz")'); ok(/Interesado · 12\.345\.678-5/.test(await txt('#view-cartera')), 'crea la persona y la vincula como interesada (RUT formateado)');
     const pid = await w.evaluate(() => window.Inmo._IM.ficha);
     await w.evaluate(([id, f]) => window.pf.inmoDocAgregar(id, [f]), [pid, path.join(__dirname, 'fixtures', 'contrato_prueba.pdf')]);
-    await w.evaluate((id) => window.Inmo.abrirFicha(id), pid); await w.evaluate((k) => window.Inmo.fichaTab(k), 'firmas'); await w.waitForSelector('#fDocs .im-doc');
+    await w.evaluate((id) => window.Inmo.abrirFicha(id), pid); await w.evaluate((k) => window.Inmo.fichaTab(k), 'firmas'); await w.waitForSelector('#fDocs [data-doc]');
     ok(/contrato_prueba\.pdf/.test(await txt('#fDocs')) && fs.readdirSync(path.join(inmoDir, 'documentos')).length === 1, 'documento copiado a la carpeta de la propiedad');
     await w.evaluate((k) => window.Inmo.fichaTab(k), 'historial');
-    await w.fill('#fNotaT', 'Visita agendada con Ana para el sábado'); await w.press('#fNotaT', 'Enter'); await w.waitForSelector('[data-pane="historial"] .im-act li.nota');
-    ok(/Visita agendada/.test(await txt('.im-act')), 'nota en el historial');
+    await w.fill('#fNotaT', 'Visita agendada con Ana para el sábado'); await w.press('#fNotaT', 'Enter'); await w.waitForSelector('[data-pane="historial"] [data-historial] li[data-nota]');
+    ok(/Visita agendada/.test(await txt('[data-pane="historial"] [data-historial]')), 'nota en el historial');
     await shot('pr2-ficha.png');
 
     // Editar la ficha: lo editado aquí se respeta al volver a importar

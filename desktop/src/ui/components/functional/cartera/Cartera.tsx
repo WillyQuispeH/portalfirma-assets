@@ -1,22 +1,33 @@
 // Cartera: las propiedades en tarjetas, con búsqueda, filtros y el modo «Asignar captador».
+// Hecha con el kit: Layout (cabecera y barra de filtros), Boton, Buscador, Tabs, Select, Badge, Card y EstadoVacio;
+// las tarjetas (PropiedadCard) siguen con sus clases im-* de styles.css.
 //
 // La ficha de la propiedad, «Nueva propiedad», «Importar», «Portales» y «Dictar» siguen en
-// src/renderer/inmo.js; se llaman por utils/app.ts. Los id im* los usan las pruebas e2e y Aprende.
+// src/renderer/inmo.js; se llaman por utils/app.ts. Los id im*, data-op, data-clr y las clases im-grid,
+// im-chips/im-chip los usan las pruebas e2e y Aprende.
 import { useEffect, useMemo } from 'react';
 import { useCartera, type IFiltrosCartera } from '../../../store/hooks/useCartera.hook';
 import { usePerfil } from '../../../store/hooks/usePerfil.hook';
 import { abrirFicha, abrirPortales, confirmar, dictarPropiedad, importarCartera, nuevaPropiedad, toast } from '../../../utils/app';
 import { fecha } from '../../../utils/formato';
 import Buscador from '../../ui/Buscador';
+import Layout from '../../ui/Layout';
+import Boton from '../../ui/Boton';
+import Tabs, { type TTabOpcion } from '../../ui/Tabs';
+import Select from '../../ui/Select';
+import Badge from '../../ui/Badge';
+import Card from '../../ui/Card';
+import EstadoVacio from '../../ui/EstadoVacio';
 import Icono from '../../ui/Icono';
-import Segmentos from '../../ui/Segmentos';
 import BarraCaptador from './BarraCaptador';
 import PropiedadCard from './PropiedadCard';
 import { ESPECIAL, ESTADO, TIPO } from './catalogos';
 import { filtrarPropiedades } from './filtrar';
 import type { TPropiedadEstado, TPropiedadTipo } from '../../../store/interfaces/propiedad.interface';
 
-const OPERACIONES: [IFiltrosCartera['op'], string][] = [['todas', 'Todas'], ['venta', 'Venta'], ['arriendo', 'Arriendo']];
+const OPERACIONES: TTabOpcion<IFiltrosCartera['op']>[] = [['todas', 'Todas'], ['venta', 'Venta'], ['arriendo', 'Arriendo']];
+// la «x» que quita un filtro activo (dentro de su etiqueta)
+const QUITAR = 'tw:grid tw:place-items-center tw:w-5 tw:h-5 tw:p-0 tw:m-0 tw:rounded-full tw:border-0 tw:bg-transparent tw:text-inherit tw:cursor-pointer tw:hover:bg-lav';
 const plural = (n: number, s: string, p = s + 's') => (n === 1 ? s : p);
 
 interface ICarteraProps {
@@ -58,55 +69,47 @@ export default function Cartera({ filtros: filtrosIniciales }: ICarteraProps) {
   };
 
   return (
-    <div className="im-wrap">
-      <div className="im-head fx-cartera">
-        <div>
-          <h1>Cartera</h1>
-          <p className="muted">{activas.length} propiedades{ultimaImportacion ? ` · actualizada desde Portalfirma el ${fecha(ultimaImportacion.fecha)}` : ''}</p>
-        </div>
-        <div className="row">
-          <button className="secondary" id="imPort" onClick={abrirPortales}><Icono nombre="link" tam={15} /> Portales</button>
-          <button className="secondary" id="imImp" onClick={importarCartera}><Icono nombre="download" tam={15} /> Importar desde Portalfirma</button>
-          <button className="secondary" id="imDict" title="Graba un audio o pega la descripción y Asset llena la ficha" onClick={dictarPropiedad}><Icono nombre="mic" tam={15} /> Dictar</button>
-          <button className="primary" id="imNew" onClick={nuevaPropiedad}><Icono nombre="plus" tam={15} /> Nueva propiedad</button>
-        </div>
-      </div>
-
-      <div className="im-bar">
-        <Buscador id="imQ" valor={f.q} alCambiar={(q) => carteraSetFiltros({ q })} espera={180} placeholder="Buscar por código, dirección, comuna, rol o propietario" />
-        <Segmentos id="imOp" dato="op" etiqueta="Operación" opciones={OPERACIONES} valor={f.op} alCambiar={(op) => carteraSetFiltros({ op })} />
-        <select id="imTipo" value={f.tipo} onChange={(e) => carteraSetFiltros({ tipo: e.target.value as TPropiedadTipo | '' })}>
-          <option value="">Todo tipo</option>
-          {Object.entries(TIPO).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-        </select>
-        <select id="imEst" value={f.estado} onChange={(e) => carteraSetFiltros({ estado: e.target.value as TPropiedadEstado | '' })}>
-          <option value="">Todo estado</option>
-          {Object.entries(ESTADO).map(([k, [v]]) => <option key={k} value={k}>{v}</option>)}
-        </select>
+    <Layout
+      titulo="Cartera"
+      ilustracion={{ imagen: 'img/formas/cartera.svg' }}
+      subtitulo={`${activas.length} propiedades${ultimaImportacion ? ` · actualizada desde Portalfirma el ${fecha(ultimaImportacion.fecha)}` : ''}`}
+      acciones={<>
+        <Boton id="imPort" variante="secundario" icono="link" onClick={abrirPortales}>Portales</Boton>
+        <Boton id="imImp" variante="secundario" icono="download" onClick={importarCartera}>Importar desde Portalfirma</Boton>
+        <Boton id="imDict" variante="secundario" icono="mic" title="Graba un audio o pega la descripción y Asset llena la ficha" onClick={dictarPropiedad}>Dictar</Boton>
+        <Boton id="imNew" icono="plus" onClick={nuevaPropiedad}>Nueva propiedad</Boton>
+      </>}
+      barra={<>
+        <Buscador kit id="imQ" valor={f.q} alCambiar={(q) => carteraSetFiltros({ q })} espera={180} placeholder="Buscar por código, dirección, comuna, rol o propietario"
+          className="tw:w-full tw:sm:w-auto tw:sm:flex-1 tw:sm:min-w-[280px]" />
+        <Tabs id="imOp" dato="op" etiqueta="Operación" opciones={OPERACIONES} valor={f.op} alCambiar={(op) => carteraSetFiltros({ op })} />
+        <Select id="imTipo" aria-label="Tipo" vacia="Todo tipo" opciones={Object.entries(TIPO)} value={f.tipo}
+          onChange={(e) => carteraSetFiltros({ tipo: e.target.value as TPropiedadTipo | '' })} />
+        <Select id="imEst" aria-label="Estado" vacia="Todo estado" opciones={Object.entries(ESTADO).map(([k, [v]]): [string, string] => [k, v])} value={f.estado}
+          onChange={(e) => carteraSetFiltros({ estado: e.target.value as TPropiedadEstado | '' })} />
         {enCaptacion > 0 && (
-          <button className={`im-cf ${f.especial === 'enCaptacion' ? 'on' : ''}`} id="imCapt" title="Propiedades a las que les falta algo de la captación"
+          <Boton id="imCapt" variante={f.especial === 'enCaptacion' ? 'principal' : 'secundario'} icono="clock" aria-pressed={f.especial === 'enCaptacion'}
+            title="Propiedades a las que les falta algo de la captación"
             onClick={() => carteraSetFiltros({ especial: f.especial === 'enCaptacion' ? '' : 'enCaptacion' })}>
-            <Icono nombre="clock" tam={13} /> En captación · {enCaptacion}
-          </button>
+            En captación · {enCaptacion}
+          </Boton>
         )}
-        <select id="imCom" value={f.comuna} onChange={(e) => carteraSetFiltros({ comuna: e.target.value })}>
-          <option value="">Toda comuna</option>
-          {comunas.map((c) => <option key={c} value={c}>{c}</option>)}
-        </select>
+        <Select id="imCom" aria-label="Comuna" vacia="Toda comuna" opciones={comunas.map((c): [string, string] => [c, c])} value={f.comuna}
+          onChange={(e) => carteraSetFiltros({ comuna: e.target.value })} />
         {hayCorredores && (
-          <select id="imCaptF" value={f.captador} onChange={(e) => carteraSetFiltros({ captador: e.target.value })}>
+          <Select id="imCaptF" aria-label="Captador" value={f.captador} onChange={(e) => carteraSetFiltros({ captador: e.target.value })}>
             <option value="">Todo captador</option>
             <option value="_sin">Sin captador · {activas.filter((p) => !p.captadorId).length}</option>
             {corredores.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-          </select>
+          </Select>
         )}
         {hayCorredores && esAdmin && !seleccion && (
-          <button className="secondary small" id="imCaptBulk" title="Elige varias propiedades y asígnales quién las captó" onClick={seleccionIniciar}>
-            <Icono nombre="users" tam={14} /> Asignar captador
-          </button>
+          <Boton id="imCaptBulk" variante="secundario" icono="users" title="Elige varias propiedades y asígnales quién las captó" onClick={seleccionIniciar}>
+            Asignar captador
+          </Boton>
         )}
-      </div>
-
+      </>}
+    >
       {seleccion && (
         <BarraCaptador elegidas={seleccion.length} enLista={lista.length} corredores={corredores}
           alElegirTodas={() => seleccionFijar([...new Set([...seleccion, ...lista.map((p) => p.id)])])}
@@ -114,13 +117,23 @@ export default function Cartera({ filtros: filtrosIniciales }: ICarteraProps) {
       )}
 
       {(f.especial || f.archivadas) && (
-        <div className="im-chips">
-          {f.especial && <span className="im-chip">{ESPECIAL[f.especial]}<button data-clr="especial" title="Quitar filtro" onClick={() => carteraSetFiltros({ especial: '' })}><Icono nombre="x" tam={12} /></button></span>}
-          {f.archivadas && <span className="im-chip">Archivadas<button data-clr="archivadas" onClick={() => carteraSetFiltros({ archivadas: false })}><Icono nombre="x" tam={12} /></button></span>}
+        <div className="im-chips tw:flex tw:flex-wrap tw:gap-2">
+          {f.especial && (
+            <Badge tono="lavanda" className="im-chip tw:pr-1">
+              {ESPECIAL[f.especial]}
+              <button type="button" data-clr="especial" title="Quitar filtro" aria-label="Quitar filtro" onClick={() => carteraSetFiltros({ especial: '' })} className={QUITAR}><Icono nombre="x" tam={12} /></button>
+            </Badge>
+          )}
+          {f.archivadas && (
+            <Badge tono="lavanda" className="im-chip tw:pr-1">
+              Archivadas
+              <button type="button" data-clr="archivadas" title="Quitar filtro" aria-label="Quitar filtro" onClick={() => carteraSetFiltros({ archivadas: false })} className={QUITAR}><Icono nombre="x" tam={12} /></button>
+            </Badge>
+          )}
         </div>
       )}
 
-      {error && <p className="error">No se pudo leer la cartera: {error}</p>}
+      {error && <p role="alert" className="tw:m-0 tw:text-red-softink">No se pudo leer la cartera: {error}</p>}
 
       {cargado && (lista.length ? (
         <div className="im-grid">
@@ -131,15 +144,14 @@ export default function Cartera({ filtros: filtrosIniciales }: ICarteraProps) {
           ))}
         </div>
       ) : (
-        <div className="im-empty sm">
-          <span className="im-eic"><Icono nombre="search" tam={30} /></span>
-          <p>{propiedades.length ? 'Ninguna propiedad coincide con los filtros.' : 'Aún no tienes propiedades. Impórtalas desde Portalfirma o crea la primera.'}</p>
-        </div>
+        <Card>
+          <EstadoVacio icono="search" texto={propiedades.length ? 'Ninguna propiedad coincide con los filtros.' : 'Aún no tienes propiedades. Impórtalas desde Portalfirma o crea la primera.'} />
+        </Card>
       ))}
 
-      <p className="im-foot">
-        <button className="ghost small" id="imArch" onClick={() => carteraSetFiltros({ archivadas: !f.archivadas })}>{f.archivadas ? 'Ver activas' : 'Ver archivadas'}</button>
-      </p>
-    </div>
+      <div className="tw:flex tw:justify-center">
+        <Boton id="imArch" variante="fantasma" tamano="sm" onClick={() => carteraSetFiltros({ archivadas: !f.archivadas })}>{f.archivadas ? 'Ver activas' : 'Ver archivadas'}</Boton>
+      </div>
+    </Layout>
   );
 }
