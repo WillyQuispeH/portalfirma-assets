@@ -88,7 +88,7 @@ function limpiarProp(o) {
 
 // usuario: el de la sesión de Asset · base: lo último que mandó el servidor de cada propiedad ('p:id'), persona ('c:id'),
 // negocio ('n:id'), evento ('e:id'), lead ('l:id') y firma ('f:id')
-const R = { usuario: null, props: [], pers: [], negs: [], evs: [], leads: [], firmas: [], base: new Map(), marca: null, listo: false, cargando: null };
+const R = { usuario: null, props: [], pers: [], negs: [], evs: [], leads: [], firmas: [], reg: {}, base: new Map(), marca: null, listo: false, cargando: null };
 const P = () => (API ? R.props : db().propiedades);
 const C = () => (API ? R.pers : db().personas);
 // ganchos que pone main.js: avisar en pantalla, avisar que cambiaron datos y el nombre de un usuario del equipo
@@ -234,6 +234,35 @@ const DOCS = {
   lead: { lista: () => R.leads, pref: 'l:', ruta: '/leads', que: 'leads', nombre: 'un lead' },
   firma: { lista: () => R.firmas, pref: 'f:', ruta: '/firmas', que: 'propiedades', nombre: 'el registro de un documento en firma' },
 };
+// ---------- registros: colecciones de la app en la base (/v1/registros/:coleccion) ----------
+// Postventa, plazos, expedientes, configuración de la corredora y autorizaciones viven como documentos de una
+// colección. Cada módulo trabaja sobre registros(coleccion) (una lista en memoria, sincronizada) y llama a guardar():
+// lo que cambió se encola como PUT del documento entero, igual que negocios y eventos.
+// En PF_MOCK, registros() devuelve null y cada módulo sigue con su archivo local.
+const COLECCIONES = ['pv_proyectos', 'pv_unidades', 'pv_reclamos', 'pv_contratistas', 'pv_chats', 'pv_config', 'plazos', 'expedientes', 'corredora_config', 'consentimientos', 'perfil'];
+for (const c of COLECCIONES) DOCS['reg:' + c] = { lista: () => (R.reg[c] ||= []), pref: `r:${c}:`, ruta: '/registros/' + c, que: c.startsWith('pv_') ? 'postventa' : c, nombre: 'un registro' };
+const registros = (c) => { if (!COLECCIONES.includes(c)) throw err('Colección desconocida: ' + c); return API ? (R.reg[c] ||= []) : null; };
+/** El siguiente número de una serie (folios): lo da el servidor, así dos equipos no repiten. */
+async function folio(serie, minimo) { const r = await asset().llamar('POST', '/contadores/' + serie, minimo != null ? { minimo } : {}); return r.valor; }
+// lo que cada módulo sube de su archivo local antes de cargar (los registra con alCargar)
+const subidasAntes = [];
+const alCargar = (fn) => { subidasAntes.push(fn); };
+// archivos de un registro (plazos, expedientes) en R2: subir, bajar a una copia local y borrar
+async function subirArchivoRegistro(c, id, nombre, buf, tipo = mimeDe(nombre)) {
+  const { subidas } = await asset().llamar('POST', `/registros/${c}/${encodeURIComponent(id)}/archivos/subidas`, { archivos: [{ nombre: String(nombre).slice(0, 200), tipo, tamano: buf.length }] });
+  await subirR2(subidas[0].subida, buf, tipo);
+  return subidas[0].clave;
+}
+async function bajarArchivoRegistro(c, id, clave, nombre, destino) {
+  const { url } = await asset().llamar('GET', `/registros/${c}/${encodeURIComponent(id)}/archivos/descarga?clave=${encodeURIComponent(clave)}&nombre=${encodeURIComponent(nombre || 'archivo')}`);
+  let r; try { r = await fetch(url, { signal: AbortSignal.timeout(120000) }); } catch { throw err('No se pudo bajar el archivo. Revisa tu conexión a internet.', 'SIN_CONEXION'); }
+  if (!r.ok) throw err('No se pudo bajar el archivo.');
+  fs.mkdirSync(path.dirname(destino), { recursive: true }); const tmp = destino + '.parcial';
+  fs.writeFileSync(tmp, Buffer.from(await r.arrayBuffer())); fs.renameSync(tmp, destino);
+  return destino;
+}
+const borrarArchivosRegistro = (c, id, claves) => (claves.length ? asset().llamar('POST', `/registros/${c}/${encodeURIComponent(id)}/archivos/borrar`, { claves }).catch((e) => console.warn('[inmo] archivos sin borrar:', e.message)) : null);
+
 // mensajes de la conversación de un lead: { tipo: 'msgs', lead, ks } (los envía leads.js, que tiene la conversación)
 function encolarMensajes(lead, ks) {
   if (!API || !ks.length) return;
@@ -267,7 +296,7 @@ function detectarDocs() {
   for (const [tipo, D] of Object.entries(DOCS)) {
     const ids = new Set();
     for (const x of D.lista()) { ids.add(x.id); const b = R.base.get(D.pref + x.id); if (!b || !docIgual(x, b)) encolar({ tipo, id: x.id }); }
-    for (const k of R.base.keys()) if (k.startsWith(D.pref) && !ids.has(k.slice(2))) encolar({ tipo, id: k.slice(2) });
+    for (const k of R.base.keys()) if (k.startsWith(D.pref) && !ids.has(k.slice(D.pref.length))) encolar({ tipo, id: k.slice(D.pref.length) });
   }
 }
 async function enviarDoc(tipo, id) {
@@ -470,6 +499,7 @@ function recibirRespuesta(ruta, x) {
   if (/^\/propiedades\//.test(ruta)) recibirProp(x); else if (/^\/personas\//.test(ruta)) recibirPer(x);
   else if (/^\/negocios\//.test(ruta)) recibirDoc('neg', x); else if (/^\/eventos\//.test(ruta)) recibirDoc('ev', x);
   else if (/^\/leads\/[^/]+$/.test(ruta)) recibirDoc('lead', x); else if (/^\/firmas\//.test(ruta)) recibirDoc('firma', x);
+  else { const m = /^\/registros\/([^/]+)\/[^/]+$/.exec(ruta); if (m && DOCS['reg:' + m[1]]) recibirDoc('reg:' + m[1], x); }
 }
 // manda lo que cambió de una propiedad o persona (contra lo último que mandó el servidor) con su versión
 async function enviarDiferencia(tipo, id) {
@@ -491,9 +521,9 @@ async function fallo(op, e) {
     try { if (e.datos?.visible) await recargarDoc('lead', e.datos.id); await H.leads.alDuplicado(id, e.datos || {}); } catch (e2) { console.warn('[inmo] lead duplicado:', e2.message); }
     H.cambio('leads'); return;
   }
-  const tipoDoc = DOCS[op.tipo] ? op.tipo : /^\/negocios\//.test(op.ruta || '') ? 'neg' : /^\/eventos\//.test(op.ruta || '') ? 'ev' : /^\/leads\//.test(op.ruta || '') ? 'lead' : /^\/firmas\//.test(op.ruta || '') ? 'firma' : null;
+  const tipoDoc = DOCS[op.tipo] ? op.tipo : /^\/negocios\//.test(op.ruta || '') ? 'neg' : /^\/eventos\//.test(op.ruta || '') ? 'ev' : /^\/leads\//.test(op.ruta || '') ? 'lead' : /^\/firmas\//.test(op.ruta || '') ? 'firma' : /^\/registros\/([^/]+)\//.test(op.ruta || '') ? 'reg:' + /^\/registros\/([^/]+)\//.exec(op.ruta)[1] : null;
   if (tipoDoc) {
-    const D = DOCS[tipoDoc]; const id = op.id || decodeURIComponent(String(op.ruta).split('/')[2]);
+    const D = DOCS[tipoDoc]; const id = op.id || decodeURIComponent(String(op.ruta).split('/').pop());
     if (op.metodo === 'DELETE' && e.status === 404) { R.base.delete(D.pref + id); return; }
     H.avisar(conflicto ? `Otra persona cambió ${D.nombre} recién: se recargó con sus datos. Revisa y vuelve a aplicar tu cambio.` : e.status === 403 || e.status === 404 ? `${D.nombre[0].toUpperCase() + D.nombre.slice(1)} ya no está a tu cargo o se eliminó: se quitó de tu lista.` : `No se pudo guardar ${D.nombre}: ${e.message}`);
     try { await recargarDoc(tipoDoc, id); } catch {}
@@ -535,14 +565,18 @@ async function cargarTodo() {
   try { await subirNegociosEventos(); } catch (e) { console.warn('[inmo] negocios y eventos locales sin subir:', e.message); }
   try { const t = await H.leads?.subirLocales?.(); if (t) H.avisar(t); } catch (e) { console.warn('[inmo] leads locales sin subir:', e.message); }
   try { await subirFirmasLocales(H.historialLocal ? H.historialLocal() : []); } catch (e) { console.warn('[inmo] firmas locales sin subir:', e.message); }
+  for (const f of subidasAntes) { try { const t = await f(); if (t) H.avisar(t); } catch (e2) { console.warn('[inmo] datos locales sin subir:', e2.message); } }
   const [n, e, ld, fi] = await Promise.all([traer('/negocios'), traer('/eventos'), traer('/leads'), traer('/firmas')]);
+  const regs = await Promise.all(COLECCIONES.map((c) => traer('/registros/' + c)));
   R.negs.length = 0; for (const x of n.items) if (!x.eliminado) { R.base.set('n:' + x.id, clonar(x)); R.negs.push(clonar(x)); }
   R.evs.length = 0; for (const x of e.items) if (!x.eliminado) { R.base.set('e:' + x.id, clonar(x)); R.evs.push(clonar(x)); }
   R.leads.length = 0; for (const x of ld.items) if (!x.eliminado) { R.base.set('l:' + x.id, clonar(x)); R.leads.push(clonar(x)); }
+  const marcasReg = {};
+  COLECCIONES.forEach((c, i) => { const l = (R.reg[c] ||= []); l.length = 0; for (const x of regs[i].items) if (!x.eliminado) { R.base.set(`r:${c}:` + x.id, clonar(x)); l.push(clonar(x)); } marcasReg[`r:${c}:`] = marcaDe(regs[i].marca); });
   R.firmas.length = 0; for (const x of fi.items) if (!x.eliminado) { R.base.set('f:' + x.id, clonar(x)); R.firmas.push(clonar(x)); }
   R.negs.sort((x, y) => String(y.creado).localeCompare(String(x.creado)));
   R.leads.sort((x, y) => String(y.creado).localeCompare(String(x.creado)));
-  R.marca = { p: marcaDe(a.marca), c: marcaDe(b.marca), n: marcaDe(n.marca), e: marcaDe(e.marca), l: marcaDe(ld.marca), f: marcaDe(fi.marca) }; R.listo = true;
+  R.marca = { p: marcaDe(a.marca), c: marcaDe(b.marca), 'n:': marcaDe(n.marca), 'e:': marcaDe(e.marca), 'l:': marcaDe(ld.marca), 'f:': marcaDe(fi.marca), ...marcasReg }; R.listo = true;
 }
 let sincronizando = null;
 function sincronizar() {
@@ -565,7 +599,7 @@ function sincronizar() {
     if (n) H.cambio('propiedades');
     const marcas = {};
     for (const [tipo, D] of Object.entries(DOCS)) {
-      const k = D.pref[0]; const r = await traer(D.ruta, `&desde=${encodeURIComponent(R.marca[k])}`); let m = 0;
+      const k = D.pref; const r = await traer(D.ruta, `&desde=${encodeURIComponent(R.marca[k] || marcaDe(null))}`); let m = 0;
       for (const x of r.items) {
         if (pendiente(tipo, x.id)) continue; // lo que se está enviando: si chocó, lo resuelve la cola (409 → recarga)
         const b = R.base.get(D.pref + x.id);
@@ -606,9 +640,9 @@ let reloj = null;
 // al iniciar sesión de Asset: carga la copia de la corredora (y retoma lo que quedó sin enviar de esta persona)
 async function iniciar(u) {
   const antes = R.usuario;
-  R.usuario = u ? { id: u.id, rol: u.rol, nombre: u.nombre, corredoraId: u.corredoraId } : null;
+  R.usuario = u ? { id: u.id, rol: u.rol, nombre: u.nombre, email: u.email || '', telefono: u.telefono || '', corredoraId: u.corredoraId } : null;
   if (!API || !u) return;
-  if (antes && (antes.corredoraId !== u.corredoraId || antes.id !== u.id)) { R.listo = false; R.base.clear(); R.props.length = 0; R.pers.length = 0; R.negs.length = 0; R.evs.length = 0; R.leads.length = 0; R.firmas.length = 0; }
+  if (antes && (antes.corredoraId !== u.corredoraId || antes.id !== u.id)) { R.listo = false; R.base.clear(); R.props.length = 0; R.pers.length = 0; R.negs.length = 0; R.evs.length = 0; R.leads.length = 0; R.firmas.length = 0; for (const l of Object.values(R.reg)) l.length = 0; }
   const g = leerCola();
   if (g?.ops?.length && !cola.length) { if (g.usuarioId === u.id) cola.push(...g.ops); else escribirCola(null); }
   if (!R.listo) { try { await (R.cargando ||= cargarTodo().finally(() => { R.cargando = null; })); } catch (e) { H.avisar(`No se pudo cargar la cartera desde el servidor: ${e.message}`); } }
@@ -622,7 +656,7 @@ async function cerrar() {
   if (API) {
     await esperarCola(4000); persistirCola();
     for (const op of cola) if (op.tipo === 'fn') op.rechazar(err('Se cerró la sesión de PortalFirma Asset.', 'NEEDS_ASSET_LOGIN'));
-    cola.length = 0; if (reloj) { clearInterval(reloj); reloj = null; } R.listo = false; R.base.clear(); R.props.length = 0; R.pers.length = 0; R.negs.length = 0; R.evs.length = 0; R.leads.length = 0; R.firmas.length = 0; }
+    cola.length = 0; if (reloj) { clearInterval(reloj); reloj = null; } R.listo = false; R.base.clear(); R.props.length = 0; R.pers.length = 0; R.negs.length = 0; R.evs.length = 0; R.leads.length = 0; R.firmas.length = 0; for (const l of Object.values(R.reg)) l.length = 0; }
   R.usuario = null;
 }
 const usuario = () => R.usuario;
@@ -1044,8 +1078,35 @@ function guardarTodo() { save(); detectarDocs(); }
 const personaPorId = (id) => C().find((x) => x.id === id) || null;
 FC.propietario.buscar = personaPorId;
 const registrar = (ref, texto, extra) => log(ref, texto, extra);
-function config() { return db().config || {}; }
-function guardarConfig(parcial) { const d = db(); d.config = { ...(d.config || {}), ...parcial }; save(); return d.config; }
+// Configuración. Con la cuenta de Asset: lo de la corredora (formatos, portales, publicaciones, estilo…) es un registro
+// compartido (corredora_config › «corredora») y el corredor que firma los documentos sale de la cuenta del usuario
+// (nombre, correo, teléfono), más lo que él complete (RUT…) en su perfil (registro propio «perfil-<usuario>»).
+const SERV_REG = ['id', 'version', 'creado', 'actualizado'];
+const sinServidor = (o) => Object.fromEntries(Object.entries(o || {}).filter(([k]) => !SERV_REG.includes(k)));
+function regUnico(c, id, nuevo) { const l = registros(c); let x = l.find((y) => y.id === id); if (!x && nuevo) { x = { id, ...nuevo }; l.push(x); } return x || null; }
+function config() {
+  if (!API || !R.usuario) return db().config || {};
+  const c = sinServidor(regUnico('corredora_config', 'corredora'));
+  const pf = regUnico('perfil', 'perfil-' + R.usuario.id)?.corredor || {};
+  const u = R.usuario;
+  return { ...c, corredor: { nombre: u.nombre, email: u.email, telefono: u.telefono, ...Object.fromEntries(Object.entries(pf).filter(([, v]) => v)) } };
+}
+function guardarConfig(parcial) {
+  if (!API || !R.usuario) { const d = db(); d.config = { ...(d.config || {}), ...parcial }; save(); return d.config; }
+  const { corredor, ...resto } = parcial || {};
+  if (corredor) { const pf = regUnico('perfil', 'perfil-' + R.usuario.id, {}); const u = R.usuario;
+    // solo lo que difiere de la cuenta queda en el perfil (así un cambio en la cuenta se ve en los documentos)
+    pf.corredor = Object.fromEntries(Object.entries({ ...(pf.corredor || {}), ...corredor }).filter(([k, v]) => v && !(['nombre', 'email', 'telefono'].includes(k) && v === u[k]))); }
+  if (Object.keys(resto).length) Object.assign(regUnico('corredora_config', 'corredora', {}), resto);
+  guardarTodo(); return config();
+}
+// la configuración local de este equipo (salvo el corredor, que ahora es de cada cuenta) se sube una vez
+alCargar(async () => {
+  const d = db(); if (d.configSubida || !d.config) return null;
+  const { corredor, ...resto } = d.config;
+  if (Object.keys(resto).length) await asset().llamar('POST', '/registros/corredora_config/importar', { items: [{ id: 'corredora', ...resto }] });
+  d.configSubida = now(); save(); return null;
+});
 // Interesado que llega desde un portal: queda en la ficha; si trae RUT válido entra al CRM como «interesado».
 function registrarLead(propId, l) {
   const p = prop(propId); p.leads ||= [];
@@ -1137,4 +1198,4 @@ const _reset = () => { cache = null; };
 module.exports = { personaDesdeLead, esEmpresa, eventos, negocios, personaPorId, registrar, obtener, parchear, todas, config, guardarConfig, registrarLead, guardar: guardarTodo, TIPOS, ESTADOS, ROLES, validRut, fmtRut, listar, resumen, guardarPropiedad, archivarPropiedad, guardarPersona, borrarPersona, vincular, desvincular,
   nota, actividadDe, actividadTodas, agregarDocumentos, quitarDocumento, docPath, mostrarCarpeta, subirFotos, importarPF, desdePF, exportarDatos, _reset,
   // repositorio (sesión de Asset y sincronización)
-  API, configurar, iniciar, cerrar, sincronizar, firmasDe, todasLasFirmas, agregarFirma, actualizarFirma, firmaDeOperacion, historialEnvios, registrarEnvio, leadsLista: () => R.leads, encolarMensajes, subirR2, recargarLead: (id) => recargarDoc('lead', id), esperarCola, usuario, listo, asignarCaptador, asignarVarios };
+  API, configurar, iniciar, cerrar, sincronizar, registros, folio, alCargar, subirArchivoRegistro, bajarArchivoRegistro, borrarArchivosRegistro, firmasDe, todasLasFirmas, agregarFirma, actualizarFirma, firmaDeOperacion, historialEnvios, registrarEnvio, leadsLista: () => R.leads, encolarMensajes, subirR2, recargarLead: (id) => recargarDoc('lead', id), esperarCola, usuario, listo, asignarCaptador, asignarVarios };

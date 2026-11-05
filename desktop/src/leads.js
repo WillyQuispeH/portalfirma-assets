@@ -343,7 +343,7 @@ function crear({ dir, ai, inmo = null, broker = () => ({ nombre: '' }), emit = (
       res.push({ id: l.id, nuevo, agregados: agregados.length, delCliente: agregados.some((m) => m.de === 'cliente') });
     }
     // quién autorizó y cuándo (queda en el registro de Leads)
-    const d = db(); d.consentimientos = [...(d.consentimientos || []), { canal: 'instagram', cuenta: cuenta || yo, autorizadoPor: String(autorizadoPor || brokerNombre || broker().nombre || '').slice(0, 120), fecha: now(), archivo: p.nombre, conversaciones: res.length }].slice(-100);
+    consentir({ canal: 'instagram', cuenta: cuenta || yo, autorizadoPor: String(autorizadoPor || brokerNombre || broker().nombre || '').slice(0, 120), archivo: p.nombre, conversaciones: res.length });
     save(); pendientes.delete(token);
     let analizados = 0; const errores = [];
     if (analizarIA) for (const r of res) { if (!r.agregados || !r.delCliente) continue; try { await analizarConIA(r.id); analizados++; } catch (e) { errores.push(e.message); if (e.code === 'NO_TOKENS' || /saldo|token/i.test(e.message)) break; } }
@@ -417,8 +417,18 @@ function crear({ dir, ai, inmo = null, broker = () => ({ nombre: '' }), emit = (
     }
     save(); if (n) emit({ type: 'datos', que: 'leads' }); return n;
   }
-  function consentir(c) { const d = db(); d.consentimientos = [...(d.consentimientos || []), { fecha: now(), ...c }].slice(-100); save(); }
-  const consentimientos = () => (db().consentimientos || []).slice().reverse();
+  // quién autorizó importar los mensajes de una cuenta (registro legal). Con la API: colección «consentimientos» de la
+  // corredora (un registro por autorización); lo que había en indice.json se sube una vez.
+  function consentir(c) {
+    if (enApi()) { inmo.registros('consentimientos').push({ id: uid().replace(/^ld/, 'cs'), fecha: now(), usuarioId: inmo.usuario?.()?.id || null, ...c }); inmo.guardar(); return; }
+    const d = db(); d.consentimientos = [...(d.consentimientos || []), { fecha: now(), ...c }].slice(-100); save();
+  }
+  const consentimientos = () => (enApi() ? inmo.registros('consentimientos').slice().sort((a, b) => String(b.fecha).localeCompare(String(a.fecha))) : (db().consentimientos || []).slice().reverse());
+  if (inmo?.alCargar) inmo.alCargar(async () => {
+    if (!enApi()) return null; const d = db(); const l = d.consentimientos || []; if (!l.length) return null;
+    await require('./asset').llamar('POST', '/registros/consentimientos/importar', { items: l.map((c, i) => ({ id: `cs-local-${String(c.fecha || '').replace(/\D/g, '').slice(0, 17)}-${i}`, ...c })) });
+    delete d.consentimientos; save(); return null;
+  });
   const resumenMsg = (m) => (m.texto ? m.texto.slice(0, 140) : m.tipo === 'audio' ? '🎤 Audio' + (m.transcripcion ? ': ' + m.transcripcion.slice(0, 100) : '') : m.tipo === 'imagen' ? '📷 Foto' : m.tipo === 'video' ? '🎬 Video' : m.tipo === 'omitido' ? '(archivo no incluido)' : '📎 ' + (m.archivo || 'Archivo'));
 
   // propiedades de la cartera que aparecen en la conversación (por link publicado o por código)

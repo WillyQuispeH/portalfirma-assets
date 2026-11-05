@@ -43,11 +43,38 @@ function garantia(unidad, tipo, hoy = new Date()) {
   return { anos, base, desde, vence, vigente, txt: vigente ? `vigente hasta ${vence.split('-').reverse().join('/')}` : `vencida el ${vence.split('-').reverse().join('/')}` };
 }
 
-function crear({ dir, wa = null, ia = null, mock = false }) {
+function crear({ dir, wa = null, ia = null, mock = false, inmo = null }) {
   const file = () => path.join(dir(), 'postventa.json');
   let db = null;
-  const D = () => { if (!db) { try { db = JSON.parse(fs.readFileSync(file(), 'utf8')); } catch { db = {}; } db.proyectos ||= []; db.unidades ||= []; db.reclamos ||= []; db.contratistas ||= []; db.chats ||= {}; db.config ||= { auto: false }; db.folio ||= 0; } return db; };
-  const save = () => fs.writeFileSync(file(), JSON.stringify(D(), null, 1));
+  // Con la cuenta de Asset, postventa vive en la base: colecciones pv_* (vía inmo.registros, sincronizadas) y el folio
+  // lo da el servidor. Las conversaciones (chats) son un mapa por id para este módulo y una lista en la base.
+  const enApi = () => !!inmo?.API;
+  const chatsMapa = {};
+  function DApi() {
+    const L = (c) => inmo.registros(c);
+    const cfgL = L('pv_config'); let cfg = cfgL.find((x) => x.id === 'config'); if (!cfg) { cfg = { id: 'config', auto: false }; cfgL.push(cfg); }
+    const lc = L('pv_chats'); const ids = new Set(lc.map((c) => c.id));
+    for (const [id, c] of Object.entries(chatsMapa)) if (!ids.has(id)) { if (c.__baja) delete chatsMapa[id]; else lc.push(c); } // nuevas conversaciones → a la lista
+    for (const id of Object.keys(chatsMapa)) if (!lc.some((c) => c.id === id)) delete chatsMapa[id];
+    for (const c of lc) chatsMapa[c.id] = c;
+    return { proyectos: L('pv_proyectos'), unidades: L('pv_unidades'), reclamos: L('pv_reclamos'), contratistas: L('pv_contratistas'), chats: chatsMapa, config: cfg, folio: 0 };
+  }
+  const D = () => { if (enApi()) return DApi(); if (!db) { try { db = JSON.parse(fs.readFileSync(file(), 'utf8')); } catch { db = {}; } db.proyectos ||= []; db.unidades ||= []; db.reclamos ||= []; db.contratistas ||= []; db.chats ||= {}; db.config ||= { auto: false }; db.folio ||= 0; } return db; };
+  const save = () => { if (enApi()) { D(); inmo.guardar(); return; } fs.writeFileSync(file(), JSON.stringify(D(), null, 1)); };
+  // lo que este equipo tenía en postventa.json se sube una vez al iniciar sesión (queda postventa.respaldo.json)
+  if (inmo?.alCargar) inmo.alCargar(async () => {
+    if (!enApi() || !fs.existsSync(file())) return null;
+    let d; try { d = JSON.parse(fs.readFileSync(file(), 'utf8')); } catch { return null; }
+    const api = (...a) => require('./asset').llamar(...a);
+    const lotes = { pv_proyectos: d.proyectos || [], pv_unidades: d.unidades || [], pv_reclamos: d.reclamos || [], pv_contratistas: d.contratistas || [],
+      pv_chats: Object.values(d.chats || {}), pv_config: d.config ? [{ ...d.config, id: 'config' }] : [] };
+    let n = 0;
+    for (const [c, l] of Object.entries(lotes)) for (let i = 0; i < l.length; i += 200) n += (await api('POST', `/registros/${c}/importar`, { items: l.slice(i, i + 200) })).nuevos || 0;
+    if (d.folio) await inmo.folio('PV', d.folio - 1); // la serie sigue después del último folio de este equipo
+    fs.renameSync(file(), file().replace(/\.json$/, '.respaldo.json'));
+    const r = (d.reclamos || []).length;
+    return n ? `Se subió al servidor la postventa de este computador${r ? ` (${r} ${r === 1 ? 'reclamo' : 'reclamos'})` : ''}.` : null;
+  });
   const unidad = (id) => D().unidades.find((u) => u.id === id) || null;
   const proyecto = (id) => D().proyectos.find((p) => p.id === id) || null;
   const nomUnidad = (u) => { if (!u) return 'Sin unidad'; const p = proyecto(u.proyectoId); return `${p?.nombre || 'Proyecto'} · ${u.torre ? 'Torre ' + u.torre + ' · ' : ''}${u.numero}`; };
@@ -114,9 +141,9 @@ function crear({ dir, wa = null, ia = null, mock = false }) {
     return { ...r, estadoTxt: ESTADO_TXT[r.estado], unidad: u ? { id: u.id, nombre: nomUnidad(u), propietario: u.propietario, recepcionDOM: u.recepcionDOM, inscripcionCBR: u.inscripcionCBR } : null,
       items: r.items.map((it) => ({ ...it, tipoTxt: TIPOS[it.tipo]?.[0] || 'Otro', garantia: garantia(u, it.tipo) })),
       conversacion: r.chatId ? (D().chats[r.chatId]?.mensajes || []) : [], dias: Math.floor((Date.now() - new Date(r.creado).getTime()) / 864e5) }; };
-  function crearReclamo({ unidadId = null, items = [], canal = 'manual', contacto = null, chatId = null }) {
-    const d = D(); d.folio += 1;
-    const r = { id: uid('r'), folio: `PV-${String(d.folio).padStart(4, '0')}`, unidadId, canal, contacto, chatId, estado: 'triage', urgente: items.some((i) => i.urgente || clasificar(i.descripcion).urgente),
+  async function crearReclamo({ unidadId = null, items = [], canal = 'manual', contacto = null, chatId = null }) {
+    const n = enApi() ? await inmo.folio('PV') : (D().folio += 1); const d = D();
+    const r = { id: uid('r'), folio: `PV-${String(n).padStart(4, '0')}`, unidadId, canal, contacto, chatId, estado: 'triage', urgente: items.some((i) => i.urgente || clasificar(i.descripcion).urgente),
       items: items.map((i) => { const c = clasificar(i.descripcion); return { id: uid('i'), descripcion: i.descripcion, recinto: i.recinto || c.recinto, tipo: i.tipo || c.tipo, fotos: i.fotos || [], auto: true }; }),
       visitas: [], contratista: null, historial: [], creado: now(), actualizado: now() };
     log(r, `Reclamo recibido por ${canal === 'whatsapp' ? 'WhatsApp' : 'Asset'}`); d.reclamos.unshift(r); save(); return vista(r);
@@ -240,7 +267,7 @@ function crear({ dir, wa = null, ia = null, mock = false }) {
   }
   async function probarEstilo(o) { const p = persona(o); const m = muestra(p).mensajes.find((x) => x.clave === 'registrado').texto; const r = await pulir(m, p); return { antes: m, ...r }; }
 
-  function responder(chat, msg) {
+  async function responder(chat, msg) {
     const V = voz();
     const t = norm(msg.body); const fotos = msg.attachments || [];
     const s = chat.paso || 'nuevo';
@@ -275,7 +302,7 @@ function crear({ dir, wa = null, ia = null, mock = false }) {
       else if (!/sin fotos|no tengo|listo|eso es todo|nada mas|no$/.test(t)) { chat.borrador.texto = [chat.borrador.texto, msg.body].filter(Boolean).join('. '); return V.fotosAnotado(); }
       // crear el reclamo
       const c = clasificar(chat.borrador.texto); const u = unidad(chat.unidadId);
-      const r = crearReclamo({ unidadId: chat.unidadId, canal: 'whatsapp', chatId: chat.id, contacto: { contactId: chat.contactId, nombre: chat.nombre, telefono: chat.telefono },
+      const r = await crearReclamo({ unidadId: chat.unidadId, canal: 'whatsapp', chatId: chat.id, contacto: { contactId: chat.contactId, nombre: chat.nombre, telefono: chat.telefono },
         items: [{ descripcion: chat.borrador.texto, recinto: c.recinto, tipo: c.tipo, fotos: chat.borrador.fotos, urgente: c.urgente }] });
       chat.paso = 'listo'; chat.borrador = null; chat.ultimoReclamo = r.id;
       const g = r.items[0].garantia;
@@ -289,6 +316,8 @@ function crear({ dir, wa = null, ia = null, mock = false }) {
   async function revisarWhatsApp(o = {}) { while (revisando) await revisando.catch(() => {}); revisando = revisar1(o); try { return await revisando; } finally { revisando = null; } }
   async function revisar1({ forzar = false, excluir = [] } = {}) {
     if (!wa) throw err('WhatsApp no disponible.'); const d = D(); if (!d.config.auto && !forzar) return { activo: false, procesados: 0 };
+    // con la base compartida, responde solo el equipo que activó la respuesta automática (no dos a la vez)
+    if (enApi() && !forzar && !esteEquipo(d.config)) return { activo: false, procesados: 0, otroEquipo: d.config.revisaEquipo || null };
     const convs = await wa.conversaciones(); let procesados = 0, enviados = 0; const nuevos = [];
     const fuera = new Set(excluir.map(dig).filter(Boolean)); // el celular del ejecutivo (Agente por WhatsApp) no es un cliente de postventa
     for (const c of convs) {
@@ -300,7 +329,7 @@ function crear({ dir, wa = null, ia = null, mock = false }) {
       const msgs = await wa.mensajes(c.id); chat.marca = marca; const ix = chat.ultimo ? msgs.findIndex((m) => m.id === chat.ultimo) : -1;
       const pend = (ix >= 0 ? msgs.slice(ix + 1) : msgs.filter((m) => new Date(m.dateAdded) >= new Date(chat.desde))).filter((m) => m.direction === 'inbound');
       for (const m of pend) {
-        procesados++; chat.ultimo = m.id; const resp = responder(chat, m);
+        procesados++; chat.ultimo = m.id; const resp = await responder(chat, m);
         if (resp || chat.pv) { // solo se guarda la conversación de postventa (las comerciales no)
           chat.pv = true; chat.actualizado = now(); (chat.mensajes ||= []).push({ dir: 'in', texto: m.body || '', fotos: m.attachments || [], fecha: m.dateAdded || now() });
           if (resp) { const pr = await pulir(resp); await wa.enviar(chat.contactId, pr.texto); enviados++; chat.mensajes.push({ dir: 'out', texto: pr.texto, fecha: now(), ...(pr.ia ? { ia: true } : {}) }); }
@@ -315,8 +344,11 @@ function crear({ dir, wa = null, ia = null, mock = false }) {
   }
   // cada cuánto revisar: rápido si alguien está conversando con el asistente (últimos 20 min)
   const ritmo = () => (Object.values(D().chats).some((c) => c.pv && !['nuevo', 'listo'].includes(c.paso) && Date.now() - new Date(c.actualizado || 0) < 20 * 6e4) ? 4000 : 10000);
-  const config = () => ({ ...D().config, persona: persona() });
-  function configurar(o) { const c = D().config; const { persona: pz, ...resto } = o || {}; Object.assign(c, resto);
+  const config = () => ({ ...D().config, persona: persona(), ...(enApi() ? { enEsteEquipo: esteEquipo(D().config) } : {}) });
+  // quién hace la revisión automática (con la API): el usuario y el equipo que la activaron
+  const equipoActual = () => ({ revisaUsuarioId: inmo?.usuario?.()?.id || null, revisaEquipo: require('os').hostname().slice(0, 80) });
+  const esteEquipo = (c) => { const e = equipoActual(); return !c.revisaUsuarioId || (c.revisaUsuarioId === e.revisaUsuarioId && c.revisaEquipo === e.revisaEquipo); };
+  function configurar(o) { const c = D().config; const { persona: pz, ...resto } = o || {}; if (enApi() && resto.auto && !c.auto) Object.assign(c, equipoActual()); Object.assign(c, resto);
     if (pz) { const p = { ...(c.persona || {}) }; for (const k of Object.keys(PERSONA)) if (pz[k] !== undefined) p[k] = typeof PERSONA[k] === 'boolean' ? !!pz[k] : String(pz[k]).slice(0, k === 'instrucciones' ? 1500 : 120);
       if (!['tu', 'usted'].includes(p.trato)) p.trato = 'tu'; if (!['cercano', 'neutro', 'formal'].includes(p.tono)) p.tono = 'neutro'; if (!['breve', 'normal'].includes(p.largo)) p.largo = 'normal'; c.persona = p; }
     save(); return config(); }

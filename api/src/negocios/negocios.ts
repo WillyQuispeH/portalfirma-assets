@@ -24,6 +24,7 @@ import {
   buscarVisible,
   esAdmin,
   esUuid,
+  igualJson,
   idDoc,
   isoOpc,
   listar,
@@ -128,7 +129,7 @@ export class NegociosService {
       }
     }
     const igual =
-      JSON.stringify(datos) === JSON.stringify(previa.datos) &&
+      igualJson(datos, previa.datos) &&
       Object.entries(cols).every(([k, v]) => {
         const a = (previa as Record<string, unknown>)[k];
         return (a instanceof Date ? a.getTime() : a) === (v instanceof Date ? v.getTime() : v);

@@ -23,6 +23,7 @@ import {
   buscarVisible,
   esAdmin,
   esUuid,
+  igualJson,
   fechaDia,
   idDoc,
   isoOpc,
@@ -143,7 +144,7 @@ export class EventosService {
       }
     }
     const igual =
-      JSON.stringify(datos) === JSON.stringify(previa.datos) &&
+      igualJson(datos, previa.datos) &&
       Object.entries(cols).every(([k, v]) => {
         const a = (previa as Record<string, unknown>)[k];
         return (

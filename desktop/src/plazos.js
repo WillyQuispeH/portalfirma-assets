@@ -1,14 +1,34 @@
 // Plazos y vencimientos: documentos del usuario con sus fechas clave (término, aviso, reajuste).
 // Los archivos se copian a una carpeta de la app; el análisis (hecho con IA en la ventana) se guarda aquí.
 // Al abrir la app y una vez al día se avisa con una notificación si algo vence pronto.
+// Con la cuenta de Asset, la lista vive en la base (colección «plazos», de cada usuario) y cada PDF en R2 (it.clave);
+// en este equipo queda una copia (it.file) que se baja cuando falta. Lo de antes se sube una vez al iniciar sesión.
 const fs = require('fs'); const path = require('path'); const crypto = require('crypto');
 const { app, Notification } = require('electron');
 const store = require('./store');
 
 let toPdf = null; let onOpen = () => {};
 const dir = () => { const d = path.join(app.getPath('userData'), 'plazos'); fs.mkdirSync(d, { recursive: true }); return d; };
-const all = () => store.get('plazos') || [];
-const save = (l) => store.set('plazos', l);
+let inmoMod = null; const inmo = () => (inmoMod ||= require('./inmo'));
+const enApi = () => inmo().API;
+const all = () => (enApi() ? inmo().registros('plazos') : store.get('plazos') || []);
+// con la API la lista es la copia sincronizada: se cambia en el lugar y guardar() encola lo que cambió
+const save = (l) => { if (!enApi()) return store.set('plazos', l); const r = inmo().registros('plazos'); if (l !== r) r.splice(0, r.length, ...l); inmo().guardar(); };
+const copia = (it) => path.join(dir(), it.id + '.pdf');
+// lo que este equipo tenía (store › plazos) se sube una vez: los PDF a R2 y la lista a la base
+inmo().alCargar(async () => {
+  if (!enApi() || store.get('plazosSubidos')) return null;
+  const l = store.get('plazos') || []; if (!l.length) { store.set('plazosSubidos', new Date().toISOString()); return null; }
+  const items = [];
+  for (const it of l) {
+    const x = { ...it };
+    try { if (it.file && fs.existsSync(it.file)) x.clave = await inmo().subirArchivoRegistro('plazos', it.id, it.name || 'documento.pdf', fs.readFileSync(it.file), 'application/pdf'); } catch (e) { console.warn('[plazos] PDF sin subir:', it.name, e.message); }
+    items.push(x);
+  }
+  for (let i = 0; i < items.length; i += 200) await require('./asset').llamar('POST', '/registros/plazos/importar', { items: items.slice(i, i + 200) });
+  store.set('plazosSubidos', new Date().toISOString());
+  return `Se ${l.length === 1 ? 'subió 1 documento' : `subieron ${l.length} documentos`} de Plazos que estaban solo en este computador.`;
+});
 const uid = () => 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
 function init({ asPdf, open }) { toPdf = asPdf; onOpen = open; setTimeout(notify, 8000); setInterval(notify, 24 * 3600 * 1000); }
@@ -23,6 +43,7 @@ async function add(paths) {
       if (known.has(hash)) { skipped.push(`${path.basename(p)}: ya está en la lista`); continue; }
       const id = uid(); const dst = path.join(dir(), id + '.pdf'); fs.writeFileSync(dst, buf);
       const it = { id, name: path.basename(p).replace(/\.docx$/i, '.pdf'), file: dst, hash, added: new Date().toISOString(), status: 'pending' };
+      if (enApi()) it.clave = await inmo().subirArchivoRegistro('plazos', id, it.name, buf, 'application/pdf');
       list.push(it); known.add(hash); added.push(it);
     } catch (e) { skipped.push(`${path.basename(p)}: ${e.message}`); }
   }
@@ -34,10 +55,17 @@ function update(id, patch) {
 }
 function remove(id) {
   const list = all(); const it = list.find((x) => x.id === id);
-  if (it) try { fs.unlinkSync(it.file); } catch {}
+  if (it) try { fs.unlinkSync(it.file || copia(it)); } catch {}
+  if (it?.clave && enApi()) inmo().borrarArchivosRegistro('plazos', id, [it.clave]);
   save(list.filter((x) => x.id !== id)); return all();
 }
-const bytes = (id) => { const it = all().find((x) => x.id === id); if (!it) throw new Error('Documento no encontrado.'); return new Uint8Array(fs.readFileSync(it.file)); };
+// el PDF: la copia de este equipo o, si no está (lo agregó en otro equipo), se baja de R2
+async function bytes(id) {
+  const it = all().find((x) => x.id === id); if (!it) throw new Error('Documento no encontrado.');
+  const f = it.file && fs.existsSync(it.file) ? it.file : copia(it);
+  if (!fs.existsSync(f)) { if (!it.clave || !enApi()) throw new Error('El archivo ya no está en este computador.'); await inmo().bajarArchivoRegistro('plazos', id, it.clave, it.name, f); }
+  return new Uint8Array(fs.readFileSync(f));
+}
 
 // Evento de calendario (.ics) para la fecha clave
 function ics(id) {

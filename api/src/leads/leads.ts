@@ -29,6 +29,7 @@ import {
   buscarVisible,
   esAdmin,
   esUuid,
+  igualJson,
   idDoc,
   isoOpc,
   listar,
@@ -256,7 +257,7 @@ export class LeadsService {
     }
     const nuevo = { ...cols, corredorId };
     const igual =
-      JSON.stringify(datos) === JSON.stringify(previa.datos) &&
+      igualJson(datos, previa.datos) &&
       Object.entries(nuevo).every(
         ([k, v]) => JSON.stringify((previa as Record<string, unknown>)[k]) === JSON.stringify(v),
       );

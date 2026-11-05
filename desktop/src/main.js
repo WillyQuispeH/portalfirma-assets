@@ -778,7 +778,7 @@ handle('res:estado', () => reservas.estado());
 handle('res:configurar', (o) => reservas.configurar(o || {}));
 handle('res:sincronizar', async (pend) => { const r = await reservas.sincronizar(pend || null); if (r.cita && !r.cita.ok && r.cita.permiso) toUI('agent:event', { type: 'aviso', texto: r.cita.error }); if (r.nuevas || r.actualizadas || r.canceladas) toUI('agent:event', { type: 'datos', que: 'agenda' }); return r; });
 // Postventa (MVP): unidades entregadas, reclamos con garantía y atención por WhatsApp vía wechatia
-const postventa = require('./postventa').crear({ dir: () => { const d = process.env.PF_INMO_DIR || path.join(app.getPath('userData'), 'inmo'); fs.mkdirSync(d, { recursive: true }); return d; }, wa: require('./postventa').whatsappWechatia(reservas), ia: (o) => require('./ai').redactarCorto(o) });
+const postventa = require('./postventa').crear({ dir: () => { const d = process.env.PF_INMO_DIR || path.join(app.getPath('userData'), 'inmo'); fs.mkdirSync(d, { recursive: true }); return d; }, wa: require('./postventa').whatsappWechatia(reservas), ia: (o) => require('./ai').redactarCorto(o), inmo });
 const pvAviso = (r) => { if (r?.procesados) toUI('agent:event', { type: 'datos', que: 'postventa' }); return r; };
 handle('pv:tablero', () => postventa.tablero());
 handle('pv:listar', (o) => postventa.listar(o || {}));

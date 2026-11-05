@@ -37,6 +37,8 @@ model Corredora {
   eventos         Evento[]
   leads           Lead[]
   firmas          Firma[]
+  registros       Registro[]
+  contadores      Contador[]
 
   @@map("corredoras")
 }
@@ -532,4 +534,43 @@ model Firma {
   @@index([corredoraId, negocioId])
   @@index([propiedadIds], type: Gin)
   @@map("firmas")
+}
+
+// ============================================================================ registros (colecciones de la app)
+
+/// Datos de la app que viven como documentos dentro de una colección: postventa (proyectos, unidades, reclamos,
+/// contratistas, conversaciones, configuración del asistente), plazos, expedientes, configuración de la corredora…
+/// La lógica de cada uno está en la app; aquí se guardan con su versión y la sincronización por cambios, como los
+/// negocios. Las colecciones permitidas y quién las ve están en src/registros/registros.ts. El id lo pone la app.
+model Registro {
+  corredoraId   String    @map("corredora_id") @db.Uuid
+  coleccion     String
+  id            String
+  /// dueño, en las colecciones de cada usuario (plazos, expedientes); null en las de toda la corredora
+  usuarioId     String?   @map("usuario_id") @db.Uuid
+  datos         Json      @default("{}")
+  version       Int       @default(1)
+  creadoPorId   String?   @map("creado_por_id") @db.Uuid
+  creadoEn      DateTime  @default(now()) @map("creado_en")
+  actualizadoEn DateTime  @updatedAt @map("actualizado_en")
+  eliminadoEn   DateTime? @map("eliminado_en")
+
+  corredora Corredora @relation(fields: [corredoraId], references: [id], onDelete: Restrict)
+
+  @@id([corredoraId, coleccion, id])
+  @@index([corredoraId, coleccion, actualizadoEn])
+  @@index([corredoraId, coleccion, usuarioId, actualizadoEn])
+  @@map("registros")
+}
+
+/// Números correlativos por corredora (p. ej. el folio PV-0001 de los reclamos de postventa): se toman con
+/// INSERT … ON CONFLICT … RETURNING, así dos equipos no reciben el mismo número.
+model Contador {
+  corredoraId String    @map("corredora_id") @db.Uuid
+  serie       String
+  valor       Int       @default(0)
+  corredora   Corredora @relation(fields: [corredoraId], references: [id], onDelete: Restrict)
+
+  @@id([corredoraId, serie])
+  @@map("contadores")
 }

@@ -163,5 +163,18 @@ export async function referencias(
   };
 }
 
+/** JSON con las claves ordenadas: para comparar contenido (jsonb reordena las claves al guardar) */
+export const estable = (v: unknown): unknown =>
+  Array.isArray(v)
+    ? v.map(estable)
+    : v && typeof v === 'object' && !(v instanceof Date)
+      ? Object.fromEntries(
+          Object.keys(v)
+            .sort()
+            .map((k) => [k, estable((v as Record<string, unknown>)[k])]),
+        )
+      : v;
+export const igualJson = (a: unknown, b: unknown) => JSON.stringify(estable(a)) === JSON.stringify(estable(b));
+
 export const esUuid = (s: unknown): s is string =>
   typeof s === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
