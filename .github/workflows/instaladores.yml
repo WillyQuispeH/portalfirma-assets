@@ -72,7 +72,7 @@ jobs:
 
   mac:
     needs: windows # después de Windows: así los dos suben a la misma versión sin pisarse al crearla
-    runs-on: macos-14
+    runs-on: macos-latest # la versión vigente de macOS en GitHub (las versiones viejas se retiran)
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
