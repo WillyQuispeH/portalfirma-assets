@@ -33,8 +33,8 @@ jobs:
   windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: yarn
@@ -74,8 +74,8 @@ jobs:
     needs: windows # después de Windows: así los dos suben a la misma versión sin pisarse al crearla
     runs-on: macos-latest # la versión vigente de macOS en GitHub (las versiones viejas se retiran)
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: yarn

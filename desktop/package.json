@@ -1,7 +1,7 @@
 {
   "name": "portalfirma-asset",
   "productName": "PortalFirma Asset",
-  "version": "0.17.2",
+  "version": "0.17.3",
   "description": "PortalFirma Asset: gestión inmobiliaria 360 (cartera, personas, negocios y arriendos) con firma electrónica PortalFirma",
   "main": "src/main.js",
   "author": "Portalfirma",
