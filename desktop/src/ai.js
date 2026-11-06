@@ -7,6 +7,27 @@ const PROVIDERS = {
   anthropic: { label: 'Anthropic (Claude)', keyHint: 'sk-ant-…', site: 'https://console.anthropic.com/settings/keys' },
 };
 const MOCK = process.env.PF_MOCK === '1';
+
+// ---- IA por el servidor de Asset ----
+// Con la cuenta de Asset, todo pasa por la API (api/src/ia/ia-app.ts): la clave de Claude vive en el servidor y la app
+// nunca la ve; el modelo lo elige el servidor según la tarea (agente, documento, corto). Sin cuenta de Asset (o en
+// PF_MOCK) se usa la clave de este computador, como antes.
+const enServidor = () => { if (MOCK) return false; try { return require('./wa-servidor').enApi(); } catch { return false; } };
+const errorServidor = (e) => {
+  const codigo = e.datos?.codigo || e.code; // asset.js deja la respuesta de la API en e.datos
+  if (codigo === 'SIN_IA') return Object.assign(new Error('La IA todavía no está activada en el servidor de Asset. Avísale al administrador de Portalfirma.'), { code: 'NO_KEY' });
+  if (codigo === 'SIN_TRANSCRIPCION') return new Error('El dictado por voz no está disponible. Escribe o pega la descripción en el cuadro de texto.');
+  return e;
+};
+/** un mensaje a Claude en el formato de la API de Anthropic: por el servidor o, sin cuenta de Asset, con la clave local */
+async function mensajeClaude(tarea, body, ms = 180000) {
+  if (enServidor()) {
+    try { return await require('./asset').llamar('POST', '/ia/mensajes', { tarea, system: body.system || '', messages: body.messages, ...(body.tools ? { tools: body.tools } : {}), max_tokens: body.max_tokens }, ms); }
+    catch (e) { throw errorServidor(e); }
+  }
+  const { k } = key();
+  return http('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'x-api-key': k, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' }, body: JSON.stringify(body) }, ms);
+}
 const fs = require('fs'); const path = require('path');
 
 // ---- Clave incluida en la app (la pone Portalfirma al compilar; los usuarios no la ven ni la cambian) ----
@@ -29,9 +50,11 @@ function managed() {
 function config() {
   const c = { provider: 'openai', model: '', consent: false, ...(store.get('ai') || {}) };
   const m = managed(); if (m) { c.provider = m.provider; c.model = m.model || c.model; if (m.docModel && !c.docModel) c.docModel = m.docModel; }
+  if (enServidor()) c.provider = 'anthropic'; // la IA va por el servidor de Asset (Claude)
   return c;
 }
 function status() {
+  if (enServidor()) { const c = config(); return { provider: 'anthropic', model: '', consent: !!c.consent, hasKey: true, keyEnd: '', managed: true, propia: false, servidor: true, providers: PROVIDERS, mock: MOCK }; }
   const c = config(); const m = managed(); const key = m ? m.key : store.getSecret('aiKey:' + c.provider);
   const propia = m ? store.getSecret('aiKey:' + c.provider) : null; // 0.16.28 · clave propia que reemplaza a la incluida
   return { provider: c.provider, model: c.model, consent: !!c.consent, hasKey: !!key || MOCK, keyEnd: propia ? propia.slice(-4) : key && !m ? key.slice(-4) : '', managed: !!m, propia: !!propia, providers: PROVIDERS, mock: MOCK };
@@ -55,6 +78,7 @@ function setConfig(p) {
   return status();
 }
 function key() {
+  if (enServidor()) return { c: config(), k: null }; // la clave la pone el servidor
   const c = config(); const m = managed(); const k = store.getSecret('aiKey:' + c.provider) || (m ? m.key : null);
   if (!k) { const e = new Error('Falta la clave de API del asistente. Agrégala en «Asistente → Ajustes».'); e.code = 'NO_KEY'; throw e; }
   return { c, k };
@@ -83,6 +107,7 @@ async function http(url, opts, ms = 180000) {
 // Lista de modelos de la cuenta (para elegir en Ajustes)
 async function models() {
   if (MOCK) return ['modelo-de-prueba'];
+  if (enServidor()) return ['servidor']; // el servidor elige el modelo según la tarea
   const { c, k } = key();
   if (c.provider === 'anthropic') {
     const j = await http('https://api.anthropic.com/v1/models?limit=100', { headers: { 'x-api-key': k, 'anthropic-version': '2023-06-01' } }, 30000);
@@ -131,7 +156,7 @@ async function chat({ system, messages, json = false, action = 'review' }) {
 async function rawChat({ system, messages, json, images, model: forced, extra }) {
   if (MOCK) return mockReply({ system, messages, json });
   const { c, k } = key();
-  let model = forced || c.model;
+  let model = enServidor() ? 'servidor' : forced || c.model; // con el servidor, el modelo lo elige él
   if (!model) model = autoModel; if (!model) { model = pickDefault(await models()); if (!model) throw new Error('No se encontró un modelo disponible en la cuenta.'); autoModel = model; if (!managed()) setConfig({ model }); }
   // imágenes (páginas de un documento) en el último mensaje del usuario, según el proveedor
   if (images && images.length) {
@@ -141,10 +166,7 @@ async function rawChat({ system, messages, json, images, model: forced, extra })
       : [{ type: 'text', text: last.content }, ...images.map((im) => ({ type: 'image_url', image_url: { url: `data:${im.mime};base64,${im.data}`, detail: 'high' } }))];
   }
   if (c.provider === 'anthropic') {
-    const j = await http('https://api.anthropic.com/v1/messages', {
-      method: 'POST', headers: { 'x-api-key': k, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({ model, max_tokens: 8000, system: system + (json ? '\nResponde SOLO con un objeto JSON válido, sin texto antes ni después.' : ''), messages }),
-    });
+    const j = await mensajeClaude('documento', { model, max_tokens: 8000, system: system + (json ? '\nResponde SOLO con un objeto JSON válido, sin texto antes ni después.' : ''), messages });
     const text = (j.content || []).filter((p) => p.type === 'text').map((p) => p.text).join('');
     return { text, model, usage: j.usage };
   }
@@ -232,6 +254,7 @@ Devuelve exactamente: {"propuestas":[{"tipo":"acto|materia|excepcion","nombre":"
 // modelo con PF_AGENT_MODEL o «agentModel» en la configuración.
 let agentModelCache = '';
 async function agentModel() {
+  if (enServidor()) return 'servidor'; // el servidor elige el modelo del agente (IA_MODELO_APP)
   if (process.env.PF_AGENT_MODEL) return process.env.PF_AGENT_MODEL;
   const c = config(); const m = managed();
   if (c.agentModel) return c.agentModel; if (m?.agentModel) return m.agentModel;
@@ -254,8 +277,7 @@ async function toolChat({ system, messages, tools }) {
       else if (m.role === 'assistant') am.push({ role: 'assistant', content: [...(m.content ? [{ type: 'text', text: m.content }] : []), ...(m.tool_calls || []).map((t) => ({ type: 'tool_use', id: t.id, name: t.function.name, input: JSON.parse(t.function.arguments || '{}') }))] });
       else am.push({ role: 'user', content: m.content });
     }
-    const j = await http('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'x-api-key': k, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({ model, max_tokens: 4000, system, messages: am, tools: tools.map((t) => ({ name: t.name, description: t.description, input_schema: t.parameters })) }) });
+    const j = await mensajeClaude('agente', { model, max_tokens: 4000, system, messages: am, tools: tools.map((t) => ({ name: t.name, description: t.description, input_schema: t.parameters })) });
     const blocks = j.content || [];
     return { model, usage: j.usage, content: blocks.filter((b) => b.type === 'text').map((b) => b.text).join('\n'),
       tool_calls: blocks.filter((b) => b.type === 'tool_use').map((b) => ({ id: b.id, type: 'function', function: { name: b.name, arguments: JSON.stringify(b.input || {}) } })) };
@@ -276,6 +298,11 @@ async function toolChat({ system, messages, tools }) {
 // Audio → texto (dictado de propiedades). Usa la transcripción de OpenAI; con otro proveedor se pide escribir el texto.
 async function transcribir({ bytes, mime = 'audio/webm' }) {
   if (MOCK) { await new Promise((r) => setTimeout(r, 300)); return { texto: process.env.PF_MOCK_DICTADO || 'Estoy captando un departamento en arriendo en Avenida del Tranque 1234, departamento 26B, Lo Barnechea. Tiene tres dormitorios, dos baños, 85 metros útiles y 92 totales, estacionamiento y bodega. Piso 7, orientación norte, cocina amplia y piso flotante. Se permiten mascotas. El arriendo es de 850 lucas y los gastos comunes 120 mil.' }; }
+  if (enServidor()) { // el servidor transcribe (Claude no transcribe audio: usa la transcripción de OpenAI del servidor)
+    if (!bytes || bytes.length < 2000) throw new Error('La grabación quedó muy corta. Intenta de nuevo, hablando cerca del micrófono.');
+    try { return await require('./asset').llamar('POST', '/ia/transcribir', { audio: Buffer.from(bytes).toString('base64'), mime }, 190000); }
+    catch (e) { throw errorServidor(e); }
+  }
   const { c, k } = key(); if (c.provider !== 'openai') throw new Error('Transcribir audio requiere el asistente con OpenAI. Escribe o pega la descripción en el cuadro de texto.');
   if (!bytes || bytes.length < 2000) throw new Error('La grabación quedó muy corta. Intenta de nuevo, hablando cerca del micrófono.');
   const ext = /mp4|m4a/.test(mime) ? 'm4a' : /ogg/.test(mime) ? 'ogg' : /wav/.test(mime) ? 'wav' : 'webm';
@@ -293,7 +320,7 @@ async function redactarCorto({ system, user, ms = 6000 }) {
   }
   const { c, k } = key(); const model = await agentModel();
   if (c.provider === 'anthropic') {
-    const j = await http('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'x-api-key': k, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' }, body: JSON.stringify({ model, max_tokens: 700, system, messages: [{ role: 'user', content: user }] }) }, ms);
+    const j = await mensajeClaude('corto', { model, max_tokens: 700, system, messages: [{ role: 'user', content: user }] }, enServidor() ? Math.max(ms, 15000) : ms);
     return (j.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('');
   }
   const body = { model, messages: [{ role: 'system', content: system }, { role: 'user', content: user }] };

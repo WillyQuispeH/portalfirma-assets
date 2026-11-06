@@ -44,9 +44,10 @@ El tag tiene que coincidir con `package.json`; si no, el flujo se detiene. Tambi
    | `RELEASES_TOKEN` | el token del paso 2 (obligatorio) |
    | `GOOGLE_OAUTH_JSON` | contenido de `build/google/oauth.json` (Google Drive) |
    | `PORTALFIRMA_API_JSON` | contenido de `build/portalfirma/api.json` |
-   | `MERCADOLIBRE_APP_JSON` | contenido de `build/mercadolibre/app.json` |
 
-   Los tres últimos van dentro del instalador; si falta uno, la app abre igual, sin esa integración.
+   Los dos últimos van dentro del instalador; si falta uno, la app abre igual, sin esa integración.
+   Mercado Libre y la IA ya **no** van en el instalador: sus claves viven en el servidor (`ML_CLIENT_ID`/`ML_CLIENT_SECRET`
+   e `IA_CLAVE` en `/etc/asset/api.env`).
 
 ## Firma
 

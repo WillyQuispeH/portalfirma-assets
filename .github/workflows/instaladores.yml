@@ -9,7 +9,6 @@
 #                           los instaladores se arman igual y quedan como artefactos de la ejecución (no se publican)
 #   GOOGLE_OAUTH_JSON       contenido de build/google/oauth.json (Google Drive)            · opcional
 #   PORTALFIRMA_API_JSON    contenido de build/portalfirma/api.json                         · opcional
-#   MERCADOLIBRE_APP_JSON   contenido de build/mercadolibre/app.json                        · opcional
 #   Firma de Mac (cuando exista la cuenta Apple Developer; sin ellos la app de Mac sale sin firmar):
 #   MAC_CERT_P12_BASE64, MAC_CERT_PASSWORD, APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID
 name: Instaladores
@@ -52,7 +51,6 @@ jobs:
         env:
           GOOGLE_OAUTH_JSON: ${{ secrets.GOOGLE_OAUTH_JSON }}
           PORTALFIRMA_API_JSON: ${{ secrets.PORTALFIRMA_API_JSON }}
-          MERCADOLIBRE_APP_JSON: ${{ secrets.MERCADOLIBRE_APP_JSON }}
         run: bash tools/credenciales-ci.sh
       - name: Repositorio de versiones con al menos un archivo (GitHub no crea versiones en un repositorio vacío)
         shell: bash
@@ -87,7 +85,6 @@ jobs:
         env:
           GOOGLE_OAUTH_JSON: ${{ secrets.GOOGLE_OAUTH_JSON }}
           PORTALFIRMA_API_JSON: ${{ secrets.PORTALFIRMA_API_JSON }}
-          MERCADOLIBRE_APP_JSON: ${{ secrets.MERCADOLIBRE_APP_JSON }}
         run: bash tools/credenciales-ci.sh
       - name: Instalador de Mac → GitHub Releases
         env:

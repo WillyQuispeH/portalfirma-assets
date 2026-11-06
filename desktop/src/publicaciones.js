@@ -166,7 +166,7 @@ ${area('floorArea', p.supTotal)}${area('usableFloorArea', p.supUtil)}${p.estacio
   }
   async function sincronizar() {
     const r = { pi: null, chilepropiedades: null, errores: [] };
-    if (ml.tokensOk()) { try { r.pi = await ml.sincronizar(); await metricasPI(); } catch (e) { r.errores.push('Portal Inmobiliario: ' + e.message); } }
+    if (await ml.conectada()) { try { r.pi = await ml.sincronizar(); await metricasPI(); } catch (e) { r.errores.push('Portal Inmobiliario: ' + e.message); } }
     try { r.chilepropiedades = await sincronizarCP(); } catch (e) { r.errores.push('Chilepropiedades: ' + e.message); }
     inmo.guardarConfig({ publicacionesSync: hoy() });
     return r;

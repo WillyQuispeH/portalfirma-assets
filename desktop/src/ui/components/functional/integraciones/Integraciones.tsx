@@ -4,7 +4,7 @@
 //    correo y chat del sitio. La API de wechatia no conecta canales: «Conectar» abre la página de su panel donde se hace
 //    (con el inicio de sesión de Meta). Un canal aparece «En uso» cuando hay conversaciones recientes por él.
 //  · Portales (Mercado Libre / Portal Inmobiliario), archivos (Google Drive) y otros (Google Maps, asistente de IA).
-// Conectar o cambiar lo que es de toda la corredora (Portalfirma, wechatia) es del administrador.
+// Conectar o cambiar lo que es de toda la corredora (Portalfirma, wechatia, Mercado Libre) es del administrador.
 import { useEffect, useState, type ReactNode } from 'react';
 import Layout from '../../ui/Layout';
 import Card from '../../ui/Card';
@@ -117,9 +117,12 @@ export default function Integraciones() {
           <Fila id="mercadolibre" logo={<Logo icono="house" color="#e9b200" />} nombre="Mercado Libre y Portal Inmobiliario"
             detalle={ml?.conectada ? `Publica y sincroniza avisos${ml.cuenta?.nickname ? ' · ' + ml.cuenta.nickname : ''}` : 'Publica tus propiedades y recibe los interesados en Leads.'}
             estado={!ml?.configurada ? 'no-disponible' : ml.conectada ? 'conectado' : 'sin-conectar'}>
+            {/* la cuenta es de toda la corredora (la sesión vive en el servidor): la conecta y desconecta el administrador */}
             {ml?.configurada && (ml.conectada
-              ? <Boton tamano="sm" variante="fantasma" cargando={ocupado === 'ml'} onClick={() => accion('ml', svc.mlDesconectar, 'Mercado Libre desconectado.')}>Desconectar</Boton>
-              : <Boton tamano="sm" icono="link" cargando={ocupado === 'ml'} onClick={() => accion('ml', svc.mlConectar, 'Mercado Libre conectado.')}>Conectar</Boton>)}
+              ? <Boton tamano="sm" variante="fantasma" cargando={ocupado === 'ml'} disabled={!admin} title={admin ? undefined : 'La desconecta el administrador de la corredora'}
+                  onClick={() => accion('ml', svc.mlDesconectar, 'Mercado Libre desconectado.')}>Desconectar</Boton>
+              : <Boton tamano="sm" icono="link" cargando={ocupado === 'ml'} disabled={!admin} title={admin ? undefined : 'La conecta el administrador de la corredora'}
+                  onClick={() => accion('ml', svc.mlConectar, 'Mercado Libre conectado.')}>Conectar</Boton>)}
           </Fila>
         </Lista>
       </Card>

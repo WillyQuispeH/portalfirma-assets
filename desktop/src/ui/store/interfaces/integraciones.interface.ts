@@ -22,9 +22,9 @@ export interface ICanales {
 }
 
 export interface IMlEstado {
-  configurada: boolean; // la app trae su registro en Mercado Libre
+  configurada: boolean; // el servidor de Asset tiene la app de Mercado Libre (y hay sesión de Asset)
   conectada: boolean;
-  cuenta: { id: string; nickname: string; email: string } | null;
+  cuenta: { id: string | number | null; nickname: string; email: string } | null;
 }
 
 export interface IIaEstado {

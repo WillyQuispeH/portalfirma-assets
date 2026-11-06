@@ -1,110 +1,155 @@
 // Portal Inmobiliario (Mercado Libre Chile, sitio MLC) para PortalFirma Asset.
 // Documentación: developers.mercadolibre.cl → Guía para inmuebles (revisada el 12/10/2026).
-//  · OAuth 2.0 con la app de PortalFirma; cada corredora autoriza su propia cuenta. El redirect_uri debe ser HTTPS:
-//    la ventana de autorización se intercepta antes de cargarlo, así que no necesita existir una página.
-//  · El access token dura 6 horas; el refresh token es de un solo uso (se reemplaza en cada renovación).
+//  · La conexión es de la CORREDORA y vive en el servidor de Asset (tabla conexiones, cifrada): la app de Asset en
+//    Mercado Libre (client_id y secreto) está solo en el servidor y el administrador conecta la cuenta una vez
+//    (POST /v1/conexiones/mercadolibre/iniciar → se abre en el navegador). Este equipo no guarda tokens de Mercado Libre:
+//    cada llamada a la API de Mercado Libre pasa por el proxy POST /v1/mercadolibre/api, que pone el token y lo renueva.
+//  · En modo de prueba (PF_MOCK / PF_ML_MOCK) se usa la API simulada (mercadolibre-mock.js) con una sesión local falsa.
 //  · POST /items con el atributo CMG_SITE = "POI" publica a la vez en Mercado Libre y Portal Inmobiliario.
 //  · seller_contact.country_code2 + phone2 (WhatsApp, solo dígitos) son obligatorios desde el 01/10/2026.
 //  · PUT /items/{id} actualiza título, precio, fotos, contacto y estado (active, paused, closed).
 //  · Leads: GET /vis/users/{id}/leads/buyers (WhatsApp, preguntas, llamadas, visitas, cotizaciones).
-const crypto = require('crypto'); const fs = require('fs'); const path = require('path');
-const { BrowserWindow, session } = require('electron');
+const { shell } = require('electron');
 const store = require('../store');
 const inmo = require('../inmo');
 
 const API = 'https://api.mercadolibre.com';
-const AUTH = 'https://auth.mercadolibre.cl/authorization';
 const ROOT = 'MLC1459'; // Inmuebles (Chile)
 const MOCK = process.env.PF_ML_MOCK === '1' || (process.env.PF_MOCK === '1' && process.env.PF_ML_MOCK !== '0'); // en modo demostración se usa la API simulada
-const http = MOCK ? require('./mercadolibre-mock') : realHttp;
+const mock = MOCK ? require('./mercadolibre-mock') : null;
 const PORTAL = 'Portal Inmobiliario';
-
-async function realHttp(method, url, { token, body, form } = {}) {
-  const headers = { accept: 'application/json' };
-  if (token) headers.authorization = 'Bearer ' + token;
-  let data;
-  if (form) { headers['content-type'] = 'application/x-www-form-urlencoded'; data = new URLSearchParams(form).toString(); }
-  else if (body !== undefined) { headers['content-type'] = 'application/json'; data = JSON.stringify(body); }
-  const r = await fetch(url.startsWith('http') ? url : API + url, { method, headers, body: data });
-  let json = null; try { json = await r.json(); } catch {}
-  return { status: r.status, json };
-}
-
-// ---------- credenciales de la app de PortalFirma en Mercado Libre ----------
-function credenciales() {
-  if (MOCK) return { client_id: 'demo', client_secret: 'demo', redirect_uri: 'https://www.portalfirma.cl/mercadolibre/callback', pkce: true };
-  const cands = [process.env.PF_ML_APP, process.resourcesPath && path.join(process.resourcesPath, 'mercadolibre', 'app.json'), path.join(__dirname, '..', '..', 'build', 'mercadolibre', 'app.json')].filter(Boolean);
-  for (const f of cands) { try { const j = JSON.parse(fs.readFileSync(f, 'utf8')); if (j.client_id && j.client_secret && j.redirect_uri) return j; } catch {} }
-  return null;
-}
+const asset = () => require('../asset');
 const err = (m, code, extra) => Object.assign(new Error(m), { code, ...extra });
+const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// ---------- sesión de la corredora ----------
-const tokens = () => store.getSecret('mlTokens');
-function estado() {
-  const t = tokens(); const c = inmo.config();
-  return { configurada: !!credenciales(), conectada: !!t, cuenta: t ? { id: t.user_id, nickname: t.nickname || '', email: t.email || '' } : null, contacto: c.contacto || {}, tipoAviso: c.ml?.tipoAviso || 'silver', ultimaSync: c.ml?.ultimaSync || null, ultimosLeads: c.ml?.ultimosLeads || null };
-}
-async function guardarTokens(j) {
-  const t = { access_token: j.access_token, refresh_token: j.refresh_token, user_id: j.user_id, expires_at: Date.now() + (j.expires_in || 21600) * 1000 };
-  const prev = tokens(); if (prev && prev.user_id === t.user_id) { t.nickname = prev.nickname; t.email = prev.email; }
-  store.setSecret('mlTokens', t); return t;
-}
-async function conectar(parent) {
-  const cred = credenciales();
-  if (!cred) throw err('Falta registrar la app de PortalFirma en Mercado Libre (build/mercadolibre/app.json). Ver PORTAL-INMOBILIARIO.md.', 'NO_APP');
-  const state = crypto.randomBytes(16).toString('hex');
-  const verifier = crypto.randomBytes(48).toString('base64url');
-  const challenge = crypto.createHash('sha256').update(verifier).digest('base64url');
-  let code;
-  if (MOCK) code = 'mock-code';
-  else {
-    const q = new URLSearchParams({ response_type: 'code', client_id: cred.client_id, redirect_uri: cred.redirect_uri, state, ...(cred.pkce ? { code_challenge: challenge, code_challenge_method: 'S256' } : {}) });
-    code = await new Promise((resolve, reject) => {
-      const ses = session.fromPartition('mercadolibre-auth'); // sin persistencia: no quedan cookies de Mercado Libre en el equipo
-      const w = new BrowserWindow({ parent, modal: !!parent, width: 520, height: 720, title: 'Conectar Portal Inmobiliario', autoHideMenuBar: true, webPreferences: { session: ses, sandbox: true, contextIsolation: true, nodeIntegration: false } });
-      let done = false;
-      const fin = (e, v) => { if (done) return; done = true; try { ses.webRequest.onBeforeRequest(null); } catch {} try { w.close(); } catch {} e ? reject(e) : resolve(v); };
-      // El redirect_uri nunca se carga: se lee el código en cuanto Mercado Libre redirige.
-      ses.webRequest.onBeforeRequest({ urls: [cred.redirect_uri + '*'] }, (det, cb) => {
-        cb({ cancel: true });
-        const u = new URL(det.url);
-        if (u.searchParams.get('state') !== state) return fin(err('La respuesta de Mercado Libre no corresponde a esta solicitud.'));
-        if (u.searchParams.get('error')) return fin(err('Mercado Libre no autorizó la conexión: ' + (u.searchParams.get('error_description') || u.searchParams.get('error'))));
-        fin(null, u.searchParams.get('code'));
-      });
-      w.on('closed', () => fin(err('Se cerró la ventana sin conectar la cuenta.', 'CANCELADO')));
-      w.loadURL(AUTH + '?' + q.toString());
-    });
-  }
-  const r = await http('POST', API + '/oauth/token', { form: { grant_type: 'authorization_code', client_id: cred.client_id, client_secret: cred.client_secret, code, redirect_uri: cred.redirect_uri, ...(cred.pkce ? { code_verifier: verifier } : {}) } });
-  if (r.status !== 200) throw err('Mercado Libre rechazó la conexión: ' + mensaje(r));
-  const t = await guardarTokens(r.json);
-  const me = await api('GET', '/users/me');
-  t.nickname = me.nickname || ''; t.email = me.email || ''; store.setSecret('mlTokens', t);
-  return estado();
-}
-function desconectar() { store.setSecret('mlTokens', undefined); return estado(); }
-async function token() {
-  let t = tokens(); if (!t) throw err('Conecta la cuenta de Portal Inmobiliario de la corredora.', 'ML_LOGIN');
-  if (Date.now() > t.expires_at - 5 * 60e3) t = await renovar(t);
-  return t;
-}
-async function renovar(t) {
-  const cred = credenciales();
-  const r = await http('POST', API + '/oauth/token', { form: { grant_type: 'refresh_token', client_id: cred.client_id, client_secret: cred.client_secret, refresh_token: t.refresh_token } });
-  if (r.status !== 200) { store.setSecret('mlTokens', undefined); throw err('La conexión con Portal Inmobiliario venció. Vuelve a conectar la cuenta.', 'ML_LOGIN'); }
-  return guardarTokens(r.json); // el refresh token anterior ya no sirve: se guarda el nuevo
-}
+// los tokens que la app guardaba antes en el equipo ya no se usan
+if (!MOCK) { try { if (store.getSecret('mlTokens')) store.setSecret('mlTokens', undefined); } catch {} }
+
+/** ¿se habla con el servidor de Asset? (fuera del modo de prueba y con la sesión de Asset iniciada) */
+const enApi = () => { if (MOCK) return false; try { return require('../wa-servidor').enApi(); } catch { return false; } };
+const sinCuentaAsset = () => err('Entra con tu cuenta de Asset para usar Portal Inmobiliario.', 'ML_LOGIN');
 function mensaje(r) {
   const j = r.json || {};
   const causas = (j.cause || []).map((c) => (typeof c === 'string' ? c : c.message || c.code)).filter(Boolean);
   return [j.message || j.error || ('error ' + r.status), ...causas].join(' · ');
 }
-async function api(method, p, body, retry = true) {
-  const t = await token();
-  const r = await http(method, API + p, { token: t.access_token, body });
-  if (r.status === 401 && retry) { await renovar(t); return api(method, p, body, false); }
+
+// ---------- la conexión de la corredora en el servidor (en caché: la app la consulta seguido) ----------
+let remoto = null; let remotoEn = 0; // { configurada, conexion } de lo último que respondió el servidor
+async function estadoRemoto() {
+  try { const r = await asset().llamar('GET', '/conexiones/mercadolibre'); remoto = { configurada: true, conexion: r.conexion || null }; }
+  catch (e) { if (e.status !== 404) throw e; remoto = { configurada: false, conexion: null }; } // 404: el servidor no tiene la app de Mercado Libre
+  remotoEn = Date.now(); return remoto;
+}
+const activa = () => remoto?.conexion?.estado === 'activa';
+/** error de la API de Asset → el de antes (ML_LOGIN pide conectar la cuenta) */
+function traducir(e) {
+  if (e?.datos?.codigo === 'NECESITA_CONEXION') { if (remoto?.conexion) remoto.conexion = { ...remoto.conexion, estado: 'vencida' }; return err(e.message || 'Conecta la cuenta de Portal Inmobiliario de la corredora.', 'ML_LOGIN'); }
+  if (e?.status === 503 || e?.status === 404) return err('Portal Inmobiliario no está configurado en el servidor de Asset.', 'NO_APP');
+  return e;
+}
+
+// ---------- sesión simulada (solo PF_MOCK / PF_ML_MOCK) ----------
+const tokens = () => (MOCK ? store.getSecret('mlTokens') : null);
+function guardarTokens(j) {
+  const t = { access_token: j.access_token, refresh_token: j.refresh_token, user_id: j.user_id, expires_at: Date.now() + (j.expires_in || 21600) * 1000 };
+  const prev = tokens(); if (prev && prev.user_id === t.user_id) { t.nickname = prev.nickname; t.email = prev.email; }
+  store.setSecret('mlTokens', t); return t;
+}
+async function tokenMock() {
+  let t = tokens(); if (!t) throw err('Conecta la cuenta de Portal Inmobiliario de la corredora.', 'ML_LOGIN');
+  if (Date.now() > t.expires_at - 5 * 60e3) t = await renovarMock(t);
+  return t;
+}
+async function renovarMock(t) {
+  const r = await mock('POST', API + '/oauth/token', { form: { grant_type: 'refresh_token', client_id: 'demo', client_secret: 'demo', refresh_token: t.refresh_token } });
+  if (r.status !== 200) { store.setSecret('mlTokens', undefined); throw err('La conexión con Portal Inmobiliario venció. Vuelve a conectar la cuenta.', 'ML_LOGIN'); }
+  return guardarTokens(r.json); // el refresh token anterior ya no sirve: se guarda el nuevo
+}
+
+// ---------- estado, conectar y desconectar ----------
+async function estado() {
+  const c = inmo.config();
+  const resto = { contacto: c.contacto || {}, tipoAviso: c.ml?.tipoAviso || 'silver', ultimaSync: c.ml?.ultimaSync || null, ultimosLeads: c.ml?.ultimosLeads || null };
+  if (MOCK) { const t = tokens(); return { configurada: true, conectada: !!t, cuenta: t ? { id: t.user_id, nickname: t.nickname || '', email: t.email || '' } : null, ...resto }; }
+  let error = null;
+  if (enApi()) { try { await estadoRemoto(); } catch (e) { error = e.message; } }
+  const cx = enApi() ? remoto?.conexion : null; const ok = cx?.estado === 'activa';
+  return { configurada: enApi() && !!remoto?.configurada, conectada: ok, vencida: cx?.estado === 'vencida', cuenta: ok ? { id: cx.cuentaId || null, nickname: cx.cuenta || '', email: '' } : null, ...(error ? { error } : {}), ...resto };
+}
+async function conectar() {
+  if (MOCK) {
+    const r = await mock('POST', API + '/oauth/token', { form: { grant_type: 'authorization_code', client_id: 'demo', client_secret: 'demo', code: 'mock-code' } });
+    if (r.status !== 200) throw err('Mercado Libre rechazó la conexión: ' + mensaje(r));
+    const t = guardarTokens(r.json);
+    const me = await api('GET', '/users/me');
+    t.nickname = me.nickname || ''; t.email = me.email || ''; store.setSecret('mlTokens', t);
+    return estado();
+  }
+  if (!enApi()) throw sinCuentaAsset();
+  let url;
+  try { ({ url } = await asset().llamar('POST', '/conexiones/mercadolibre/iniciar')); }
+  catch (e) { if (e.status === 403) throw err('Portal Inmobiliario se conecta una vez para toda la corredora: pídele al administrador que lo conecte desde su Asset.', 'SOLO_ADMIN'); throw traducir(e); }
+  const desde = Date.now();
+  await shell.openExternal(url);
+  const fin = desde + 5 * 60_000;
+  while (Date.now() < fin) {
+    await dormir(2000);
+    const r = await estadoRemoto().catch(() => null);
+    if (r?.conexion?.estado === 'activa' && r.conexion.conectadoEn && new Date(r.conexion.conectadoEn).getTime() > desde - 60_000) return estado();
+  }
+  throw err('No se completó la conexión con Mercado Libre (se acabó el tiempo). Inténtalo de nuevo.', 'CANCELADO');
+}
+async function desconectar() {
+  if (MOCK) { store.setSecret('mlTokens', undefined); return estado(); }
+  if (!enApi()) throw sinCuentaAsset();
+  try { await asset().llamar('DELETE', '/conexiones/mercadolibre'); }
+  catch (e) { if (e.status === 403) throw err('Solo el administrador de la corredora puede desconectar Portal Inmobiliario.', 'SOLO_ADMIN'); throw traducir(e); }
+  remoto = remoto ? { ...remoto, conexion: null } : null;
+  return estado();
+}
+/** ¿la corredora tiene la cuenta conectada? (consulta al servidor) */
+async function conectada() {
+  if (MOCK) return !!tokens();
+  if (!enApi()) return false;
+  try { await estadoRemoto(); } catch {}
+  return activa();
+}
+/** lo mismo, síncrono, con lo último que se supo (y se pide de nuevo si es viejo) */
+function tokensOk() {
+  if (MOCK) return !!tokens();
+  if (!enApi()) return false;
+  if (Date.now() - remotoEn > 60_000) { remotoEn = Date.now(); estadoRemoto().catch(() => {}); }
+  return activa();
+}
+/** el id del usuario de Mercado Libre de la corredora */
+async function uid() {
+  if (MOCK) return (await tokenMock()).user_id;
+  if (!enApi()) throw sinCuentaAsset();
+  if (!activa() || !remoto.conexion.cuentaId) await estadoRemoto();
+  if (!activa()) throw err('Conecta la cuenta de Portal Inmobiliario de la corredora.', 'ML_LOGIN');
+  if (!remoto.conexion.cuentaId) throw err('No se sabe qué cuenta de Mercado Libre está conectada: vuelve a conectarla.', 'ML_LOGIN');
+  return remoto.conexion.cuentaId;
+}
+
+// ---------- llamadas a la API de Mercado Libre ----------
+/** una llamada → { status, json }. Con la cuenta de Asset va por el proxy del servidor (pone y renueva el token). */
+async function llamada(method, p, body, publica = false) {
+  if (!MOCK) {
+    if (!enApi()) throw sinCuentaAsset();
+    let r;
+    try { r = await asset().llamar('POST', '/mercadolibre/api', { metodo: method, ruta: p, ...(body !== undefined ? { cuerpo: body } : {}) }, 65_000); } // publicar puede tardar más que los 20 s de siempre
+    catch (e) { throw traducir(e); }
+    return { status: r.status, json: r.cuerpo };
+  }
+  if (publica) return mock(method, API + p);
+  const t = await tokenMock();
+  const r = await mock(method, API + p, { token: t.access_token, body });
+  if (r.status !== 401) return r;
+  return mock(method, API + p, { token: (await renovarMock(t)).access_token, body });
+}
+async function api(method, p, body) {
+  const r = await llamada(method, p, body);
   if (r.status >= 400) throw err('Portal Inmobiliario: ' + mensaje(r), 'ML_' + r.status, { ml: r.json });
   return r.json;
 }
@@ -113,7 +158,7 @@ const cache = new Map();
 async function pub(p) {
   const all = store.get('mlCache') || {}; const hit = cache.get(p) || all[p];
   if (hit && Date.now() - hit.t < 7 * 864e5) return hit.v;
-  const r = await http('GET', API + p);
+  const r = await llamada('GET', p, undefined, true);
   if (r.status !== 200) throw err('No se pudo consultar Mercado Libre (' + p + '): ' + mensaje(r));
   const e = { t: Date.now(), v: r.json }; cache.set(p, e);
   if (/^\/(categories|classified_locations)/.test(p)) { all[p] = e; store.set('mlCache', all); }
@@ -236,9 +281,9 @@ async function revisar(propId, op, opts = {}) {
   };
   // paquete disponible
   let paquete = null;
-  if (tokens()) {
+  if (await conectada()) {
     try {
-      const uid = tokens().user_id; const r = await api('GET', `/users/${uid}/classifieds_promotion_packs/${tipoAviso}`);
+      const r = await api('GET', `/users/${await uid()}/classifieds_promotion_packs/${tipoAviso}`);
       const lista = Array.isArray(r) ? r : r ? [r] : []; paquete = lista.reduce((s, x) => s + (Number(x.remaining_listings) || 0), 0);
       if (!p.portales?.pi?.[op]?.itemId && paquete <= 0) errores.push(`No quedan publicaciones disponibles en el paquete «${tipoAviso}». La corredora debe contratar uno en Mercado Libre.`);
     } catch (e) { if (e.code === 'ML_LOGIN') errores.push(e.message); else avisos.push('No se pudo consultar el paquete de publicaciones.'); }
@@ -279,7 +324,7 @@ async function cambiarEstado(propId, op, status, motivo) {
 // La ficha cambió: el aviso se mantiene al día solo (precio, fotos, título, estado comercial).
 const CAMPOS_AVISO = ['titulo', 'tituloPortal', 'precioVenta', 'precioArriendo', 'fotos', 'descripcion', 'direccion', 'unidad'];
 async function reaccionar(antes, p) {
-  if (!tokens() || !p.portales?.pi) return [];
+  if (!p.portales?.pi || !tokensOk()) return [];
   const out = [];
   for (const op of ['venta', 'arriendo']) {
     const a = p.portales.pi[op]; if (!a?.itemId || a.status === 'closed') continue;
@@ -309,13 +354,13 @@ async function sincronizar() {
 }
 const CANAL = { whatsapp: 'WhatsApp', question: 'pregunta', call: 'llamada', schedule: 'solicitud de visita', quotation: 'cotización' };
 async function traerLeads() {
-  const uid = (await token()).user_id; const cfg = inmo.config().ml || {};
+  const id = await uid(); const cfg = inmo.config().ml || {};
   const hoy = new Date(); const desde = cfg.leadsDesde ? new Date(cfg.leadsDesde) : new Date(Date.now() - 30 * 864e5);
   const f = (d) => d.toISOString().slice(0, 10);
   const porItem = new Map(); for (const p of inmo.todas()) for (const op of ['venta', 'arriendo']) { const a = p.portales?.pi?.[op]; if (a?.itemId) porItem.set(a.itemId, p.id); }
   let nuevos = 0, offset = 0;
   for (let vuelta = 0; vuelta < 40; vuelta++) {
-    const r = await api('GET', `/vis/users/${uid}/leads/buyers?date_from=${f(desde)}&date_to=${f(hoy)}&limit=50&offset=${offset}`);
+    const r = await api('GET', `/vis/users/${id}/leads/buyers?date_from=${f(desde)}&date_to=${f(hoy)}&limit=50&offset=${offset}`);
     const res = r?.results || []; if (!res.length) break;
     for (const b of res) for (const l of b.leads || []) {
       const propId = porItem.get(l.item_id || b.item_id); if (!propId) continue;
@@ -330,9 +375,9 @@ async function traerLeads() {
 
 // ---------- migración: avisos que la corredora ya tiene (p. ej. publicados por Convecta) ----------
 async function avisosExistentes() {
-  const uid = (await token()).user_id; const ids = []; let offset = 0;
+  const id = await uid(); const ids = []; let offset = 0;
   for (let v = 0; v < 50; v++) {
-    const r = await api('GET', `/users/${uid}/items/search?status=active&limit=100&offset=${offset}`);
+    const r = await api('GET', `/users/${id}/items/search?status=active&limit=100&offset=${offset}`);
     ids.push(...(r.results || [])); offset += (r.results || []).length; if (!(r.results || []).length || offset >= (r.paging?.total || 0)) break;
   }
   const items = []; for (let i = 0; i < ids.length; i += 20) { const r = await api('GET', '/items?ids=' + ids.slice(i, i + 20).join(',')); for (const it of r || []) if (it.code === 200) items.push(it.body); }
@@ -358,8 +403,8 @@ function guardarContacto(c, tipoAviso) {
   return estado();
 }
 async function paquetes() {
-  const uid = (await token()).user_id; const out = {};
-  for (const t of ['silver', 'gold', 'gold_premium']) { try { const r = await api('GET', `/users/${uid}/classifieds_promotion_packs/${t}`); const l = Array.isArray(r) ? r : r ? [r] : []; out[t] = l.reduce((s, x) => s + (Number(x.remaining_listings) || 0), 0); } catch { out[t] = null; } }
+  const id = await uid(); const out = {};
+  for (const t of ['silver', 'gold', 'gold_premium']) { try { const r = await api('GET', `/users/${id}/classifieds_promotion_packs/${t}`); const l = Array.isArray(r) ? r : r ? [r] : []; out[t] = l.reduce((s, x) => s + (Number(x.remaining_listings) || 0), 0); } catch { out[t] = null; } }
   return out;
 }
 
@@ -368,4 +413,4 @@ async function metricas(itemId, dias = 30) {
   const [v, t] = await Promise.all([api('GET', `/items/${itemId}/visits/time_window?last=${dias}&unit=day`).catch(() => null), api('GET', `/items/${itemId}/contacts/phone_views/time_window?last=${dias}&unit=day`).catch(() => null)]);
   return { visitas: v?.total_visits ?? null, telefonos: t?.total ?? t?.total_phone_views ?? null, serie: (v?.results || []).map((x) => ({ fecha: String(x.date).slice(0, 10), n: x.total })) };
 }
-module.exports = { metricas, tokensOk: () => !!tokens(), estado, conectar, desconectar, revisar, publicar, actualizar, cambiarEstado, reaccionar, sincronizar, traerLeads, avisosExistentes, vincularAvisos, barrios, guardarContacto, paquetes, _norm: norm, _whatsapp: whatsapp };
+module.exports = { metricas, tokensOk, conectada, estado, conectar, desconectar, revisar, publicar, actualizar, cambiarEstado, reaccionar, sincronizar, traerLeads, avisosExistentes, vincularAvisos, barrios, guardarContacto, paquetes, _norm: norm, _whatsapp: whatsapp };

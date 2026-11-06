@@ -21,14 +21,14 @@ const base = () => {
 const sesion = () => store.getSecret(CLAVE) || null;
 const guardar = (s) => store.setSecret(CLAVE, s || undefined);
 
-async function pedir(metodo, ruta, cuerpo, token) {
+async function pedir(metodo, ruta, cuerpo, token, ms = 20000) {
   let r;
   try {
     r = await fetch(base() + ruta, {
       method: metodo,
       headers: { 'content-type': 'application/json', ...(token ? { authorization: 'Bearer ' + token } : {}) },
       body: cuerpo ? JSON.stringify(cuerpo) : undefined,
-      signal: AbortSignal.timeout(20000),
+      signal: AbortSignal.timeout(ms),
     });
   } catch (e) {
     if (e.code === 'SIN_API') throw e;
@@ -64,15 +64,16 @@ function renovar() {
 }
 
 /** Llamada con sesión a la API de Asset (la usarán los módulos que pasen sus datos a la base). */
-async function llamar(metodo, ruta, cuerpo) {
+/** `ms`: tiempo máximo de espera (por defecto 20 s; la IA usa más). */
+async function llamar(metodo, ruta, cuerpo, ms) {
   let s = sesion();
   if (!s) throw err('Inicia sesión.', 'NEEDS_ASSET_LOGIN', 401);
   try {
-    return await pedir(metodo, ruta, cuerpo, s.tokenAcceso);
+    return await pedir(metodo, ruta, cuerpo, s.tokenAcceso, ms);
   } catch (e) {
     if (e.status !== 401) throw e;
     s = await renovar();
-    return pedir(metodo, ruta, cuerpo, s.tokenAcceso);
+    return pedir(metodo, ruta, cuerpo, s.tokenAcceso, ms);
   }
 }
 
