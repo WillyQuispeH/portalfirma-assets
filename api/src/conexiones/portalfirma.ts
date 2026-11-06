@@ -34,6 +34,7 @@ const llamadaEsquema = z.object({ argumentos: z.record(z.string(), z.unknown()).
 export class PortalfirmaService {
   private readonly url: string;
   private readonly archivosId?: string;
+  private readonly produccion: boolean;
 
   constructor(
     private readonly conexiones: ConexionesService,
@@ -41,6 +42,14 @@ export class PortalfirmaService {
   ) {
     this.url = config.get('PORTALFIRMA_MCP_URL', { infer: true });
     this.archivosId = config.get('PORTALFIRMA_ARCHIVOS_ID', { infer: true }) || undefined;
+    this.produccion = config.get('NODE_ENV', { infer: true }) === 'production';
+  }
+
+  /** el servidor MCP de esa sesión: el de Portalfirma; fuera de producción, una sesión puede traer otro (las pruebas) */
+  private async urlDe(d: DuenoConexion) {
+    if (this.produccion) return this.url;
+    const datos = await this.conexiones.datosDe('portalfirma', d).catch(() => null);
+    return typeof datos?.mcpUrl === 'string' ? datos.mcpUrl : this.url;
   }
 
   /** corre `fn` con un token vigente; si Portalfirma lo rechaza, renueva una vez y reintenta */
@@ -54,15 +63,22 @@ export class PortalfirmaService {
         return await fn(await this.conexiones.acceso('portalfirma', d, token));
       }
     } catch (e) {
-      if (e instanceof SesionVencidaError) throw new ConflictException({ codigo: 'NECESITA_CONEXION', proveedor: 'portalfirma', message: e.message });
-      if (e instanceof TokenRechazadoError) throw new ConflictException({ codigo: 'NECESITA_CONEXION', proveedor: 'portalfirma', message: 'Portalfirma rechazó la sesión: vuelve a conectarla en Asset.' });
+      if (e instanceof SesionVencidaError)
+        throw new ConflictException({ codigo: 'NECESITA_CONEXION', proveedor: 'portalfirma', message: e.message });
+      if (e instanceof TokenRechazadoError)
+        throw new ConflictException({
+          codigo: 'NECESITA_CONEXION',
+          proveedor: 'portalfirma',
+          message: 'Portalfirma rechazó la sesión: vuelve a conectarla en Asset.',
+        });
       throw e;
     }
   }
 
   /** para los procesos de la API (p. ej. la revisión de firmas): la sesión de una corredora dada */
-  llamarComo(d: DuenoConexion, nombre: string, args: Record<string, unknown> = {}): Promise<ResultadoMcp> {
-    return this.conToken(d, (t) => herramientaMcp(this.url, t, nombre, args));
+  async llamarComo(d: DuenoConexion, nombre: string, args: Record<string, unknown> = {}): Promise<ResultadoMcp> {
+    const url = await this.urlDe(d);
+    return this.conToken(d, (t) => herramientaMcp(url, t, nombre, args));
   }
 
   llamar(u: UsuarioToken, nombre: string, args: Record<string, unknown>) {
@@ -73,14 +89,17 @@ export class PortalfirmaService {
     });
   }
 
-  herramientas(u: UsuarioToken) {
-    return this.conToken(this.conexiones.duenoDe(u, 'portalfirma'), (t) => herramientasMcp(this.url, t));
+  async herramientas(u: UsuarioToken) {
+    const d = this.conexiones.duenoDe(u, 'portalfirma');
+    const url = await this.urlDe(d);
+    return this.conToken(d, (t) => herramientasMcp(url, t));
   }
 
   /** PDF de una operación. Pide que la corredora tenga Portalfirma conectado (la credencial del servicio es de Asset). */
   async archivo(u: UsuarioToken, contrato: string) {
     if (!/^[A-Za-z0-9_-]{1,80}$/.test(contrato)) throw new NotFoundException('Contrato no válido');
-    if (!this.archivosId) throw new ServiceUnavailableException('Falta configurar el servicio de archivos de Portalfirma en el servidor.');
+    if (!this.archivosId)
+      throw new ServiceUnavailableException('Falta configurar el servicio de archivos de Portalfirma en el servidor.');
     await this.conToken(this.conexiones.duenoDe(u, 'portalfirma'), async () => null);
     const r = await fetch(ARCHIVOS_URL, {
       method: 'POST',
@@ -90,12 +109,22 @@ export class PortalfirmaService {
     }).catch((e: Error) => {
       throw new BadGatewayException(`No pude conectarme con Portalfirma para traer el documento (${e.message}).`);
     });
-    const j = (await r.json().catch(() => null)) as { success?: boolean; error?: unknown; data?: { name?: string; base64?: string; updated?: string } } | null;
+    const j = (await r.json().catch(() => null)) as {
+      success?: boolean;
+      error?: unknown;
+      data?: { name?: string; base64?: string; updated?: string };
+    } | null;
     if (!r.ok || !j?.success || !j.data?.base64) {
       const e = j?.error as { message?: string } | string | undefined;
-      throw new BadGatewayException(`Portalfirma no entregó el documento: ${(typeof e === 'string' ? e : e?.message) || (r.ok ? 'respuesta sin archivo' : 'error ' + r.status)}.`);
+      throw new BadGatewayException(
+        `Portalfirma no entregó el documento: ${(typeof e === 'string' ? e : e?.message) || (r.ok ? 'respuesta sin archivo' : 'error ' + r.status)}.`,
+      );
     }
-    return { nombre: j.data.name ?? null, base64: String(j.data.base64).replace(/^data:[^,]*,/, ''), actualizado: j.data.updated ?? null };
+    return {
+      nombre: j.data.name ?? null,
+      base64: String(j.data.base64).replace(/^data:[^,]*,/, ''),
+      actualizado: j.data.updated ?? null,
+    };
   }
 }
 
@@ -109,7 +138,11 @@ export class PortalfirmaController {
   }
 
   @Post('herramientas/:nombre')
-  llamar(@UsuarioActual() u: UsuarioToken, @Param('nombre') nombre: string, @Body(new ZodPipe(llamadaEsquema)) b: z.infer<typeof llamadaEsquema>) {
+  llamar(
+    @UsuarioActual() u: UsuarioToken,
+    @Param('nombre') nombre: string,
+    @Body(new ZodPipe(llamadaEsquema)) b: z.infer<typeof llamadaEsquema>,
+  ) {
     return this.s.llamar(u, nombre, b.argumentos);
   }
 

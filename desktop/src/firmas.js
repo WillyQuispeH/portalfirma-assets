@@ -142,6 +142,9 @@ function crear({ inmo, pf, negocios = null, aviso = () => {}, alDetalle = () => 
   // ronda automática: revisa lo que está en firma (de a uno, sin apuro) y avisa los cambios al ejecutivo
   let corriendo = false;
   async function ronda() {
+    // con la cuenta de Asset la revisa el servidor (para toda la corredora): «revisar ahora» se lo pide; los cambios
+    // llegan por la sincronización y los avisos (avisos.js)
+    if (inmo.API) { const r = await require('./asset').llamar('POST', '/firmas/revisar'); try { await inmo.sincronizar?.(); } catch {} return r.cambios || []; }
     if (corriendo) return []; corriendo = true; const avisos = [];
     try {
       for (const { f } of enFirma().filter(({ f }) => mia(f))) {

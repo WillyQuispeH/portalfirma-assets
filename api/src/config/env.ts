@@ -30,9 +30,31 @@ const esquema = z.object({
   PLATAFORMA_REVISORES: z
     .string()
     .default('')
-    .transform((v) => v.split(',').map((x) => x.trim().toLowerCase()).filter(Boolean)),
+    .transform((v) =>
+      v
+        .split(',')
+        .map((x) => x.trim().toLowerCase())
+        .filter(Boolean),
+    ),
   /** cada cuántos segundos revisa el servidor los WhatsApp programados que tocan (0 = no los envía esta API) */
   PROGRAMADOS_CADA_SEG: z.coerce.number().int().min(0).max(3600).default(30),
+  /** cada cuántos segundos revisa el servidor en Portalfirma lo que está en firma (0 = esta API no lo revisa) */
+  FIRMAS_CADA_SEG: z.coerce.number().int().min(0).max(86400).default(300),
+  /** cada cuántos segundos lee el servidor el WhatsApp de cada corredora para sus asistentes (0 = esta API no lee) */
+  LECTOR_CADA_SEG: z.coerce.number().int().min(0).max(600).default(4),
+  /**
+   * fuera de producción el lector solo atiende corredoras con wechatia de prueba (conexión con «base»): así la API de
+   * desarrollo no le responde a clientes reales. «1» lo deja leer también las reales.
+   */
+  WA_LECTOR_REAL: z
+    .string()
+    .default('0')
+    .transform((v) => v === '1' || v === 'true'),
+  /** clave de la API de Anthropic (Claude) para los asistentes del servidor; sin ella, responden sin IA */
+  IA_CLAVE: z.string().optional(),
+  IA_MODELO: z.string().default('claude-opus-5-5'),
+  /** solo fuera de producción: otra dirección para la API de IA (las pruebas levantan una falsa) */
+  IA_URL: z.url().optional(),
 });
 
 export type Env = z.infer<typeof esquema>;

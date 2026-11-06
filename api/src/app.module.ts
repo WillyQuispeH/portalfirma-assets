@@ -27,6 +27,16 @@ import { PortalfirmaController, PortalfirmaService } from './conexiones/portalfi
 import { ContadoresController, RegistrosController, RegistrosService } from './registros/registros';
 import { WechatiaController, WechatiaService } from './whatsapp/wechatia';
 import { ProgramadosController, ProgramadosService } from './whatsapp/programados';
+import { AvisosController, AvisosService } from './avisos/avisos';
+import { FirmasRondaController, FirmasRondaService } from './firmas/ronda';
+import { IaService } from './whatsapp/ia';
+import { EnviadosController, EnviadosService } from './whatsapp/enviados';
+import { EjecutivoController, EjecutivoService } from './whatsapp/ejecutivo';
+import { LeadsWaService } from './whatsapp/leads-wa';
+import { ClientesService } from './whatsapp/clientes';
+import { PostventaWaService } from './whatsapp/postventa';
+import { ObservadorController, ObservadorService } from './whatsapp/observador';
+import { LectorController, LectorService } from './whatsapp/lector';
 
 @Module({
   imports: [
@@ -55,6 +65,12 @@ import { ProgramadosController, ProgramadosService } from './whatsapp/programado
     ReglasNotarialesController,
     WechatiaController,
     ProgramadosController,
+    AvisosController,
+    FirmasRondaController,
+    EnviadosController,
+    EjecutivoController,
+    ObservadorController,
+    LectorController,
   ],
   // el límite de intentos va antes que la sesión: un login fallido también cuenta
   providers: [
@@ -74,6 +90,16 @@ import { ProgramadosController, ProgramadosService } from './whatsapp/programado
     ReglasNotarialesService,
     WechatiaService,
     ProgramadosService,
+    AvisosService,
+    FirmasRondaService,
+    IaService,
+    EnviadosService,
+    EjecutivoService,
+    LeadsWaService,
+    ClientesService,
+    PostventaWaService,
+    ObservadorService,
+    LectorService,
   ],
 })
 export class AppModule {}

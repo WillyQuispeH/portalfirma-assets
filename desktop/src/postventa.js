@@ -369,7 +369,8 @@ function whatsappWechatia(res) {
     // 0.16.22 · solo WhatsApp: las de Instagram, Facebook o correo las lee el observador de Leads (nadie las responde)
     async conversaciones() { const j = await res.api('GET', `/conversations/search?locationId=${encodeURIComponent(res.locationId() || '')}&sortBy=last_message_date&sort=desc&limit=30`); return (j.conversations || []).filter((c) => c.phone || !OTRO_CANAL.test(String(c.lastMessageType || c.type || ''))); }, // 0.16.28 · con teléfono se mira igual (los mensajes de otros canales se filtran abajo)
     async mensajes(convId) { const j = await res.api('GET', `/conversations/${convId}/messages?limit=30`); const l = (j.messages?.messages || j.messages || []).filter((m) => !OTRO_CANAL.test(String(m.messageType || m.type || ''))); return [...l].sort((a, b) => new Date(a.dateAdded) - new Date(b.dateAdded)).map((m) => ({ id: m.id, direction: m.direction, body: m.body || '', attachments: m.attachments || [], dateAdded: m.dateAdded, userId: m.userId || null, source: m.source || m.meta?.source || null, tipo: m.messageType || m.type || null })); },
-    async enviar(contactId, texto) { return res.api('POST', '/conversations/messages', { body: { type: 'WhatsApp', contactId, message: texto } }); },
+    // con la cuenta de Asset, por el servidor (queda como envío de Asset y no se usa la clave local)
+    async enviar(contactId, texto) { const srv = require('./wa-servidor'); if (srv.enApi()) return srv.contacto({ contactId, texto }); return res.api('POST', '/conversations/messages', { body: { type: 'WhatsApp', contactId, message: texto } }); },
   };
 }
 

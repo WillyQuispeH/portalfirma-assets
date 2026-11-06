@@ -513,13 +513,13 @@ Reglas: «lucas» = miles de pesos (290 lucas = 290000 CLP). Usa solo lo que dic
     try { fs.rmSync(fMsgs(id), { force: true }); fs.rmSync(path.join(base(), id), { recursive: true, force: true }); } catch {}
     emit({ type: 'datos', que: 'leads' }); return true;
   }
-  // 0.16.9 · WhatsApp en vivo: lo que conversan Fernanda (asistente) o el corredor con el lead por el número de la empresa
-  // queda en su conversación. «atiende» = 'agente' (Fernanda responde) o 'corredor' (el corredor tomó la conversación).
+  // 0.16.9 · WhatsApp en vivo: lo que conversan Sofía (asistente) o el corredor con el lead por el número de la empresa
+  // queda en su conversación. «atiende» = 'agente' (Sofía responde) o 'corredor' (el corredor tomó la conversación).
   const fechaLocal = (d = new Date()) => { const z = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}T${z(d.getHours())}:${z(d.getMinutes())}:${z(d.getSeconds())}`; };
   function porTelefono(telefono) { const t = dig(telefono).slice(-9); return t.length >= 8 ? db().leads.find((l) => dig(l.telefono).slice(-9) === t) || null : null; }
   function registrarWa(idOTel, { de, texto, autor = '', fallido = null }) {
     const l = db().leads.find((x) => x.id === idOTel) || porTelefono(idOTel); if (!l || !String(texto || '').trim()) return null;
-    const m = { fecha: fechaLocal(), autor: autor || (de === 'cliente' ? (l.nombre || l.chatCon || l.telefono) : de === 'agente' ? 'Fernanda (asistente)' : broker().nombre || 'Tú'), texto: String(texto).slice(0, 4000), tipo: 'texto', de, wa: true, ...(fallido ? { fallido: String(fallido).slice(0, 300) } : {}) };
+    const m = { fecha: fechaLocal(), autor: autor || (de === 'cliente' ? (l.nombre || l.chatCon || l.telefono) : de === 'agente' ? 'Sofía (asistente)' : broker().nombre || 'Tú'), texto: String(texto).slice(0, 4000), tipo: 'texto', de, wa: true, ...(fallido ? { fallido: String(fallido).slice(0, 300) } : {}) };
     m.k = clave(m); const todos = [...mensajesDe(l.id), m];
     guardarMsgs(l.id, todos);
     l.mensajes = todos.length; l.ultimo = { fecha: m.fecha, de: de === 'cliente' ? 'cliente' : 'broker', texto: resumenMsg(m) }; l.wa = true; l.atiende ||= 'agente';
@@ -527,7 +527,7 @@ Reglas: «lucas» = miles de pesos (290 lucas = 290000 CLP). Usa solo lo que dic
     l.actualizado = now(); save(); emit({ type: 'datos', que: 'leads', id: l.id });
     return l.id;
   }
-  // un contacto nuevo al que Asset (Fernanda) le escribió por WhatsApp: queda como lead para seguir la conversación
+  // un contacto nuevo al que Asset (Sofía) le escribió por WhatsApp: queda como lead para seguir la conversación
   function crearDesdeWa({ nombre = '', telefono, personaId = null, origen = 'whatsapp' }) {
     const ya = porTelefono(telefono); if (ya) return ya;
     if (dig(telefono).length < 8) throw err('El celular no es válido.');

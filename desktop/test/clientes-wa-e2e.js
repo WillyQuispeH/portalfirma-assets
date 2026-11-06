@@ -36,7 +36,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     const h2 = await espera(/^k8\|/, e0); ok(h2 && /quedó tu visita/.test(h2) && /RUT/.test(h2), 'Fernanda agenda la visita, la confirma y le pide RUT y correo para la orden de visita');
     const vis = await w.evaluate((f) => window.pf.agendaListar({ desde: f, hasta: f }).then((r) => r.data || r), fv);
     ok((vis || []).some((e) => e.tipo === 'visita' && e.hora === '11:00' && e.prop?.codigo === prop.codigo), 'la visita queda en la agenda del corredor, en la propiedad elegida');
-    ok(await espera(/^k9\|\*Fernanda\* · Leads\n📅 \*Visita agendada por Fernanda\*/, e0), 'al corredor le llega el aviso de la visita agendada');
+    ok(await espera(/^k9\|\*Sofía\* · Atención de leads\n📅 \*Visita agendada por Sofía\*/, e0), 'al corredor le llega el aviso de la visita agendada');
     e0 = (await enviados()).length; await escribe('Mi rut es 12.345.678-5 y mi correo juan@ejemplo.cl', 'c8'); await espera(/^k8\|/, e0);
     const lj2 = await w.evaluate((id) => window.pf.leadsObtener(id).then((r) => r.data || r), lj.id);
     ok(lj2.rut && /juan@ejemplo\.cl/.test(lj2.email) && lj2.estado === 'visita' && lj2.mensajesLista.filter((m) => m.de === 'agente').length >= 3, 'el lead guarda RUT, correo, queda en estado «visita» y toda la conversación está en Leads');
@@ -55,11 +55,11 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     // Carla pregunta: responde con su propiedad (sin notas internas)
     e0 = (await enviados()).length; await escribe('Hola, ¿cuánto son los gastos comunes del depto?', 'c5');
     const r1 = await espera(/^k5\|/, e0); ok(r1 && /Irarrázaval 2450/.test(r1) && /95\.000/.test(r1) && !/600 mil/.test(r1), `Diego le responde a Carla con los datos de SU propiedad: «${(r1 || '').slice(3, 90)}…»`);
-    const aviso1 = await espera(/^k9\|\*Diego\* · Seguimiento\n💬 Carla Ruiz Soto escribió/, e0); ok(aviso1, 'y le avisa al corredor que Carla escribió y qué le respondió');
+    const aviso1 = await espera(/^k9\|\*Tomás\* · Atención de clientes\n💬 Carla Ruiz Soto escribió/, e0); ok(aviso1, 'y le avisa al corredor que Carla escribió y qué le respondió');
     // pide una visita: toma el recado, no agenda
     e0 = (await enviados()).length; await escribe('Quiero agendar una visita, puedo el sábado en la mañana', 'c5');
     const r2 = await espera(/^k5\|/, e0); ok(r2 && /le paso tu disponibilidad/i.test(r2), 'para una visita, Diego toma el recado (no confirma fecha)');
-    const rec = await espera(/^k9\|\*Diego\* · Seguimiento\n📩 \*Recado de Carla Ruiz Soto\*/, e0); ok(rec && /agendar una visita/.test(rec) && /sábado en la mañana/.test(rec), 'el recado le llega al corredor con lo que pide y su disponibilidad');
+    const rec = await espera(/^k9\|\*Tomás\* · Atención de clientes\n📩 \*Recado de Carla Ruiz Soto\*/, e0); ok(rec && /agendar una visita/.test(rec) && /sábado en la mañana/.test(rec), 'el recado le llega al corredor con lo que pide y su disponibilidad');
     const act = JSON.stringify(await w.evaluate((id) => window.pf.inmoActividad(id), per.id));
     ok(/Quiere agendar una visita/.test(act) && /sábado en la mañana/.test(act), 'el recado queda anotado en la actividad de Carla en el CRM');
     // un número que no está en el CRM: no se responde
@@ -76,11 +76,11 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     const lid = imp.lead.id;
     e0 = (await enviados()).length; await escribe('Hola, sigo buscando casa en La Reina', 'c7');
     const r3 = await espera(/^k7\|/, e0); ok(r3, 'un lead que escribe al número de la empresa recibe respuesta');
-    ok(await espera(/^k9\|\*Fernanda\* · Leads\n💬 \+56 9 8765 4321 escribió[\s\S]*tomarla en Leads/, e0), 'al lead lo atiende Fernanda y te avisa que puedes tomar la conversación en Leads');
+    ok(await espera(/^k9\|\*Sofía\* · Atención de leads\n💬 \+56 9 8765 4321 escribió[\s\S]*tomarla en Leads/, e0), 'al lead lo atiende Fernanda y te avisa que puedes tomar la conversación en Leads');
     let L = await w.evaluate((id) => window.pf.leadsObtener(id).then((x) => x.data || x), lid);
     ok(L.wa && L.atiende === 'agente' && L.mensajesLista.some((m) => m.de === 'cliente' && /sigo buscando casa/.test(m.texto)) && L.mensajesLista.some((m) => m.de === 'agente'), 'la conversación (cliente y Fernanda) queda en la pantalla Leads');
     await w.evaluate(() => window.closeModal?.()); await w.keyboard.press('Escape'); await w.evaluate((id) => window.Leads.abrir(id), lid); await w.waitForSelector('#ldTomar');
-    ok(/Atiende Fernanda/.test(await w.textContent('#ldChat')), 'en Leads se ve «Atiende Fernanda» con el botón para tomar la conversación');
+    ok(/Atiende Sofía/.test(await w.textContent('#ldChat')), 'en Leads se ve «Atiende Sofía» con el botón para tomar la conversación');
     await w.screenshot({ path: path.resolve(__dirname, 'cw1-lead-fernanda.png') });
     await w.click('#ldTomar'); await w.waitForSelector('#ldRespTx');
     ok(/La atiendes tú/.test(await w.textContent('#ldChat')), 'al tomarla, la conversación pasa al corredor y aparece la caja para responder');
@@ -91,7 +91,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     L = await w.evaluate((id) => window.pf.leadsObtener(id).then((x) => x.data || x), lid);
     ok(L.mensajesLista.some((m) => /espero tu llamada/.test(m.texto)) && L.mensajesLista.some((m) => m.de === 'broker' && /Te llamo hoy/.test(m.texto)), 'igual queda registrado todo lo que escribe el lead y lo que le respondes');
     await w.waitForTimeout(600); await w.screenshot({ path: path.resolve(__dirname, 'cw2-lead-tomado.png') });
-    await w.click('#ldDevolver'); await w.waitForSelector('#ldTomar'); ok(true, '«Devolver a Fernanda» la vuelve a dejar a cargo');
+    await w.click('#ldDevolver'); await w.waitForSelector('#ldTomar'); ok(true, '«Devolver a Sofía» la vuelve a dejar a cargo');
     ok(!errs.length, 'sin errores de JavaScript' + (errs.length ? ': ' + errs.join(' | ') : ''));
     console.log('OK clientes whatsapp');
   } catch (er) { console.error(er.message); await w.screenshot({ path: path.resolve(__dirname, 'cw-error.png') }).catch(() => {}); process.exitCode = 1; } finally { await app.close(); }

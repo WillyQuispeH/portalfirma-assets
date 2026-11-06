@@ -44,7 +44,7 @@ function borrarConv(c) {
 async function claveIA() {
   const r = await pf.aiStatus?.(); const st = r?.ok ? r.data : {};
   modal(`<div class="im-form"><h2>${icon('lock', 18)} Clave de IA</h2>
-    <p class="muted">Asset usa OpenAI para el Agente, Fernanda y la lectura de documentos. ${st.propia ? `Ahora usa una clave propia (termina en …${esc(st.keyEnd)}).` : st.managed ? 'Ahora usa la clave incluida con la app.' : st.keyEnd ? `Clave guardada: termina en …${esc(st.keyEnd)}.` : 'No hay clave.'}</p>
+    <p class="muted">Asset usa OpenAI para el Agente, la atención de clientes (Sofía y Tomás) y la lectura de documentos. ${st.propia ? `Ahora usa una clave propia (termina en …${esc(st.keyEnd)}).` : st.managed ? 'Ahora usa la clave incluida con la app.' : st.keyEnd ? `Clave guardada: termina en …${esc(st.keyEnd)}.` : 'No hay clave.'}</p>
     <p class="muted small">Si OpenAI rechaza la clave, crea una nueva en platform.openai.com › API keys (con límite de gasto) y pégala aquí. Queda cifrada en este computador y reemplaza a la incluida.</p>
     <label>Nueva clave<input id="iaK" type="password" autocomplete="off" spellcheck="false" placeholder="sk-…" /></label>
     <p class="error" id="iaErr"></p>

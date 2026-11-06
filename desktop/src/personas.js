@@ -74,7 +74,9 @@ function saludo(id, { retoma = '' } = {}) {
   const p = POR_ID[id];
   return `Hola, soy *${p.nombre}* (${p.area}).${retoma ? ' ' + retoma : ` Te ayudo con ${p.foco.split(':')[0]}.`}\nPídeme, por ejemplo: ${p.ejemplos.slice(0, 2).join(' o ')}.`;
 }
-const firma = (id) => { const p = POR_ID[id]; return p ? `*${p.nombre}* · ${p.area}` : ''; };
+// las asistentes que atienden a los clientes por WhatsApp (cliente-agente.js): no son del equipo del ejecutivo
+const ATENCION = { sofia: { id: 'sofia', nombre: 'Sofía', area: 'Atención de leads' }, tomas: { id: 'tomas', nombre: 'Tomás', area: 'Atención de clientes' } };
+const firma = (id) => { const p = POR_ID[id] || ATENCION[id]; return p ? `*${p.nombre}* · ${p.area}` : ''; };
 function prompt(id, tareas = null) {
   const p = POR_ID[id]; if (!p) return '';
   const otros = EQUIPO.filter((x) => x.id !== id).map((x) => `${x.nombre} (${x.area.toLowerCase()})`).join(', ');
@@ -89,4 +91,4 @@ function prompt(id, tareas = null) {
 - Clientes y leads que conversan por WhatsApp: Fernanda (asistente) ya les responde sola y todo queda en Leads. Si el usuario pregunta qué dijo o respondió un cliente, o antes de escribirle, usa asset_conversacion_cliente; nunca le pidas al usuario que te cuente lo que respondió el cliente.${lista ? `\nLO TUYO HOY (${p.area}):\n${lista}` : ''}`;
 }
 
-module.exports = { traspaso, EQUIPO, POR_ID, PASO, deP, detectar, clasificar, menu, saludo, firma, prompt, ES_MENU, norm };
+module.exports = { traspaso, EQUIPO, POR_ID, ATENCION, PASO, deP, detectar, clasificar, menu, saludo, firma, prompt, ES_MENU, norm };

@@ -749,7 +749,26 @@ handle('fir:reenviar', (o) => firmas.reenviar(o || {}));
 handle('fir:corregir', (o) => firmas.corregir(o || {}));
 handle('fir:revisarContacto', (l) => firmas.revisarFirmantes(l || []));
 // cada 5 minutos (si hay algo en firma y la sesión de Portalfirma está abierta)
-setInterval(() => { if (pf.isConnected?.() === false) return; firmas.ronda().catch(() => null); }, 5 * 60 * 1000);
+// la revisión automática: con la cuenta de Asset la hace el servidor (cada 5 min, para toda la corredora, aunque la app
+// esté cerrada); lo que cambia llega por la sincronización y por los avisos. En modo de prueba, este equipo.
+setInterval(() => { if (inmo.API || pf.isConnected?.() === false) return; firmas.ronda().catch(() => null); }, 5 * 60 * 1000);
+// Avisos del servidor (avisos.js): se toman una sola vez y se muestran aquí y por WhatsApp (Juanita)
+const avisarFirmas = (t) => { toUI('agent:event', { type: 'aviso', texto: t }); toUI('agent:event', { type: 'datos', que: 'propiedades' }); try { waAgente.avisarComo('juanita', `Firmas: ${t}.`); } catch {} };
+const avisosServidor = require('./avisos').crear({
+  mostrar: (t) => toUI('agent:event', { type: 'aviso', texto: t }),
+  manejadores: {
+    firmas: async (a) => { try { await inmo.sincronizar(); } catch {} avisarFirmas(a.texto); },
+    // la firma de la etapa actual de un negocio: con el negocio ya sincronizado, avanza (lo hace la app: las etapas viven aquí)
+    firma_negocio: async (a) => {
+      try { await inmo.sincronizar(); } catch {}
+      let extra = [];
+      if (a.datos?.avanzar) { try { extra = (await negocios.avanzarPorFirma(a.datos.negocioId, a.datos.etapa)).mensajes.slice(1); } catch (e) { console.warn('[avisos] negocio:', e.message); } }
+      toUI('agent:event', { type: 'datos', que: 'negocios' }); avisarFirmas([a.texto, ...extra].join(' · '));
+    },
+  },
+});
+setInterval(() => { avisosServidor.traer().catch((e) => { if (inmo.API) console.warn('[avisos]', e.message); }); }, 30_000).unref?.();
+inmo.alCargar(async () => { setTimeout(() => avisosServidor.traer().catch(() => {}), 5000); return null; });
 const docs = require('./documentos').crear({ inmo, negocios, pf, firmas });
 const est = require('./estado').crear({ inmo, negocios, agenda });
 // HTML → PDF (carta) con una ventana oculta; lo usan los documentos a medida
@@ -815,10 +834,11 @@ handle('tema:get', () => ({ tema: nativeTheme.themeSource, oscuro: nativeTheme.s
 handle('tema:set', (t) => { if (!TEMAS.includes(t)) throw new Error('Tema no válido.'); nativeTheme.themeSource = t; require('./store').set('tema', t); win?.setBackgroundColor(nativeTheme.shouldUseDarkColors ? '#12141a' : '#f6f7fb'); return { tema: t, oscuro: nativeTheme.shouldUseDarkColors }; });
 handle('pv:muestra', (o) => postventa.muestra(o || {}));
 handle('pv:probarEstilo', (o) => postventa.probarEstilo(o || {}));
-handle('pv:revisar', () => postventa.revisarWhatsApp({ forzar: true, excluir: [(store.get('waAgente') || {}).telefono] }).then(pvAviso));
+handle('pv:revisar', () => waSrv.enApi() ? { activo: true, procesados: 0, enServidor: true } : postventa.revisarWhatsApp({ forzar: true, excluir: [(store.get('waAgente') || {}).telefono] }).then(pvAviso));
 // WhatsApp de postventa: revisa cada 4 s si hay alguien conversando con el asistente, cada 10 s si no (sin superponerse)
 let pvOcupado = false;
 const pvCiclo = async () => {
+  if (waSrv.enApi()) { setTimeout(pvCiclo, 30e3).unref?.(); return; } // con la cuenta de Asset responde el servidor
   if (!pvOcupado && reservas.estadoWa().conectado && postventa.config().auto) { pvOcupado = true; try { pvAviso(await postventa.revisarWhatsApp({ excluir: [(store.get('waAgente') || {}).telefono] })); } catch {} pvOcupado = false; }
   setTimeout(pvCiclo, postventa.ritmo()).unref?.();
 };
@@ -876,8 +896,8 @@ function datosPlantilla(a) {
   // 0.16.18 · una confirmación o recordatorio de visita va con su plantilla (propiedad, fecha y hora), no como primer contacto
   const esVisita = a.propiedad && a.fecha && a.hora && (!a.plantilla || a.plantilla === 'primer_contacto');
   const id = esVisita ? 'recordatorio_visita' : PLANTILLAS_WA[a.plantilla] ? a.plantilla : 'primer_contacto'; const P = PLANTILLAS_WA[id];
-  // el remitente es el ejecutivo (nunca el nombre de un asistente: Pedro, Juanita, Diego o Fernanda)
-  const rem0 = String(a.remitente || '').trim(); const asistente = /^(pedro|juanita|diego|fernanda)\b/i.test(rem0) && rem0.split(/\s+/).length <= 2;
+  // el remitente es el ejecutivo (nunca el nombre de un asistente: Pedro, Juanita, Diego, Fernanda, Sofía o Tomás)
+  const rem0 = String(a.remitente || '').trim(); const asistente = /^(pedro|juanita|diego|fernanda|sof[ií]a|tom[aá]s)\b/i.test(rem0) && rem0.split(/\s+/).length <= 2;
   const remitente = (!asistente && rem0) || inmo.config().corredor?.nombre || inmo.config().contacto?.nombre || inmo.config().nombre || '';
   const v = { remitente, motivo: a.motivo, propiedad: a.propiedad, fecha: a.fecha, hora: a.hora, documento: a.documento, enlace: a.enlace };
   const campos = Object.fromEntries(P.campos.map((k) => [k, v[k]])); const faltan = P.campos.filter((k) => !String(campos[k] || '').trim());
@@ -885,7 +905,7 @@ function datosPlantilla(a) {
 }
 // fuera de las 24 h: plantilla si está activa; si no (o faltan datos), el enlace para enviarlo desde el WhatsApp del usuario
 // 0.16.10 · lo que Asset le manda a un contacto queda en Leads: si no está en el CRM (o es un primer contacto o seguimiento
-// de lead), se crea el lead para que Fernanda siga la conversación cuando responda.
+// de lead), se crea el lead para que Sofía siga la conversación cuando responda.
 function alLead(d, texto, plantilla = null) {
   try {
     let l = leads.porTelefono(d.telefono);
@@ -908,11 +928,11 @@ async function fueraDe24(d, a) {
 }
 // 0.16.18 · si WhatsApp rechaza un mensaje después (Meta avisa con retraso), queda marcado «No entregado» y se avisa al
 // ejecutivo con el enlace para mandarlo desde su WhatsApp
-function avisarNoEntregado(x, motivo) {
+function avisarNoEntregado(x, motivo, { porServidor = false } = {}) {
   const t = `WhatsApp no le entregó el mensaje a ${x.nombre || x.telefono}${/24/.test(motivo || '') || !motivo ? ' (no ha escrito a tu número en las últimas 24 h; solo se puede con una plantilla aprobada)' : ': ' + motivo}. Mándaselo tú desde tu WhatsApp: ${enlaceWa(x.telefono, x.texto)}`;
   try { leads.marcarFallido(x.telefono, x.texto, motivo || 'Fuera de las 24 h'); } catch {}
   if (x.personaId) { try { inmo.registrar(x.personaId, t); inmo.guardar(); } catch {} }
-  toUI('agent:event', { type: 'aviso', texto: t }); try { waAgente.avisar?.(t); } catch {}
+  toUI('agent:event', { type: 'aviso', texto: t }); if (!porServidor) { try { waAgente.avisar?.(t); } catch {} }
 }
 function vigilarEntrega(x, r) {
   if (!r?.messageId || ['delivered', 'read', 'fallido'].includes(r.estado) || r.duplicado) return;
@@ -948,9 +968,9 @@ assetTools.push({ name: 'asset_enviar_whatsapp', modo: 'confirmar',
       // 0.16.18 · cualquier otro rechazo: NO se reintenta (antes el agente lo repetía y llegaban varios iguales)
       try { const l = leads.porTelefono(d.telefono); if (l) leads.registrarWa(l.id, { de: 'agente', texto: a.texto, fallido: e.message }); clientesWa.marcarEnvio(d.telefono, a.texto); } catch {}
       return { ok: false, noEnviado: true, motivo: e.message, enlace: enlaceWa(d.telefono, a.texto), instruccion: 'NO lo reintentes: dile al usuario que no se envió, por qué, y dale el enlace para mandarlo desde su WhatsApp.' }; } } });
-// 0.16.19 · «contacta a X y que agende la visita»: el ejecutivo pide que se coordine una visita y Fernanda sigue sola.
+// 0.16.19 · «contacta a X y que agende la visita»: el ejecutivo pide que se coordine una visita y Sofía sigue sola.
 // Se le escribe a la persona (con plantilla si no ha escrito en 24 h), queda como interesado en la propiedad y, cuando
-// responda, Fernanda le ofrece horarios libres de la agenda y la agenda (hora de Chile).
+// responda, Sofía le ofrece horarios libres de la agenda y la agenda (hora de Chile).
 function propPorRef(ref) {
   const r = String(ref || '').trim().toLowerCase(); if (!r) throw new Error('Indica la propiedad (código, por ejemplo PF-1001).');
   const all = inmo.todas().filter((p) => !p.archivada);
@@ -960,24 +980,24 @@ function propPorRef(ref) {
   throw new Error(l.length || t.length ? `Hay varias propiedades que coinciden con «${ref}»: indica el código.` : `No encontré la propiedad «${ref}».`);
 }
 assetTools.push({ name: 'asset_coordinar_visita', modo: 'confirmar',
-  description: 'Cuando el usuario pide CONTACTAR a una persona para que AGENDE una visita a una propiedad («escríbele a Juan para que agende la visita a PF-1001», «coordina con Ana una visita»). Le escribe por WhatsApp desde el número de la empresa (con la plantilla aprobada si no ha escrito en 24 h) y deja a Fernanda a cargo: cuando responda, le ofrece horarios libres de la agenda y le agenda la visita, y te avisa. No la uses si el usuario ya dio día y hora (eso es asset_crear_evento).',
+  description: 'Cuando el usuario pide CONTACTAR a una persona para que AGENDE una visita a una propiedad («escríbele a Juan para que agende la visita a PF-1001», «coordina con Ana una visita»). Le escribe por WhatsApp desde el número de la empresa (con la plantilla aprobada si no ha escrito en 24 h) y deja a Sofía (la asistente de leads) a cargo: cuando responda, le ofrece horarios libres de la agenda y le agenda la visita, y te avisa. No la uses si el usuario ya dio día y hora (eso es asset_crear_evento).',
   parameters: { type: 'object', properties: { para: { type: 'string', description: 'Persona del CRM: nombre, RUT o id' }, telefono: { type: 'string', description: 'Celular, si no está en el CRM' }, nombre: { type: 'string', description: 'Nombre, si se da el celular' }, propiedad: { type: 'string', description: 'Código de la propiedad (ej. PF-1001)' }, texto: { type: 'string', description: 'Opcional: el mensaje; si no, se arma uno cordial en nombre del usuario' } }, required: ['propiedad'] },
   preparar: async (a) => { if (!reservas.estadoWa().conectado) throw new Error('El WhatsApp de la empresa no está conectado (Agente › WhatsApp).'); const d = destinoWa(a); const p = propPorRef(a.propiedad);
     const c = inmo.config().corredor?.nombre || inmo.config().contacto?.nombre || 'tu corredor';
     a.__d = d; a.__p = p; a.__t = a.texto || `Hola ${String(d.nombre || '').split(' ')[0] || ''}, te escribo de parte de ${c} por la propiedad ${p.codigo}${p.titulo ? ' (' + p.titulo + ')' : ''}${p.comuna ? ' en ' + p.comuna : ''}. ¿Qué día y horario te acomoda para visitarla? Te propongo opciones y la dejamos agendada.`.replace(/Hola ,/, 'Hola,');
-    return { titulo: `Coordinar una visita a ${p.codigo} con ${d.nombre || d.telefono}`, detalle: [`Para: ${d.nombre ? d.nombre + ' · ' : ''}${d.telefono}`, `Mensaje: ${a.__t}`, 'Cuando responda, Fernanda le ofrece horarios libres de tu agenda y la agenda; te aviso.'], aviso: 'Sale desde el WhatsApp de la empresa. Si no ha escrito en 24 h, va la plantilla aprobada de seguimiento.' }; },
+    return { titulo: `Coordinar una visita a ${p.codigo} con ${d.nombre || d.telefono}`, detalle: [`Para: ${d.nombre ? d.nombre + ' · ' : ''}${d.telefono}`, `Mensaje: ${a.__t}`, 'Cuando responda, Sofía le ofrece horarios libres de tu agenda y la agenda; te aviso.'], aviso: 'Sale desde el WhatsApp de la empresa. Si no ha escrito en 24 h, va la plantilla aprobada de seguimiento.' }; },
   run: async (a) => { const d = a.__d || destinoWa(a); const p = a.__p || propPorRef(a.propiedad); const texto = a.__t || a.texto;
-    // queda como interesado (lead) de esa propiedad: así lo atiende Fernanda, que puede agendar
+    // queda como interesado (lead) de esa propiedad: así lo atiende Sofía, que puede agendar
     const l = leads.porTelefono(d.telefono) || leads.crearDesdeWa({ nombre: d.nombre || '', telefono: d.telefono, personaId: d.personaId || null });
-    if (l) { try { leads.actualizar(l.id, { propiedades: [...new Set([...(l.propiedades || []), p.id])], proximaAccion: { texto: `Coordinar visita a ${p.codigo} (Fernanda)`, fecha: require('./hora').hoy() } }); if (l.atiende === 'corredor') leads.atencion(l.id, 'agente'); } catch {} }
+    if (l) { try { leads.actualizar(l.id, { propiedades: [...new Set([...(l.propiedades || []), p.id])], proximaAccion: { texto: `Coordinar visita a ${p.codigo} (Sofía)`, fecha: require('./hora').hoy() } }); if (l.atiende === 'corredor') leads.atencion(l.id, 'agente'); } catch {} }
     if (d.personaId && !(p.vinculos || []).some((v) => v.personaId === d.personaId)) try { await inmo.vincular(p.id, d.personaId, 'interesado'); } catch {}
     const remitente = inmo.config().corredor?.nombre || inmo.config().contacto?.nombre || '';
     let r;
     try { const x = await enviarWaCliente({ ...d, texto }); alLead(d, texto, 'seguimiento_lead'); r = { ok: true, enviado: { para: d.nombre || d.telefono, estado: x.duplicado ? 'ya enviado hace unos minutos (no se repitió)' : x.estado } }; }
     catch (e) { if (e.code === 'FUERA_24H' || /24 horas/.test(e.message)) r = await fueraDe24(d, { texto, plantilla: 'seguimiento_lead', remitente, propiedad: `${p.codigo}${p.titulo ? ' · ' + p.titulo : ''}` });
       else { try { if (l) leads.registrarWa(l.id, { de: 'agente', texto, fallido: e.message }); clientesWa.marcarEnvio(d.telefono, texto); } catch {} r = { ok: false, noEnviado: true, motivo: e.message, enlace: enlaceWa(d.telefono, texto), instruccion: 'NO lo reintentes: dile al usuario que no se envió y dale el enlace.' }; } }
-    if (d.personaId) try { inmo.registrar(d.personaId, `Coordinar visita a ${p.codigo}: ${r.ok ? 'mensaje enviado; Fernanda le ofrecerá horarios' : 'no se pudo enviar'}`, { ref2: p.id }); inmo.guardar(); } catch {}
-    return { ...r, propiedad: p.codigo, siguiente: r.ok ? 'Cuando responda, Fernanda le ofrece horarios libres y agenda la visita; te aviso por WhatsApp y queda en la agenda.' : null, efectos: { datos: 'leads' } };
+    if (d.personaId) try { inmo.registrar(d.personaId, `Coordinar visita a ${p.codigo}: ${r.ok ? 'mensaje enviado; Sofía le ofrecerá horarios' : 'no se pudo enviar'}`, { ref2: p.id }); inmo.guardar(); } catch {}
+    return { ...r, propiedad: p.codigo, siguiente: r.ok ? 'Cuando responda, Sofía le ofrece horarios libres y agenda la visita; te aviso por WhatsApp y queda en la agenda.' : null, efectos: { datos: 'leads' } };
   } });
 assetTools.push({ name: 'asset_plantillas_whatsapp', modo: 'escribir',
   description: 'Ve o cambia qué plantillas de WhatsApp (aprobadas por Meta en wechatia) usa Asset cuando un cliente no ha escrito en 24 h. Úsala cuando el usuario diga que Meta ya aprobó una plantilla («ya se aprobaron las plantillas, actívalas») o pregunte cuáles están activas. Sin «activar» ni «desactivar», solo muestra el estado.',
@@ -996,16 +1016,19 @@ function alProgramado(x) {
     if (r.messageId) reservas.anotarPropio(r.messageId); if (r.plantilla) reservas.anotarPlantilla(x.telefono);
     alLead(d, r.plantilla ? `(Plantilla ${r.plantilla}) ${Object.values(x.plantilla?.campos || {}).filter(Boolean).join(' · ')}` : x.texto, x.plantilla?.id || null);
     const t = `Le envié a ${x.nombre || x.telefono} el WhatsApp programado${r.plantilla ? ` (con la plantilla ${r.plantilla}, porque no había escrito en 24 h)` : ''}: «${x.texto.slice(0, 120)}»`;
-    toUI('agent:event', { type: 'aviso', texto: t }); try { waAgente.avisar?.(t); } catch {}
-  } else if (x.estado === 'no_entregado') avisarNoEntregado(x, r.error);
+    toUI('agent:event', { type: 'aviso', texto: t }); if (!waSrv.enApi()) { try { waAgente.avisar?.(t); } catch {} } // con la cuenta de Asset, al celular lo avisa el servidor
+  } else if (x.estado === 'no_entregado') avisarNoEntregado(x, r.error, { porServidor: waSrv.enApi() });
   else {
     try { const l = leads.porTelefono(x.telefono); if (l) leads.registrarWa(l.id, { de: 'agente', texto: x.texto, fallido: r.error || 'No se envió' }); } catch {}
     const t = `No pude enviarle a ${x.nombre || x.telefono} el WhatsApp programado: ${r.error || 'error desconocido'}
 Envíaselo tú desde tu WhatsApp (se abre con el mensaje listo): ${enlaceWa(x.telefono, x.texto)}`;
     if (x.personaId) { try { inmo.registrar(x.personaId, `No se envió el WhatsApp programado: ${r.error || ''}`.trim()); inmo.guardar(); } catch {} }
-    toUI('agent:event', { type: 'aviso', texto: t }); try { waAgente.avisar?.(t); } catch {}
+    toUI('agent:event', { type: 'aviso', texto: t }); if (!waSrv.enApi()) { try { waAgente.avisar?.(t); } catch {} }
   }
 }
+// WhatsApp de la empresa por el servidor (con la cuenta de Asset): envíos, celular del ejecutivo, asistentes, observador
+const waSrv = require('./wa-servidor');
+inmo.alCargar(async () => { await waSrv.refrescarConexion(); try { await waSrv.ejecutivo.refrescar(); } catch {} try { await waSrv.asistentes.refrescar(); } catch {} return null; });
 const waProg = require('./wa-programados').crear({ credenciales: () => reservas.credencialesWa(), alResultado: alProgramado, plantillaDe: plantillaProgramada });
 global.__waProg = waProg; global.__assetTool = (n) => assetTools.find((t) => t.name === n); // las pruebas e2e los usan (app.evaluate)
 // al iniciar sesión: la clave de este equipo al servidor (si la corredora aún no la tiene) y lo programado aquí, arriba
@@ -1099,7 +1122,7 @@ handle('leads:derivar', async (id) => {
 });
 handle('leads:listar', (o) => { const c = permisos.corredorActual(); return leads.listar({ ...(o || {}), ...(c ? { soloDe: c } : {}) }); });
 // al abrir un lead, primero los mensajes que llegaron a otros equipos
-handle('leads:obtener', async (id) => { try { await leads.traerMensajes(id); } catch {} const l = leads.obtener(id); if (!permisos.verLead(l)) throw new Error('Ese lead es de otro corredor.'); try { const pz = l?.telefono ? clientesWa.pausa(l.telefono) : null; if (pz) l.pausaHasta = pz; } catch {} return l; });
+handle('leads:obtener', async (id) => { try { await leads.traerMensajes(id); } catch {} const l = leads.obtener(id); if (!permisos.verLead(l)) throw new Error('Ese lead es de otro corredor.'); try { const pz = l?.telefono ? (waSrv.enApi() ? await waSrv.asistentes.pausa(l.telefono) : clientesWa.pausa(l.telefono)) : null; if (pz) l.pausaHasta = pz; } catch {} return l; });
 handle('leads:analizar', async (o) => { if (o?.miNombre && !(inmo.API && inmo.usuario())) store.set('leadsBroker', String(o.miNombre).slice(0, 80));
   // 0.16.21 · un .zip puede ser un chat de WhatsApp o la descarga de Instagram: se reconoce por lo que trae
   if (/\.zip$/i.test(o?.ruta || '') || o?.canal === 'instagram') { try { return await leads.analizarInstagram(o || {}); } catch (e) { if (o?.canal === 'instagram' || e.code !== 'NO_IG') throw e; } }
@@ -1108,17 +1131,19 @@ handle('leads:importarInstagram', (o) => leads.importarInstagram({ brokerNombre:
 handle('leads:consentimientos', () => leads.consentimientos());
 // 0.16.22 · observador en vivo: Instagram, Facebook y correo desde wechatia, solo lectura
 const observador = require('./observador').crear({ res: reservas, leads, store, corredores: equipo, emit: (e) => toUI('agent:event', e) });
-handle('obs:estado', () => observador.estado());
-handle('obs:configurar', (o) => { const r = observador.configurar({ autorizadoPor: miNombre(), ...(o || {}) }); if (r.activo) observador.revisar().catch(() => {}); return r; });
-handle('obs:revisar', async () => { const r = await observador.revisar({ forzar: true }); return { ...r, estado: observador.estado() }; });
-setTimeout(() => observador.revisar().catch(() => {}), 20000); setInterval(() => observador.revisar().catch(() => {}), 2 * 60000);
+// con la cuenta de Asset lo corre el servidor (cada 2 min, aunque la app esté cerrada); aquí solo se configura y se mira
+handle('obs:estado', () => (waSrv.enApi() ? waSrv.observador.estado() : observador.estado()));
+handle('obs:configurar', (o) => { if (waSrv.enApi()) return waSrv.observador.configurar({ autorizadoPor: miNombre(), ...(o || {}) }); const r = observador.configurar({ autorizadoPor: miNombre(), ...(o || {}) }); if (r.activo) observador.revisar().catch(() => {}); return r; });
+handle('obs:revisar', async () => { if (waSrv.enApi()) return waSrv.observador.revisar(); const r = await observador.revisar({ forzar: true }); return { ...r, estado: observador.estado() }; });
+const obsLocal = () => { if (!waSrv.enApi()) observador.revisar().catch(() => {}); };
+setTimeout(obsLocal, 20000); setInterval(obsLocal, 2 * 60000);
 handle('leads:importar', (o) => leads.importar(o || {}));
 handle('leads:actualizar', (id, c) => leads.actualizar(id, c || {}));
 handle('leads:reanalizar', (id) => leads.analizarConIA(id));
 handle('leads:borrar', (id) => leads.borrar(id));
-// 0.16.9 · Leads: el corredor toma (o devuelve a Fernanda) la conversación de WhatsApp y le responde desde Asset
+// 0.16.9 · Leads: el corredor toma (o devuelve a Sofía) la conversación de WhatsApp y le responde desde Asset
 handle('leads:atencion', (id, quien) => leads.atencion(id, quien));
-handle('leads:reanudar', (id) => { const l = leads.obtener(id, { marcarLeido: false }); if (l?.telefono) clientesWa.reanudar(l.telefono); if (l?.atiende === 'corredor') leads.atencion(id, 'agente'); return true; });
+handle('leads:reanudar', async (id) => { const l = leads.obtener(id, { marcarLeido: false }); if (l?.telefono) { if (waSrv.enApi()) await waSrv.asistentes.reanudar(l.telefono); else clientesWa.reanudar(l.telefono); } if (l?.atiende === 'corredor') leads.atencion(id, 'agente'); return true; });
 handle('leads:responder', async (id, texto) => {
   const l = leads.obtener(id, { marcarLeido: false }); const t = String(texto || '').trim(); if (!t) throw new Error('Escribe el mensaje.');
   if (!l.telefono) throw new Error('Este lead no tiene celular.');
@@ -1127,35 +1152,41 @@ handle('leads:responder', async (id, texto) => {
   leads.registrarWa(id, { de: 'broker', texto: t }); try { clientesWa.marcarEnvio(l.telefono, t); } catch {} if (l.atiende !== 'corredor') leads.atencion(id, 'corredor');
   return leads.obtener(id);
 });
-// 0.16.8 · atención de clientes: las personas del CRM que escriben al número de la empresa las atiende Diego (asistente
+// 0.16.8 · atención de clientes: las personas del CRM que escriben al número de la empresa las atiende Tomás (asistente
 // del corredor). Responde dudas de sus propiedades y de la firma; para agendar o cambiar visitas solo toma el recado.
 const clientesWa = require('./cliente-agente').crear({ store, inmo, agenda, docs, leads, ai: require('./ai'), wa: require('./postventa').whatsappWechatia(reservas),
-  avisarCorredor: (t, como) => waAgente.avisarComo(como || 'diego', t), emitUI: (e) => toUI('agent:event', e), mock: process.env.PF_MOCK === '1' });
-// 0.16.12 · el equipo puede leer la conversación de WhatsApp de un cliente o lead (lo que respondió y lo que le dijo Fernanda)
+  avisarCorredor: (t, como) => waAgente.avisarComo(como || 'tomas', t), emitUI: (e) => toUI('agent:event', e), mock: process.env.PF_MOCK === '1' });
+// 0.16.12 · el equipo puede leer la conversación de WhatsApp de un cliente o lead (lo que respondió y lo que le dijeron Sofía o Tomás)
 assetTools.push({ name: 'asset_conversacion_cliente', modo: 'leer',
-  description: 'Lee la conversación de WhatsApp con un cliente o lead (lo que escribió el cliente y lo que le respondieron Fernanda, Diego o el corredor) y quién la está atendiendo. Úsala SIEMPRE que el usuario pregunte qué dijo o respondió un cliente, o antes de escribirle de nuevo; no le pidas al usuario que te cuente lo que respondió el cliente.',
+  description: 'Lee la conversación de WhatsApp con un cliente o lead (lo que escribió el cliente y lo que le respondieron Sofía, Tomás o el corredor) y quién la está atendiendo. Úsala SIEMPRE que el usuario pregunte qué dijo o respondió un cliente, o antes de escribirle de nuevo; no le pidas al usuario que te cuente lo que respondió el cliente.',
   parameters: { type: 'object', properties: { cliente: { type: 'string', description: 'Nombre, celular o RUT del cliente o lead' }, mensajes: { type: 'number', description: 'Cuántos mensajes recientes (máx. 30)' } }, required: ['cliente'] },
   run: async (a) => {
     const q = String(a.cliente || '').trim(); const nq = q.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); const tel = cleanTel(q);
     const cAct = permisos.corredorActual(); const todos = leads.listar(cAct ? { soloDe: cAct } : {}).leads;
     let l = tel.length >= 8 ? leads.porTelefono(q) : null; if (l && !permisos.verLead(l)) return { nota: 'Ese lead es de otro corredor: no puedo mostrar su conversación.' };
     if (!l) { const c = todos.filter((x) => [x.nombre, x.chatCon].some((v) => String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(nq))); if (c.length > 1) return { error: `Hay varios: ${c.slice(0, 5).map((x) => x.nombre || x.telefono).join(', ')}. ¿Cuál?` }; l = c[0] || null; }
-    if (!l) { try { const d = destinoWa({ para: q }); l = leads.porTelefono(d.telefono); if (!l) return { cliente: d.nombre, nota: 'No tiene conversación registrada en Leads (es un cliente del CRM: lo que conversó con Diego queda en su actividad).' }; } catch (e) { return { error: e.message }; } }
+    if (!l) { try { const d = destinoWa({ para: q }); l = leads.porTelefono(d.telefono); if (!l) return { cliente: d.nombre, nota: 'No tiene conversación registrada en Leads (es un cliente del CRM: lo que conversó con Tomás queda en su actividad).' }; } catch (e) { return { error: e.message }; } }
     const o = leads.obtener(l.id, { marcarLeido: false }); const n = Math.min(30, a.mensajes || 15);
-    return { lead: o.nombre || o.chatCon || o.telefono, telefono: o.telefono, atiende: o.atiende === 'corredor' ? 'el corredor (tomó la conversación)' : 'Fernanda (responde sola)', estado: o.estadoTxt, busca: o.busqueda,
-      mensajes: o.mensajesLista.slice(-n).map((m) => ({ de: m.de === 'cliente' ? 'cliente' : m.de === 'agente' ? 'Fernanda' : 'corredor', fecha: m.fecha.replace('T', ' ').slice(0, 16), texto: m.texto || m.transcripcion || `(${m.tipo})` })) };
+    return { lead: o.nombre || o.chatCon || o.telefono, telefono: o.telefono, atiende: o.atiende === 'corredor' ? 'el corredor (tomó la conversación)' : 'Sofía (responde sola)', estado: o.estadoTxt, busca: o.busqueda,
+      mensajes: o.mensajesLista.slice(-n).map((m) => ({ de: m.de === 'cliente' ? 'cliente' : m.de === 'agente' ? 'Sofía' : 'corredor', fecha: m.fecha.replace('T', ' ').slice(0, 16), texto: m.texto || m.transcripcion || `(${m.tipo})` })) };
   } });
 assetTools.push({ name: 'asset_atencion_clientes', modo: 'escribir',
-  description: 'Enciende, apaga o muestra la atención de clientes por WhatsApp: cuando una persona del CRM le escribe al número de la empresa, Diego (asistente del corredor) le responde dudas de sus propiedades y de la firma, y toma recados para agendar, reprogramar o cancelar visitas o reuniones (no confirma nada solo). Con «pausar» y una persona, deja de responderle 12 h porque el corredor la atiende.',
+  description: 'Enciende, apaga o muestra la atención de clientes por WhatsApp: cuando una persona del CRM le escribe al número de la empresa, Tomás (asistente del corredor) le responde dudas de sus propiedades y de la firma, y toma recados para agendar, reprogramar o cancelar visitas o reuniones (no confirma nada solo). Con «pausar» y una persona, deja de responderle 12 h porque el corredor la atiende.',
   parameters: { type: 'object', properties: { activar: { type: 'boolean', description: 'true enciende, false apaga; vacío = solo estado' }, pausar: { type: 'string', description: 'Persona del CRM a la que el corredor quiere atender él (nombre, RUT o id)' }, siempre_activo: { type: 'boolean', description: 'Asset siempre activo (abre al encender el computador, sigue con la ventana cerrada y no se suspende): true/false' } } },
   run: async (a) => {
-    if (a.pausar) { const d = destinoWa({ para: a.pausar }); const per = inmo.personaPorId(d.personaId); const h = clientesWa.pausar(per); return { ok: true, pausado: per.nombre, hasta: h }; }
+    if (a.pausar) { const d = destinoWa({ para: a.pausar }); const per = inmo.personaPorId(d.personaId); const h = waSrv.enApi() ? await waSrv.asistentes.pausar(per.telefono || d.telefono) : clientesWa.pausar(per); return { ok: true, pausado: per.nombre, hasta: h }; }
+    if (waSrv.enApi()) {
+      if (a.activar !== undefined) await waSrv.asistentes.configurar(!!a.activar); else await waSrv.asistentes.refrescar();
+      if (a.siempre_activo !== undefined) { store.set('siempreActivo', !!a.siempre_activo); aplicarSiempreActivo(); }
+      const e = waSrv.asistentes.estado();
+      return { ok: true, activo: !!e.clientesActivo, ia: e.ia, nota: e.clientesActivo ? 'Tomás responde a las personas del CRM que escriban al número de la empresa (y Sofía a los leads), y te avisa de cada recado. Lo hace el servidor de Asset: responden aunque tu computador esté apagado.' : 'Apagada: los mensajes de las personas del CRM no se responden solos (Sofía sigue atendiendo a los leads).' };
+    }
     if (a.activar !== undefined) clientesWa.configurar({ activo: !!a.activar });
     if (a.siempre_activo !== undefined) { store.set('siempreActivo', !!a.siempre_activo); aplicarSiempreActivo(); }
-    return { ok: true, ...clientesWa.estado(), nota: clientesWa.activo() ? 'Diego responde a las personas del CRM que escriban al número de la empresa, y te avisa por WhatsApp de cada recado. Asset queda activo aunque cierres la ventana y se abre solo al encender el computador; solo deja de responder si el computador está apagado o sin internet.' : 'Apagada: los mensajes de clientes no se responden solos.', siempreActivo: siempreActivo() };
+    return { ok: true, ...clientesWa.estado(), nota: clientesWa.activo() ? 'Tomás responde a las personas del CRM que escriban al número de la empresa, y te avisa por WhatsApp de cada recado. Asset queda activo aunque cierres la ventana y se abre solo al encender el computador; solo deja de responder si el computador está apagado o sin internet.' : 'Apagada: los mensajes de clientes no se responden solos.', siempreActivo: siempreActivo() };
   } });
 const waAgente = require('./whatsapp-agente').crear({ store, wa: require('./postventa').whatsappWechatia(reservas), crearAgente: (o) => require('./agente').crear({ pf, ai: require('./ai'), ...o }),
-  locales: assetTools, dictado, inmo, convs, leads, ai: require('./ai'), equipoHoy: () => ofDatos(), emitUI: (e) => toUI('agent:event', e), mock: process.env.PF_MOCK === '1', clientes: clientesWa });
+  locales: assetTools, dictado, inmo, convs, leads, ai: require('./ai'), equipoHoy: () => ofDatos(), emitUI: (e) => toUI('agent:event', e), mock: process.env.PF_MOCK === '1', clientes: clientesWa, servidor: waSrv });
 // 0.16.26 · el Agente respeta quién usa el equipo: no muestra datos de dueños reservados ni prepara documentos con ellos
 { const DUENO = new Set(['asset_preparar_formato', 'asset_enviar_formato', 'asset_formulario_documento', 'asset_generar_documento']);
   for (const t of assetTools) { if (t.__acc) continue; t.__acc = true; const run0 = t.run; const prep0 = t.preparar;
@@ -1165,13 +1196,13 @@ const waAgente = require('./whatsapp-agente').crear({ store, wa: require('./post
     t.run = async (a) => { guard(a); if (['asset_atencion_clientes', 'asset_plantillas_whatsapp'].includes(t.name) && Object.keys(a || {}).some((k) => !/^(consultar|ver)$/.test(k))) permisos.permiso('fernanda'); const out = await run0(a); if (!out || typeof out !== 'object') return out; const ef = out.efectos; const r = permisos.limpiar(out); if (ef) r.efectos = ef; return r; }; } }
 handle('wa:estado', () => ({ ...waAgente.estado(), ...reservas.estadoWa() }));
 handle('app:siempreActivo', (v) => { if (typeof v === 'boolean') { permisos.permiso('fernanda'); store.set('siempreActivo', v); } return aplicarSiempreActivo(); });
-handle('wa:vincular', (o) => { if (!reservas.estadoWa().conectado) throw new Error('Primero conecta el WhatsApp de la empresa (clave de wechatia).'); return waAgente.vincular(o || {}); });
+handle('wa:vincular', async (o) => { if (waSrv.enApi()) await waSrv.refrescarConexion(); if (!reservas.estadoWa().conectado) throw new Error('Primero conecta el WhatsApp de la empresa (clave de wechatia).'); return waAgente.vincular(o || {}); });
 handle('wa:desvincular', () => waAgente.desvincular());
 handle('wa:configurar', (o) => waAgente.configurar(o || {}));
 handle('wa:revisar', () => waAgente.revisar());
 let waOcupado = false;
 const waCiclo = async () => { const e = waAgente.estado();
-  if (!waOcupado && reservas.estadoWa().conectado && (e.activo || e.codigo)) { waOcupado = true; try { await waAgente.revisar(); } catch {} waOcupado = false; }
+  if (!waOcupado && reservas.estadoWa().conectado && (e.activo || e.codigo || waSrv.enApi())) { waOcupado = true; try { await waAgente.revisar(); } catch {} waOcupado = false; }
   setTimeout(waCiclo, waAgente.ritmo()).unref?.(); };
 setTimeout(waCiclo, 4e3).unref?.();
 handle('dict:mic', async () => { if (process.platform !== 'darwin') return true; const { systemPreferences } = require('electron'); const st = systemPreferences.getMediaAccessStatus('microphone'); if (st === 'granted') return true; if (st === 'denied' || st === 'restricted') return false; return systemPreferences.askForMediaAccess('microphone'); });

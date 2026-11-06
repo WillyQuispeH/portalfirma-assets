@@ -6,7 +6,9 @@
 //  · Todo queda en este computador: lo hecho por WhatsApp aparece en la cartera, la agenda, los negocios y en la
 //    conversación «WhatsApp» del Agente.
 //  · Lo que cobra o envía se confirma respondiendo SÍ/NO. Una propiedad dictada se muestra resumida y se guarda con «CREAR».
-//  · Funciona mientras Asset esté abierto en el computador del usuario (para 24/7 hará falta un servidor).
+//  · Con la cuenta de Asset (0.17), el SERVIDOR lee el WhatsApp de la empresa, vincula el celular con el código y le
+//    entrega a este Asset lo que escribe (cola); aquí se atiende con el Agente y se responde a través del servidor. Si
+//    este Asset está cerrado, el servidor guarda los mensajes y le avisa al ejecutivo. Sin cuenta (PF_MOCK), como antes.
 const guia = require('./herramientas-guia');
 const P = require('./personas');
 const now = () => new Date().toISOString();
@@ -16,7 +18,8 @@ const CONV_ID = 'whatsapp';
 const SI = /^(s[ií]|si+|confirmo|confirmar|dale|ok|ya|de acuerdo|hazlo|env[ií]a(lo)?)\b/;
 const NO = /^(no|cancela(r)?|mejor no|detente|para)\b/;
 
-function crear({ store, wa, crearAgente, locales, dictado, inmo, convs, leads = null, ai, emitUI = () => {}, fetchFn = (...a) => fetch(...a), mock = false, equipoHoy = null, clientes = null }) {
+function crear({ store, wa, crearAgente, locales, dictado, inmo, convs, leads = null, ai, emitUI = () => {}, fetchFn = (...a) => fetch(...a), mock = false, equipoHoy = null, clientes = null, servidor = null }) {
+  const srvOn = () => !!servidor?.enApi?.();
   const cfg = () => ({ activo: false, telefono: null, codigo: null, numeroEmpresa: '+56 9 4497 5958', ...(store.get('waAgente') || {}) });
   const setCfg = (o) => { const c = { ...cfg(), ...o }; store.set('waAgente', c); return c; };
   const S = { vistos: store.get('waAgenteVistos') || {}, busy: false, pend: null, ficha: null, lead: null, cola: [], ultimaActividad: 0, contactId: null, items: null,
@@ -42,10 +45,16 @@ function crear({ store, wa, crearAgente, locales, dictado, inmo, convs, leads = 
   function items() { if (!S.items) { try { S.items = convs.obtener(CONV_ID).items || []; } catch { S.items = []; } } return S.items; }
   function registrar(k, text) { items().push({ k, text: String(text).slice(0, 4000), wa: true, t: now(), ...(S.persona ? { p: S.persona } : {}) }); try { convs.guardar(CONV_ID, { items: items(), messages: S.persona ? agenteDe(S.persona).mensajes() : [], titulo: 'WhatsApp · tu celular' }); convs.fijar(CONV_ID, true); } catch {} emitUI({ type: 'whatsapp', que: 'conversacion' }); }
   // cada respuesta va firmada por el personaje que habla («*Pedro* · Captación»); el menú y los avisos del sistema, sin firma
-  async function enviar(texto, { sinFirma = false } = {}) { if (!S.contactId) return; let t = String(texto || '').trim(); if (!t) return; if (S.persona && !sinFirma) t = `${P.firma(S.persona)}\n${t}`; await wa.enviar(S.contactId, t.slice(0, 3500)); registrar('bot', t); }
+  async function enviar(texto, { sinFirma = false } = {}) {
+    let t = String(texto || '').trim(); if (!t) return; if (S.persona && !sinFirma) t = `${P.firma(S.persona)}\n${t}`;
+    if (srvOn()) { await servidor.ejecutivo.responder(t); registrar('bot', t); return; } // con la cuenta de Asset, por el servidor
+    if (!S.contactId) return; await wa.enviar(S.contactId, t.slice(0, 3500)); registrar('bot', t);
+  }
 
   // un aviso al celular del ejecutivo (también si aún no escribe en esta sesión: se usa el contacto guardado)
-  async function avisarCorredor(t, como = null) { const c = cfg(); if (!c.activo) return false; if (!S.contactId && c.contactId) S.contactId = c.contactId; if (!S.contactId) return false; await enviar(como ? `${P.firma(como)}\n${t}` : t, { sinFirma: !!como }); return true; }
+  async function avisarCorredor(t, como = null) {
+    if (srvOn()) { if (!servidor.ejecutivo.estado().activo) return false; await enviar(como ? `${P.firma(como)}\n${t}` : t, { sinFirma: !!como }); return true; }
+    const c = cfg(); if (!c.activo) return false; if (!S.contactId && c.contactId) S.contactId = c.contactId; if (!S.contactId) return false; await enviar(como ? `${P.firma(como)}\n${t}` : t, { sinFirma: !!como }); return true; }
   // ---------- eventos del agente → mensajes de WhatsApp ----------
   function evento(e, pid) {
     if (e.type === 'confirm') {
@@ -215,7 +224,15 @@ function crear({ store, wa, crearAgente, locales, dictado, inmo, convs, leads = 
 
   // ---------- revisar WhatsApp: vinculación por código y mensajes del celular vinculado ----------
   let revisando = null;
-  async function revisar() { if (revisando) return revisando; revisando = revisar1().finally(() => { revisando = null; }); return revisando; }
+  async function revisar() { if (revisando) return revisando; revisando = (srvOn() ? revisarServidor() : revisar1()).finally(() => { revisando = null; }); return revisando; }
+  // con la cuenta de Asset: lo que el servidor guardó del celular vinculado (y si recién se vinculó)
+  async function revisarServidor() {
+    const antes = !!servidor.ejecutivo.estado().activo;
+    const items = await servidor.ejecutivo.entrantes(); const e = servidor.ejecutivo.estado();
+    if (e.activo && !antes) { registrar('hecho', `Celular ${e.telefono || ''} vinculado`); emitUI({ type: 'whatsapp', que: 'vinculado' }); }
+    for (const m of items) { S.contactId = 'servidor'; try { await manejar(m); } catch (er) { console.warn('[wa]', er.message); } }
+    return { procesados: items.length };
+  }
   async function revisar1() {
     const c = cfg(); if (!c.activo && !c.codigo) return { procesados: 0 };
     const convsWa = await wa.conversaciones(); let procesados = 0;
@@ -251,13 +268,21 @@ function crear({ store, wa, crearAgente, locales, dictado, inmo, convs, leads = 
     return { procesados };
   }
   // ritmo: rápido si hay una conversación activa (últimos 10 min) o algo pendiente
-  const ritmo = () => (S.busy || S.pend || S.ficha || S.lead || Date.now() - S.ultimaActividad < 10 * 6e4 || cfg().codigo ? 3000 : 8000);
+  const ritmo = () => (srvOn() ? (servidor.ejecutivo.estado().activo || servidor.ejecutivo.estado().codigo ? 3000 : 15000) : S.busy || S.pend || S.ficha || S.lead || Date.now() - S.ultimaActividad < 10 * 6e4 || cfg().codigo ? 3000 : 8000);
 
   return {
-    estado: () => { const c = cfg(); return { activo: !!c.activo, telefono: c.telefono, codigo: c.codigo, numeroEmpresa: c.numeroEmpresa, vinculado: c.vinculado || null, ocupado: S.busy, pendiente: !!(S.pend || S.ficha || S.lead), persona: S.persona }; },
-    vincular: ({ nombre, email } = {}) => { const codigo = 'ASSET ' + String(1000 + Math.floor(Math.random() * 9000)); setCfg({ codigo, nombre: nombre || '', email: email || cfg().email || '' }); for (const k of Object.keys(S.vistos)) S.vistos[k].desde = now(); return { codigo, numeroEmpresa: cfg().numeroEmpresa }; },
-    desvincular: () => { setCfg({ telefono: null, codigo: null, activo: false, vinculado: null }); S.pend = null; S.ficha = null; S.espera = null; setPersona(null); return true; },
-    configurar: (o = {}) => { const x = {}; if (o.activo !== undefined) x.activo = !!o.activo && !!cfg().telefono; if (o.numeroEmpresa) x.numeroEmpresa = String(o.numeroEmpresa).slice(0, 30); if (o.email) x.email = o.email; setCfg(x); return cfg(); },
+    estado: () => {
+      if (srvOn()) { const e = servidor.ejecutivo.estado(); return { activo: !!e.activo, telefono: e.telefono, codigo: e.codigo, numeroEmpresa: e.numeroEmpresa, vinculado: e.vinculado || null, ocupado: S.busy, pendiente: !!(S.pend || S.ficha || S.lead), persona: S.persona, enServidor: true }; }
+      const c = cfg(); return { activo: !!c.activo, telefono: c.telefono, codigo: c.codigo, numeroEmpresa: c.numeroEmpresa, vinculado: c.vinculado || null, ocupado: S.busy, pendiente: !!(S.pend || S.ficha || S.lead), persona: S.persona }; },
+    vincular: ({ nombre, email } = {}) => {
+      if (srvOn()) { setCfg({ nombre: nombre || '', email: email || cfg().email || '' }); return servidor.ejecutivo.vincular({ ...(nombre ? { nombre } : {}), ...(email ? { email } : {}) }); }
+      const codigo = 'ASSET ' + String(1000 + Math.floor(Math.random() * 9000)); setCfg({ codigo, nombre: nombre || '', email: email || cfg().email || '' }); for (const k of Object.keys(S.vistos)) S.vistos[k].desde = now(); return { codigo, numeroEmpresa: cfg().numeroEmpresa }; },
+    desvincular: () => {
+      if (srvOn()) { S.pend = null; S.ficha = null; S.espera = null; setPersona(null); return servidor.ejecutivo.desvincular(); }
+      setCfg({ telefono: null, codigo: null, activo: false, vinculado: null }); S.pend = null; S.ficha = null; S.espera = null; setPersona(null); return true; },
+    configurar: (o = {}) => {
+      if (srvOn()) { if (o.email) setCfg({ email: o.email }); return servidor.ejecutivo.configurar({ ...(o.activo !== undefined ? { activo: !!o.activo } : {}), ...(o.email ? { email: String(o.email) } : {}), ...(o.numeroEmpresa ? { numeroEmpresa: String(o.numeroEmpresa) } : {}) }); }
+      const x = {}; if (o.activo !== undefined) x.activo = !!o.activo && !!cfg().telefono; if (o.numeroEmpresa) x.numeroEmpresa = String(o.numeroEmpresa).slice(0, 30); if (o.email) x.email = o.email; setCfg(x); return cfg(); },
     revisar, ritmo, _S: S,
     // un aviso al celular del ejecutivo (p. ej. «le envié el recordatorio a…»), firmado por quien esté activo
     avisar: (t) => avisarCorredor(t),

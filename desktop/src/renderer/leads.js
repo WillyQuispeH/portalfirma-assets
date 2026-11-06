@@ -59,15 +59,15 @@ function chat(l) {
     else if (m.tipo === 'video') cuerpo = `<span class="ld-adj">${icon('file', 14)} Video${m.archivo ? ' · ' + esc(m.archivo) : ''}</span>`;
     else if (m.tipo === 'documento' || m.tipo === 'contacto') cuerpo = `<span class="ld-adj">${icon('file', 14)} ${esc(m.archivo || 'Archivo')}</span>`;
     else if (m.tipo === 'omitido') cuerpo = `<span class="ld-adj">${icon('file', 14)} Archivo no incluido en la exportación</span>`;
-    const quien = m.de === 'agente' ? `<em class="ld-ag">${icon('sparkle', 11)} ${esc(m.autor || 'Fernanda (asistente)')}</em>` : m.de !== 'cliente' && (m.wa || l.mensajesLista.some((x) => x.de !== 'cliente' && x.autor !== m.autor)) ? `<em>${esc(m.autor)}</em>` : '';
+    const quien = m.de === 'agente' ? `<em class="ld-ag">${icon('sparkle', 11)} ${esc(m.autor || 'Sofía (asistente)')}</em>` : m.de !== 'cliente' && (m.wa || l.mensajesLista.some((x) => x.de !== 'cliente' && x.autor !== m.autor)) ? `<em>${esc(m.autor)}</em>` : '';
     const can = m.canal || (m.ig ? 'instagram' : ''); const canIc = can === 'instagram' ? `<em class="ld-can">${icon('instagram', 11)} Instagram</em>` : can === 'email' ? `<em class="ld-can">${icon('mail', 11)} Correo</em>` : can === 'facebook' ? '<em class="ld-can">Messenger</em>' : '';
     html += `<div class="ld-m ${m.de === 'cliente' ? 'in' : 'out'}${m.de === 'agente' ? ' ld-ia' : ''}${m.fallido ? ' ld-nok' : ''}">${canIc && (l.canales?.length > 1 || l.wa) ? canIc : ''}${quien}${cuerpo}${m.texto ? `<span class="ld-t">${linkify(m.texto)}</span>` : ''}${m.fallido ? `<span class="ld-fail" title="${esc(m.fallido)}">${icon('alert', 12)} No entregado</span>` : ''}<small>${esc(m.fecha.slice(11, 16))}</small></div>`;
   }
   $('#ldChat').innerHTML = `<div class="ld-ch-h"><span class="ld-av">${esc(ini(nombreDe(l)))}</span><div><b>${esc(nombreDe(l))}</b><small>${esc([l.telefono && l.nombre ? l.telefono : '', l.origenTxt, `${l.mensajes} mensajes`, l.broker && 'broker: ' + l.broker].filter(Boolean).join(' · '))}</small></div>
       <span class="spacer"></span>${l.wa ? (l.atiende === 'corredor'
-        ? `<span class="ld-atn yo">${icon('user', 12)} La atiendes tú</span><button class="ghost small" id="ldDevolver" title="Fernanda vuelve a responderle sola">Devolver a Fernanda</button>`
-        : l.pausaHasta ? `<span class="ld-atn pausa" title="Le escribiste tú desde WhatsApp: Fernanda no responde para no pisarte">${icon('clock', 12)} Fernanda en pausa hasta las ${esc(new Date(l.pausaHasta).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }))}</span><button class="primary small" id="ldReanudar" title="Fernanda vuelve a responder desde ya">Reanudar Fernanda</button>`
-        : `<span class="ld-atn ia">${icon('sparkle', 12)} Atiende Fernanda</span><button class="primary small" id="ldTomar" title="Fernanda deja de responder y la conversación pasa a ti">Tomar conversación</button>`)
+        ? `<span class="ld-atn yo">${icon('user', 12)} La atiendes tú</span><button class="ghost small" id="ldDevolver" title="Sofía vuelve a responderle sola">Devolver a Sofía</button>`
+        : l.pausaHasta ? `<span class="ld-atn pausa" title="Le escribiste tú desde WhatsApp: Sofía no responde para no pisarte">${icon('clock', 12)} Sofía en pausa hasta las ${esc(new Date(l.pausaHasta).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }))}</span><button class="primary small" id="ldReanudar" title="Sofía vuelve a responder desde ya">Reanudar Sofía</button>`
+        : `<span class="ld-atn ia">${icon('sparkle', 12)} Atiende Sofía</span><button class="primary small" id="ldTomar" title="Sofía deja de responder y la conversación pasa a ti">Tomar conversación</button>`)
       : `<span class="ld-ro" title="Es el registro de la conversación: se responde desde WhatsApp">${icon('lock', 12)} Solo lectura</span>`}</div>
     <div class="ld-ch-b" id="ldChB">${html || '<p class="muted ld-nada">Sin mensajes.</p>'}</div>
     ${l.wa && l.atiende === 'corredor' ? `<div class="ld-resp"><textarea id="ldRespTx" rows="2" placeholder="Escríbele a ${esc(nombreDe(l))} por WhatsApp…"></textarea><button class="primary small" id="ldRespOk">${icon('whatsapp', 13)} Enviar</button></div>` : ''}
@@ -79,9 +79,9 @@ function chat(l) {
   $('#ldAct').onclick = () => (l.ig ? comoInstagram() : $('#ldFile').click());
   // 0.16.9 · tomar / devolver la conversación de WhatsApp y responder desde aquí
   const recargar = async () => { await detalle(); lista(); };
-  if ($('#ldTomar')) $('#ldTomar').onclick = async () => { try { await api('leadsAtencion', l.id, 'corredor'); toast('La conversación es tuya: Fernanda deja de responderle.'); recargar(); } catch (e) { toast(e.message); } };
-  if ($('#ldReanudar')) $('#ldReanudar').onclick = async () => { try { await api('leadsReanudar', l.id); toast('Fernanda vuelve a responder en esta conversación.'); recargar(); } catch (e) { toast(e.message, 4000); } };
-  if ($('#ldDevolver')) $('#ldDevolver').onclick = async () => { try { await api('leadsAtencion', l.id, 'agente'); toast('Fernanda vuelve a atender a este lead.'); recargar(); } catch (e) { toast(e.message); } };
+  if ($('#ldTomar')) $('#ldTomar').onclick = async () => { try { await api('leadsAtencion', l.id, 'corredor'); toast('La conversación es tuya: Sofía deja de responderle.'); recargar(); } catch (e) { toast(e.message); } };
+  if ($('#ldReanudar')) $('#ldReanudar').onclick = async () => { try { await api('leadsReanudar', l.id); toast('Sofía vuelve a responder en esta conversación.'); recargar(); } catch (e) { toast(e.message, 4000); } };
+  if ($('#ldDevolver')) $('#ldDevolver').onclick = async () => { try { await api('leadsAtencion', l.id, 'agente'); toast('Sofía vuelve a atender a este lead.'); recargar(); } catch (e) { toast(e.message); } };
   if ($('#ldRespOk')) {
     const tx = $('#ldRespTx'); const go = async () => { const t = tx.value.trim(); if (!t) return; $('#ldRespOk').disabled = true;
       try { await api('leadsResponder', l.id, t); tx.value = ''; recargar(); } catch (e) { toast(e.message); } finally { if ($('#ldRespOk')) $('#ldRespOk').disabled = false; } };

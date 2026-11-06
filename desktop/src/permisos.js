@@ -11,7 +11,7 @@ const err = (m, code) => Object.assign(new Error(m), code ? { code } : {});
 const OCULTO = 'Reservado al captador';
 const CAMPOS_DUENO = /^propietario/;
 
-const SOLO = { conexiones: 'Conectar o cambiar cuentas y claves', fernanda: 'Configurar a Fernanda (la asistente de clientes)', saldo: 'Cargar saldo de Portalfirma', finanzas: 'Ver las finanzas y comisiones de todos',
+const SOLO = { conexiones: 'Conectar o cambiar cuentas y claves', fernanda: 'Configurar la atención de clientes (Sofía y Tomás)', saldo: 'Cargar saldo de Portalfirma', finanzas: 'Ver las finanzas y comisiones de todos',
   borrar: 'Eliminar o archivar', reasignar: 'Reasignar captaciones o leads entre corredores', importar: 'Importar la cartera o exportar datos', documentos: 'Subir o configurar los formatos de documentos', usuarios: 'Agregar o editar usuarios' };
 
 function crear({ inmo, equipo, usuario }) {

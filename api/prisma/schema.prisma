@@ -22,28 +22,36 @@ datasource db {
 
 /// La empresa (corredora de propiedades). Todo dato de la app pertenece a una corredora.
 model Corredora {
-  id              String               @id @default(uuid()) @db.Uuid
-  nombre          String
-  rut             String?              @unique
+  id               String               @id @default(uuid()) @db.Uuid
+  nombre           String
+  rut              String?              @unique
   /// siguiente número del código de propiedad (PF-1001, PF-1002…); se toma con UPDATE … RETURNING (atómico)
-  siguienteCodigo Int                  @default(1001) @map("siguiente_codigo")
-  creadoEn        DateTime             @default(now()) @map("creado_en")
-  actualizadoEn   DateTime             @updatedAt @map("actualizado_en")
-  usuarios        Usuario[]
-  propiedades     Propiedad[]
-  personas        Persona[]
-  actividad       Actividad[]
-  negocios        Negocio[]
-  eventos         Evento[]
-  leads           Lead[]
-  firmas          Firma[]
-  registros       Registro[]
-  contadores      Contador[]
-  conexiones      Conexion[]
-  conversaciones  AgenteConversacion[]
-  registroAgente  AgenteRegistro[]
-  casosReglas     ReglaCaso[]
-  waProgramados   WaProgramado[]
+  siguienteCodigo  Int                  @default(1001) @map("siguiente_codigo")
+  creadoEn         DateTime             @default(now()) @map("creado_en")
+  actualizadoEn    DateTime             @updatedAt @map("actualizado_en")
+  usuarios         Usuario[]
+  propiedades      Propiedad[]
+  personas         Persona[]
+  actividad        Actividad[]
+  negocios         Negocio[]
+  eventos          Evento[]
+  leads            Lead[]
+  firmas           Firma[]
+  registros        Registro[]
+  contadores       Contador[]
+  conexiones       Conexion[]
+  conversaciones   AgenteConversacion[]
+  registroAgente   AgenteRegistro[]
+  casosReglas      ReglaCaso[]
+  waProgramados    WaProgramado[]
+  avisos           Aviso[]
+  waAjustes        WaAjustes?
+  waConversaciones WaConversacion[]
+  waHilos          WaHilo[]
+  waEnviados       WaEnviado[]
+  waVinculos       WaVinculo[]
+  waEntrantes      WaEntrante[]
+  iaConsumo        IaConsumo[]
 
   @@map("corredoras")
 }
@@ -82,6 +90,8 @@ model Usuario {
   conexiones     Conexion[]           @relation("conexionUsuario")
   conversaciones AgenteConversacion[]
   registroAgente AgenteRegistro[]
+  waVinculo      WaVinculo?
+  waEntrantes    WaEntrante[]
 
   @@index([corredoraId])
   @@map("usuarios")
@@ -772,4 +782,181 @@ model WaProgramado {
   @@index([revisarHasta])
   @@index([usuarioId, actualizadoEn])
   @@map("wa_programados")
+}
+
+/// Avisos del servidor a un usuario (p. ej. «X firmó la promesa» de la revisión de firmas). La app los trae y los toma
+/// una sola vez (`tomadoEn`), aunque el usuario tenga dos equipos abiertos; si estaba cerrada, los ve al abrirla.
+/// `tipo` dice qué hace la app además de mostrarlo (firmas, firma_negocio…); `datos`, con qué.
+model Aviso {
+  id          BigInt    @id @default(autoincrement())
+  corredoraId String    @map("corredora_id") @db.Uuid
+  usuarioId   String    @map("usuario_id") @db.Uuid
+  tipo        String
+  texto       String
+  datos       Json      @default("{}")
+  creadoEn    DateTime  @default(now()) @map("creado_en")
+  tomadoEn    DateTime? @map("tomado_en")
+
+  corredora Corredora @relation(fields: [corredoraId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId, tomadoEn])
+  @@index([creadoEn])
+  @@map("avisos")
+}
+
+// ============================================================================ asistentes de WhatsApp (en el servidor)
+//
+// El servidor lee el WhatsApp de la empresa (wechatia) por cada corredora y reparte cada conversación a UN asistente:
+// el celular de un ejecutivo (su Asset), Sofía (leads), Tomás (clientes del CRM), postventa (reclamos) o el observador
+// (Instagram, Facebook y correo → Leads). Antes cada equipo leía por su cuenta y dos equipos podían responder dos veces.
+
+/// Ajustes de los asistentes de una corredora y el turno del lector: un solo lector a la vez por corredora
+/// (`lectorHasta` se toma con UPDATE … WHERE lector_hasta < now(), aunque corran dos API).
+model WaAjustes {
+  corredoraId    String    @id @map("corredora_id") @db.Uuid
+  /// Tomás atiende a las personas del CRM (Sofía atiende siempre a los leads)
+  clientesActivo Boolean   @default(true) @map("clientes_activo")
+  /// { activo, canales: { instagram, facebook, email }, ia, diasInicio, autorizadoPor, autorizadoEn }
+  observador     Json      @default("{}")
+  lectorHasta    DateTime? @map("lector_hasta")
+  /// última ronda terminada y su error (si lo hubo)
+  lectorEn       DateTime? @map("lector_en")
+  lectorError    String?   @map("lector_error")
+  /// hasta cuándo leer seguido (alguien está conversando con un asistente)
+  rapidoHasta    DateTime? @map("rapido_hasta")
+  /// última vez que el observador revisó Instagram, Facebook y correo, y su resultado
+  observadorEn   DateTime? @map("observador_en")
+  observadorRes  Json      @default("{}") @map("observador_res")
+  actualizadoEn  DateTime  @updatedAt @map("actualizado_en")
+
+  corredora Corredora @relation(fields: [corredoraId], references: [id], onDelete: Cascade)
+
+  @@map("wa_ajustes")
+}
+
+/// Hasta dónde se leyó cada conversación de wechatia (canal, último mensaje visto) y, para el observador, a qué lead va.
+model WaConversacion {
+  corredoraId   String   @map("corredora_id") @db.Uuid
+  convId        String   @map("conv_id")
+  /// whatsapp | instagram | facebook | email
+  canal         String   @default("whatsapp")
+  telefonoNorm  String?  @map("telefono_norm")
+  contactId     String?  @map("contact_id")
+  /// lastMessageDate de wechatia en la última lectura: si no cambió, no se vuelve a leer
+  marca         String?
+  ultimoMsgId   String?  @map("ultimo_msg_id")
+  /// conversación nueva: se miran los mensajes desde aquí
+  desde         DateTime @default(now())
+  leadId        String?  @map("lead_id")
+  /// «propietario» del contacto en wechatia (usuario de wechatia) visto la última vez
+  dueno         String?
+  actualizadoEn DateTime @updatedAt @map("actualizado_en")
+
+  corredora Corredora @relation(fields: [corredoraId], references: [id], onDelete: Cascade)
+
+  @@id([corredoraId, convId])
+  @@index([corredoraId, telefonoNorm])
+  @@map("wa_conversaciones")
+}
+
+/// La conversación de Sofía o Tomás con un número: lo último conversado (para la IA), la pausa cuando el corredor
+/// escribe a mano y las marcas de tiempo.
+model WaHilo {
+  corredoraId   String    @map("corredora_id") @db.Uuid
+  telefonoNorm  String    @map("telefono_norm")
+  /// [{ role: user|assistant, content }] (las últimas 20)
+  mensajes      Json      @default("[]")
+  pausaHasta    DateTime? @map("pausa_hasta")
+  /// hasta dónde se revisaron los mensajes escritos a mano por el corredor
+  visto         DateTime?
+  /// última respuesta del asistente
+  ultimo        DateTime?
+  /// último envío de Asset a este número (una conversación nueva se lee desde ahí)
+  ultEnvio      DateTime? @map("ult_envio")
+  actualizadoEn DateTime  @updatedAt @map("actualizado_en")
+
+  corredora Corredora @relation(fields: [corredoraId], references: [id], onDelete: Cascade)
+
+  @@id([corredoraId, telefonoNorm])
+  @@map("wa_hilos")
+}
+
+/// Lo que mandó Asset por WhatsApp (asistentes, programados, la app): así un mensaje saliente que no está aquí se
+/// reconoce como escrito a mano por el corredor. Se borran a los 30 días.
+model WaEnviado {
+  id           BigInt   @id @default(autoincrement())
+  corredoraId  String   @map("corredora_id") @db.Uuid
+  telefonoNorm String   @map("telefono_norm")
+  messageId    String?  @map("message_id")
+  /// texto normalizado (120 caracteres)
+  huella       String   @default("")
+  plantilla    Boolean  @default(false)
+  creadoEn     DateTime @default(now()) @map("creado_en")
+
+  corredora Corredora @relation(fields: [corredoraId], references: [id], onDelete: Cascade)
+
+  @@index([corredoraId, telefonoNorm, creadoEn])
+  @@index([messageId])
+  @@index([creadoEn])
+  @@map("wa_enviados")
+}
+
+/// El celular de un ejecutivo ligado a su cuenta (Agente por WhatsApp). Se vincula enviando el código («ASSET 4821»)
+/// al número de la empresa. `senalEn`: la última vez que su Asset abierto pidió los mensajes (si pasa más de un minuto,
+/// su Asset está cerrado y el servidor se lo dice una vez).
+model WaVinculo {
+  usuarioId      String    @id @map("usuario_id") @db.Uuid
+  corredoraId    String    @map("corredora_id") @db.Uuid
+  telefono       String?
+  telefonoNorm   String?   @map("telefono_norm")
+  contactId      String?   @map("contact_id")
+  codigo         String?
+  activo         Boolean   @default(false)
+  /// { nombre, email, apodo, numeroEmpresa }
+  datos          Json      @default("{}")
+  vinculadoEn    DateTime? @map("vinculado_en")
+  senalEn        DateTime? @map("senal_en")
+  avisoCerradoEn DateTime? @map("aviso_cerrado_en")
+  actualizadoEn  DateTime  @updatedAt @map("actualizado_en")
+
+  corredora Corredora @relation(fields: [corredoraId], references: [id], onDelete: Cascade)
+  usuario   Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([corredoraId, telefonoNorm])
+  @@unique([corredoraId, codigo])
+  @@map("wa_vinculos")
+}
+
+/// Mensajes del celular del ejecutivo para su Asset: la app los toma (una sola vez) y los atiende con el Agente.
+model WaEntrante {
+  id          BigInt    @id @default(autoincrement())
+  corredoraId String    @map("corredora_id") @db.Uuid
+  usuarioId   String    @map("usuario_id") @db.Uuid
+  /// { id, body, attachments, dateAdded }
+  mensaje     Json
+  creadoEn    DateTime  @default(now()) @map("creado_en")
+  tomadoEn    DateTime? @map("tomado_en")
+
+  corredora Corredora @relation(fields: [corredoraId], references: [id], onDelete: Cascade)
+  usuario   Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId, tomadoEn])
+  @@index([creadoEn])
+  @@map("wa_entrantes")
+}
+
+/// Uso de IA del servidor por corredora (para cobrarlo después): para qué, modelo y tokens.
+model IaConsumo {
+  id          BigInt   @id @default(autoincrement())
+  corredoraId String   @map("corredora_id") @db.Uuid
+  uso         String
+  modelo      String
+  entrada     Int      @default(0)
+  salida      Int      @default(0)
+  creadoEn    DateTime @default(now()) @map("creado_en")
+
+  corredora Corredora @relation(fields: [corredoraId], references: [id], onDelete: Cascade)
+
+  @@index([corredoraId, creadoEn])
+  @@map("ia_consumo")
 }

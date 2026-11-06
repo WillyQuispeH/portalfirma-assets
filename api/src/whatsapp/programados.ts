@@ -35,6 +35,8 @@ import { idDoc } from '../comun/asignados';
 import { ActividadService } from '../comun/actividad.service';
 import type { Env } from '../config/env';
 import { Wechatia, WechatiaError, WechatiaService } from './wechatia';
+import { EnviadosService } from './enviados';
+import { EjecutivoService } from './ejecutivo';
 
 const ATASCADO_MS = 10 * 60_000;
 const REVISAR_MS = 3 * 60_000;
@@ -63,6 +65,13 @@ const listarEsquema = z.object({
   limite: z.coerce.number().int().min(1).max(200).default(100),
 });
 
+/** enlace para enviarlo desde el WhatsApp propio (wa.me con el texto listo) */
+function enlaceWa(telefono: string, texto: string) {
+  let d = String(telefono || '').replace(/D/g, '');
+  if (d.length === 9) d = '56' + d;
+  return `https://wa.me/${d}?text=${encodeURIComponent(texto)}`;
+}
+
 /** hora local de Chile «AAAA-MM-DDTHH:MM:SS» (como guardan la fecha los mensajes de los leads) */
 function horaChile(d: Date) {
   const f = new Intl.DateTimeFormat('en-CA', {
@@ -90,6 +99,8 @@ export class ProgramadosService implements OnModuleInit, OnModuleDestroy {
     private readonly db: PrismaService,
     private readonly wa: WechatiaService,
     private readonly actividad: ActividadService,
+    private readonly enviados: EnviadosService,
+    private readonly ejecutivo: EjecutivoService,
     config: ConfigService<Env, true>,
   ) {
     this.cadaMs = config.get('PROGRAMADOS_CADA_SEG', { infer: true }) * 1000;
@@ -321,6 +332,17 @@ export class ProgramadosService implements OnModuleInit, OnModuleDestroy {
         r = await this.conPlantilla(wa, x, e.message);
       }
       await this.terminar(x, 'enviado', r, true);
+      // queda como envío de Asset: el asistente no lo confunde con un mensaje escrito a mano
+      await this.enviados
+        .registrar(x.corredoraId, x.telefono, {
+          messageId: (r.messageId as string) ?? null,
+          ...(r.plantilla ? { plantilla: true } : { texto: x.texto }),
+        })
+        .catch(() => null);
+      await this.avisar(
+        x,
+        `Le envié a ${x.nombre || x.telefono} el WhatsApp programado${r.plantilla ? ` (con la plantilla ${r.plantilla as string}, porque no había escrito en 24 h)` : ''}: «${x.texto.slice(0, 120)}»`,
+      );
       if (x.personaId)
         await this.actividad
           .registrar({
@@ -340,6 +362,11 @@ export class ProgramadosService implements OnModuleInit, OnModuleDestroy {
         error: m.slice(0, 300),
         ...(e instanceof WechatiaError && e.codigo ? { codigo: e.codigo } : {}),
       });
+      await this.avisar(
+        x,
+        `No pude enviarle a ${x.nombre || x.telefono} el WhatsApp programado: ${m.slice(0, 300)}
+Envíaselo tú desde tu WhatsApp (se abre con el mensaje listo): ${enlaceWa(x.telefono, x.texto)}`,
+      );
     }
   }
 
@@ -363,6 +390,13 @@ export class ProgramadosService implements OnModuleInit, OnModuleDestroy {
     return { contactId: r.contactId, plantilla: p.nombre };
   }
 
+  /** el resultado, al celular del ejecutivo que lo programó (en la app ya lo muestra wa-programados.js al tomarlo) */
+  private async avisar(x: Pick<WaProgramado, 'corredoraId' | 'usuarioId'>, texto: string) {
+    await this.ejecutivo
+      .avisar(x.corredoraId, x.usuarioId, texto, null, null, false)
+      .catch((e: Error) => this.log.warn(`aviso: ${e.message}`));
+  }
+
   /** unos minutos después: ¿Meta rechazó alguno ya enviado? */
   private async revisarEntregas() {
     const l = await this.db.waProgramado.findMany({
@@ -376,6 +410,10 @@ export class ProgramadosService implements OnModuleInit, OnModuleDestroy {
       const wa = clientes.get(x.corredoraId);
       const m = id && wa ? await wa.estadoMensaje(id) : null;
       if (m && ['failed', 'undelivered', 'error'].includes(m.estado)) {
+        await this.avisar(
+          x,
+          `WhatsApp no le entregó a ${x.nombre || x.telefono} el mensaje programado («${x.texto.slice(0, 100)}»). Envíaselo desde tu WhatsApp: ${enlaceWa(x.telefono, x.texto)}`,
+        );
         const fuera = /24|window|session|template|plantilla|re-engagement|131047|470/i.test(m.detalle) || !m.detalle;
         await this.db.waProgramado.update({
           where: { corredoraId_id: { corredoraId: x.corredoraId, id: x.id } },

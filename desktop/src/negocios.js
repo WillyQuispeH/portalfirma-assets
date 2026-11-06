@@ -185,4 +185,19 @@ async function revisarFirmas(pf, id) {
   return { mensajes, negocios: lista().map(vista) };
 }
 
-module.exports = { ETAPAS, configurar, listar, obtener, ver, guardar, mover, tarea, cerrar, reabrir, nota, borrar, vincularFirma, quitarFirma, firmaFuera, revisarFirmas };
+// Con la cuenta de Asset, la revisión de firmas la hace el servidor: cuando se firma el documento de la etapa actual,
+// marca la firma con `avanzar` y le avisa al corredor a cargo; su app (al tomar el aviso, con el negocio ya
+// sincronizado) mueve el negocio a la siguiente etapa, o lo cierra ganado si era la última.
+async function avanzarPorFirma(id, etId) {
+  const n = lista().find((x) => x.id === id); const f = n?.firmas?.[etId];
+  if (!f?.avanzar) return { mensajes: [] };
+  delete f.avanzar;
+  if (n.estado !== 'abierto' || n.etapa !== etId || f.estado !== 'firmado') { inmo.guardar(); return { mensajes: [] }; }
+  const e = etapa(n.tipo, etId); const lst = etapas(n.tipo); const idx = lst.findIndex((x) => x.id === etId);
+  const mensajes = [`${titulo(n)}: ${(e?.firma || 'documento').toLowerCase()} firmado.`];
+  if (e?.final || idx === lst.length - 1) { const r = await cerrar(n.id, 'ganado'); mensajes.push(...r.mensajes); }
+  else { const r = await mover(n.id, lst[idx + 1].id, 'Avanzó solo al firmarse el documento'); mensajes.push(...r.mensajes); }
+  return { mensajes };
+}
+
+module.exports = { ETAPAS, configurar, listar, obtener, ver, guardar, mover, tarea, cerrar, reabrir, nota, borrar, vincularFirma, quitarFirma, firmaFuera, revisarFirmas, avanzarPorFirma };

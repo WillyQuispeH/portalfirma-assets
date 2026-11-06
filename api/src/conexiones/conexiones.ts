@@ -68,7 +68,8 @@ export class ConexionesService {
     return p;
   }
   redirectUri = (id: string) => `${this.base}/v1/conexiones/callback/${id}`;
-  private dueno = (p: ProveedorOAuth, d: DuenoConexion) => (p.dueno === 'corredora' ? 'corredora' : (d.usuarioId ?? ''));
+  private dueno = (p: ProveedorOAuth, d: DuenoConexion) =>
+    p.dueno === 'corredora' ? 'corredora' : (d.usuarioId ?? '');
   /** el dueño de la sesión de un proveedor para el usuario de la petición */
   duenoDe = (u: UsuarioToken, id: string): DuenoConexion => ({
     corredoraId: u.corredoraId,
@@ -105,15 +106,30 @@ export class ConexionesService {
   /** El proveedor volvió con el código. Devuelve la página que ve el usuario en el navegador. */
   async callback(id: string, q: { code?: string; state?: string; error?: string; error_description?: string }) {
     const p = this.proveedores.get(id);
-    if (!p || !q.state) return pagina('No se pudo conectar', 'El enlace no es válido. Vuelve a Asset e inténtalo de nuevo.', false);
+    if (!p || !q.state)
+      return pagina('No se pudo conectar', 'El enlace no es válido. Vuelve a Asset e inténtalo de nuevo.', false);
     // el state se usa una sola vez: se borra al leerlo
     const pend = await this.db.oauthPendiente.delete({ where: { state: q.state } }).catch(() => null);
     if (!pend || pend.proveedor !== id || pend.expiraEn < new Date())
-      return pagina('No se pudo conectar', 'Se acabó el tiempo para autorizar. Vuelve a Asset e inténtalo de nuevo.', false);
+      return pagina(
+        'No se pudo conectar',
+        'Se acabó el tiempo para autorizar. Vuelve a Asset e inténtalo de nuevo.',
+        false,
+      );
     if (q.error || !q.code)
-      return pagina('No se conectó', q.error === 'access_denied' ? 'No se dio el permiso. Puedes cerrar esta ventana.' : `${p.nombre} respondió: ${q.error_description || q.error || 'sin código'}.`, false);
+      return pagina(
+        'No se conectó',
+        q.error === 'access_denied'
+          ? 'No se dio el permiso. Puedes cerrar esta ventana.'
+          : `${p.nombre} respondió: ${q.error_description || q.error || 'sin código'}.`,
+        false,
+      );
     try {
-      const t = await p.canjear({ redirectUri: this.redirectUri(id), codigo: q.code, verificador: this.cifrado.descifrar(pend.verificadorCif) });
+      const t = await p.canjear({
+        redirectUri: this.redirectUri(id),
+        codigo: q.code,
+        verificador: this.cifrado.descifrar(pend.verificadorCif),
+      });
       const cuenta = await p.cuenta(t.acceso).catch(() => ({ id: null, nombre: null }));
       const d: DuenoConexion = { corredoraId: pend.corredoraId, usuarioId: pend.deCorredora ? null : pend.usuarioId };
       await this.guardar(p, d, t, {
@@ -123,13 +139,31 @@ export class ConexionesService {
         // la sesión se renueva siempre con el registro con que se conectó (aunque cambie el dominio de la API)
         datos: { redirectUri: this.redirectUri(id) },
       });
-      return pagina(`${p.nombre} conectado`, `${cuenta.nombre ? `Conectado como ${cuenta.nombre}. ` : ''}Ya puedes volver a Asset y cerrar esta ventana.`, true);
+      return pagina(
+        `${p.nombre} conectado`,
+        `${cuenta.nombre ? `Conectado como ${cuenta.nombre}. ` : ''}Ya puedes volver a Asset y cerrar esta ventana.`,
+        true,
+      );
     } catch (e) {
-      return pagina('No se pudo conectar', `${p.nombre} no aceptó la autorización (${(e as Error).message}). Vuelve a Asset e inténtalo de nuevo.`, false);
+      return pagina(
+        'No se pudo conectar',
+        `${p.nombre} no aceptó la autorización (${(e as Error).message}). Vuelve a Asset e inténtalo de nuevo.`,
+        false,
+      );
     }
   }
 
-  private async guardar(p: ProveedorOAuth, d: DuenoConexion, t: TokensOAuth, extra: { cuentaId: string | null; cuentaNombre: string | null; conectadoPor: string; datos: { redirectUri: string } }) {
+  private async guardar(
+    p: ProveedorOAuth,
+    d: DuenoConexion,
+    t: TokensOAuth,
+    extra: {
+      cuentaId: string | null;
+      cuentaNombre: string | null;
+      conectadoPor: string;
+      datos: { redirectUri: string };
+    },
+  ) {
     const dueno = this.dueno(p, d);
     const datos = {
       tipo: 'oauth',
@@ -164,29 +198,53 @@ export class ConexionesService {
   }
 
   async listar(u: UsuarioToken) {
-    const filas = await this.db.conexion.findMany({ where: { corredoraId: u.corredoraId, dueno: { in: [u.sub, 'corredora'] } } });
+    const filas = await this.db.conexion.findMany({
+      where: { corredoraId: u.corredoraId, dueno: { in: [u.sub, 'corredora'] } },
+    });
     return {
       proveedores: [...this.proveedores.values()].map((p) => ({
         id: p.id,
         nombre: p.nombre,
         dueno: p.dueno,
         puedeConectar: p.dueno === 'usuario' || u.rol === 'ADMIN',
-        conexion: this.publica(filas.find((f) => f.proveedor === p.id && f.dueno === this.dueno(p, this.duenoDe(u, p.id)))),
+        conexion: this.publica(
+          filas.find((f) => f.proveedor === p.id && f.dueno === this.dueno(p, this.duenoDe(u, p.id))),
+        ),
       })),
     };
   }
 
   async estado(u: UsuarioToken, id: string) {
     const p = this.proveedor(id);
-    const c = await this.db.conexion.findUnique({ where: { corredoraId_proveedor_dueno: { corredoraId: u.corredoraId, proveedor: id, dueno: this.dueno(p, this.duenoDe(u, id)) } } });
+    const c = await this.db.conexion.findUnique({
+      where: {
+        corredoraId_proveedor_dueno: {
+          corredoraId: u.corredoraId,
+          proveedor: id,
+          dueno: this.dueno(p, this.duenoDe(u, id)),
+        },
+      },
+    });
     return { id, nombre: p.nombre, dueno: p.dueno, conexion: this.publica(c ?? undefined) };
   }
 
   async desconectar(u: UsuarioToken, id: string) {
     const p = this.proveedor(id);
     this.exigirPuedeConectar(u, p);
-    await this.db.conexion.deleteMany({ where: { corredoraId: u.corredoraId, proveedor: id, dueno: this.dueno(p, this.duenoDe(u, id)) } });
+    await this.db.conexion.deleteMany({
+      where: { corredoraId: u.corredoraId, proveedor: id, dueno: this.dueno(p, this.duenoDe(u, id)) },
+    });
     return { ok: true };
+  }
+
+  /** los datos no secretos de una sesión (p. ej. locationId, redirectUri), o null si no hay */
+  async datosDe(id: string, d: DuenoConexion): Promise<Record<string, unknown> | null> {
+    const p = this.proveedor(id);
+    const c = await this.db.conexion.findUnique({
+      where: { corredoraId_proveedor_dueno: { corredoraId: d.corredoraId, proveedor: id, dueno: this.dueno(p, d) } },
+      select: { datos: true },
+    });
+    return c ? ((c.datos ?? {}) as Record<string, unknown>) : null;
   }
 
   // ---------------------------------------------------------------- token vigente (para los servicios de la API)
@@ -196,10 +254,13 @@ export class ConexionesService {
    */
   async acceso(id: string, d: DuenoConexion, rechazado?: string): Promise<string> {
     const p = this.proveedor(id);
-    const where = { corredoraId_proveedor_dueno: { corredoraId: d.corredoraId, proveedor: id, dueno: this.dueno(p, d) } };
+    const where = {
+      corredoraId_proveedor_dueno: { corredoraId: d.corredoraId, proveedor: id, dueno: this.dueno(p, d) },
+    };
     const c = await this.db.conexion.findUnique({ where });
     if (!c || !c.accesoCif) throw new SesionVencidaError(`Conecta tu cuenta de ${p.nombre} en Asset.`);
-    if (c.estado !== 'activa') throw new SesionVencidaError(`La sesión de ${p.nombre} venció: vuelve a conectarla en Asset.`);
+    if (c.estado !== 'activa')
+      throw new SesionVencidaError(`La sesión de ${p.nombre} venció: vuelve a conectarla en Asset.`);
     const actual = this.cifrado.descifrar(c.accesoCif);
     const vigente = !c.expiraEn || c.expiraEn.getTime() - Date.now() > MARGEN_MS;
     if (vigente && actual !== rechazado) {
@@ -216,7 +277,8 @@ export class ConexionesService {
       async (tx) => {
         await tx.$queryRaw`SELECT id FROM conexiones WHERE id = ${conexionId}::uuid FOR UPDATE`;
         const c = await tx.conexion.findUniqueOrThrow({ where: { id: conexionId } });
-        if (c.estado !== 'activa' || !c.accesoCif) throw new SesionVencidaError(`La sesión de ${p.nombre} venció: vuelve a conectarla en Asset.`);
+        if (c.estado !== 'activa' || !c.accesoCif)
+          throw new SesionVencidaError(`La sesión de ${p.nombre} venció: vuelve a conectarla en Asset.`);
         const actual = this.cifrado.descifrar(c.accesoCif);
         // otro pedido la renovó mientras esperábamos el bloqueo
         if (actual !== viejo && (!c.expiraEn || c.expiraEn.getTime() - Date.now() > MARGEN_MS)) return actual;
@@ -250,7 +312,10 @@ export class ConexionesService {
     );
     if (token) return token;
     // se marca fuera de la transacción (si no, el rollback la desharía)
-    await this.db.conexion.update({ where: { id: conexionId }, data: { estado: 'vencida', ultimoError: String(vencida).slice(0, 500) } });
+    await this.db.conexion.update({
+      where: { id: conexionId },
+      data: { estado: 'vencida', ultimoError: String(vencida).slice(0, 500) },
+    });
     throw new SesionVencidaError(`La sesión de ${p.nombre} venció: vuelve a conectarla en Asset.`);
   }
 }

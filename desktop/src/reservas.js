@@ -18,6 +18,8 @@ function local(t) {
 const widgetId = (x) => { const s = String(x || '').trim(); const m = s.match(/widget\/booking\/([A-Za-z0-9_-]+)/) || s.match(/^([A-Za-z0-9_-]{12,40})$/); return m ? m[1] : null; };
 
 function crear({ store, inmo, agenda, est, mock = false, fetchFn = (...a) => fetch(...a) }) {
+  // con la cuenta de Asset, el WhatsApp de la empresa va por el servidor (wa-servidor.js): la app no usa la clave local
+  const srv = require('./wa-servidor');
   const token = () => store.getSecret('wechatiaToken') || null;
   const cfg = () => store.get('wechatia') || {};
   const esV1 = (t) => /^eyJ/.test(t || ''); // las claves antiguas de ubicación (v1) son JWT; las nuevas son «pit-…»
@@ -77,7 +79,7 @@ function crear({ store, inmo, agenda, est, mock = false, fetchFn = (...a) => fet
   // WhatsApp solo deja escribir texto libre si la persona escribió en las últimas 24 h; si no, Meta exige una plantilla aprobada.
   // ¿la persona le escribió al número de la empresa en las últimas 24 h? (si no, WhatsApp rechaza el texto libre)
   // estado de un mensaje ya enviado (para revisar después si Meta lo rechazó)
-  async function estadoMensaje(messageId) { try { const m = (await api('GET', `/conversations/messages/${messageId}`)).message || {}; return { estado: String(m.status || '').toLowerCase(), detalle: String(m.meta?.error || m.error || m.errorMessage || '') }; } catch { return null; } }
+  async function estadoMensaje(messageId) { if (srv.enApi()) return srv.estadoMensaje(messageId); try { const m = (await api('GET', `/conversations/messages/${messageId}`)).message || {}; return { estado: String(m.status || '').toLowerCase(), detalle: String(m.meta?.error || m.error || m.errorMessage || '') }; } catch { return null; } }
   async function ventana24(contactId) {
     try {
       const j = await api('GET', `/conversations/search?locationId=${encodeURIComponent(locationId() || '')}&contactId=${encodeURIComponent(contactId)}`);
@@ -106,6 +108,7 @@ function crear({ store, inmo, agenda, est, mock = false, fetchFn = (...a) => fet
   const recientes = new Map();
   const claveEnvio = (tel, tx) => String(tel || '').replace(/\D/g, '').slice(-9) + '|' + String(tx || '').trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 300);
   async function enviarWhatsApp({ telefono, nombre, texto, esperar = mock ? 0 : 4000, revisar24 = false, entranteLocal = null }) {
+    if (srv.enApi()) return srv.enviar({ telefono, nombre, texto, revisar24 });
     const kE = claveEnvio(telefono, texto); const prev = recientes.get(kE);
     if (prev && Date.now() - prev.t < 15 * 6e4) { if (prev.error) throw prev.error; return { ...prev.r, duplicado: true }; }
     const { contactId, creado } = await contacto(telefono, nombre);
@@ -143,6 +146,7 @@ function crear({ store, inmo, agenda, est, mock = false, fetchFn = (...a) => fet
   }
   const anotarPlantilla = (telefono) => { const k = String(telefono || '').replace(/\D/g, '').slice(-9); const m = store.get('waPlantillaEnv') || {}; m[k] = Date.now(); store.set('waPlantillaEnv', m); };
   async function enviarPlantilla({ telefono, nombre, etiqueta, campos }) {
+    if (srv.enApi()) return srv.plantilla({ telefono, nombre, etiqueta, campos });
     const { contactId, loc } = await contacto(telefono, nombre);
     const ids = await camposIds(loc);
     const customFields = Object.entries(campos).filter(([, v]) => v != null && String(v).trim()).map(([k, v]) => (ids['asset_' + k] ? { id: ids['asset_' + k], field_value: String(v).trim() } : { key: 'asset_' + k, field_value: String(v).trim() }));
@@ -155,7 +159,9 @@ function crear({ store, inmo, agenda, est, mock = false, fetchFn = (...a) => fet
     return { contactId, etiqueta };
   }
   // clave propia de WhatsApp (integración «Postventa»): se prueba leyendo una conversación antes de guardarla
-  const estadoWa = () => ({ propia: !!store.getSecret('wechatiaWaToken'), conectado: !!(store.getSecret('wechatiaWaToken') || token()), locationId: locationId() });
+  const estadoWa = () => (srv.enApi()
+    ? { propia: !!store.getSecret('wechatiaWaToken'), conectado: srv.conectado(), locationId: locationId(), enServidor: true }
+    : { propia: !!store.getSecret('wechatiaWaToken'), conectado: !!(store.getSecret('wechatiaWaToken') || token()), locationId: locationId() });
   async function configurarWa({ token: tk, locationId: loc } = {}) {
     tk = String(tk || '').trim(); const c = { ...cfg() };
     if (loc) c.locationId = String(loc).trim();

@@ -6,7 +6,7 @@
 //  · PUT    /whatsapp/conexion   { token, locationId }: se prueba contra wechatia antes de guardarla. El administrador
 //                                 siempre; otro usuario solo si la corredora aún no tiene (la sube su app la primera vez);
 //  · DELETE /whatsapp/conexion   (administrador) la quita.
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument --
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return --
    las respuestas de wechatia son JSON sin tipo (Json) y se leen campo a campo, con respaldo si falta alguno */
 import {
   BadRequestException,
@@ -53,6 +53,31 @@ interface Opciones {
   raw?: boolean;
 }
 type Json = Record<string, any>;
+
+export interface Conversacion {
+  id: string;
+  contactId: string | null;
+  telefono: string | null;
+  nombre: string;
+  email: string;
+  usuario: string;
+  /** tipo del último mensaje (TYPE_WHATSAPP, TYPE_INSTAGRAM, TYPE_EMAIL…) */
+  tipo: string;
+  marca: string | null;
+  /** «propietario» del contacto en wechatia */
+  asignado: string | null;
+}
+export interface MensajeWa {
+  id: string;
+  direccion: 'entrante' | 'saliente';
+  texto: string;
+  adjuntos: string[];
+  fecha: string;
+  usuarioId: string | null;
+  origen: string;
+  tipo: string;
+  asunto: string;
+}
 
 const conexionEsquema = z.object({
   token: z.string().trim().min(20, 'Esa clave es muy corta. Copia la clave completa de la integración.').max(4000),
@@ -107,6 +132,60 @@ export class Wechatia {
 
   /** prueba la clave leyendo una conversación */
   probar = () => this.api('GET', `/conversations/search?locationId=${encodeURIComponent(this.c.locationId)}&limit=1`);
+
+  /** las conversaciones más recientes (todas las de los canales: WhatsApp, Instagram, Facebook, correo…) */
+  async conversaciones(limite = 50): Promise<Conversacion[]> {
+    const j = await this.api(
+      'GET',
+      `/conversations/search?locationId=${encodeURIComponent(this.c.locationId)}&sortBy=last_message_date&sort=desc&limit=${limite}`,
+      {
+        permiso:
+          'La clave de wechatia no tiene permiso para ver conversaciones. Agrega «Ver conversaciones» y «Ver mensajes de conversaciones» a la integración privada.',
+      },
+    );
+    return ((j.conversations as Json[]) || []).map((c) => ({
+      id: String(c.id),
+      contactId: c.contactId ? String(c.contactId) : null,
+      telefono: c.phone ? String(c.phone) : null,
+      nombre: String(c.fullName || c.contactName || ''),
+      email: c.email ? String(c.email) : '',
+      usuario: String(c.instagramUsername || c.username || ''),
+      tipo: String(c.lastMessageType || c.type || ''),
+      marca: (c.lastMessageDate ?? c.dateUpdated ?? null) ? String(c.lastMessageDate ?? c.dateUpdated) : null,
+      asignado: c.assignedTo ? String(c.assignedTo) : null,
+    }));
+  }
+
+  /** los mensajes de una conversación, del más antiguo al más nuevo */
+  async mensajes(convId: string, limite = 30): Promise<MensajeWa[]> {
+    const j = await this.api('GET', `/conversations/${encodeURIComponent(convId)}/messages?limit=${limite}`);
+    const l: Json[] = (j.messages?.messages || j.messages || []).filter((m: Json) => m && m.id);
+    return l
+      .map((m) => ({
+        id: String(m.id),
+        direccion: m.direction === 'inbound' ? ('entrante' as const) : ('saliente' as const),
+        texto: String(m.body || ''),
+        adjuntos: ((m.attachments as unknown[]) || [])
+          .map((a) => (typeof a === 'string' ? a : (a as Json)?.url))
+          .filter((x): x is string => typeof x === 'string' && !!x),
+        fecha: String(m.dateAdded || new Date().toISOString()),
+        usuarioId: m.userId ? String(m.userId) : null,
+        origen: String(m.source || m.meta?.source || ''),
+        tipo: String(m.messageType || m.type || ''),
+        asunto: String(m.meta?.email?.subject || m.subject || ''),
+      }))
+      .sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
+  }
+
+  /** un texto a un contacto que ya conversa (dentro de las 24 h): lo usan los asistentes al responder */
+  async enviarAContacto(contactId: string, texto: string) {
+    const env = await this.api('POST', '/conversations/messages', {
+      body: { type: 'WhatsApp', contactId, message: texto },
+      permiso:
+        'La clave de wechatia no tiene permiso para enviar mensajes. Agrega «Editar mensajes de conversaciones» a la integración privada.',
+    });
+    return { messageId: (env.messageId || env.id || null) as string | null };
+  }
 
   async contacto(telefono: string, nombre: string) {
     let d = String(telefono || '').replace(/\D/g, '');
@@ -178,7 +257,14 @@ export class Wechatia {
    * Envía un texto libre. `entrante24` dice si Asset tiene registrado que la persona escribió en 24 h (cuando wechatia
    * no lo puede confirmar). Lanza FUERA_24H si WhatsApp no lo dejaría pasar.
    */
-  async enviar(o: { telefono: string; nombre: string; texto: string; entrante24?: () => Promise<boolean> }) {
+  async enviar(o: {
+    telefono: string;
+    nombre: string;
+    texto: string;
+    entrante24?: () => Promise<boolean>;
+    /** cuántas veces revisar si se entregó (cada 4 s) */
+    revisiones?: number;
+  }) {
     const contactId = await this.contacto(o.telefono, o.nombre);
     let v24 = await this.ventana24(contactId);
     if (v24 === null) v24 = o.entrante24 ? await o.entrante24().catch(() => false) : false;
@@ -197,7 +283,7 @@ export class Wechatia {
     let detalle = '';
     if (messageId) {
       // Meta puede rechazarlo unos segundos después: se revisa hasta que quede entregado o fallido
-      for (let i = 0; i < 4; i++) {
+      for (let i = 0; i < (o.revisiones ?? 4); i++) {
         await this.espera(4000);
         const m = await this.estadoMensaje(messageId);
         if (!m) continue;

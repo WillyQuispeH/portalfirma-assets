@@ -1,5 +1,5 @@
 // Interruptor de encendido/apagado (role="switch", se usa con teclado: Espacio o Enter).
-//   <Switch activo={auto} alCambiar={setAuto} etiqueta="Responder solo" descripcion="Fernanda atiende por WhatsApp" />
+//   <Switch activo={auto} alCambiar={setAuto} etiqueta="Responder solo" descripcion="Sofía atiende por WhatsApp" />
 import { useId, type ReactNode } from 'react';
 import { cx } from '../../utils/cx';
 

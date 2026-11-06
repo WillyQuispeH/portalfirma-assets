@@ -1,6 +1,7 @@
 const H = require('./hora');
+const { ATENCION } = require('./personas');
 // 0.16.8 · Atención de clientes por WhatsApp. Cuando una persona del CRM le escribe al número de la empresa, la atiende
-// Diego como «asistente del corredor»: responde dudas de SUS propiedades (con los datos de la ficha), ayuda con la
+// Tomás como «asistente del corredor»: responde dudas de SUS propiedades (con los datos de la ficha), ayuda con la
 // firma y, para agendar, reprogramar o cancelar una visita o reunión, SOLO toma el recado y se lo pasa al corredor.
 // Nunca confirma fechas ni ve datos de otros clientes: sus herramientas están limitadas a esa persona.
 //  · Se enciende y apaga desde el equipo («activa la atención de clientes»). Por defecto está apagada.
@@ -20,7 +21,7 @@ function crear({ store, inmo, agenda, docs = null, leads = null, ai, wa, avisarC
   const corredor = () => { const c = inmo.config(); return { nombre: c.corredor?.nombre || c.nombre || 'tu corredor', email: c.corredor?.email || '' }; };
 
   // ¿es una persona del CRM? (por los últimos 9 dígitos del celular)
-  // 0.16.9 · también los leads (pantalla Leads): a ellos los atiende Fernanda y la conversación queda en su lead
+  // 0.16.9 · también los leads (pantalla Leads): a ellos los atiende Sofía y la conversación queda en su lead
   function personaDe(phone) {
     const d = dig(phone); if (d.length < 8) return null;
     const per = (inmo.listar().personas || []).find((p) => dig(p.telefono) === d) || null;
@@ -29,7 +30,7 @@ function crear({ store, inmo, agenda, docs = null, leads = null, ai, wa, avisarC
     const base = per ? { ...per } : { id: l.personaId || null, nombre: l.nombre || l.chatCon || l.telefono, telefono: l.telefono, rut: l.rut || '' };
     return l ? { ...base, leadId: l.id, lead: l } : base;
   }
-  const quien = (per) => (per.leadId ? { id: 'fernanda', nombre: 'Fernanda' } : { id: 'diego', nombre: 'Diego' });
+  const quien = (per) => (per.leadId ? ATENCION.sofia : ATENCION.tomas);
 
   // ---------- lo que el asistente puede saber de ESTE cliente ----------
   const PUB = ['codigo', 'titulo', 'tipo', 'direccion', 'unidad', 'comuna', 'supTotal', 'supUtil', 'dormitorios', 'banos', 'estacionamientos', 'bodegas', 'amoblado', 'gastosComunes'];
@@ -82,7 +83,7 @@ function crear({ store, inmo, agenda, docs = null, leads = null, ai, wa, avisarC
     { name: 'cliente_recado', description: 'Le pasa un recado al corredor por WhatsApp y lo deja anotado en el CRM. Úsala para TODO lo que no puedes resolver tú: agendar, reprogramar o cancelar una visita o reunión, problemas con la firma, negociar precio, dudas legales o cualquier otra cosa. Incluye lo que pide y su disponibilidad.', parameters: { type: 'object', properties: { tipo: { type: 'string', enum: ['agendar_visita', 'agendar_reunion', 'reprogramar', 'cancelar', 'firma', 'consulta', 'otro'] }, detalle: { type: 'string', description: 'Qué necesita, en una o dos frases, con la propiedad si aplica' }, disponibilidad: { type: 'string', description: 'Días y horarios que dio el cliente, si los dio' } }, required: ['tipo', 'detalle'] } },
   ];
 
-  // 0.16.10 · Fernanda con los leads: toma sus datos, busca propiedades, ofrece horarios libres y agenda (o cambia) visitas
+  // 0.16.10 · Sofía con los leads: toma sus datos, busca propiedades, ofrece horarios libres y agenda (o cambia) visitas
   const TOOLS_LEAD = [
     { name: 'lead_guardar_datos', description: 'Guarda en el lead lo que el interesado te contó: nombre completo, RUT, correo y qué busca. Úsala apenas te dé un dato nuevo.', parameters: { type: 'object', properties: { nombre: { type: 'string' }, rut: { type: 'string' }, email: { type: 'string' }, operacion: { type: 'string', enum: ['arriendo', 'venta'] }, tipo: { type: 'string', description: 'departamento, casa, oficina…' }, comunas: { type: 'array', items: { type: 'string' } }, dormitorios: { type: 'number' }, banos: { type: 'number' }, presupuesto: { type: 'number', description: 'Monto' }, moneda: { type: 'string', enum: ['CLP', 'UF'] }, cuando: { type: 'string', description: 'Para cuándo lo necesita' }, estacionamiento: { type: 'boolean' }, mascotas: { type: 'boolean' } } } },
     { name: 'lead_buscar_propiedades', description: 'Busca en la cartera propiedades disponibles que calcen con lo que busca el interesado (datos públicos de la ficha). Devuelve el código para agendar.', parameters: { type: 'object', properties: { operacion: { type: 'string', enum: ['arriendo', 'venta'] }, comuna: { type: 'string' }, dormitorios: { type: 'number' }, presupuesto: { type: 'number' }, texto: { type: 'string', description: 'Dirección, código o palabras de la ficha' } } } },
@@ -135,22 +136,22 @@ function crear({ store, inmo, agenda, docs = null, leads = null, ai, wa, avisarC
       if (a.fecha < H.hoy() || (a.fecha === H.hoy() && a.hora <= H.ahora())) return { error: 'Ese día u hora ya pasó (hora de Chile): ofrece otro con lead_horarios.' };
       if (!libre(a.fecha, a.hora)) return { error: 'Ese horario ya está ocupado en la agenda: ofrece otro con lead_horarios.' };
       const pid = await personaDelLead(per);
-      const e = agenda.crear({ tipo: 'visita', fecha: a.fecha, hora: a.hora, propId: p.id, personaIds: pid ? [pid] : [], notas: `Agendada por Fernanda por WhatsApp con ${per.nombre} (${per.telefono})`, ext: { fuente: 'lead', id: l.id } });
+      const e = agenda.crear({ tipo: 'visita', fecha: a.fecha, hora: a.hora, propId: p.id, personaIds: pid ? [pid] : [], notas: `Agendada por Sofía por WhatsApp con ${per.nombre} (${per.telefono})`, ext: { fuente: 'lead', id: l.id } });
       if (pid) { try { if (!(p.vinculos || []).some((v) => v.personaId === pid)) await inmo.vincular(p.id, pid, 'interesado'); } catch {} }
       leads.actualizar(l.id, { estado: 'visita', propiedades: [...new Set([...(l.propiedades || []), p.id])], proximaAccion: { texto: `Visita ${p.codigo} el ${a.fecha.slice(8, 10)}/${a.fecha.slice(5, 7)} ${a.hora}`, fecha: a.fecha } });
       ctx.visita = { codigo: p.codigo, fecha: a.fecha, hora: a.hora };
       const falta = [!l.rut && 'RUT', !l.email && 'correo'].filter(Boolean);
-      await avisarCorredor(`📅 *Visita agendada por Fernanda*\n${per.nombre} (${per.telefono}) · ${p.codigo} ${p.titulo || ''}\n${a.fecha.slice(8, 10)}/${a.fecha.slice(5, 7)} a las ${a.hora}${falta.length ? `\nAún le falta: ${falta.join(' y ')} (para la orden de visita).` : `\nTiene RUT y correo: si quieres la orden de visita, pídesela a Juanita.`}`, 'fernanda').catch(() => {});
+      await avisarCorredor(`📅 *Visita agendada por Sofía*\n${per.nombre} (${per.telefono}) · ${p.codigo} ${p.titulo || ''}\n${a.fecha.slice(8, 10)}/${a.fecha.slice(5, 7)} a las ${a.hora}${falta.length ? `\nAún le falta: ${falta.join(' y ')} (para la orden de visita).` : `\nTiene RUT y correo: si quieres la orden de visita, pídesela a Juanita.`}`, 'sofia').catch(() => {});
       return { ok: true, agendada: { propiedad: p.codigo, direccion: [[p.direccion, p.unidad].filter(Boolean).join(' '), p.comuna].filter(Boolean).join(', '), mapa: mapa(p), fecha: a.fecha, hora: a.hora }, ...(falta.length ? { pedir: `Pídele ${falta.join(' y ')} para preparar la orden de visita.` } : {}) };
     }
     if (name === 'lead_cambiar_visita') {
       const vs = agenda.listar({ desde: a.fecha_actual, hasta: a.fecha_actual, tipo: 'visita' }).filter((e) => e.estado !== 'cancelado' && ((e.ext?.fuente === 'lead' && e.ext.id === l.id) || (per.id && (e.personaIds || []).includes(per.id))));
       const e = vs[0]; if (!e) return { error: 'No encontré una visita de este interesado ese día.' };
-      if (a.cancelar) { agenda.actualizar(e.id, { estado: 'cancelado' }); await avisarCorredor(`❌ ${per.nombre} canceló la visita del ${e.fecha.slice(8, 10)}/${e.fecha.slice(5, 7)} ${e.hora || ''} (${e.prop?.codigo || ''}).`, 'fernanda').catch(() => {}); return { ok: true, cancelada: true }; }
+      if (a.cancelar) { agenda.actualizar(e.id, { estado: 'cancelado' }); await avisarCorredor(`❌ ${per.nombre} canceló la visita del ${e.fecha.slice(8, 10)}/${e.fecha.slice(5, 7)} ${e.hora || ''} (${e.prop?.codigo || ''}).`, 'sofia').catch(() => {}); return { ok: true, cancelada: true }; }
       if (!/^\d{4}-\d{2}-\d{2}$/.test(a.fecha || '') || !/^\d{2}:\d{2}$/.test(a.hora || '')) return { error: 'Para reprogramar necesito fecha y hora nuevas.' };
       if (!libre(a.fecha, a.hora, e.id)) return { error: 'Ese horario está ocupado: ofrece otro con lead_horarios.' };
       agenda.actualizar(e.id, { fecha: a.fecha, hora: a.hora });
-      await avisarCorredor(`🔁 Fernanda reprogramó la visita de ${per.nombre} (${e.prop?.codigo || ''}): ahora ${a.fecha.slice(8, 10)}/${a.fecha.slice(5, 7)} a las ${a.hora}.`, 'fernanda').catch(() => {});
+      await avisarCorredor(`🔁 Sofía reprogramó la visita de ${per.nombre} (${e.prop?.codigo || ''}): ahora ${a.fecha.slice(8, 10)}/${a.fecha.slice(5, 7)} a las ${a.hora}.`, 'sofia').catch(() => {});
       return { ok: true, reprogramada: { fecha: a.fecha, hora: a.hora } };
     }
     return null;
@@ -274,7 +275,7 @@ ${per.leadId ? `- Es un INTERESADO (lead) y tú llevas todo lo suyo. Tu objetivo
 
   return {
     personaDe, manejar, infoCliente, propPorRef, refsEnTexto, mapa,
-    // a quién se atiende: los leads siempre (los lleva Fernanda); el resto del CRM, si la atención de clientes está activa
+    // a quién se atiende: los leads siempre (los lleva Sofía); el resto del CRM, si la atención de clientes está activa
     atiende: (phone) => { const per = personaDe(phone); return per && (per.leadId || cfg().activo) ? per : null; },
     // desde cuándo mirar una conversación nueva: desde el último envío de Asset a ese número (si no, ahora)
     // todo lo que Asset le envía a un número (pedido por el corredor, plantillas, el propio asistente): así no se confunde
