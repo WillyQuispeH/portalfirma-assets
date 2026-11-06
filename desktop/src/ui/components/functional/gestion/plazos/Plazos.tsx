@@ -47,11 +47,11 @@ export default function Plazos() {
 
   const lista = [...items].sort(orden); const it = items.find((x) => x.id === sel);
   const verDoc = async (d: IDocPlazo) => { const r = await documentoPlazo.bytes(d.id); if (!r.ok) return; const t = await documentoPlazo.aTemporal(r.data!, d.name); if (t.ok) abrirEnEditor(typeof t.data === 'string' ? t.data : t.data!.path!); };
-  const quitar = async (d: IDocPlazo) => { if (await confirmar({ titulo: 'Quitar de Plazos', texto: `¿Quitar «${d.name}» de la lista? El archivo original no se toca.`, boton: 'Quitar' })) plazoQuitar(d.id); };
+  const quitar = async (d: IDocPlazo) => { if (await confirmar({ clave: 'modal-117', titulo: 'Quitar de Plazos', texto: `¿Quitar «${d.name}» de la lista? El archivo original no se toca.`, boton: 'Quitar', peligro: true })) plazoQuitar(d.id); };
   const traer = async () => {
     const r = await plazosTraer();
     if (r.sinAcceso) return configurarAccesoDocumentos(traer);
-    if (r.fallas) return confirmar({ titulo: 'Traer de Portalfirma', texto: `${r.agregados ? `Se agregaron ${r.agregados} contrato(s).` : 'No se pudo traer ningún contrato.'} ${r.fallas.slice(0, 5).join(' · ')}`, boton: 'Entendido' });
+    if (r.fallas) return confirmar({ clave: 'modal-118', titulo: 'Traer de Portalfirma', texto: `${r.agregados ? `Se agregaron ${r.agregados} contrato(s).` : 'No se pudo traer ningún contrato.'} ${r.fallas.slice(0, 5).join(' · ')}`, boton: 'Entendido' });
     if (r.error) toast(r.error, 5000); else if (r.mensaje) toast(r.mensaje, 4000);
   };
   const redactar = async (d: IDocPlazo, s: { contrato?: number; titulo: string; motivo?: string }) => {

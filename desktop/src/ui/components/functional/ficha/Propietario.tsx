@@ -112,7 +112,7 @@ export default function Propietario({ p }: { p: IPropiedad }) {
             <p className="tw:mt-0 tw:mb-1 tw:text-sm"><b>{f.propietarioNombre}</b>{f.propietarioCelular ? ' · ' + f.propietarioCelular : ''}{f.propietarioEmail ? ' · ' + f.propietarioEmail : ''}</p>
             <p className="tw:m-0 tw:text-[13px] tw:text-muted">Anotado en la ficha; queda en Personas cuando tenga RUT válido.</p>
           </> : <p className="tw:m-0 tw:text-[13px] tw:text-muted">Todavía no hay propietario. Vincúlalo para poder enviar el mandato.</p>}
-          <div className="tw:mt-4"><Boton id="fDVinc" variante="secundario" tamano="sm" icono="plus" onClick={() => abrirModal(<VincularPersona p={p} />)}>Vincular propietario</Boton></div>
+          <div className="tw:mt-4"><Boton id="fDVinc" variante="secundario" tamano="sm" icono="plus" onClick={() => abrirModal(<VincularPersona p={p} />, { clave: 'modal-76' })}>Vincular propietario</Boton></div>
         </Card>
       )}
     </div>

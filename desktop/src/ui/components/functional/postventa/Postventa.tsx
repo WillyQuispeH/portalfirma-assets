@@ -42,7 +42,6 @@ export default function Postventa({ tab: tabInicial }: { tab?: TPvTab }) {
   const texto = (l: string, s?: string) => (s ? `${l} · ${s}` : l);
   return (
     <Layout
-      className="pv-wrap"
       titulo="Postventa"
       ilustracion={{ imagen: 'img/formas/etapa.svg', tinte: '#0e9488' }}
       subtitulo="Reclamos de propietarios con su garantía legal, atendidos por WhatsApp."

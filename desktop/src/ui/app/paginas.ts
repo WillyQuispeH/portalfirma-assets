@@ -22,6 +22,7 @@ import GestionNotariaVirtualPage from './gestion/notaria-virtual/page';
 import GestionRecientesPage from './gestion/recientes/page';
 import HoyPage from './hoy/page';
 import InicioSesionPage from './inicio-sesion/page';
+import IntegracionesPage from './integraciones/page';
 import LeadsPage from './leads/page';
 import NegociosPage from './negocios/page';
 import OficinaPage from './oficina/page';
@@ -51,7 +52,8 @@ export const paginas: Record<string, ComponentType<any>> = {
   GestionNotariaVirtual: GestionNotariaVirtualPage, // window.openTemplates() en src/renderer/templates.js
   GestionRecientes: GestionRecientesPage, // Recientes.open() en src/renderer/home.js
   Hoy: HoyPage, // el inicio en lista: abrir() de window.Hoy en src/renderer/etapas.js
-  InicioSesion: InicioSesionPage, // #view-login: app.js la monta al cargar; requireLogin() la muestra
+  InicioSesion: InicioSesionPage,
+  Integraciones: IntegracionesPage, // desde el menú del usuario: abrirIntegraciones() en src/renderer/app.js // #view-login: app.js la monta al cargar; requireLogin() la muestra
   Leads: LeadsPage, // pestaña Leads: abrir() en src/renderer/leads.js
   Negocios: NegociosPage, // pestaña Negocios: abrirNegocios() en src/renderer/negocios.js
   Oficina: OficinaPage, // el inicio: abrir() de window.Oficina en src/renderer/oficina.js

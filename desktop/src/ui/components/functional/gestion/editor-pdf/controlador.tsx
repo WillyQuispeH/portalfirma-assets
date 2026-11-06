@@ -69,7 +69,7 @@ export async function descartarPestana(T: IDocumento, prev: IDocumento) {
   await activate();
 }
 function confirmDiscard(): Promise<boolean> {
-  return new Promise((res) => abrirModal(<CambiosSinGuardar nombre={ed().name} alResponder={async (r) => res(r === 'descartar' ? true : r === 'guardar' ? await save() : false)} />));
+  return new Promise((res) => abrirModal(<CambiosSinGuardar nombre={ed().name} alResponder={async (r) => res(r === 'descartar' ? true : r === 'guardar' ? await save() : false)} />, { clave: 'modal-81' }));
 }
 export async function closeTab(t: IDocumento = ed()) {
   if (!t?.bytes) return true;
@@ -160,7 +160,7 @@ export function createBlank() {
     const T = nuevoDocumento(); T.name = `Documento nuevo${tabs.some((t) => /^Documento nuevo/.test(t.name)) ? ' ' + (tabs.length + 1) : ''}.pdf`;
     nuevaPestana(T); irAlEditor();
     await setBytes(await guardarPdf(doc), { keepPage: false, structural: true, T }); setDirty(true); M.setTool('text');
-  }} />);
+  }} />, { clave: 'modal-82' });
 }
 
 // ---------- guardar ----------
@@ -223,7 +223,7 @@ export function exportDialog(kind?: string) {
     if (k === 'png' || k === 'jpg') return exportImages(k, dpi);
     const scanned = await scannedPages(ed()); if (scanned.length) await M.recognize(scanned);
     return k === 'docx' ? exportDocx() : exportTxt();
-  }} />);
+  }} />, { clave: 'modal-83' });
 }
 function htmlRuns(html: string, base: any) {
   const div = document.createElement('div'); div.innerHTML = html; const runs: any[] = [];
@@ -288,7 +288,7 @@ export async function sendToSign() {
   const T = ed();
   if (!T.bytes) return toast('Abre un documento primero.');
   const b = await step('Preparando documento…', M.finalBytes); if (!b) return;
-  if (b.length > MAX_ENVIO) { abrirModal(<MuyPesado tam={fmtMB(b.length)} alComprimir={compress} />); return; }
+  if (b.length > MAX_ENVIO) { abrirModal(<MuyPesado tam={fmtMB(b.length)} alComprimir={compress} />, { clave: 'modal-84' }); return; }
   const r = await editorArchivos.temporal(b, T.name);
   if (!r.ok) return toast(r.error || '', 5000);
   const pre = T.signers?.length ? T.signers.map((x) => ({ ...x })) : null;
@@ -346,7 +346,7 @@ export function splitDialog() {
       }
       toast(`${groups.length} archivo(s) guardado(s) en ${nombreDeRuta(dir.data!)}`, 5000);
     });
-  }} />);
+  }} />, { clave: 'modal-85' });
 }
 // Aplanar: convierte la página en imagen (elimina por completo el texto original que quedó tapado).
 export function flattenPages() {
@@ -367,7 +367,7 @@ export function flattenPages() {
       await setBytes(await guardarPdf(doc), { structural: true });
       toast('Página(s) aplanada(s).');
     });
-  }} />);
+  }} />, { clave: 'modal-86' });
 }
 export function numberPages() {
   const T0 = ed(); const big = T0.vp1[0] ? esGrande(T0.vp1[0]) : false;
@@ -384,7 +384,7 @@ export function numberPages() {
         page.drawText(t, { x: px, y: py, size, font, color: rgb(0.2, 0.2, 0.2), rotate: degrees(rot) });
       }
     });
-  }} />);
+  }} />, { clave: 'modal-87' });
 }
 export function watermark() {
   abrirModal(<MarcaDeAgua alAplicar={async (text, op) => {
@@ -400,7 +400,7 @@ export function watermark() {
         page.drawText(text, { x: px, y: py, size, font, color: rgb(0.5, 0.5, 0.55), opacity: op, rotate: degrees(rot + 45) });
       }
     });
-  }} />);
+  }} />, { clave: 'modal-88' });
 }
 async function compressCore() {
   const r = await comprimirImagenes(ed().bytes!);
@@ -420,7 +420,7 @@ export async function compress() {
 export async function ocrDialog() {
   const T = ed(); if (!T.bytes) return;
   const sc = await scannedPages(T);
-  abrirModal(<Ocr escaneadas={sc.length} actual={T.current} total={T.count} alReconocer={(w) => M.recognize(w === 'scanned' ? sc : w === 'current' ? [ed().current] : [...Array(ed().count).keys()])} />);
+  abrirModal(<Ocr escaneadas={sc.length} actual={T.current} total={T.count} alReconocer={(w) => M.recognize(w === 'scanned' ? sc : w === 'current' ? [ed().current] : [...Array(ed().count).keys()])} />, { clave: 'modal-89' });
 }
 
 // --- Firmar plano arquitectónico: láminas + compresión + hoja de firmas tamaño carta
@@ -467,7 +467,7 @@ export function planWizard() {
       T.notice = `Plano listo: ${T.count - 1} lámina(s) + hoja de firmas · ${fmtMB(T.bytes!.length)}. Revisa y presiona «Enviar a firmar».`;
       tocar();
     });
-  }} />);
+  }} />, { clave: 'modal-90' });
 }
 
 // Base64 del documento final (Expedientes lo guarda en la carpeta del caso)
@@ -488,7 +488,7 @@ function montarPestanas() {
 }
 
 export function instalarEditor() {
-  M.ganchos.abrirEnlace = (url) => abrirModal(<AbrirEnlace url={url} alAbrir={() => editorArchivos.abrirEnlace(url)} />);
+  M.ganchos.abrirEnlace = (url) => abrirModal(<AbrirEnlace url={url} alAbrir={() => editorArchivos.abrirEnlace(url)} />, { clave: 'modal-91' });
   M.ganchos.focoCampo = focoCampo;
   M.ganchos.imprimir = () => { printDoc(); };
   M.ganchos.leer = (on) => M.reading(on);

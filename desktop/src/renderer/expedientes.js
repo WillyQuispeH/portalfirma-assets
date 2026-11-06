@@ -1,4 +1,4 @@
-/* global liberar, pf, $, esc, toast, modal, closeModal, icon, show, api, startAnalysis */
+/* global liberar, pf, $, toast, closeModal, show, api, startAnalysis */
 'use strict';
 (() => { // módulo aislado
 // ============================================================================
@@ -35,7 +35,7 @@ async function fromDrive(e) {
   if (!st.connected) return window.Drive.open({ purpose: 'exp' });
   const r = await pf.drivePick({ multi: true, folders: false }); if (!r.ok) return toast(r.error, 5000);
   if (!r.data.length) return;
-  modal(`<h2>${icon('drive', 18)} Copiando desde Google Drive…</h2><p class="muted">${r.data.length} archivo(s)</p>`);
+  window.Ventanas.abrir('agente.expAvance', { icono: 'drive', titulo: 'Copiando desde Google Drive…', detalle: `${r.data.length} archivo(s)` }, { clave: 'modal-14' });
   const paths = []; for (const f of r.data) { const d = await pf.driveDownload(f.id); if (d.ok) paths.push(d.data); }
   closeModal(); afterAdd(await pf.expAddFiles(e.id, paths, { note: `Se copiaron ${paths.length} archivo(s) desde Google Drive` }));
 }
@@ -44,7 +44,7 @@ async function addPaths(paths, note) { if (!X.sel) return toast('Primero elige u
 
 async function paths(files) {
   const out = [];
-  if (files.length > 1) modal(`<h2>Preparando ${files.length} archivos…</h2>`);
+  if (files.length > 1) window.Ventanas.abrir('agente.expAvance', { icono: 'files', titulo: `Preparando ${files.length} archivos…` }, { clave: 'modal-15' });
   for (const f of files) { const r = await pf.expLocalPath(X.sel, f.id); if (r.ok) out.push({ f, path: r.data }); else toast(`${f.name}: ${r.error}`, 5000); }
   if (files.length > 1) closeModal();
   return out;
@@ -67,52 +67,38 @@ async function act(what, files, e) {
   }
 }
 
+const tipos = () => Object.entries(TYPES).map(([k, [l]]) => [k, l]);
 function createDialog(after) {
-  modal(`<h2>${icon('folderOpen', 18)} Nuevo expediente</h2>
-    <label>Nombre<input id="xnName" placeholder="Ej.: Depto Calle Nueva 120, torre 2" maxlength="90" /></label>
-    <label>Tipo<select id="xnType">${Object.entries(TYPES).map(([k, [l]]) => `<option value="${k}">${l}</option>`).join('')}</select></label>
-    <div class="xp-store"><span>¿Dónde se guarda?</span>
-      <label class="xp-opt on"><input type="radio" name="xnSt" value="local" checked /><span><b>${icon('folder', 14)} En este computador</b><small>Carpeta «Expedientes PortalFirma» en Documentos.</small></span></label>
-      <label class="xp-opt"><input type="radio" name="xnSt" value="drive" /><span><b>${icon('drive', 14)} En Google Drive</b><small>Carpeta «Expedientes PortalFirma» en tu Drive: la ves desde cualquier equipo.</small></span></label></div>
-    <label>Notas (opcional)<input id="xnNotes" placeholder="Ej.: arriendo 2026, corredora SEC Propiedades" maxlength="200" /></label>
-    <div class="actions"><button class="secondary" id="mCancel">Cancelar</button><button class="primary" id="mOk">Crear</button></div>`);
-  $('#modalCard').querySelectorAll('input[name="xnSt"]').forEach((r) => (r.onchange = () => $('#modalCard').querySelectorAll('.xp-opt').forEach((l) => l.classList.toggle('on', l.contains(r) && r.checked))));
-  $('#mCancel').onclick = closeModal; $('#xnName').focus();
-  $('#mOk').onclick = async () => {
-    const name = $('#xnName').value.trim(); if (!name) { $('#xnName').classList.add('invalid'); return; }
-    const storage = $('#modalCard').querySelector('input[name="xnSt"]:checked').value;
-    const o = { name, type: $('#xnType').value, storage, notes: $('#xnNotes').value.trim() };
-    if (storage === 'drive') { const st = (await pf.driveStatus()).data || {}; if (!st.connected) { closeModal(); toast('Primero conecta Google Drive; después vuelve a crear el expediente.', 6000); return window.Drive.open({ purpose: 'connect' }); } }
-    $('#mOk').disabled = true; $('#mOk').innerHTML = '<i class="bk-spin"></i> Creando…';
-    const r = await pf.expCreate(o); if (!r.ok) { $('#mOk').disabled = false; $('#mOk').textContent = 'Crear'; return toast(r.error, 6000); }
-    closeModal(); if (after) return after(r.data);
-    await open(r.data.id); toast('Expediente creado. Agrega sus documentos.');
-  };
+  window.Ventanas.abrir('agente.expNuevo', {
+    tipos: tipos(),
+    alCrear: async (o) => {
+      if (o.storage === 'drive') { const st = (await pf.driveStatus()).data || {}; if (!st.connected) { closeModal(); toast('Primero conecta Google Drive; después vuelve a crear el expediente.', 6000); window.Drive.open({ purpose: 'connect' }); return; } }
+      const r = await pf.expCreate(o); if (!r.ok) { toast(r.error, 6000); return false; }
+      closeModal(); if (after) return after(r.data);
+      await open(r.data.id); toast('Expediente creado. Agrega sus documentos.');
+    },
+  }, { clave: 'modal-16' });
 }
 function moreDialog(e) {
-  modal(`<h2>${esc(e.name)}</h2>
-    <label>Tipo<select id="xmType">${Object.entries(TYPES).map(([k, [l]]) => `<option value="${k}" ${e.type === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
-    <label>Notas<input id="xmNotes" value="${esc(e.notes || '')}" maxlength="200" /></label>
-    <p class="muted small">Creado el ${fmtD(e.created)} · ${e.storage === 'drive' ? 'Google Drive' : esc(e.path || '')}</p>
-    <div class="actions"><button class="ghost danger-t" id="xmDel" style="margin-right:auto">Quitar de la lista</button><button class="secondary" id="mCancel">Cancelar</button><button class="primary" id="mOk">Guardar</button></div>`);
-  $('#mCancel').onclick = closeModal;
-  $('#mOk').onclick = async () => { closeModal(); await pf.expUpdate(e.id, { type: $('#xmType').value, notes: $('#xmNotes').value }); recargar(e.id); };
-  $('#xmDel').onclick = () => {
-    modal(`<h2>Quitar de la lista</h2><p>«${esc(e.name)}» deja de aparecer en la app. <b>La carpeta y sus archivos no se borran</b>: siguen ${e.storage === 'drive' ? 'en tu Google Drive' : 'en tu computador'}.</p><div class="actions"><button class="secondary" id="mCancel">Cancelar</button><button class="danger" id="mOk">Quitar</button></div>`);
-    $('#mCancel').onclick = closeModal; $('#mOk').onclick = async () => { closeModal(); await pf.expRemove(e.id); recargar(null); };
-  };
+  window.Ventanas.abrir('agente.expMas', {
+    nombre: e.name, tipos: tipos(), tipo: e.type, notas: e.notes || '',
+    detalle: `Creado el ${fmtD(e.created)} · ${e.storage === 'drive' ? 'Google Drive' : (e.path || '')}`,
+    alGuardar: async (v) => { closeModal(); await pf.expUpdate(e.id, v); recargar(e.id); },
+    alQuitar: () => window.Ventanas.abrir('agente.expQuitar', {
+      nombre: e.name, enDrive: e.storage === 'drive',
+      alConfirmar: async () => { closeModal(); await pf.expRemove(e.id); recargar(null); },
+    }, { clave: 'modal-18' }),
+  }, { clave: 'modal-17' });
 }
 // Guardar el documento abierto en el editor dentro de un expediente
 async function saveCurrent() {
   const l = await pf.expList(); const list = l.ok ? l.data : [];
   const name = (window.editor._state?.name || 'Documento.pdf').replace(/\.[^.]+$/, '') + '.pdf';
-  modal(`<h2>${icon('folderOpen', 18)} Guardar en un expediente</h2>
-    <label>Nombre del archivo<input id="xsName" value="${esc(name)}" /></label>
-    ${list.length ? `<label>Expediente<select id="xsExp">${list.map((x) => `<option value="${x.id}">${esc(x.name)}${x.storage === 'drive' ? ' (Drive)' : ''}</option>`).join('')}</select></label>` : '<p class="muted">Todavía no tienes expedientes: crea uno.</p>'}
-    <div class="actions"><button class="ghost" id="xsNew" style="margin-right:auto">${icon('plus', 13)} Nuevo expediente</button><button class="secondary" id="mCancel">Cancelar</button><button class="primary" id="mOk" ${list.length ? '' : 'disabled'}>Guardar</button></div>`);
-  $('#mCancel').onclick = closeModal;
-  $('#xsNew').onclick = () => { const nm = $('#xsName').value; createDialog(async (x) => { await doSave(x.id, nm); }); };
-  $('#mOk').onclick = async () => { const id = $('#xsExp').value; const nm = $('#xsName').value; closeModal(); await doSave(id, nm); };
+  window.Ventanas.abrir('agente.expGuardar', {
+    nombre: name, expedientes: list.map((x) => [x.id, x.name + (x.storage === 'drive' ? ' (Drive)' : '')]),
+    alNuevo: (nm) => createDialog(async (x) => { await doSave(x.id, nm); }),
+    alGuardar: async (id, nm) => { closeModal(); await doSave(id, nm); },
+  }, { clave: 'modal-19' });
 }
 async function doSave(id, name) {
   const b64 = await window.editor.exportBase64(); const bin = atob(b64); const bytes = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);

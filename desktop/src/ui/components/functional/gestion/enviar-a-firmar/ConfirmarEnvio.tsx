@@ -1,5 +1,9 @@
-// Confirmar el envío (en el modal de la app): documento, firma, trámite, firmantes, pagador y saldo.
+// Confirmar el envío (en el modal de la app, con las partes del kit: VentanaCabecera, VentanaCuerpo y VentanaPie):
+// documento, firma, trámite, firmantes, pagador y saldo. #mOk y #mCancel los usan las pruebas.
 import { useState } from 'react';
+import Boton from '../../../ui/Boton';
+import ListaDatos from '../../../ui/ListaDatos';
+import { VentanaCabecera, VentanaCuerpo, VentanaPie } from '../../../ui/Ventana';
 import { envioEstado, envioOperacion } from '../../../../store/hooks/useEnvio.hook';
 import { cerrarModal } from '../../../../utils/modal';
 import { saldoSesion } from '../../../../utils/app';
@@ -24,17 +28,19 @@ export default function ConfirmarEnvio({ analisis, archivo, payload: p }: { anal
     }
   };
   return <>
-    <h2>Confirmar envío</h2>
-    <dl>
-      <dt>Documento</dt><dd>{archivo.name}</dd>
-      <dt>Firma</dt><dd>{firma}</dd><dt>Trámite notarial</dt><dd>{tramite}</dd>
-      <dt>Firmantes</dt><dd>{p.signatories.map((s, i) => <span key={i}>{i > 0 && <br />}{i + 1}. {s.fullName} ({s.alias}) — {s.rut}</span>)}</dd>
-      <dt>Pagador</dt><dd>{p.email}</dd><dt>Saldo actual</dt><dd>{monto(saldoSesion(), 'CLP')}</dd>
-    </dl>
-    <p className="muted small">La operación se cobrará según la tarifa de Portalfirma. Los firmantes recibirán su enlace de firma.</p>
-    <div className="actions">
-      <button className="secondary" id="mCancel" onClick={cerrarModal}>Volver</button>
-      <button className="primary" id="mOk" disabled={enviando} onClick={confirmar}>{enviando ? 'Enviando…' : 'Confirmar y enviar'}</button>
-    </div>
+    <VentanaCabecera icono="sign" titulo="Confirmar envío" cerrable={!enviando} />
+    <VentanaCuerpo>
+      <ListaDatos datos={[
+        ['Documento', archivo.name],
+        ['Firma', firma], ['Trámite notarial', tramite],
+        ['Firmantes', p.signatories.map((s, i) => <span key={i}>{i > 0 && <br />}{i + 1}. {s.fullName} ({s.alias}) — {s.rut}</span>)],
+        ['Pagador', p.email], ['Saldo actual', monto(saldoSesion(), 'CLP')],
+      ]} />
+      <p className="tw:mt-4 tw:mb-0 tw:text-[12.5px] tw:text-muted tw:leading-relaxed">La operación se cobrará según la tarifa de Portalfirma. Los firmantes recibirán su enlace de firma.</p>
+    </VentanaCuerpo>
+    <VentanaPie>
+      <Boton id="mCancel" variante="secundario" onClick={cerrarModal}>Volver</Boton>
+      <Boton id="mOk" disabled={enviando} onClick={confirmar}>{enviando ? 'Enviando…' : 'Confirmar y enviar'}</Boton>
+    </VentanaPie>
   </>;
 }

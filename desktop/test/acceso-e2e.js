@@ -96,7 +96,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÃ“: ' + m); console.log('  â
     // lo que solo hace el administrador (por rol del usuario de Asset), y el corredor ve solo sus leads y negocios
     for (const [fn, args, que] of [['inmoPropArchivar', [pA.id, true], 'archivar'], ['inmoImportar', [], 'importar la cartera'], ['obsConfigurar', [{ activo: true, autorizado: true }], 'conexiones'], ['pvConfigurar', [{ auto: true }], 'configurar a Fernanda'], ['topUp', [10000, 'x@x.cl'], 'cargar saldo'], ['fmtConfigurar', [{ paquete: 'the-living' }], 'formatos'], ['usrCrear', [{ nombre: 'Nuevo', email: 'n@x.cl', clave: 'clave-nueva-1' }], 'usuarios'], ['usrEditar', [beto.id, { rol: 'ADMIN' }], 'cambiar el rol de otro']]) {
       const e = await falla(fn, ...args); ok(/lo hace el administrador/.test(e || ''), `el corredor no puede: ${que}`); }
-    await w.click('#nav [data-view="cartera"]'); await w.waitForSelector('.im-card'); await w.evaluate((id) => window.Inmo.abrirFicha(id), pA.id); await w.waitForSelector('#fArch', { state: 'attached' });
+    await w.click('#nav [data-view="cartera"]'); await w.waitForSelector('.im-card'); await w.evaluate((id) => window.Inmo.abrirFicha(id), pA.id); await w.waitForSelector('.im-ficha [data-mas]'); await w.click('.im-ficha [data-mas]'); await w.waitForSelector('#fArch', { state: 'attached' });
     ok(await w.evaluate(() => document.body.classList.contains('perfil-corredor')) && !(await w.isVisible('#fArch')), 'en pantalla se ocultan las acciones del administrador (Archivar)');
     // la corredora ve el equipo, sin editar
     await w.evaluate(() => window.Usuarios.abrir()); await w.waitForSelector('#usrPanel [data-usr]');

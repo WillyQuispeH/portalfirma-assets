@@ -110,6 +110,7 @@ declare global {
     sesionActual?: () => object | null; // state.session de app.js
     toLoggedIn: (sesion: object | null) => void; // app.js: guarda la sesión y sigue con lo pedido
     toLoggedOut: (mensaje?: string) => void; // app.js
+    abrirIntegraciones?: () => void; // app.js: la pantalla Integraciones (components/functional/integraciones)
     requireLogin: (fn: () => void, motivo?: string, pestana?: string) => void; // app.js
     cancelarInicioSesion?: () => void; // app.js: olvida lo pedido («Volver al editor»)
     Tema?: { get: () => string; set: (t: string) => Promise<void> }; // src/renderer/tema.js

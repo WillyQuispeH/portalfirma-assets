@@ -104,7 +104,7 @@ function Agregados() {
         <button className="ghost small" data-quitar={i} title="Quitar" onClick={() => S.escrituraQuitarAgregado(i)}><Icono nombre="x" tam={13} /></button></div>
         <q className={cita(true)}>{x.frase}</q></div>
     ))}
-    <button className="link tw:self-start tw:inline-flex tw:items-center tw:gap-[5px] tw:text-[12.5px] tw:mt-1 tw:w-auto" id="esAddActo" onClick={() => abrirModal(<AgregarActo />)}><Icono nombre="plus" tam={13} /> Agregar un acto que no detectamos</button>
+    <button className="link tw:self-start tw:inline-flex tw:items-center tw:gap-[5px] tw:text-[12.5px] tw:mt-1 tw:w-auto" id="esAddActo" onClick={() => abrirModal(<AgregarActo />, { clave: 'modal-107' })}><Icono nombre="plus" tam={13} /> Agregar un acto que no detectamos</button>
   </>;
 }
 

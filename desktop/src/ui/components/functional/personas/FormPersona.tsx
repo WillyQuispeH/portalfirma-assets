@@ -75,7 +75,7 @@ export default function FormPersona({ persona, rol, pre, onGuardar, onCerrar }: 
   };
 
   return (
-    <Modal abierto onCerrar={onCerrar} tamano="lg" fondoNoCierra cerrable={!guardando}
+    <Modal clave="modal-121" abierto onCerrar={onCerrar} tamano="lg" fondoNoCierra cerrable={!guardando}
       titulo={nueva ? 'Nueva persona' : 'Editar persona'}
       descripcion="Un registro por RUT: se reutiliza en cada contrato y documento."
       icono={empresa ? 'building' : 'users'}

@@ -29,7 +29,7 @@ export async function refrescarCuenta() {
 export async function abrirConexionDirecta() {
   const r = await cuentaEstado().cuentaRefrescar(sesionPortalfirma()).then(() => cuentaEstado().usuario);
   if (!r) return iniciarConCorreo();
-  abrirModal(<ConexionDirecta usuario={r} alSalir={async () => { await cuentaEstado().cuentaSalirApi(); cerrarModal(); toast('Sesión cerrada'); refrescarCuenta(); }} />);
+  abrirModal(<ConexionDirecta usuario={r} alSalir={async () => { await cuentaEstado().cuentaSalirApi(); cerrarModal(); toast('Sesión cerrada'); refrescarCuenta(); }} />, { clave: 'modal-64' });
 }
 
 // Inicio de sesión con correo y contraseña; al terminar sigue con `despues` (si no, muestra la conexión)
@@ -37,7 +37,7 @@ export function iniciarConCorreo(despues?: () => void, motivo?: string) {
   abrirModal(<IniciarConCorreo motivo={motivo} alEntrar={() => {
     refrescarCuenta();
     if (despues) { cerrarModal(); despues(); } else abrirConexionDirecta();
-  }} />);
+  }} />, { clave: 'modal-65' });
 }
 
 export function instalarCuenta() {

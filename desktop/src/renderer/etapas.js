@@ -1,4 +1,4 @@
-/* global $, api, esc, icon, toast, modal, closeModal, ir, pf, liberar */
+/* global $, api, esc, icon, toast, closeModal, ir, pf, liberar */
 'use strict';
 // «Hoy» y las etapas del negocio (0.15). Tres etapas (Captación · Comercialización · Postventa) con pasos
 // logrados, pendientes («te toca» o «esperando a…») y no logrados. Estilo: vidrio sobre la foto del inicio
@@ -81,26 +81,17 @@ async function accion(x, alTerminar) {
   if (t === 'ok') { await marcar(x, 'ok'); toast(`Logrado: ${x.paso || x.t}.`); return alTerminar?.(); }
 }
 const marcar = (x, estado, extra = {}) => api('etMarcar', { negocioId: x.negocioId || null, propId: x.negocioId ? null : x.propId, paso: x.pasoId || x.id, estado, ...extra });
+// Las dos ventanas están en React (ventanas/inmo/Etapas.tsx); marcar el paso sigue aquí.
 function reprogramar(x, alTerminar) {
-  modal(`<div class="im-form"><h2>${x.accion === 'Reprogramar' ? 'Reprogramar' : 'Volver a intentar'}: ${esc(x.paso || x.t)}</h2>
-    <label>Nueva fecha<input id="rpF" type="date" value="${hoyISO()}" /></label><label>Nota (opcional)<input id="rpD" placeholder="Ej.: se reagendó con el cliente" /></label>
-    <div class="actions"><button class="secondary" id="mCancel">Cancelar</button><button class="primary" id="mOk">Guardar</button></div></div>`);
-  $('#mCancel').onclick = closeModal;
-  $('#mOk').onclick = async () => { await marcar(x, 'pend', { vence: $('#rpF').value, d: $('#rpD').value }); closeModal(); toast('Vuelve a quedar pendiente.'); alTerminar?.(); };
+  window.Ventanas.abrir('inmo.reprogramar', { titulo: `${x.accion === 'Reprogramar' ? 'Reprogramar' : 'Volver a intentar'}: ${x.paso || x.t}`, hoy: hoyISO(),
+    alGuardar: async ({ vence, d }) => { await marcar(x, 'pend', { vence, d }); closeModal(); toast('Vuelve a quedar pendiente.'); alTerminar?.(); } }, { clave: 'modal-12' });
 }
 // menú de estados de un paso: logrado, no logrado, esperando a…, automático
 function menuPaso(x, alTerminar) {
-  modal(`<div class="im-form et-menu"><h2>${esc(x.t)}</h2><p class="muted">${esc(x.d || 'Elige cómo está este paso.')}</p>
-    <div class="et-mopts"><button class="secondary" data-e="ok">${IC.ok} Logrado</button><button class="secondary" data-e="fail">${IC.fail} No logrado</button><button class="secondary" data-e="otro">${IC.otro} Esperando a alguien</button>${x.manual ? '<button class="ghost" data-e="auto">Volver a lo automático</button>' : ''}</div>
-    <div class="et-mx hidden" id="emX"><label id="emL">Motivo<input id="emT" /></label><label class="hidden" id="emVL">Plazo<input id="emV" type="date" /></label><button class="primary" id="emOk">Guardar</button></div>
-    <div class="actions"><button class="secondary" id="mCancel">Cerrar</button></div></div>`);
-  $('#mCancel').onclick = closeModal; let modo = null;
   const fin = async (estado, extra) => { await marcar(x, estado, extra); closeModal(); toast('Paso actualizado.'); alTerminar?.(); };
-  document.querySelectorAll('.et-mopts [data-e]').forEach((b) => (b.onclick = () => {
-    const e = b.dataset.e; if (e === 'ok') return fin('ok'); if (e === 'auto') return fin(null);
-    modo = e; $('#emX').classList.remove('hidden'); $('#emL').firstChild.textContent = e === 'fail' ? 'Motivo' : '¿A quién esperas?'; $('#emVL').classList.toggle('hidden', e !== 'otro'); $('#emT').focus();
-  }));
-  $('#emOk').onclick = () => (modo === 'fail' ? fin('fail', { d: $('#emT').value }) : fin('pend', { quien: $('#emT').value || 'otra persona', vence: $('#emV').value }));
+  window.Ventanas.abrir('inmo.menuPaso', { titulo: x.t, descripcion: x.d, manual: !!x.manual,
+    alElegir: (e) => (e === 'ok' ? fin('ok') : fin(null)),
+    alGuardar: (modo, texto, vence) => (modo === 'fail' ? fin('fail', { d: texto }) : fin('pend', { quien: texto || 'otra persona', vence })) }, { clave: 'modal-13' });
 }
 
 // ---------- pantalla «Hoy» ----------

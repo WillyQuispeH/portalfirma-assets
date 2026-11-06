@@ -41,7 +41,7 @@ export default function ConversacionesUsuario({ u, onCerrar }: { u: IUsuario; on
   };
 
   return (
-    <Modal abierto onCerrar={onCerrar} tamano="xl" icono="sparkle" titulo={`Agente de ${u.nombre}`}
+    <Modal clave="modal-122" abierto onCerrar={onCerrar} tamano="xl" icono="sparkle" titulo={`Agente de ${u.nombre}`}
       descripcion="Lo que conversó con el Agente y lo que el Agente hizo por esta persona. Solo lectura." id="cvuPanel">
       <div className="tw:flex tw:flex-col tw:gap-3">
         <Segmentos etiqueta="Qué ver" id="cvuVista" opciones={[['conversaciones', 'Conversaciones'], ['acciones', 'Acciones del Agente']]} valor={vista} alCambiar={setVista} />

@@ -3,7 +3,7 @@
 // Hecha con el kit: Layout (fondo, cabecera con ilustración y «volver»), Boton, Card y Badge.
 // Los id (#apStart, #apBack, #apVivo, #apDone, #apFin), data-l, data-go y las clases ap-* los usan las pruebas.
 import Icono from '../../ui/Icono';
-import Layout from '../../ui/Layout';
+import Layout, { MIGA_INICIO } from '../../ui/Layout';
 import Boton from '../../ui/Boton';
 import Card from '../../ui/Card';
 import Badge from '../../ui/Badge';
@@ -22,6 +22,7 @@ function Lecciones() {
   return (
     <Layout
       titulo="Aprende a usar PortalFirma Asset"
+      miga="Aprende"
       ilustracion={ILUSTRACION}
       subtitulo={<>
         Panel por panel: para qué sirve, cómo se usa y un recorrido guiado en vivo. Te toma unos 10 minutos.
@@ -53,7 +54,7 @@ function Leccion({ id }: { id: string }) {
   return (
     <Layout
       className="ap-lec"
-      volver={{ texto: 'Todas las lecciones', alTocar: () => aprendeLeccion(null), id: 'apBack' }}
+      migas={[MIGA_INICIO, { texto: 'Aprende', alTocar: () => aprendeLeccion(null), id: 'apBack' }, { texto: l.t }]}
       ilustracion={ILUSTRACION}
       sobretitulo={l.sub}
       titulo={l.t}

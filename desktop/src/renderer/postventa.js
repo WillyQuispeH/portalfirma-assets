@@ -1,4 +1,4 @@
-/* global $, api, esc, icon, toast, modal, closeModal, ir, pf, liberar */
+/* global $, api, esc, icon, toast, closeModal, ir, pf, liberar */
 'use strict';
 // Postventa (MVP): reclamos de propietarios con su garantía legal, atención por WhatsApp (vía wechatia),
 // unidades entregadas (carga desde Excel) y contratistas. Cada paso es guiado: «¿Qué sigue?» según el estado.
@@ -99,23 +99,22 @@ async function guia(r) {
 
 function formContratista() {
   return new Promise((res) => {
-    modal(`<div class="im-form"><h2>Nuevo contratista</h2><label>Nombre o empresa<input id="ctN" /></label><label>Especialidad<input id="ctE" placeholder="Gasfitería, pintura, electricidad…" /></label><label>Celular (WhatsApp)<input id="ctT" placeholder="+56 9 1234 5678" /></label><p class="error" id="ctErr"></p>
-      <div class="actions"><button class="secondary" id="mCancel">Cancelar</button><button class="primary" id="mOk">Guardar</button></div></div>`);
-    $('#mCancel').onclick = () => { closeModal(); res(null); };
-    $('#mOk').onclick = async () => { try { const c = await api('pvContratista', { nombre: $('#ctN').value, especialidad: $('#ctE').value, telefono: $('#ctT').value }); closeModal(); res(c); } catch (e) { $('#ctErr').textContent = e.message; } };
-    setTimeout(() => $('#ctN').focus(), 30);
+    window.Ventanas.abrir('negocios.postventaContratista', {
+      alCancelar: () => { closeModal(); res(null); },
+      // si falla, la ventana muestra el error (antes, #ctErr)
+      alGuardar: async (v) => { const c = await api('pvContratista', { nombre: v.nombre, especialidad: v.especialidad, telefono: v.telefono }); closeModal(); res(c); },
+    }, { clave: 'modal-53' });
   });
 }
 async function nuevo() {
   const us = await api('pvUnidades').catch(() => []);
-  modal(`<div class="im-form"><h2>Nuevo reclamo</h2><label>Unidad<select id="nrU"><option value="">— Sin unidad —</option>${us.map((u) => `<option value="${esc(u.id)}">${esc(u.nombre)} · ${esc(u.propietario?.nombre || '')}</option>`).join('')}</select></label>
-    <label>¿Qué falla reporta?<textarea id="nrD" rows="3" placeholder="Ej.: filtración bajo el lavamanos del baño principal"></textarea></label><p class="error" id="nrErr"></p>
-    <div class="actions"><button class="secondary" id="mCancel">Cancelar</button><button class="primary" id="mOk">Crear</button></div></div>`);
-  $('#mCancel').onclick = closeModal;
-  $('#mOk').onclick = async () => { const d = $('#nrD').value.trim(); if (!d) { $('#nrErr').textContent = 'Describe la falla.'; return; }
-    const r = await api('pvCrear', { unidadId: $('#nrU').value || null, items: [{ descripcion: d }] }).catch((e) => { $('#nrErr').textContent = e.message; });
-    if (r) { closeModal(); recargar({ tab: 'reclamos', sel: r.id, filtro: 'abiertos' }); } };
-  setTimeout(() => $('#nrD').focus(), 30);
+  window.Ventanas.abrir('negocios.postventaReclamo', {
+    unidades: us.map((u) => [u.id, `${u.nombre} · ${u.propietario?.nombre || ''}`]),
+    // si falla, la ventana muestra el error (antes, #nrErr)
+    alGuardar: async ({ unidadId, descripcion }) => { const d = descripcion.trim(); if (!d) throw new Error('Describe la falla.');
+      const r = await api('pvCrear', { unidadId: unidadId || null, items: [{ descripcion: d }] });
+      closeModal(); recargar({ tab: 'reclamos', sel: r.id, filtro: 'abiertos' }); },
+  }, { clave: 'modal-54' });
 }
 
 // llegaron mensajes o reclamos nuevos por WhatsApp: se actualiza si la pantalla está a la vista y no se está escribiendo

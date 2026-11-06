@@ -1,16 +1,21 @@
 // Agente por WhatsApp: conectar el WhatsApp de la empresa (wechatia), vincular el celular del usuario con un
 // código y decidir si este computador responde. Lo hecho por WhatsApp queda en la conversación «WhatsApp» del Agente.
-// Va en el modal de la app (ancho). Los id (#waAg, #waKey, #waVin, #waAct…) los usan las pruebas; los estilos son
-// las clases wa-* de styles.css; los botones son Boton del kit.
+// Va en el modal de la app (ancho), con las partes del kit (VentanaCabecera, VentanaCuerpo y VentanaPie). Los id (#waAg,
+// #waKey, #waVin, #waAct…) los usan las pruebas; #waAg va dentro del cuerpo (lo busca refrescar() del controlador).
+// Los estilos son las clases wa-* de styles.css; los botones son Boton del kit.
 import { useEffect, useRef, useState } from 'react';
 import Icono from '../../ui/Icono';
 import Boton from '../../ui/Boton';
+import { VentanaCabecera, VentanaCuerpo, VentanaPie } from '../../ui/Ventana';
 import { useWhatsApp } from '../../../store/hooks/useWhatsApp.hook';
 import { useCuenta } from '../../../store/hooks/useCuenta.hook';
 import { cerrarModal } from '../../../utils/modal';
 import { toast } from '../../../utils/app';
 
 // +56 9 1234 5678
+const Cabecera = () => <VentanaCabecera icono="whatsapp" tonoIcono="verde" titulo="Agente por WhatsApp" />;
+const Pie = () => <VentanaPie><Boton variante="secundario" id="mCancel" onClick={cerrarModal}>Cerrar</Boton></VentanaPie>;
+
 const fmtTel = (t?: string | null) => { const d = String(t || '').replace(/\D/g, ''); return d.length >= 11 ? `+${d.slice(0, 2)} ${d.slice(2, 3)} ${d.slice(3, 7)} ${d.slice(7)}` : t || ''; };
 
 export default function AgenteWhatsApp() {
@@ -28,7 +33,11 @@ export default function AgenteWhatsApp() {
     return () => clearInterval(t);
   }, [codigo, waRevisarVinculo]);
 
-  if (!listo || !e) return <div className="wa-ag" id="waAg"><div className="ga-load"><span className="spinner sm" />Cargando…</div></div>;
+  if (!listo || !e) return <>
+    <Cabecera />
+    <VentanaCuerpo><div className="wa-ag" id="waAg"><div className="ga-load"><span className="spinner sm" />Cargando…</div></div></VentanaCuerpo>
+    <Pie />
+  </>;
 
   const paso1 = !!e.conectado;
   const conectar = async () => {
@@ -47,10 +56,11 @@ export default function AgenteWhatsApp() {
     toast(activo ? 'El Agente responde tu WhatsApp desde este computador.' : 'Agente por WhatsApp en pausa.');
   };
 
-  return (
+  return <>
+    <Cabecera />
+    <VentanaCuerpo>
     <div className="wa-ag" id="waAg">
-      <h2><Icono nombre="whatsapp" tam={20} /> Agente por WhatsApp</h2>
-      <p className="muted">Habla con tu equipo desde el celular, por texto o notas de voz. Escribe el nombre de quien necesitas y te atiende: <b>Pedro</b> (Captación), <b>Juanita</b> (Documentos), <b>Diego</b> (Seguimiento) o <b>Fernanda</b> (Leads). Cada uno guarda su propia conversación, así puedes cambiar de uno a otro sin perder el hilo. Todo queda aquí, en la conversación <b>WhatsApp</b> del Agente.</p>
+      <p className="tw:mt-0 tw:mb-3 tw:leading-relaxed tw:text-muted">Habla con tu equipo desde el celular, por texto o notas de voz. Escribe el nombre de quien necesitas y te atiende: <b>Pedro</b> (Captación), <b>Juanita</b> (Documentos), <b>Diego</b> (Seguimiento) o <b>Fernanda</b> (Leads). Cada uno guarda su propia conversación, así puedes cambiar de uno a otro sin perder el hilo. Todo queda aquí, en la conversación <b>WhatsApp</b> del Agente.</p>
 
       <div className={`wa-paso ${paso1 ? 'ok' : ''}`}><span className="wa-n">{paso1 ? <Icono nombre="check" tam={14} /> : '1'}</span><div><b>WhatsApp de la empresa</b>
         {paso1 ? <small>Conectado a wechatia{e.propia ? ' con la clave de la integración' : ''}.</small> : <>
@@ -90,7 +100,8 @@ export default function AgenteWhatsApp() {
             onKeyDown={(ev) => { if (ev.key === 'Enter') (ev.target as HTMLInputElement).blur(); }} />
         </label>
       </details>
-      <div className="actions"><Boton variante="secundario" id="mCancel" onClick={cerrarModal}>Cerrar</Boton></div>
     </div>
-  );
+    </VentanaCuerpo>
+    <Pie />
+  </>;
 }

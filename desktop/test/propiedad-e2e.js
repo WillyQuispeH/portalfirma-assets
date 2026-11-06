@@ -103,7 +103,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     await shot('pr7-varias-visitas.png');
 
     // 7. Desde la ficha: «Ver en el Agente»
-    await w.evaluate((id) => window.Inmo.abrirFicha(id), ids.p); await w.waitForSelector('#fAg'); await w.click('#fAg');
+    await w.evaluate((id) => window.Inmo.abrirFicha(id), ids.p); await w.waitForSelector('.im-ficha [data-mas]'); await w.click('.im-ficha [data-mas]'); await w.click('#fAg');
     await w.waitForSelector('#view-agente .ag.ag-full'); await w.waitForFunction(() => /¿Cómo va CV-9002\?/.test(document.querySelector('#agBody')?.textContent || ''));
     ok(await w.isVisible('.ga-est'), 'la ficha abre la propiedad en el Agente');
     ok(!errs.length, 'sin errores de JavaScript' + (errs.length ? ': ' + errs.join(' | ') : ''));

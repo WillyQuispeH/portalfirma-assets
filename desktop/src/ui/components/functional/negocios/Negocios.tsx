@@ -63,7 +63,6 @@ export default function Negocios({ tipo: tipoInicial }: INegociosProps) {
 
   return (
     <Layout
-      className="ng-wrap"
       titulo="Negocios"
       ilustracion={{ imagen: 'img/formas/negocios.svg', tinte: '#3d9cf0' }}
       subtitulo="Cada etapa dice qué falta. Arrastra una tarjeta para moverla; cuando un documento queda firmado, el negocio avanza solo."

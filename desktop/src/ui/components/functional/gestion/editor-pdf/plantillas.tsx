@@ -7,7 +7,7 @@
 // La API de siempre queda en window.Plantillas (la instala index.tsx).
 import { abrirModal } from '../../../../utils/modal';
 import { CampoForm, CamposDetectados, GuardarPlantilla, Importada, PlantillaAbierta, PlantillaGuardada, SalirSinGuardar, type IDetectado } from './ModalesPlantilla';
-import { Confirmar } from './Modales';
+import { Confirmar, NOTA, P } from './Modales';
 import { editorArchivos, editorEstado, nuevoDocumento, tocar } from '../../../../store/hooks/useEditor.hook';
 import { cargarPdf, guardarPdf, nombreBase, nombreDeRuta, normText } from '../../../../utils/editor-pdf/comun';
 import { blocksFor, detectDigitalBlocks, vp1 } from '../../../../utils/editor-pdf/bloques';
@@ -42,7 +42,7 @@ export function enterDesign(def?: { name: string; fields: ICampo[] }) {
 export function exitDesign() { const T = ed(); if (T.editing) M.stopEditing(); T.tpl = null; M.setTool('select'); tocar(); }
 export function terminarDiseno() {
   if (!ed().tpl?.dirty) return exitDesign();
-  abrirModal(<SalirSinGuardar alSalir={exitDesign} alGuardar={saveTemplate} />);
+  abrirModal(<SalirSinGuardar alSalir={exitDesign} alGuardar={saveTemplate} />, { clave: 'modal-92' });
 }
 
 // Selección actual dentro del párrafo que se está editando
@@ -78,7 +78,7 @@ export function fieldDialog({ field, sample, onDone }: { field?: ICampo; sample?
   abrirModal(<CampoForm campo={field} muestra={sample} existentes={T.tpl!.def.fields} alListo={(f, nuevo) => {
     if (field || nuevo) { if (nuevo) T.tpl!.def.fields.push(f); T.tpl!.dirty = true; tocar(); }
     onDone?.(f);
-  }} />);
+  }} />, { clave: 'modal-93' });
 }
 export function removeField(id: string) {
   const T = ed();
@@ -99,7 +99,7 @@ async function offerRepeats(f: ICampo, text: string) {
     for (const b of bl) if (!usedBlocks.has(i + ':' + b.id) && normText(b.text).replace(/\s+/g, ' ').includes(target)) closed.push({ page: i, b });
   }
   const n = opened.length + closed.length; if (!n || ed() !== T) return;
-  abrirModal(<Confirmar titulo="El mismo dato aparece en otras partes" boton="Sí, en todas" alAceptar={async () => {
+  abrirModal(<Confirmar icono="template" titulo="El mismo dato aparece en otras partes" boton="Sí, en todas" alAceptar={async () => {
     await step('Marcando el campo en el documento…', async () => {
       const keep = T.current; let count = 0;
       const byPage: Record<number, typeof closed[number]['b'][]> = {}; for (const c of closed) (byPage[c.page] ||= []).push(c.b);
@@ -110,8 +110,8 @@ async function offerRepeats(f: ICampo, text: string) {
       toast(`Campo «${f.label}» agregado en ${count} lugar(es) más.`);
     });
   }}>
-    <p>«{text.slice(0, 80)}» aparece en <strong>{n}</strong> párrafo(s) más del documento.</p><p className="muted">¿Usar el campo «{f.label}» también ahí? Así se llena una sola vez.</p>
-  </Confirmar>);
+    <p className={P}>«{text.slice(0, 80)}» aparece en <strong>{n}</strong> párrafo(s) más del documento.</p><p className={NOTA}>¿Usar el campo «{f.label}» también ahí? Así se llena una sola vez.</p>
+  </Confirmar>, { clave: 'modal-94' });
 }
 
 // ============================================================================
@@ -144,7 +144,7 @@ export async function detectWithAi() {
   const l = list as IDetectado[] | null;
   if (!l || ed() !== T) return;
   if (!l.length) return toast('La IA no encontró datos variables nuevos en el documento.', 5000);
-  abrirModal(<CamposDetectados lista={l} alCrear={(sel) => { applyDetected(sel); }} />);
+  abrirModal(<CamposDetectados lista={l} alCrear={(sel) => { applyDetected(sel); }} />, { clave: 'modal-95' });
 }
 
 // Crea los campos y marca todas sus apariciones (primero los textos más largos, para que
@@ -242,7 +242,7 @@ export function saveTemplate() {
   if (!fields.length) return toast('Agrega al menos un campo antes de guardar la plantilla.', 4000);
   abrirModal(<GuardarPlantilla nombre={T.tpl!.def.name || nombreBase(T.name)} campos={fields.length} parrafos={blocks.length} alGuardar={async (name) => {
     if (name !== T.tpl!.def.saved && (await editorArchivos.plantillaExiste(name)).data) {
-      const go = await new Promise<boolean>((res) => abrirModal(<Confirmar titulo={`Ya existe «${name}»`} boton="Reemplazar" alAceptar={() => res(true)} alCancelar={() => res(false)}><p>¿Reemplazar la plantilla guardada?</p></Confirmar>));
+      const go = await new Promise<boolean>((res) => abrirModal(<Confirmar icono="alert" tonoIcono="amarillo" titulo={`Ya existe «${name}»`} boton="Reemplazar" alAceptar={() => res(true)} alCancelar={() => res(false)}><p className={P}>¿Reemplazar la plantilla guardada?</p></Confirmar>, { clave: 'modal-97' }));
       if (!go) return;
     }
     await step('Guardando plantilla…', async () => {
@@ -253,9 +253,9 @@ export function saveTemplate() {
       const r = await editorArchivos.plantillaGuardar(name, bytes, { fields: fields.length, pages: T.count, signers: [...new Set(fields.filter((f) => f.signer).map((f) => f.signer!.role))] });
       if (!r.ok) throw new Error(r.error);
       T.tpl!.def.name = name; T.tpl!.def.saved = name; T.tpl!.dirty = false; T.tpl!.file = r.data; tocar();
-      abrirModal(<PlantillaGuardada nombre={name} alExportar={() => { editorArchivos.guardarComo(bytes, name + ' (plantilla).pdf'); }} alLlenar={() => { openTemplateFile(r.data!, 'fill'); }} />);
+      abrirModal(<PlantillaGuardada nombre={name} alExportar={() => { editorArchivos.guardarComo(bytes, name + ' (plantilla).pdf'); }} alLlenar={() => { openTemplateFile(r.data!, 'fill'); }} />, { clave: 'modal-98' });
     });
-  }} />);
+  }} />, { clave: 'modal-96' });
 }
 
 // ============================================================================
@@ -319,7 +319,7 @@ export async function comprobarPlantilla(T: IDocumento) {
   const tpl = await readTemplate(T.pdf); if (!tpl || ed() !== T) return;
   abrirModal(<PlantillaAbierta nombre={tpl.name} campos={tpl.fields.length} alElegir={async (mode) => {
     T.name = tpl.name + (mode === 'fill' ? '' : ' (plantilla)') + '.pdf'; T.path = null; await step('Abriendo plantilla…', () => materialize(tpl, mode));
-  }} />);
+  }} />, { clave: 'modal-99' });
 }
 
 // ============================================================================
@@ -412,9 +412,9 @@ export async function generate() {
 // ============================================================================
 export const exportarPlantilla = async (file: string) => { const r = await editorArchivos.plantillaLeer(file); if (r.ok) editorArchivos.guardarComo(r.data!, nombreDeRuta(file).replace(/\.pdf$/, ' (plantilla).pdf')); };
 export function borrarPlantilla(file: string, nombre: string, despues: () => void) {
-  abrirModal(<Confirmar titulo="Eliminar plantilla" boton="Eliminar" peligro alAceptar={async () => { await editorArchivos.plantillaBorrar(file); despues(); }}>
-    <p>¿Eliminar «{nombre}» de Mis plantillas? Los documentos ya generados no se afectan.</p>
-  </Confirmar>);
+  abrirModal(<Confirmar icono="trash" tonoIcono="rojo" titulo="Eliminar plantilla" boton="Eliminar" peligro alAceptar={async () => { await editorArchivos.plantillaBorrar(file); despues(); }}>
+    <p className={P}>¿Eliminar «{nombre}» de Mis plantillas? Los documentos ya generados no se afectan.</p>
+  </Confirmar>, { clave: 'modal-100' });
 }
 // Google Drive: el explorador está en components/functional/drive; desde aquí se abre para convertir un documento en plantilla
 export const driveDialog = () => window.Drive.open({ purpose: 'template' });
@@ -427,7 +427,7 @@ export async function importFromDrive(f: { id: string; name: string }) {
   await addFiles([file], { replace: true });
   if (editorEstado().pestanas.length === before && !ed().bytes) return;
   enterDesign();
-  abrirModal(<Importada nombre={f.name} alDetectar={detectWithAi} />);
+  abrirModal(<Importada nombre={f.name} alDetectar={detectWithAi} />, { clave: 'modal-101' });
 }
 
 // window.Plantillas de siempre (home.js, Drive, las pruebas)

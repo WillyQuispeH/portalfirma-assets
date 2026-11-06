@@ -138,7 +138,7 @@ function FilaAviso({ p, op }: { p: IPropiedad; op: TOperacion }) {
   const [ocupado, setOcupado] = useState(false);
   const a = p.portales?.pi?.[op]; const st = a?.status || ''; const [l, c, tono] = PI_ST[st] || [st, '', 'gris'];
   const hacer = async (fn: () => Promise<{ mensaje?: string; error?: string }>) => { setOcupado(true); avisar(await fn(), 6000); setOcupado(false); };
-  const finalizar = () => abrirModal(<FinalizarAviso op={op} alConfirmar={() => hacer(() => fichaAvisoEstado(op, 'closed'))} />);
+  const finalizar = () => abrirModal(<FinalizarAviso op={op} alConfirmar={() => hacer(() => fichaAvisoEstado(op, 'closed'))} />, { clave: 'modal-75' });
   return (
     <div className="tw:flex tw:flex-wrap tw:items-center tw:justify-between tw:gap-3 tw:py-3 tw:border-0 tw:border-t tw:border-solid tw:border-edge tw:first:border-t-0 tw:first:pt-0">
       <span className="tw:flex tw:flex-col tw:items-start tw:gap-1">

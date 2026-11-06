@@ -49,9 +49,9 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     ok(await w.evaluate(() => window.Usuario._u.user.nameEntity === 'Inmobiliaria Ana' && window.Usuario._u.user.role === 'admin' && 'amount' in window.Usuario._u), 'Usuario._u.user (cuenta de Portalfirma) se lee y se fija');
 
     // ===== Agente por WhatsApp
-    await w.evaluate(() => window.WhatsAppAgente.abrir()); await w.waitForSelector('#waAg h2');
+    await w.evaluate(() => window.WhatsAppAgente.abrir()); await w.waitForSelector('#waAg .wa-paso');
     ok(await w.evaluate(() => document.querySelector('#modalCard').classList.contains('im-wide')) && /Pedro/.test(await txt('#waAg')) && (await w.$$('.wa-paso')).length === 3, 'Agente por WhatsApp: la ventana ancha con los tres pasos');
-    await w.click('#waAg #mCancel'); await w.waitForSelector('#modal.hidden', { state: 'attached' });
+    await w.click('#modalCard #mCancel'); await w.waitForSelector('#modal.hidden', { state: 'attached' });
     ok(!(await w.evaluate(() => document.querySelector('#modalCard').classList.contains('im-wide'))), 'al cerrar, el modal vuelve a su ancho');
 
     // ===== reglas de detección (Firmas presenciales, administrador)

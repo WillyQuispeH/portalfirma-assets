@@ -4,7 +4,7 @@
 import Usuarios from './Usuarios';
 import { abrirModal } from '../../../utils/modal';
 
-export function abrirUsuarios() { abrirModal(<Usuarios />, { ancho: true }); }
+export function abrirUsuarios() { abrirModal(<Usuarios />, { clave: 'modal-123', ancho: true }); }
 
 export function instalarUsuarios() {
   window.Usuarios = { abrir: abrirUsuarios };

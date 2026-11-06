@@ -1,7 +1,7 @@
 {
   "name": "portalfirma-asset",
   "productName": "PortalFirma Asset",
-  "version": "0.16.28",
+  "version": "0.17.0",
   "description": "PortalFirma Asset: gestión inmobiliaria 360 (cartera, personas, negocios y arriendos) con firma electrónica PortalFirma",
   "main": "src/main.js",
   "author": "Portalfirma",
@@ -14,11 +14,11 @@
     "build:ui": "vite build",
     "typecheck": "tsc --noEmit",
     "predist:mac": "vite build",
-    "dist:mac": "electron-builder --mac zip --x64 --arm64",
-    "predist:mac-dmg": "vite build",
-    "dist:mac-dmg": "electron-builder --mac dmg --x64 --arm64",
+    "dist:mac": "electron-builder --mac dmg zip --x64 --arm64 --publish never",
     "predist:win": "vite build",
-    "dist:win": "electron-builder --win nsis --x64"
+    "dist:win": "electron-builder --win nsis --x64 --publish never",
+    "release:win": "vite build && electron-builder --win nsis --x64 --publish always",
+    "release:mac": "vite build && electron-builder --mac dmg zip --x64 --arm64 --publish always"
   },
   "build": {
     "appId": "cl.portalfirma.asset",
@@ -36,11 +36,32 @@
     "mac": {
       "category": "public.app-category.business",
       "icon": "build/icon.png",
-      "identity": null,
       "extendInfo": {
         "NSHumanReadableCopyright": "© 2026 Portalfirma",
         "NSMicrophoneUsageDescription": "PortalFirma Asset usa el micrófono para que dictes los datos de una propiedad."
-      }
+      },
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "artifactName": "PortalFirma-Asset-${version}-${arch}.${ext}",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "notarize": false
     },
     "win": {
       "icon": "build/icon.ico",
@@ -52,8 +73,7 @@
           ]
         }
       ],
-      "artifactName": "Instalar PortalFirma Asset ${version}.${ext}",
-      "publisherName": "Portalfirma",
+      "artifactName": "PortalFirma-Asset-Setup-${version}.${ext}",
       "legalTrademarks": "Portalfirma"
     },
     "nsis": {
@@ -78,9 +98,16 @@
       "runAfterFinish": true,
       "deleteAppDataOnUninstall": false,
       "menuCategory": false,
-      "artifactName": "Instalar PortalFirma Asset ${version}.${ext}"
+      "artifactName": "PortalFirma-Asset-Setup-${version}.${ext}"
     },
-    "publish": null,
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "WillyQuispeH",
+        "repo": "portalfirma-asset-release",
+        "releaseType": "release"
+      }
+    ],
     "electronLanguages": [
       "es",
       "es_419",
@@ -123,11 +150,15 @@
         ]
       }
     ],
-    "copyright": "© 2026 Portalfirma"
+    "copyright": "© 2026 Portalfirma",
+    "dmg": {
+      "title": "PortalFirma Asset ${version}"
+    }
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.31.0",
     "docx": "^9.8.1",
+    "electron-updater": "6",
     "jszip": "^3.10.2",
     "mammoth": "^1.13.0",
     "word-extractor": "^1.0.4",

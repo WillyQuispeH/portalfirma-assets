@@ -13,11 +13,11 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     await w.click('#view-inicio [data-do="importar"]'); await w.waitForSelector('text=Cartera actualizada', { timeout: 15000 }); await w.click('#mOk'); await w.waitForSelector('.im-card');
     await w.evaluate(() => window.Inmo.inicio()); await w.waitForSelector('#view-inicio .hoy-ks'); await w.waitForTimeout(700); await shot('ap1-inicio.png');
     await w.evaluate(() => window.Inmo.cartera()); await w.waitForSelector('.im-card'); await w.waitForTimeout(300);
-    ok(/formas\/cartera\.svg/.test(await w.evaluate(() => getComputedStyle(document.querySelector('#view-cartera [data-cabecera]')).backgroundImage)), 'Cartera con su diseño de formas');
+    ok(/formas\/cartera\.svg/.test(await w.evaluate(() => { const c = document.querySelector('#view-cartera [data-cabecera]'); return getComputedStyle(c).backgroundImage + getComputedStyle(c, '::before').backgroundImage; })), 'Cartera con su diseño de formas');
     await shot('ap2-cartera.png');
     for (const [fn, sel, svg] of [['window.Inmo.personas()', '#cTabla', 'personas'], ['window.Negocios.abrir()', '.ng-board', 'negocios'], ['window.Inmo.portales()', '#coWa', 'portales']]) {
       await w.evaluate(fn); await w.waitForSelector(sel);
-      ok(new RegExp('formas/' + svg + '\\.svg').test(await w.evaluate(() => [...document.querySelectorAll('.im-head, [data-cabecera]')].filter((x) => x.offsetParent).map((x) => getComputedStyle(x).backgroundImage).join())), `${svg[0].toUpperCase() + svg.slice(1)} con su diseño`);
+      ok(new RegExp('formas/' + svg + '\\.svg').test(await w.evaluate(() => [...document.querySelectorAll('.im-head, [data-cabecera]')].filter((x) => x.offsetParent).map((x) => getComputedStyle(x).backgroundImage + getComputedStyle(x, '::before').backgroundImage).join())), `${svg[0].toUpperCase() + svg.slice(1)} con su diseño`);
     }
     await shot('ap3-negocios-portales.png');
 

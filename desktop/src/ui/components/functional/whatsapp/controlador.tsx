@@ -5,7 +5,7 @@ import AgenteWhatsApp from './AgenteWhatsApp';
 import { whatsappEstado } from '../../../store/hooks/useWhatsApp.hook';
 import { abrirModal } from '../../../utils/modal';
 
-export function abrirAgenteWhatsApp() { abrirModal(<AgenteWhatsApp />, { ancho: true }); }
+export function abrirAgenteWhatsApp() { abrirModal(<AgenteWhatsApp />, { clave: 'modal-124', ancho: true }); }
 
 function refrescar() { if (document.getElementById('waAg')) whatsappEstado().waCargar(); }
 

@@ -22,7 +22,7 @@ export function Precio({ q }: { q: ICotizacion }) {
   );
 }
 
-const elegir = () => abrirModal(<ElegirNotaria />);
+const elegir = () => abrirModal(<ElegirNotaria />, { clave: 'modal-104', ancho: true });
 
 export function TarjetaNotaria() {
   const { notaria: n } = useEscritura();

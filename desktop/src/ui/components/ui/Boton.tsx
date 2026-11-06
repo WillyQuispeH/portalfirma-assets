@@ -4,7 +4,7 @@
 //   <Boton variante="secundario" icono="plus">Nuevo</Boton>
 //   <Boton variante="peligro" cargando>Eliminando…</Boton>
 // Acepta todos los atributos de <button> (onClick, type, disabled, id, title…).
-import type { ButtonHTMLAttributes, ReactNode } from 'react';
+import type { ButtonHTMLAttributes, ReactNode, Ref } from 'react';
 import Icono from './Icono';
 import { cx } from '../../utils/cx';
 
@@ -19,6 +19,7 @@ interface IBotonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   cargando?: boolean;
   bloque?: boolean; // ancho completo
   children?: ReactNode;
+  ref?: Ref<HTMLButtonElement>;
 }
 
 const BASE = 'tw:relative tw:inline-flex tw:items-center tw:justify-center tw:gap-2 tw:m-0 tw:font-semibold tw:leading-none tw:whitespace-nowrap '

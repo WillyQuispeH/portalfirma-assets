@@ -28,6 +28,7 @@ import { instalarWhatsApp } from './components/functional/whatsapp/controlador';
 import { instalarUsuarios } from './components/functional/usuarios/controlador';
 import { instalarAyuda } from './components/functional/ayuda/controlador';
 import { instalarAprende } from './components/functional/aprende/controlador';
+import { instalarVentanas } from './components/functional/ventanas/registro';
 import { liberarModal } from './utils/modal';
 import './styles/globals.css';
 
@@ -86,3 +87,4 @@ instalarUsuarios();
 // La Ayuda (botón «?», guías, recorridos guiados) y «Aprende a usarla»: window.Ayuda y window.Aprende
 instalarAyuda();
 instalarAprende();
+instalarVentanas(); // window.Ventanas: las ventanas React que abre el código antiguo (src/renderer)

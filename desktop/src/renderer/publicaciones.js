@@ -1,4 +1,4 @@
-/* global pf, $, api, esc, icon, toast, modal, closeModal, IM, cargar, precio, ir, liberar */
+/* global pf, $, api, esc, icon, toast, closeModal, IM, cargar, precio, ir, liberar */
 'use strict';
 // ============================================================================
 // Publicaciones: la parte comercial, separada del resto de la gestión.
@@ -28,47 +28,29 @@ function agendarVisita(l, despues) {
 
 function ajustarPrecio(id, op) {
   const p = IM.data.propiedades.find((x) => x.id === id); const pr = op === 'venta' ? p.precioVenta : p.precioArriendo;
-  modal(`<div class="im-form"><h2>Ajustar precio de ${op}</h2><p class="muted">${esc(p.codigo)} · ${esc(p.titulo)}. Precio actual: <b>${precio(pr)}</b>. Los avisos publicados por API se actualizan solos; los de feed, en la próxima lectura del portal.</p>
-    <div class="pb-pq">${[3, 5, 8].map((x) => `<button class="secondary small" data-b="${x}">−${x}%</button>`).join('')}</div>
-    <label>Nuevo precio (${esc(pr.moneda)})<input id="apV" type="number" step="any" value="${esc(pr.valor)}" /></label><p class="error" id="apE"></p>
-    <div class="actions"><button class="secondary" id="mCancel">Cancelar</button><button class="primary" id="mOk">Guardar precio</button></div></div>`);
-  $('#modalCard').querySelectorAll('[data-b]').forEach((b) => (b.onclick = () => { const v = pr.valor * (1 - Number(b.dataset.b) / 100); $('#apV').value = pr.moneda === 'CLP' ? Math.round(v / 1000) * 1000 : Math.round(v * 100) / 100; }));
-  $('#mCancel').onclick = closeModal;
-  $('#mOk').onclick = async () => { const v = Number($('#apV').value); if (!(v > 0)) { $('#apE').textContent = 'Indica un precio válido.'; return; } try { await api('inmoPropGuardar', { id, [op === 'venta' ? 'precioVenta' : 'precioArriendo']: { valor: v, moneda: pr.moneda } }); closeModal(); toast('Precio actualizado.'); abrir(); } catch (e) { $('#apE').textContent = e.message; } };
+  window.Ventanas.abrir('leads.pubAjustarPrecio', { op, codigo: p.codigo, titulo: p.titulo, precioTxt: precio(pr), valor: pr.valor, moneda: pr.moneda,
+    alGuardar: async (v) => { await api('inmoPropGuardar', { id, [op === 'venta' ? 'precioVenta' : 'precioArriendo']: { valor: v, moneda: pr.moneda } }); closeModal(); toast('Precio actualizado.'); abrir(); } }, { clave: 'modal-55' });
 }
 
 // ---------- interesados ----------
 function agregarInteresado() {
   const props = IM.data.propiedades.filter((p) => !p.archivada);
-  modal(`<div class="im-form"><h2>Agregar interesado</h2><p class="muted small">Para consultas que llegan por correo desde TOCTOC, Yapo u otro canal.</p><div class="im-fg2">
-    <label>Propiedad<select id="aiP">${props.map((p) => `<option value="${esc(p.id)}">${esc(p.codigo)} · ${esc(p.titulo.slice(0, 40))}</option>`).join('')}</select></label>
-    <label>Portal<select id="aiPo"><option value="toctoc">TOCTOC</option><option value="yapo">Yapo</option><option value="chilepropiedades">Chilepropiedades</option><option value="pi">Portal Inmobiliario</option><option value="Otro">Otro</option></select></label>
-    <label>Nombre<input id="aiN" /></label><label>Teléfono<input id="aiT" placeholder="+56 9…" /></label><label>Correo<input id="aiE" /></label>
-    <label style="grid-column:1/-1">Mensaje <span class="muted">(opcional)</span><input id="aiM" /></label></div><p class="error" id="aiErr"></p>
-    <div class="actions"><button class="secondary" id="mCancel">Cancelar</button><button class="primary" id="mOk">Agregar</button></div></div>`);
-  $('#modalCard').classList.add('im-wide'); $('#mCancel').onclick = closeModal;
-  $('#mOk').onclick = async () => { try { await api('pubAgregarInteresado', $('#aiP').value, { portal: $('#aiPo').value, nombre: $('#aiN').value, telefono: $('#aiT').value, email: $('#aiE').value, mensaje: $('#aiM').value }); closeModal(); toast('Interesado agregado.'); abrir('interesados', 'nuevo'); } catch (e) { $('#aiErr').textContent = e.message; } };
+  window.Ventanas.abrir('leads.pubAgregarInteresado', { propiedades: props.map((p) => ({ id: p.id, codigo: p.codigo, titulo: p.titulo })),
+    alGuardar: async (propId, datos) => { await api('pubAgregarInteresado', propId, datos); closeModal(); toast('Interesado agregado.'); abrir('interesados', 'nuevo'); } }, { clave: 'modal-56', ancho: true });
 }
 
 // ---------- portales ----------
 function contacto(c) {
-  modal(`<div class="im-form"><h2>Contacto de los avisos</h2><p class="muted small">Aparece en todos los portales. Portal Inmobiliario exige WhatsApp.</p><div class="im-fg2">
-    <label>Corredora o nombre<input id="ctN" value="${esc(c.nombre || '')}" /></label><label>Correo<input id="ctE" value="${esc(c.email || '')}" /></label>
-    <label>Teléfono<input id="ctT" value="${esc(c.telefono || '')}" /></label><label>WhatsApp<input id="ctW" value="${esc(c.whatsapp || '')}" placeholder="+56 9 1234 5678" /></label></div><p class="error" id="ctErr"></p>
-    <div class="actions"><button class="secondary" id="mCancel">Cancelar</button><button class="primary" id="mOk">Guardar</button></div></div>`);
-  $('#modalCard').classList.add('im-wide'); $('#mCancel').onclick = closeModal;
-  $('#mOk').onclick = async () => { try { await api('mlContacto', { nombre: $('#ctN').value, email: $('#ctE').value, telefono: $('#ctT').value, whatsapp: $('#ctW').value, web: c.web || '' }); closeModal(); toast('Contacto guardado.'); if (PB.wiz) pasoCalidad(); else abrir('portales'); } catch (e) { $('#ctErr').textContent = e.message; } };
+  window.Ventanas.abrir('leads.pubContacto', { contacto: c,
+    alGuardar: async (x) => { await api('mlContacto', { ...x, web: c.web || '' }); closeModal(); toast('Contacto guardado.'); if (PB.wiz) pasoCalidad(); else abrir('portales'); } }, { clave: 'modal-57', ancho: true });
 }
 
 // ---------- el flujo «Publicar» ----------
 async function elegirPropiedad() {
   await cargar(); const props = IM.data.propiedades.filter((p) => !p.archivada);
-  modal(`<div class="im-form"><h2>¿Qué propiedad publicamos?</h2><div class="ga-search">${icon('search', 15)}<input id="epQ" placeholder="Código, dirección o comuna" /></div><div class="pb-ep" id="epL"></div>
-    <div class="actions"><button class="secondary" id="mCancel">Cancelar</button></div></div>`);
-  $('#modalCard').classList.add('im-wide'); $('#mCancel').onclick = closeModal;
-  const pintar = (q) => { const t = String(q || '').toLowerCase(); $('#epL').innerHTML = props.filter((p) => !t || [p.codigo, p.titulo, p.direccion, p.comuna].join(' ').toLowerCase().includes(t)).slice(0, 12).map((p) => `<button class="ga-pc" data-p="${esc(p.id)}"><span class="ga-ph">${foto((p.fotos || [])[0])}</span><span class="ga-pt"><small>${esc(p.codigo)}</small><b>${esc(p.titulo)}</b><small>${esc(p.comuna || '')}</small></span></button>`).join('');
-    $('#epL').querySelectorAll('[data-p]').forEach((b) => (b.onclick = () => { closeModal(); publicar(b.dataset.p); })); };
-  $('#epQ').oninput = (e) => pintar(e.target.value); pintar(''); setTimeout(() => $('#epQ')?.focus(), 30);
+  window.Ventanas.abrir('leads.pubElegirPropiedad', { propiedades: props.map((p) => ({ id: p.id, codigo: p.codigo, titulo: p.titulo, direccion: p.direccion, comuna: p.comuna, foto: (p.fotos || [])[0] || null })),
+    alElegir: (id) => { closeModal(); publicar(id); } }, { clave: 'modal-58', ancho: true });
+  setTimeout(() => $('#epQ')?.focus(), 30);
 }
 async function publicar(propId, op, paso = 1) {
   await cargar(); const p = IM.data.propiedades.find((x) => x.id === propId); if (!p) return toast('La propiedad ya no está.');

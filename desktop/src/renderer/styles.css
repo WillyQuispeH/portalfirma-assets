@@ -84,8 +84,24 @@ table { width: 100%; border-collapse: collapse; } td, th { text-align: left; pad
 th { color: var(--muted); font-weight: 500; font-size: 12px; }
 .link-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 
-.modal { position: fixed; inset: 0; background: rgba(0,0,0,.4); display: grid; place-items: center; z-index: 30; }
-.modal-card { background: var(--card); border-radius: 14px; padding: 22px; width: min(520px, 92vw); max-height: 86vh; overflow: auto; }
+.modal { position: fixed; inset: 0; background: rgba(12,16,32,.42); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); display: grid; place-items: center; z-index: 30; }
+/* la tarjeta con el mismo borde táctil y sombra que el Modal del kit (src/ui/components/ui/Modal.tsx) */
+.modal-card { position: relative; background: var(--card); border: 1px solid var(--ui-edge); border-bottom: 3px solid var(--ui-edge-b); border-radius: 16px; box-shadow: 0 24px 60px -20px rgba(16,24,64,.35);
+  padding: 22px; width: min(520px, 92vw); max-height: 86vh; overflow: auto; }
+/* Ventana en tres partes (app.js, armarSecciones): encabezado y pie un tono más oscuro y fijos; solo el cuerpo se desplaza */
+.modal-card:has(> .mdl-cuerpo) { padding: 0; display: flex; flex-direction: column; overflow: hidden; }
+.mdl-cab { flex: none; display: flex; align-items: flex-start; gap: 12px; padding: 16px 18px 14px 24px; background: var(--ui-sunken); border-bottom: 1px solid var(--ui-edge); border-radius: 15px 15px 0 0; }
+.mdl-cab > h2, .mdl-cab > h3 { flex: 1; min-width: 0; margin: 0; padding-top: 4px; font-size: 18px; line-height: 1.35; display: flex; align-items: center; gap: 8px; }
+.mdl-x { flex: none; display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--muted); cursor: pointer; }
+.mdl-x:hover { background: var(--ui-hover); color: var(--text); }
+.mdl-cuerpo { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 18px 24px 20px; }
+.mdl-cuerpo > :first-child, .mdl-cuerpo > :first-child > :first-child { margin-top: 0; }
+.mdl-pie { flex: none; padding: 14px 24px; background: var(--ui-sunken); border-top: 1px solid var(--ui-edge); border-radius: 0 0 13px 13px; }
+.mdl-pie > .actions { margin: 0; }
+/* lo que antes tenía su propio scroll dentro de la ventana: ahora se desplaza el cuerpo entero (una sola barra) */
+.mdl-cuerpo :is(.im-fg, .bk-sigs, .ai-models, .ag-tl, .im-exl, .pb-ep, .fb-grid, .fl-pdf, .ai-detect) { max-height: none; overflow: visible; }
+/* la clave de la ventana («modal-23»), chiquita en la esquina inferior derecha: para saber en qué ventana se está */
+#modalCard[data-clave]::after { content: attr(data-clave); position: absolute; right: 10px; bottom: 4px; font: 500 9.5px/1 ui-monospace, Consolas, monospace; color: var(--muted); opacity: .6; pointer-events: none; }
 .modal-card dl { display: grid; grid-template-columns: 140px 1fr; gap: 6px 10px; margin: 12px 0; }
 .modal-card dt { color: var(--muted); } .modal-card dd { margin: 0; }
 .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 10px; z-index: 40; }
@@ -384,7 +400,11 @@ body.reading .ed-paper.current { box-shadow: 0 4px 24px rgba(0,0,0,.5); }
 .pf-nowrap { white-space: nowrap; }
 .tab, .account button { white-space: nowrap; }
 .dtab { min-width: 84px; }
-nav { flex: 0 0 auto; }
+/* el menú se achica cuando no cabe (se desplaza por dentro, sin barra): así la cuenta (#account) nunca se sale de la
+   ventana ni abre una barra horizontal en toda la página. El logo y la cuenta no se comprimen. */
+nav { flex: 0 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+nav::-webkit-scrollbar { display: none; }
+.topbar > .brand, .topbar > .account { flex: none; }
 .conv-note { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; padding: 10px 14px; border-radius: 10px; background: color-mix(in srgb, var(--brand) 8%, var(--card)); border: 1px solid color-mix(in srgb, var(--brand) 25%, transparent); font-size: 13px; }
 .conv-note span { flex: 1; } .conv-note svg { color: var(--brand); }
 
@@ -1104,7 +1124,7 @@ body.inmo-on { background: linear-gradient(180deg, color-mix(in srgb, var(--bran
 .im-ft h1 { margin: 2px 0 4px; }
 .im-ft p { margin: 0; display: flex; align-items: center; gap: 4px; }
 /* la ficha de la propiedad (React) usa .im-ft en la cabecera del Layout: el espacio lo da el Layout */
-.im-ft[data-cabecera] { margin-bottom: 0; } .im-ft[data-cabecera] h1 { margin: 0; }
+.im-ft[data-cabecera] h1 { margin: 0; }
 .im-orig { margin-top: 8px !important; color: var(--muted); font-size: 12px; }
 .im-fcols { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: 18px; align-items: start; }
 .im-gal { margin-bottom: 0; }
@@ -1195,7 +1215,6 @@ body.inmo-on .doc-tabs { display: none; }
 .im-ex { display: grid; grid-template-columns: auto 1fr 260px 120px; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
 .im-ex input[type=checkbox] { width: auto; margin: 0; } .im-ex select { margin: 0; } .im-ext { display: flex; flex-direction: column; min-width: 0; } .im-ext small { color: var(--muted); }
 /* ================= Negocios ================= */
-body.inmo-on #view-negocios .ng-wrap { max-width: none; }
 .ng-big button { padding: 7px 16px; font-size: 13.5px; } .ng-big i { font-style: normal; background: var(--bg); color: var(--muted); border-radius: 999px; padding: 0 7px; margin-left: 4px; font-size: 11.5px; }
 .ng-big button.on i { background: var(--card); color: var(--brand); }
 .ng-kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
@@ -1751,7 +1770,6 @@ body > .ag-festejo { position: fixed; z-index: 300; }
 .lz-det > summary svg:last-child { flex: none; color: var(--muted); transition: transform .15s; } .lz-det[open] > summary svg:last-child { transform: rotate(180deg); }
 .lz-det[open] .lz-hist { margin-top: 8px; max-height: 260px; overflow-y: auto; }
 /* ===== Postventa (MVP) ===== */
-.pv-wrap { max-width: 1280px; }
 .pv-h { display: flex; align-items: center; gap: 12px; } .pv-h h1 { margin: 0; font-size: 24px; } .pv-h p { margin: 2px 0 0; } .pv-h button { width: auto; margin: 0; }
 .pv-wa { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 999px; font-size: 12.5px; background: var(--bg); color: var(--muted); border: 1px solid var(--line); } .pv-wa.on { background: #e8f6ee; color: #178a48; border-color: transparent; }
 .pv-ks { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin: 14px 0; } .pv-k { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; } .pv-k b { font-size: 22px; } .pv-k span { font-size: 12.5px; color: var(--muted); } .pv-k small { font-size: 11.5px; color: var(--hint); }
@@ -2219,3 +2237,14 @@ html[data-theme="dark"] .im-cf.on { background: #3a2410; color: #ffb36b; }
 body.perfil-corredor #fArch, body.perfil-corredor #pDel, body.perfil-corredor #ldBorrar, body.perfil-corredor #ngDel, body.perfil-corredor #imImp,
 body.perfil-corredor [data-do="importar"], body.perfil-corredor #ldObsOn, body.perfil-corredor #ldObsOff, body.perfil-corredor .ld-obs-can, body.perfil-corredor #ldObsAut { display: none !important; }
 .ng-cor { margin: 0 0 10px; font-size: 13px; display: flex; align-items: center; gap: 6px; } .ng-cor select { font-size: 13px; padding: 3px 6px; }
+
+/* ---------------------------------------------------------------------------
+ * Barras de desplazamiento con el diseño de la app (toda la ventana): delgadas, redondeadas, sin carril, del tono del
+ * texto apagado; se marcan al pasar el mouse. Las que se ocultan a propósito (.doc-tabs, .ag-quick…) siguen ocultas.
+ */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
+::-webkit-scrollbar-thumb { background-color: color-mix(in srgb, var(--muted) 34%, transparent); background-clip: padding-box; border: 3px solid transparent; border-radius: 999px; min-height: 36px; }
+::-webkit-scrollbar-thumb:hover { background-color: color-mix(in srgb, var(--muted) 62%, transparent); }
+::-webkit-scrollbar-thumb:active { background-color: color-mix(in srgb, var(--brand) 55%, transparent); }
+::-webkit-scrollbar-button { display: none; width: 0; height: 0; }

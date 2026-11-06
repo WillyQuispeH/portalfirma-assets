@@ -85,6 +85,7 @@ export default function Hoy() {
         ref={raiz}
         fondo={false}
         className="hoy"
+        migas={[{ texto: 'Inicio', icono: 'home' }]}
         titulo={nombre ? `Hola, ${nombre}` : 'Hoy'}
         subtitulo={fecha[0].toUpperCase() + fecha.slice(1)}
         acciones={<>

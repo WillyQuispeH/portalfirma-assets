@@ -6,6 +6,8 @@
 // los estilos son las clases rg-* de styles.css y Tailwind (tw:, ver estilos.ts). es-sw la usan las pruebas.
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import Icono from '../../../ui/Icono';
+import Boton from '../../../ui/Boton';
+import { VentanaCabecera, VentanaCuerpo, VentanaPie } from '../../../ui/Ventana';
 import { useRegla } from '../../../../store/hooks/useRegla.hook';
 import { abrirModal, cerrarModal } from '../../../../utils/modal';
 import { motor } from '../../../../utils/escrituras';
@@ -13,6 +15,8 @@ import { toast } from '../../../../utils/app';
 import { ENCABEZADO, ENCABEZADO_H3, SW, SW_INPUT, SW_RIEL, seccion } from './estilos';
 import type { IReglaBase, IReglaPropuesta, IReglaPrueba, TReglaTipo } from '../../../../store/interfaces/regla.interface';
 
+// nota en gris del cuerpo de las ventanas
+const NOTA = 'tw:m-0 tw:text-[12.5px] tw:text-muted tw:leading-relaxed';
 const TIPO: Record<TReglaTipo, [string, string]> = { acto: ['Acto nuevo', '#3f4fe6'], materia: ['Materia por título', '#0d9488'], excepcion: ['Excepción', '#b26a00'] };
 const TRAMITE: Record<string, string> = { escritura: 'Escritura', protocolizacion: 'Protocolización', reduccion: 'Reducción' };
 const fecha = (iso: string) => new Date(iso).toLocaleDateString('es-CL', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -77,20 +81,26 @@ function ConfirmarPropuesta({ casos, alProponer }: { casos: number; alProponer: 
   const [ocupado, setOcupado] = useState(false);
   const n = Math.min(casos, 80);
   return <>
-    <h3>Proponer reglas con IA</h3>
-    <p className="small">Se enviarán <b>{n} {casos === 1 ? 'caso' : 'casos'}</b> (sin RUT, correos ni teléfonos) al modelo de IA más económico de la cuenta. La IA solo propone: nada se aplica hasta que lo apruebes.</p>
-    <p className="muted small">El costo va por cuenta de Portalfirma; no descuenta tokens del asistente.</p>
-    <div className="row-end"><button className="ghost" id="rgNo" onClick={cerrarModal}>Cancelar</button>
-      <button className="primary" id="rgGo" disabled={ocupado} onClick={async () => { setOcupado(true); await alProponer(); }}>{ocupado ? 'Analizando…' : 'Proponer'}</button></div>
+    <VentanaCabecera icono="sparkle" titulo="Proponer reglas con IA" cerrable={!ocupado} />
+    <VentanaCuerpo>
+      <p className="tw:mt-0 tw:mb-3 tw:leading-relaxed">Se enviarán <b>{n} {casos === 1 ? 'caso' : 'casos'}</b> (sin RUT, correos ni teléfonos) al modelo de IA más económico de la cuenta. La IA solo propone: nada se aplica hasta que lo apruebes.</p>
+      <p className={NOTA}>El costo va por cuenta de Portalfirma; no descuenta tokens del asistente.</p>
+    </VentanaCuerpo>
+    <VentanaPie>
+      <Boton id="rgNo" variante="secundario" disabled={ocupado} onClick={cerrarModal}>Cancelar</Boton>
+      <Boton id="rgGo" icono="sparkle" cargando={ocupado} onClick={async () => { setOcupado(true); await alProponer(); }}>{ocupado ? 'Analizando…' : 'Proponer'}</Boton>
+    </VentanaPie>
   </>;
 }
 
 function ConfirmarEliminar({ alEliminar }: { alEliminar: () => void }) {
   return <>
-    <h3>¿Eliminar la regla?</h3>
-    <p className="muted small">Deja de aplicarse en este computador. Si ya se publicó, hay que publicar de nuevo.</p>
-    <div className="row-end"><button className="ghost" id="rgNo" onClick={cerrarModal}>Cancelar</button>
-      <button className="primary" id="rgSi" onClick={() => { cerrarModal(); alEliminar(); }}>Eliminar</button></div>
+    <VentanaCabecera icono="trash" tonoIcono="rojo" titulo="¿Eliminar la regla?" />
+    <VentanaCuerpo><p className={NOTA}>Deja de aplicarse en este computador. Si ya se publicó, hay que publicar de nuevo.</p></VentanaCuerpo>
+    <VentanaPie>
+      <Boton id="rgNo" variante="secundario" onClick={cerrarModal}>Cancelar</Boton>
+      <Boton id="rgSi" variante="peligro" icono="trash" onClick={() => { cerrarModal(); alEliminar(); }}>Eliminar</Boton>
+    </VentanaPie>
   </>;
 }
 
@@ -119,9 +129,9 @@ export default function Reglas({ alCambiar }: { alCambiar: () => Promise<void> }
   const proponer = () => abrirModal(<ConfirmarPropuesta casos={C.length} alProponer={async () => {
     const r = await reglaProponer({ actos: MT.actosNombres(), materias: MT.CATALOGO.filter((x: { value: string }) => x.value !== 'otro').map((x: { value: string; label: string }) => ({ value: x.value, label: x.label })) });
     cerrarModal(); aviso(r);
-  }} />);
+  }} />, { clave: 'modal-105' });
   const activar = async (id: string, activo: boolean) => { const r = await reglaActivar(id, activo); if (r.error) return aviso(r); await alCambiar(); aviso(r); };
-  const eliminar = (id: string) => abrirModal(<ConfirmarEliminar alEliminar={async () => { const r = await reglaEliminar(id); if (r.error) return aviso(r); await alCambiar(); }} />);
+  const eliminar = (id: string) => abrirModal(<ConfirmarEliminar alEliminar={async () => { const r = await reglaEliminar(id); if (r.error) return aviso(r); await alCambiar(); }} />, { clave: 'modal-106' });
 
   return <>
     <div className={ENCABEZADO}><div><h3 className={ENCABEZADO_H3}>Reglas de detección</h3><div className="muted small">Interno Portalfirma. La IA propone reglas a partir de los casos que los clientes corrigieron; una persona las aprueba y desde ahí funcionan <b>sin IA</b>.{R.version ? ` Versión ${R.version}.` : ''}</div></div>

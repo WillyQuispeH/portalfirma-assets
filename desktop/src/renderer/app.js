@@ -31,13 +31,13 @@ const state = { session: null };
 function show(view) {
   document.querySelectorAll('.view').forEach((v) => v.classList.add('hidden'));
   $('#view-' + view).classList.remove('hidden');
-  const tabView = view === 'actividad' ? 'inicio' : ['inicio', 'agente', 'cartera', 'personas', 'leads', 'negocios', 'agenda', 'publicaciones', 'postventa', 'finanzas', 'arriendos'].includes(view) ? view : view === 'aprende' ? '' : 'home'; // lo documental queda bajo «Gestión documental»
+  const tabView = view === 'actividad' ? 'inicio' : ['inicio', 'agente', 'cartera', 'personas', 'leads', 'negocios', 'agenda', 'publicaciones', 'postventa', 'finanzas', 'arriendos'].includes(view) ? view : view === 'aprende' || view === 'integraciones' ? '' : 'home'; // lo documental queda bajo «Gestión documental»
   document.body.classList.toggle('wide', view === 'editor');
   document.body.classList.toggle('home-on', view === 'home');
   document.body.classList.toggle('ng-on', view === 'negocios');
   document.body.classList.toggle('ld-on', view === 'leads');
   document.body.classList.toggle('agv-on', view === 'agente');
-  document.body.classList.toggle('inmo-on', ['inicio', 'actividad', 'agente', 'publicaciones', 'postventa', 'leads', 'cartera', 'personas', 'negocios', 'agenda', 'aprende', 'finanzas', 'arriendos'].includes(view));
+  document.body.classList.toggle('inmo-on', ['inicio', 'actividad', 'agente', 'publicaciones', 'postventa', 'leads', 'cartera', 'personas', 'negocios', 'agenda', 'aprende', 'finanzas', 'arriendos', 'integraciones'].includes(view));
   document.body.classList.toggle('ops-on', view === 'recientes' || view === 'ops' || view === 'bulk' || view === 'plazos' || view === 'flujos' || view === 'expedientes' || view === 'escrituras');
   document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.dataset.view === tabView));
   window.editor?.refreshTabs?.();
@@ -47,9 +47,45 @@ function show(view) {
 }
 function toast(msg, ms = 2600) { const t = $('#toast'); t.textContent = msg; t.classList.remove('hidden'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.add('hidden'), ms); }
 // Si React tenía un formulario en el modal (src/ui/utils/modal.tsx), se desmonta antes de escribir o al cerrar
-function modal(html) { window.ReactUI?.liberarModal(); $('#modalCard').innerHTML = html; $('#modal').classList.remove('hidden'); }
+// Cada ventana empieza con su clave: modal(`<!--modal-23-->…`). Se ve chiquita en una esquina (styles.css, #modalCard[data-clave]).
+function modal(html) {
+  window.ReactUI?.liberarModal(); const c = $('#modalCard');
+  const k = /^<!--(modal-\d+)-->/.exec(html); if (k) c.dataset.clave = k[1]; else delete c.dataset.clave;
+  c.innerHTML = html; armarSecciones(c); $('#modal').classList.remove('hidden');
+}
+// La ventana en tres partes, como el Modal del kit (styles.css, .mdl-cab / .mdl-cuerpo / .mdl-pie): encabezado (el primer título, con una X para
+// cerrar), cuerpo (lo único que se desplaza) y pie (la última fila de botones, .actions). Los elementos se MUEVEN, no se
+// copian: los onclick que cada módulo les pone después de modal() siguen funcionando. El título solo se toma si abre la
+// ventana (primer elemento, o primero dentro del primero), y los botones solo si la cierran (lo último del contenido).
+function armarSecciones(card) {
+  const cuerpo = document.createElement('div'); cuerpo.className = 'mdl-cuerpo';
+  while (card.firstChild) cuerpo.appendChild(card.firstChild);
+  const primero = cuerpo.firstElementChild;
+  const titulo = [primero, primero?.firstElementChild].find((e) => e && /^H[23]$/.test(e.tagName));
+  const acciones = [...cuerpo.querySelectorAll('.actions')].pop();
+  let alFinal = !!acciones;
+  for (let e = acciones; alFinal && e && e !== cuerpo; e = e.parentElement) if (e.nextElementSibling) alFinal = false;
+  const cab = titulo ? document.createElement('header') : null;
+  const pie = alFinal ? document.createElement('footer') : null;
+  if (cab) { cab.className = 'mdl-cab'; cab.appendChild(titulo); }
+  if (pie) { pie.className = 'mdl-pie'; pie.appendChild(acciones); }
+  // la X: hace lo mismo que «Cancelar» (así quien espera la respuesta se entera); sin Cancelar, cierra
+  if (cab && (pie || card.querySelector('#mCancel') || cuerpo.querySelector('#mCancel'))) {
+    const x = document.createElement('button'); x.type = 'button'; x.className = 'mdl-x'; x.setAttribute('aria-label', 'Cerrar'); x.innerHTML = icon('x', 16);
+    x.onclick = () => { const cancelar = card.querySelector('#mCancel'); if (cancelar && !cancelar.disabled) cancelar.click(); else closeModal(); };
+    cab.appendChild(x);
+  }
+  if (cab) card.appendChild(cab);
+  card.appendChild(cuerpo);
+  if (pie) card.appendChild(pie);
+}
+// Esc cierra la ventana antigua como su X (el Modal del kit atiende su propio Esc antes y no lo deja pasar)
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape' || $('#modal').classList.contains('hidden')) return;
+  const x = $('#modalCard .mdl-x'); if (x) { e.preventDefault(); x.click(); }
+});
 // al cerrar también se vacía: si no, sus botones (#mOk, #mCancel…) quedan ocultos en la página y chocan con los de otra ventana
-function closeModal() { $('#modal').classList.add('hidden'); $('#modalCard').classList.remove('im-wide'); window.ReactUI?.liberarModal(); $('#modalCard').innerHTML = ''; }
+function closeModal() { $('#modal').classList.add('hidden'); $('#modalCard').classList.remove('im-wide'); delete $('#modalCard').dataset.clave; window.ReactUI?.liberarModal(); $('#modalCard').innerHTML = ''; }
 async function api(fn, ...args) {
   const r = await pf[fn](...args);
   if (!r.ok) {
@@ -133,6 +169,13 @@ function abrirArriendos() {
   const el = $('#view-arriendos'); show('arriendos');
   window.ReactUI.desmontar(el); window.ReactUI.montar('Arriendos', el);
 }
+// Integraciones (React, src/ui/components/functional/integraciones): desde el menú del usuario; se vuelve a montar al
+// abrirla, así el estado de cada conexión está al día
+function abrirIntegraciones() {
+  const el = $('#view-integraciones'); show('integraciones');
+  window.ReactUI.desmontar(el); window.ReactUI.montar('Integraciones', el);
+}
+window.abrirIntegraciones = abrirIntegraciones;
 document.querySelectorAll('.tab').forEach((t) => (t.onclick = () => {
   const v = t.dataset.view;
   if (v === 'inicio') window.Inmo.inicio();

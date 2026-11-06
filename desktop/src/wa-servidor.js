@@ -68,4 +68,13 @@ const obs = {
   revisar: () => api('POST', '/whatsapp/observador/revisar'),
 };
 
-module.exports = { enApi, refrescarConexion, conectado, enviar, plantilla, contacto, estadoMensaje, ejecutivo: ej, asistentes: at, observador: obs };
+// ---------------------------------------------------------------- canales (pantalla Integraciones)
+// Qué canales de wechatia usa la corredora (WhatsApp, Instagram, Facebook, correo, chat del sitio) y el enlace al panel
+// de wechatia para conectarlos. Sin la cuenta de Asset (o en PF_MOCK) no se puede saber: la lista va sin datos.
+const CANALES_LOCAL = [['whatsapp', 'WhatsApp'], ['instagram', 'Instagram'], ['facebook', 'Facebook Messenger'], ['correo', 'Correo'], ['chat', 'Chat del sitio web']];
+async function canales() {
+  if (!enApi()) return { conectado: false, local: true, error: null, panel: null, canales: CANALES_LOCAL.map(([id, nombre]) => ({ id, nombre, enUso: false, ultimo: null, conectar: null })) };
+  return api('GET', '/whatsapp/canales');
+}
+
+module.exports = { enApi, refrescarConexion, conectado, canales, enviar, plantilla, contacto, estadoMensaje, ejecutivo: ej, asistentes: at, observador: obs };

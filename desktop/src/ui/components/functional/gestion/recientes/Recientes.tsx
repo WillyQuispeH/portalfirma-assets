@@ -28,7 +28,7 @@ export default function Recientes() {
   const nums: (number | '…')[] = [];
   for (let i = 1; i <= paginas; i++) if (i === 1 || i === paginas || Math.abs(i - pag) <= 2) nums.push(i); else if (nums[nums.length - 1] !== '…') nums.push('…');
   const ir = (p: number) => { recientesSetFiltros({ pagina: p }); document.getElementById('view-recientes')?.scrollIntoView({ block: 'start' }); };
-  const borrar = async () => { if (await confirmar({ titulo: '¿Borrar la lista de recientes?', texto: 'Solo se borra la lista; tus archivos no se eliminan.', boton: 'Borrar lista' })) recientesBorrarTodo(); };
+  const borrar = async () => { if (await confirmar({ clave: 'modal-119', titulo: '¿Borrar la lista de recientes?', texto: 'Solo se borra la lista; tus archivos no se eliminan.', boton: 'Borrar lista', peligro: true })) recientesBorrarTodo(); };
 
   return (
     <div className="rec-page">

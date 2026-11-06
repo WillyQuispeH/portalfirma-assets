@@ -1,5 +1,8 @@
 // Puente con la interfaz actual (src/renderer). Lo que React usa de ella pasa por aquí,
 // así queda en un solo lugar y es fácil de reemplazar cuando esas partes se migren.
+import { createElement } from 'react';
+import { VentanaConfirmar } from '../components/ui/Ventana';
+import { abrirModal, cerrarModal } from './modal';
 import type { IEvento } from '../store/interfaces/evento.interface';
 import type { ILeadLista } from '../store/interfaces/lead.interface';
 import type { IPvChat, IPvContratista } from '../store/interfaces/postventa.interface';
@@ -60,18 +63,12 @@ export const importarCartera = () => window.Inmo.importar();
 export const abrirPortales = () => window.Inmo.portales();
 export async function dictarPropiedad() { await window.Agente.open(); window.Dictado.abrir(); }
 
-const esc = (v: string) => v.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
-
-// Pide confirmar con el modal de la app (#modal, botones #mOk y #mCancel). En `texto`, lo que va
-// entre ** se muestra en negrita; el resto se escapa.
-export function confirmar({ titulo, texto, nota = '', boton }: { titulo: string; texto: string; nota?: string; boton: string }): Promise<boolean> {
-  const negritas = (t: string) => esc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+// Pide confirmar en una ventana del kit (VentanaConfirmar: botones #mOk y #mCancel). En `texto` y `nota`, lo que va
+// entre ** se muestra en negrita. `peligro`: botón rojo (borrar, eliminar…).
+export function confirmar({ titulo, texto, nota = '', boton, clave, peligro = false }: { titulo: string; texto: string; nota?: string; boton: string; clave?: string; peligro?: boolean }): Promise<boolean> {
   return new Promise((resolver) => {
-    window.modal(`<h2>${esc(titulo)}</h2><p>${negritas(texto)}</p>${nota ? `<p class="muted small">${negritas(nota)}</p>` : ''}
-      <div class="actions"><button class="secondary" id="mCancel">Cancelar</button><button class="primary" id="mOk">${esc(boton)}</button></div>`);
-    const fin = (si: boolean) => { window.closeModal(); resolver(si); };
-    (document.getElementById('mCancel') as HTMLButtonElement).onclick = () => fin(false);
-    (document.getElementById('mOk') as HTMLButtonElement).onclick = () => fin(true);
+    const fin = (si: boolean) => { cerrarModal(); resolver(si); };
+    abrirModal(createElement(VentanaConfirmar, { titulo, texto, nota, boton, peligro, alResponder: fin }), { clave });
   });
 }
 

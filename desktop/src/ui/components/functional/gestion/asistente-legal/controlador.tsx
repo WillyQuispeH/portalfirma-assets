@@ -142,7 +142,7 @@ export async function askDoc(q: string) {
 }
 
 // Documentos que no se pueden firmar electrónicamente
-function showBlocked(b: IBloqueado, onSuggest?: (s: string) => void) { abrirModal(<Bloqueado b={b} alRedactar={onSuggest} />); }
+function showBlocked(b: IBloqueado, onSuggest?: (s: string) => void) { abrirModal(<Bloqueado b={b} alRedactar={onSuggest} />, { clave: 'modal-78' }); }
 
 let MODELS: IModeloLista[] | null = null;
 async function findModels(q: string) {
@@ -160,7 +160,7 @@ async function useModel(id: string, q: string) {
 export async function draft(q: string, opts: { models?: boolean } = {}): Promise<void> {
   if (!q || q.trim().length < 15) { toast('Describe el documento con un poco más de detalle.'); return; }
   const b = blockedDoc(q); if (b) return showBlocked(b, (s) => draft(s));
-  if (opts.models !== false) { const c = await findModels(q).catch(() => []); if (c.length) { abrirModal(<ElegirModelo modelos={c} alUsar={(id) => useModel(id, q)} alRedactar={() => draft(q, { models: false })} />); return; } }
+  if (opts.models !== false) { const c = await findModels(q).catch(() => []); if (c.length) { abrirModal(<ElegirModelo modelos={c} alUsar={(id) => useModel(id, q)} alRedactar={() => draft(q, { models: false })} />, { clave: 'modal-79' }); return; } }
   if (!(await ensureConsent())) return;
   let spec: (ISpec & { blocked?: string }) | null = null;
   await step('El asistente está redactando el documento… (puede tardar hasta un minuto)', async () => {
@@ -202,7 +202,7 @@ export function editDocText() {
     let next: ISpec; try { next = cleanSpec({ titulo, cuerpo, campos: spec.campos }, spec); } catch (e) { return toast((e as Error).message, 5000); }
     next.desc = spec.desc; next.history = spec.history || [];
     await buildAiDoc(next, T as IDocumento);
-  }} />);
+  }} />, { clave: 'modal-80' });
 }
 
 // Lo que usan las plantillas («Detectar con IA»)

@@ -22,16 +22,16 @@ export async function abrir(opts: { purpose?: TDrivePara } = {}) {
   if (para === 'connect') return cuenta(st);
   driveEstado().driveIniciar(para, st.email || '');
   if (st.picker) return selector(); // selector oficial de Google (permiso solo sobre lo que eliges)
-  abrirModal(<Explorador alHacer={hacer} alDesconectar={desconectar} alReconectar={() => conectar(para, false)} />);
+  abrirModal(<Explorador alHacer={hacer} alDesconectar={desconectar} alReconectar={() => conectar(para, false)} />, { clave: 'modal-66' });
 }
 
 // ---------- Cuenta de Google conectada: ver, cambiar o desconectar ----------
 function cuenta(st: IDriveEstado) {
-  abrirModal(<Cuenta email={st.email} alDesconectar={desconectar} alCambiar={() => { cambiarCuenta(); }} />);
+  abrirModal(<Cuenta email={st.email} alDesconectar={desconectar} alCambiar={() => { cambiarCuenta(); }} />, { clave: 'modal-67' });
 }
 export async function cambiarCuenta() {
   await drive.desconectar();
-  abrirModal(<CambiandoCuenta />);
+  abrirModal(<CambiandoCuenta />, { clave: 'modal-68' });
   const r = await drive.conectar();
   cerrarModal();
   if (!r.ok) { toast('No se pudo conectar: ' + r.error, 7000); return undefined; }
@@ -46,7 +46,7 @@ async function verCuenta() {
 // ---------- Selector de Google ----------
 async function selector() {
   const { para, email } = driveEstado();
-  abrirModal(<EsperandoSelector uno={para === 'template'} email={email} alCancelar={() => drive.cancelarSelector()} alReabrir={() => drive.reabrirSelector()} />);
+  abrirModal(<EsperandoSelector uno={para === 'template'} email={email} alCancelar={() => drive.cancelarSelector()} alReabrir={() => drive.reabrirSelector()} />, { clave: 'modal-69' });
   const r = await drive.elegir({ multi: para !== 'template', folders: para !== 'template' });
   if (!r.ok) { if (/Conecta/.test(r.error || '')) return conectar(para, false); cerrarModal(); return toast(r.error || '', 6000); }
   const archivos: IDriveArchivo[] = []; const fallas: string[] = [];
@@ -60,32 +60,32 @@ async function selector() {
   driveEstado().driveElegir(archivos);
   if (para === 'template' && archivos.length === 1) { cerrarModal(); return hacer('template'); }
   if (para === 'exp') return hacer('exp');
-  abrirModal(<Elegidos alHacer={hacer} alElegirOtros={selector} alDesconectar={desconectar} />);
+  abrirModal(<Elegidos alHacer={hacer} alElegirOtros={selector} alDesconectar={desconectar} />, { clave: 'modal-70' });
 }
 
 function noDisponible(para: TDrivePara) {
   // Los usuarios no configuran nada: la credencial viene incluida en la app. Si falta, se ofrece soporte.
   abrirModal(<NoDisponible
     alSoporte={() => { cerrarModal(); soporteWhatsApp('Hola, quiero usar Google Drive en PortalFirma Asset y aparece como no disponible.'); }}
-    alActivar={async () => { const c = await drive.activar(); if (!c.ok) return toast(c.error || '', 6000); if (!c.data) return; cerrarModal(); toast('Google Drive activado.'); abrir({ purpose: para }); }} />);
+    alActivar={async () => { const c = await drive.activar(); if (!c.ok) return toast(c.error || '', 6000); if (!c.data) return; cerrarModal(); toast('Google Drive activado.'); abrir({ purpose: para }); }} />, { clave: 'modal-71' });
 }
 function conectar(para: TDrivePara, otraVez: boolean) {
   abrirModal(<Conectar otraVez={otraVez} alConectar={async () => {
     const c = await drive.conectar();
     if (!c.ok) { cerrarModal(); return toast(c.error || '', 6000); }
     abrir({ purpose: para });
-  }} />);
+  }} />, { clave: 'modal-72' });
 }
 
 // Descarga lo elegido (de a 2) mostrando el avance
 async function descargarTodo(archivos: IDriveArchivo[]) {
   const listos: { f: IDriveArchivo; ruta: string }[] = []; const errores: string[] = []; let i = 0; let hechos = 0;
-  abrirModal(<Descargando hechos={0} total={archivos.length} />);
+  abrirModal(<Descargando hechos={0} total={archivos.length} />, { clave: 'modal-73' });
   const trabajador = async () => {
     while (i < archivos.length) {
       const f = archivos[i++]; const r = await drive.descargar(f.id);
       if (r.ok) listos.push({ f, ruta: r.data! }); else errores.push(`${f.name}: ${r.error}`);
-      hechos++; abrirModal(<Descargando hechos={hechos} total={archivos.length} />);
+      hechos++; abrirModal(<Descargando hechos={hechos} total={archivos.length} />, { clave: 'modal-74' });
     }
   };
   await Promise.all([trabajador(), trabajador()]);

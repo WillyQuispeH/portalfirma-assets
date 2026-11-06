@@ -1,4 +1,4 @@
-/* global pf, $, esc, toast, modal, closeModal, api, icon, members, ir, IM, precio, fecha, foto, fmtN, formPersona, cargar, abrirFicha, liberar */
+/* global pf, $, esc, toast, closeModal, api, icon, members, ir, IM, precio, fecha, foto, fmtN, formPersona, cargar, abrirFicha, liberar */
 'use strict';
 // Negocios: tablero por etapas (venta y arriendo), ficha del negocio con tareas, firmas y próxima acción.
 // Pensado para usarse sin capacitación: arrastrar una tarjeta mueve el negocio; cada etapa dice qué falta.
@@ -33,30 +33,18 @@ function nuevoNegocio(pre = {}) {
   const props = IM.data.propiedades.filter((p) => !p.archivada && (tipo === 'venta' ? p.venta : p.arriendo));
   const pers = [...IM.data.personas].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
   const p0 = props.find((p) => p.id === pre.propId) || null;
-  const pr = p0 ? (tipo === 'venta' ? p0.precioVenta : p0.precioArriendo) : null;
   const et = (NG.datos?.etapas || {})[tipo] || [];
-  modal(`<div class="im-form"><h2>Nuevo negocio</h2>
-    <div class="im-seg ng-big" id="nnTipo">${['venta', 'arriendo'].map((t) => `<button data-t="${t}" class="${tipo === t ? 'on' : ''}">${NG_TIPO[t]}</button>`).join('')}</div>
-    <div class="im-fg2" style="margin-top:12px">
-      <label>Propiedad<select id="nnProp"><option value="">Elegir…</option>${props.map((p) => `<option value="${esc(p.id)}" ${p0?.id === p.id ? 'selected' : ''}>${esc(p.codigo)} · ${esc(p.titulo.slice(0, 46))}</option>`).join('')}</select></label>
-      <label>${NG_CLIENTE[tipo]}<span class="ng-inl"><select id="nnCli"><option value="">Elegir…</option>${pers.map((c) => `<option value="${esc(c.id)}" ${pre.clienteId === c.id ? 'selected' : ''}>${esc(c.nombre)} · ${esc(c.rut)}</option>`).join('')}</select><button class="secondary small" id="nnPer" title="Crear persona">${icon('plus', 14)}</button></span></label>
-      <label>${tipo === 'venta' ? 'Precio acordado' : 'Arriendo mensual acordado'}<span class="ng-inl"><input id="nnVal" type="number" step="any" value="${esc(pr?.valor ?? '')}" /><select id="nnMon" style="width:90px">${['UF', 'CLP', 'USD'].map((m) => `<option ${(pr?.moneda || (tipo === 'venta' ? 'UF' : 'CLP')) === m ? 'selected' : ''}>${m}</option>`).join('')}</select></span></label>
-      <label>Comisión<span class="ng-inl"><input id="nnCom" type="number" step="any" value="${tipo === 'venta' ? 2 : 50}" /><select id="nnComT" style="width:120px"><option value="%">%</option><option value="monto">monto fijo</option></select></span><small class="muted">${tipo === 'venta' ? 'Habitual: 2% + IVA' : 'Habitual: 50% del primer mes + IVA'}</small></label>
-      <label>Etapa inicial<select id="nnEt">${et.map((e) => `<option value="${e.id}" ${pre.etapa === e.id ? 'selected' : ''}>${esc(e.t)}</option>`).join('')}</select></label>
-      <label>Próxima acción <span class="muted">(opcional)</span><span class="ng-inl"><input id="nnAcc" placeholder="Ej.: llamar para agendar visita" /><input id="nnFec" type="date" style="width:150px" value="${ngHoy()}" /></span></label>
-    </div><p class="error" id="nnErr"></p>
-    <div class="actions"><button class="secondary" id="mCancel">Cancelar</button><button class="primary" id="mOk">Crear negocio</button></div></div>`);
-  $('#modalCard').classList.add('im-wide');
-  const leer = () => ({ tipo, propId: $('#nnProp').value, clienteId: $('#nnCli').value, etapa: $('#nnEt').value });
-  $('#nnTipo').onclick = (e) => { const b = e.target.closest('[data-t]'); if (b && b.dataset.t !== tipo) nuevoNegocio({ ...leer(), tipo: b.dataset.t }); };
-  $('#nnProp').onchange = () => { const p = props.find((x) => x.id === $('#nnProp').value); const v = p ? (tipo === 'venta' ? p.precioVenta : p.precioArriendo) : null; if (v) { $('#nnVal').value = v.valor; $('#nnMon').value = v.moneda; } };
-  $('#nnPer').onclick = (e) => { e.preventDefault(); const guardado = leer(); formPersona(null, { rol: tipo === 'venta' ? 'comprador' : 'arrendatario', despues: async (c) => { await cargar(); nuevoNegocio({ ...guardado, clienteId: c.id }); } }); };
-  $('#mCancel').onclick = closeModal;
-  $('#mOk').onclick = async () => {
-    const o = { ...leer(), valor: { valor: $('#nnVal').value, moneda: $('#nnMon').value }, comision: { tipo: $('#nnComT').value, valor: $('#nnCom').value }, proximaAccion: { texto: $('#nnAcc').value, fecha: $('#nnFec').value } };
-    try { const n = await api('negGuardar', o); closeModal(); toast('Negocio creado.'); NG.tipo = n.tipo; await cargar(); abrirNegocio(n.id); }
-    catch (e) { $('#nnErr').textContent = e.message; }
-  };
+  const vez = (NG.vez = (NG.vez || 0) + 1); // cada llamada parte el formulario de nuevo, como cuando se volvía a dibujar
+  window.Ventanas.abrir('negocios.nuevo', {
+    vez, tipo, hoy: ngHoy(), propId: p0?.id || '', clienteId: pers.some((c) => c.id === pre.clienteId) ? pre.clienteId : '', etapa: pre.etapa || '',
+    etapas: et.map((e) => ({ id: e.id, t: e.t })),
+    propiedades: props.map((p) => ({ id: p.id, texto: `${p.codigo} · ${p.titulo.slice(0, 46)}`, precio: (tipo === 'venta' ? p.precioVenta : p.precioArriendo) || null })),
+    personas: pers.map((c) => ({ id: c.id, texto: `${c.nombre} · ${c.rut}` })),
+    alCambiarTipo: (leido) => nuevoNegocio(leido),
+    alCrearPersona: (guardado) => formPersona(null, { rol: tipo === 'venta' ? 'comprador' : 'arrendatario', despues: async (c) => { await cargar(); nuevoNegocio({ ...guardado, clienteId: c.id }); } }),
+    // si falla, la ventana muestra el error (antes, #nnErr)
+    alGuardar: async (o) => { const n = await api('negGuardar', o); closeModal(); toast('Negocio creado.'); NG.tipo = n.tipo; await cargar(); abrirNegocio(n.id); },
+  }, { clave: 'modal-44', ancho: true });
 }
 
 // ---------- ficha del negocio ----------
@@ -113,22 +101,19 @@ async function abrirNegocio(id) {
   host.querySelectorAll('[data-task]').forEach((c) => (c.onchange = async () => { await api('negTarea', id, n.etapa, Number(c.dataset.task), c.checked); recargar(); }));
   if ($('#ngNext')) $('#ngNext').onclick = () => {
     if (e.firma && f?.estado !== 'firmado') {
-      modal(`<h2>¿Pasar sin la firma?</h2><p>«${esc(e.firma)}» todavía no está firmado. Puedes avanzar igual y vincular la firma después.</p><div class="actions"><button class="secondary" id="mCancel">Volver</button><button class="primary" id="mOk">Pasar a «${esc(sig.t)}»</button></div>`);
-      $('#mCancel').onclick = closeModal; $('#mOk').onclick = () => { closeModal(); ngMover(id, sig.id, recargar); }; return;
+      window.Ventanas.abrir('negocios.pasarSinFirma', { firma: e.firma, siguiente: sig.t, alConfirmar: () => { closeModal(); ngMover(id, sig.id, recargar); } }, { clave: 'modal-45' }); return;
     }
     ngMover(id, sig.id, recargar);
   };
   if ($('#ngWin')) $('#ngWin').onclick = async () => { try { const r = await api('negCerrar', id, 'ganado'); toast(['¡Negocio cerrado!', ...r.mensajes].join(' '), 5000); await ngCargar(); recargar(); } catch (er) { toast(er.message, 5000); } };
   if ($('#ngLost')) $('#ngLost').onclick = () => {
-    modal(`<div class="im-form"><h2>Marcar como perdido</h2><label>¿Por qué se cayó?<select id="lmSel"><option>El cliente desistió</option><option>No calificó (crédito o antecedentes)</option><option>Eligió otra propiedad</option><option>El propietario retiró la propiedad</option><option>Precio</option><option value="otro">Otro motivo…</option></select></label><input id="lmTxt" class="hidden" placeholder="Escribe el motivo" />
-      <p class="muted small">Si la propiedad estaba reservada por este negocio, vuelve a quedar disponible.</p><div class="actions"><button class="secondary" id="mCancel">Cancelar</button><button class="danger" id="mOk">Marcar como perdido</button></div></div>`);
-    $('#lmSel').onchange = () => $('#lmTxt').classList.toggle('hidden', $('#lmSel').value !== 'otro');
-    $('#mCancel').onclick = closeModal;
-    $('#mOk').onclick = async () => { const m = $('#lmSel').value === 'otro' ? $('#lmTxt').value : $('#lmSel').value; try { const r = await api('negCerrar', id, 'perdido', m); closeModal(); toast(['Negocio marcado como perdido.', ...r.mensajes].join(' '), 5000); await ngCargar(); recargar(); } catch (er) { toast(er.message, 4000); } };
+    window.Ventanas.abrir('negocios.perdido', {
+      alGuardar: async (m) => { try { const r = await api('negCerrar', id, 'perdido', m); closeModal(); toast(['Negocio marcado como perdido.', ...r.mensajes].join(' '), 5000); await ngCargar(); recargar(); } catch (er) { toast(er.message, 4000); } },
+    }, { clave: 'modal-46' });
   };
   if ($('#ngReab')) $('#ngReab').onclick = async () => { const r = await api('negReabrir', id); toast(['Negocio reabierto.', ...r.mensajes].join(' '), 4000); await ngCargar(); recargar(); };
   $('#ngCorSel')?.addEventListener('change', async (ev) => { try { await api('negCorredor', id, ev.target.value || null); toast('Negocio reasignado. Queda en su historial.'); } catch (er) { toast(er.message, 5000); } });
-  $('#ngDel').onclick = () => { modal(`<h2>Eliminar negocio</h2><p>Se borra el negocio y su historial. Las firmas y la propiedad no se tocan.</p><div class="actions"><button class="secondary" id="mCancel">Cancelar</button><button class="danger" id="mOk">Eliminar</button></div>`); $('#mCancel').onclick = closeModal; $('#mOk').onclick = async () => { closeModal(); await api('negBorrar', id); toast('Negocio eliminado.'); abrirNegocios(); }; };
+  $('#ngDel').onclick = () => window.Ventanas.abrir('negocios.eliminar', { alConfirmar: async () => { closeModal(); await api('negBorrar', id); toast('Negocio eliminado.'); abrirNegocios(); } }, { clave: 'modal-47' });
   $('#ngPa').onsubmit = async (ev) => { ev.preventDefault(); await api('negGuardar', { id, proximaAccion: { texto: $('#ngPaT').value, fecha: $('#ngPaF').value } }); toast('Próxima acción guardada.'); await ngCargar(); recargar(); };
   $('#ngNota').onsubmit = async (ev) => { ev.preventDefault(); const t = $('#ngNotaT').value.trim(); if (t) { await api('negNota', id, t); recargar(); } };
   $('#ngCond').onclick = async () => { await api('negGuardar', { id, valor: { valor: $('#ngVal').value, moneda: $('#ngMon').value }, comision: { tipo: $('#ngComT').value, valor: $('#ngCom').value } }); toast('Condiciones guardadas.'); await ngCargar(); recargar(); };
@@ -137,9 +122,11 @@ async function abrirNegocio(id) {
   host.querySelectorAll('[data-mail]').forEach((b) => (b.onclick = async () => { await navigator.clipboard.writeText(b.dataset.mail); toast('Correo copiado.'); }));
   // firmas
   if ($('#ngVin')) $('#ngVin').onclick = () => {
-    modal(`<div class="im-form"><h2>Vincular la firma</h2><p class="muted">${esc(e.firma)}: escribe el número de la operación de Portalfirma.</p><input id="vfOp" placeholder="Ej.: 23736" inputmode="numeric" /><p class="error" id="vfErr"></p><div class="actions"><button class="secondary" id="mCancel">Cancelar</button><button class="primary" id="mOk">Vincular</button></div></div>`);
-    $('#vfOp').focus(); $('#mCancel').onclick = closeModal;
-    $('#mOk').onclick = async () => { try { await api('negFirmaVincular', id, n.etapa, $('#vfOp').value); closeModal(); toast('Firma vinculada. Revisando su estado…'); await revisarYVolver(); } catch (er) { $('#vfErr').textContent = er.message; } };
+    window.Ventanas.abrir('negocios.vincularFirma', {
+      firma: e.firma,
+      // si falla, la ventana muestra el error (antes, #vfErr)
+      alGuardar: async (op) => { await api('negFirmaVincular', id, n.etapa, op); closeModal(); toast('Firma vinculada. Revisando su estado…'); await revisarYVolver(); },
+    }, { clave: 'modal-48' });
   };
   const revisarYVolver = async () => { try { const r = await api('negFirmasRevisar', id); if (r.mensajes.length) toast(r.mensajes.join(' '), 6000); } catch (er) { toast(er.message, 5000); } await ngCargar(); recargar(); };
   if ($('#ngRev')) $('#ngRev').onclick = () => members(revisarYVolver, 'Para revisar las firmas, inicia sesión con tu cuenta de Portalfirma.');
@@ -150,16 +137,14 @@ async function abrirNegocio(id) {
 // Enviar el documento de la etapa: desde los documentos de la propiedad o un archivo. La operación queda ligada sola.
 function enviarDocumento(n) {
   const p = IM.data.propiedades.find((x) => x.id === n.prop?.id); const docs = (p?.documentos || []).filter((d) => /\.(pdf|docx?)$/i.test(d.nombre));
-  modal(`<div class="im-form"><h2>Enviar a firmar</h2><p class="muted">${esc(n.etapaInfo.firma)} · ${esc(n.prop?.codigo || '')}</p>
-    ${docs.length ? `<h3>Documentos de la propiedad</h3><div class="ng-docs">${docs.map((d) => `<button class="im-at" data-doc="${esc(d.id)}"><span class="im-aic">${icon('file', 16)}</span><span><b>${esc(d.nombre)}</b><small>${fecha(d.fecha)}</small></span>${icon('chevR', 16)}</button>`).join('')}</div>` : '<p class="muted small">La propiedad aún no tiene documentos guardados.</p>'}
-    <div class="im-quick" style="margin-top:10px"><button class="secondary" id="edFile">${icon('upload', 15)} Elegir otro archivo</button><button class="secondary" id="edTpl">${icon('notary', 15)} Usar la Notaría virtual</button></div>
-    <p class="muted small">Revisas los firmantes y confirmas en la pantalla de envío. Al terminar, la operación queda ligada a este negocio.</p>
-    <div class="actions"><button class="secondary" id="mCancel">Cancelar</button></div></div>`);
   const ctx = () => { window.__negCtx = { id: n.id, etapa: n.etapa }; };
-  $('#mCancel').onclick = closeModal;
-  $('#modalCard').querySelectorAll('[data-doc]').forEach((b) => (b.onclick = () => members(async () => { closeModal(); ctx(); await api('inmoDocAbrir', p.id, b.dataset.doc); toast('Revisa el documento y pulsa «Enviar a firmar». La operación quedará ligada al negocio.', 6000); }, 'Para enviar a firmar, inicia sesión con tu cuenta de Portalfirma.')));
-  $('#edFile').onclick = () => members(() => { closeModal(); ctx(); window.show('drop'); toast('Elige o arrastra el documento. La operación quedará ligada al negocio.', 5000); }, 'Para enviar a firmar, inicia sesión con tu cuenta de Portalfirma.');
-  $('#edTpl').onclick = () => members(() => { closeModal(); ctx(); window.show('tpl'); window.openTemplates?.(); toast('Al enviar la plantilla, la operación quedará ligada al negocio.', 5000); }, 'Para usar la Notaría virtual, inicia sesión con tu cuenta de Portalfirma.');
+  window.Ventanas.abrir('negocios.enviarDocumento', {
+    firma: n.etapaInfo.firma, codigo: n.prop?.codigo || '',
+    documentos: docs.map((d) => ({ id: d.id, nombre: d.nombre, fecha: fecha(d.fecha) })),
+    alElegirDocumento: (docId) => members(async () => { closeModal(); ctx(); await api('inmoDocAbrir', p.id, docId); toast('Revisa el documento y pulsa «Enviar a firmar». La operación quedará ligada al negocio.', 6000); }, 'Para enviar a firmar, inicia sesión con tu cuenta de Portalfirma.'),
+    alElegirArchivo: () => members(() => { closeModal(); ctx(); window.show('drop'); toast('Elige o arrastra el documento. La operación quedará ligada al negocio.', 5000); }, 'Para enviar a firmar, inicia sesión con tu cuenta de Portalfirma.'),
+    alUsarNotaria: () => members(() => { closeModal(); ctx(); window.show('tpl'); window.openTemplates?.(); toast('Al enviar la plantilla, la operación quedará ligada al negocio.', 5000); }, 'Para usar la Notaría virtual, inicia sesión con tu cuenta de Portalfirma.'),
+  }, { clave: 'modal-49' });
 }
 // La pantalla de envío avisa cuando se crea la operación
 window.addEventListener('pf-operacion', (ev) => {

@@ -55,7 +55,7 @@ export default function Cartera({ filtros: filtrosIniciales }: ICarteraProps) {
 
   const asignar = async (corredorId: string, nombre: string) => {
     const n = seleccion?.length || 0; const s = plural(n, 'propiedad', 'propiedades');
-    const si = await confirmar({
+    const si = await confirmar({ clave: 'modal-62',
       titulo: 'Asignar captador',
       texto: corredorId ? `¿Dejar **${n}** ${s} como ${plural(n, 'captada', 'captadas')} por **${nombre}**?` : `¿Quitar el captador de **${n}** ${s}?`,
       nota: `Queda anotado en el historial de cada una.${corredorId ? ` ${nombre.split(' ')[0]} verá los datos de sus propietarios.` : ''}`,

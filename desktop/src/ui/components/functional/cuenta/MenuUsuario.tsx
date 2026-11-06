@@ -16,6 +16,8 @@ import { verTokens } from '../asistente/controlador';
 import { abrirAgenteWhatsApp } from '../whatsapp/controlador';
 import { refrescarCuenta } from './controlador';
 import { abrirUsuarios } from '../usuarios/controlador';
+import { abrirIntegraciones } from '../integraciones/controlador';
+import AvisoActualizacion, { buscarActualizaciones } from './Actualizacion';
 
 const iniciales = (n: string) => String(n || '').trim().split(/\s+/).map((x) => x[0]).slice(0, 2).join('').toUpperCase() || '?';
 const primero = (n: string) => String(n || '').trim().split(/\s+/)[0] || '';
@@ -40,6 +42,7 @@ export default function MenuUsuario() {
     return () => { document.removeEventListener('click', fuera); document.removeEventListener('keydown', esc); };
   }, [menu, cuentaMenu]);
   return <>
+    <AvisoActualizacion />
     <button className={`secondary small ${conectado ? 'hidden' : ''}`} id="topLoginBtn" title="Para enviar a firmar y usar las plantillas"
       onClick={() => pedirInicioSesion(() => mostrarVista('drop'), 'Conecta tu cuenta para enviar documentos a firmar.')}>Conectar Portalfirma</button>
     <button className={`user-btn ${yo ? '' : 'hidden'} ${menu ? 'on' : ''}`} id="userBtn" title="Tu cuenta" onClick={alternar}>
@@ -79,6 +82,7 @@ function Menu() {
       </div>
       <div className="um-sec">
         <button data-um="usuarios" onClick={ir(abrirUsuarios)}><Icono nombre="users" tam={15} /><span>{yo.rol === 'ADMIN' ? 'Usuarios de la corredora' : 'Equipo de la corredora'}</span></button>
+        <button data-um="integraciones" onClick={ir(abrirIntegraciones)}><Icono nombre="link" tam={15} /><span>Integraciones</span></button>
         <button data-um="ops" onClick={ir(abrirOperaciones)}><Icono nombre="listCheck" tam={15} /><span>Mis operaciones</span></button>
         <button data-um="plazos" onClick={ir(abrirPlazos)}><Icono nombre="calendar" tam={15} /><span>Plazos y vencimientos</span></button>
         <button data-um="exp" onClick={ir(abrirExpedientes)}><Icono nombre="folderOpen" tam={15} /><span>Expedientes</span></button>
@@ -97,7 +101,7 @@ function Menu() {
         </div>
       </div>
       <div className="um-sec"><button data-um="out" className="danger" onClick={ir(salir)}><Icono nombre="logout" tam={15} /><span>Cerrar sesión</span></button></div>
-      <div className="um-foot">PortalFirma Asset {versionApp()}</div>
+      <div className="um-foot">PortalFirma Asset {versionApp()} · <a href="#" id="umAct" onClick={(e) => { e.preventDefault(); buscarActualizaciones(); }}>Buscar actualizaciones</a></div>
     </div>
   );
 }

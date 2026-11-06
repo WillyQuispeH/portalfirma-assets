@@ -32,7 +32,7 @@ function Detalle({ d, items, alRefrescar }: { d: IDetalleOperacion; items: IOper
   const archivo = async (f: () => Promise<{ ok: boolean; data?: string | null; error?: string; code?: string }>, ok: (data: string) => void) => { const r = await f(); if (!r.ok) return errorArchivoOperacion(r); if (r.data) ok(r.data); };
   const reenviar = async (s: IFirmante, porCorreo: boolean) => {
     const como = porCorreo ? `por correo a ${s.email}` : `por WhatsApp a ${s.phone || 'su teléfono'}`;
-    if (!(await confirmar({ titulo: 'Reenviar enlace de firma', texto: `¿Enviar el enlace de firma de la operación ${d.operation} ${como}?`, boton: 'Enviar' }))) return;
+    if (!(await confirmar({ clave: 'modal-116', titulo: 'Reenviar enlace de firma', texto: `¿Enviar el enlace de firma de la operación ${d.operation} ${como}?`, boton: 'Enviar' }))) return;
     try {
       await operacionArchivo.reenviar(porCorreo ? { action: 'send_signature_link_by_email', email: s.email, name: s.name, link: (s.url || '').trim(), operation: d.operation } : { action: 'send_signature_link_by_whatsapp', operation: d.operation, personId: s.personId });
       toast('Enlace enviado ' + como);

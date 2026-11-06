@@ -22,12 +22,12 @@ export async function abrir(tramite?: TTramite) {
 export function nuevoTramite() {
   const S = escrituraEstado();
   if (!(S.tramite && hayDocumento(S))) return S.escrituraElegir(null);
-  abrirModal(<Descartar />);
+  abrirModal(<Descartar />, { clave: 'modal-109' });
 }
 
 const confirmarIA = (archivos: IArchivoNotarial[]) => {
   const noWord = archivos.filter((f) => f.kind !== 'word'); if (!noWord.length) return Promise.resolve(true);
-  return new Promise<boolean>((resolver) => abrirModal(<ConfirmarIA nombres={noWord.map((f) => f.name)} alResponder={resolver} />));
+  return new Promise<boolean>((resolver) => abrirModal(<ConfirmarIA nombres={noWord.map((f) => f.name)} alResponder={resolver} />, { clave: 'modal-110' }));
 };
 
 // Archivos leídos por el proceso principal: la minuta (escritura) o los documentos privados
@@ -61,14 +61,14 @@ export function pagar(q: ICotizacion) {
   if (falta.length) { toast('Falta: ' + falta[0]); document.getElementById('esFalta')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
   if (q.cotizacion) { iniciarTramite(q); return; }
   if (!esMiembro()) { iniciarSesionPortalfirma(() => abrirFirmasPresenciales(), 'Inicia sesión con tu cuenta Portalfirma para pagar el trámite.'); return; }
-  abrirModal(<Pago q={q} />);
+  abrirModal(<Pago q={q} />, { clave: 'modal-111' });
 }
 
 export async function iniciarTramite(q: ICotizacion) {
   const privado = esPrivado(escrituraEstado());
   const r = await escrituraEstado().escrituraIniciar(q);
   if (r.ok) { toast(r.cotizacion ? 'Cotización solicitada' : 'Trámite pagado y enviado a la notaría'); return; }
-  if (r.codigo === 'PENDIENTE_API') abrirModal(<NoDisponibleAun mensaje={r.error} privado={privado} />);
+  if (r.codigo === 'PENDIENTE_API') abrirModal(<NoDisponibleAun mensaje={r.error} privado={privado} />, { clave: 'modal-112' });
   else if (r.codigo === 'SALDO') toast('Tu saldo no alcanza. Recarga y vuelve a intentarlo.');
   else if (r.codigo === 'NEEDS_LOGIN') iniciarSesionPortalfirma(() => abrirFirmasPresenciales(), 'Tu sesión expiró. Inicia sesión para pagar.');
   else toast('No se pudo iniciar el trámite: ' + r.error, 5000);

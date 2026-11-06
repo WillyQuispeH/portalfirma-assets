@@ -84,7 +84,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     // Desde la ficha
     await w.evaluate(() => window.Inmo.abrirFicha(window.Inmo._IM.data.propiedades.find((p) => p.codigo === 'CV-9002').id)); await w.evaluate((k) => window.Inmo.fichaTab(k), 'firmas'); await w.waitForSelector('#fFirmasBox [data-doc]');
     ok(/Contrato de Corretaje/.test(await txt('#fFirmasBox')) && /operación/.test(await txt('#fFirmasBox')), 'la ficha muestra «Documentos en firma»');
-    await w.click('#fGen'); await w.waitForSelector('#agDrawer .ga-tpl [data-t]', { timeout: 15000 });
+    await w.click('.im-ficha [data-mas]'); await w.click('#fGen'); await w.waitForSelector('#agDrawer .ga-tpl [data-t]', { timeout: 15000 });
     await w.click('#agDrawer .ga-tp:has-text("Contrato de Corretaje")'); await w.waitForSelector('#agDrawer .ga-form [data-rev]', { timeout: 15000 });
     ok(await w.inputValue('#agDrawer input[data-c="nombre_corredor_signer"]') === 'Jerónimo Gómez' && await w.inputValue('#agDrawer input[data-c="rut_corredor_signer"]') === '12.345.678-5', '«Generar documento» desde la ficha, con los datos del corredor ya recordados');
     await shot('ge9-ficha-panel.png');

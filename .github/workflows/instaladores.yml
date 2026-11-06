@@ -1,0 +1,119 @@
+# Instaladores de PortalFirma Asset (Windows y Mac) publicados en GitHub Releases de
+# WillyQuispeH/portalfirma-asset-release, desde donde la app se actualiza sola (desktop/src/actualizaciones.js).
+#
+# Se dispara al subir un tag «v<versión>» (p. ej. v0.17.0) que coincida con desktop/package.json, o a mano desde la
+# pestaña Actions. Ver desktop/INSTALADORES.md.
+#
+# Secretos del repositorio (Settings › Secrets and variables › Actions):
+#   RELEASES_TOKEN          token «fine-grained» con Contents: Read and write SOLO en portalfirma-asset-release. Sin él,
+#                           los instaladores se arman igual y quedan como artefactos de la ejecución (no se publican)
+#   GOOGLE_OAUTH_JSON       contenido de build/google/oauth.json (Google Drive)            · opcional
+#   PORTALFIRMA_API_JSON    contenido de build/portalfirma/api.json                         · opcional
+#   MERCADOLIBRE_APP_JSON   contenido de build/mercadolibre/app.json                        · opcional
+#   Firma de Mac (cuando exista la cuenta Apple Developer; sin ellos la app de Mac sale sin firmar):
+#   MAC_CERT_P12_BASE64, MAC_CERT_PASSWORD, APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID
+name: Instaladores
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: instaladores-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: desktop
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: yarn
+          cache-dependency-path: desktop/yarn.lock
+      - name: El tag coincide con la versión
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          v=$(node -p "require('./package.json').version")
+          [ "v$v" = "${GITHUB_REF_NAME}" ] || { echo "El tag ${GITHUB_REF_NAME} no coincide con package.json (v$v)"; exit 1; }
+      - run: yarn install --frozen-lockfile
+      - name: Credenciales que van dentro del instalador
+        shell: bash
+        env:
+          GOOGLE_OAUTH_JSON: ${{ secrets.GOOGLE_OAUTH_JSON }}
+          PORTALFIRMA_API_JSON: ${{ secrets.PORTALFIRMA_API_JSON }}
+          MERCADOLIBRE_APP_JSON: ${{ secrets.MERCADOLIBRE_APP_JSON }}
+        run: bash tools/credenciales-ci.sh
+      - name: Repositorio de versiones con al menos un archivo (GitHub no crea versiones en un repositorio vacío)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+        run: node tools/repo-versiones.js
+      - name: Instalador de Windows → GitHub Releases (o solo armarlo si no hay token)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+        run: if [ -n "$GH_TOKEN" ]; then yarn release:win; else yarn dist:win; fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: instalador-windows
+          path: |
+            desktop/dist/*.exe
+            desktop/dist/*.blockmap
+            desktop/dist/latest.yml
+
+  mac:
+    needs: windows # después de Windows: así los dos suben a la misma versión sin pisarse al crearla
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: yarn
+          cache-dependency-path: desktop/yarn.lock
+      - run: yarn install --frozen-lockfile
+      - name: Credenciales que van dentro del instalador
+        env:
+          GOOGLE_OAUTH_JSON: ${{ secrets.GOOGLE_OAUTH_JSON }}
+          PORTALFIRMA_API_JSON: ${{ secrets.PORTALFIRMA_API_JSON }}
+          MERCADOLIBRE_APP_JSON: ${{ secrets.MERCADOLIBRE_APP_JSON }}
+        run: bash tools/credenciales-ci.sh
+      - name: Instalador de Mac → GitHub Releases
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+          MAC_CERT: ${{ secrets.MAC_CERT_P12_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          # sin RELEASES_TOKEN solo se arma (queda como artefacto de esta ejecución)
+          if [ -n "$GH_TOKEN" ]; then CMD="release:mac"; else CMD="dist:mac"; fi
+          if [ -n "$MAC_CERT" ]; then
+            # con certificado: firma y notariza (la app de Mac se actualiza sola)
+            export CSC_LINK="$MAC_CERT"
+            yarn $CMD -c.mac.notarize=true
+          else
+            # sin certificado: sale sin firmar (en Mac se instala a mano; la app avisa cuando hay versión nueva)
+            export CSC_IDENTITY_AUTO_DISCOVERY=false
+            yarn $CMD
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: instalador-mac
+          path: |
+            desktop/dist/*.dmg
+            desktop/dist/*.zip
+            desktop/dist/*.blockmap
+            desktop/dist/latest-mac.yml

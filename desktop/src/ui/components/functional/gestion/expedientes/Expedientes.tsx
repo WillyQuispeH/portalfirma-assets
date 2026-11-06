@@ -50,7 +50,7 @@ export default function Expedientes({ sel: selInicial }: { sel?: string | null }
   const elegidos = archivos.filter((f) => marcados.includes(f.id)); const n = elegidos.length;
   const papelera = async (f: IArchivoExpediente) => {
     if (!e) return;
-    const si = await confirmar({ titulo: 'Enviar a la papelera', texto: `¿Enviar «${f.name}» a la papelera ${e.storage === 'drive' ? 'de Google Drive' : 'del computador'}? Puedes recuperarlo desde ahí.`, boton: 'Enviar a la papelera' });
+    const si = await confirmar({ clave: 'modal-103', titulo: 'Enviar a la papelera', texto: `¿Enviar «${f.name}» a la papelera ${e.storage === 'drive' ? 'de Google Drive' : 'del computador'}? Puedes recuperarlo desde ahí.`, boton: 'Enviar a la papelera', peligro: true });
     if (si) aviso(await archivoQuitar(f.id));
   };
 

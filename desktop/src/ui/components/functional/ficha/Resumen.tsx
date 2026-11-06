@@ -111,7 +111,7 @@ function PersonasVinculadas({ p }: { p: IPropiedad }) {
   const vincs = (p.vinculos || []).map((v) => ({ ...v, c: personas.find((x) => x.id === v.personaId) })).filter((v) => v.c);
   const quitar = async (personaId: string, rol: string) => { const r = await fichaDesvincular(personaId, rol); if (r.error) toast(r.error, 4000); };
   return (
-    <Card titulo="Personas" accion={<Boton id="fVinc" variante="secundario" tamano="sm" icono="plus" onClick={() => abrirModal(<VincularPersona p={p} />)}>Vincular</Boton>}>
+    <Card titulo="Personas" accion={<Boton id="fVinc" variante="secundario" tamano="sm" icono="plus" onClick={() => abrirModal(<VincularPersona p={p} />, { clave: 'modal-77' })}>Vincular</Boton>}>
       {vincs.length ? (
         <div className="tw:-mx-3 tw:flex tw:flex-col">
           {vincs.map(({ c, rol }) => c && (

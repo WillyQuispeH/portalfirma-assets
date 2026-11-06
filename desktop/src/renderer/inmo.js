@@ -1,4 +1,4 @@
-/* global pf, $, esc, show, toast, modal, closeModal, api, icon, members, formatRut, validRut */
+/* global pf, $, esc, show, toast, closeModal, api, icon, members, formatRut, validRut */
 'use strict';
 // PortalFirma Asset: Inicio inmobiliario, Cartera (propiedades) y Personas (CRM con RUT único).
 // Los datos viven en la base local (src/inmo.js); las propiedades reales se importan desde Portalfirma.
@@ -117,41 +117,18 @@ async function dropFiles(paths) {
 // ---------- Formulario de propiedad ----------
 function formProp(p, opt = {}) {
   const n = !p; p = p || { tipo: 'departamento', venta: true, arriendo: false, precioVenta: { moneda: 'UF' }, precioArriendo: { moneda: 'CLP' } };
-  const v = (k) => esc(p[k] ?? ''); const mon = (k, d) => `<select id="pf_${k}M">${['UF', 'CLP', 'USD'].map((m) => `<option ${(p[k]?.moneda || d) === m ? 'selected' : ''}>${m}</option>`).join('')}</select>`;
-  const inp = (k, l, t = 'text', ph = '') => `<label>${l}<input id="pf_${k}" type="${t}" value="${v(k)}" placeholder="${ph}" /></label>`;
-  modal(`<div class="im-form"><h2>${n ? 'Nueva propiedad' : 'Editar ficha'}</h2>
-    <div class="im-fg">
-      <label class="s2">Título<input id="pf_titulo" value="${v('titulo')}" placeholder="Departamento en Providencia" /></label>
-      <label>Tipo<select id="pf_tipo">${Object.entries(TIPO).map(([k, l]) => `<option value="${k}" ${p.tipo === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
-      ${inp('codigo', 'Código', 'text', n ? 'Automático' : '')}
-      <div class="s4 im-opsel"><label class="im-ck"><input type="checkbox" id="pf_venta" ${p.venta ? 'checked' : ''} /> En venta</label><label class="im-ck"><input type="checkbox" id="pf_arriendo" ${p.arriendo ? 'checked' : ''} /> En arriendo</label></div>
-      <label>Precio de venta<input id="pf_precioVenta" type="number" step="any" value="${esc(p.precioVenta?.valor ?? '')}" /></label><label>Moneda${mon('precioVenta', 'UF')}</label>
-      <label>Arriendo mensual<input id="pf_precioArriendo" type="number" step="any" value="${esc(p.precioArriendo?.valor ?? '')}" /></label><label>Moneda${mon('precioArriendo', 'CLP')}</label>
-      <label class="s2">Dirección<input id="pf_direccion" value="${v('direccion')}" placeholder="Calle y número" /></label>${inp('unidad', 'Depto. / unidad')}${inp('comuna', 'Comuna')}
-      ${inp('region', 'Región')}${inp('rol', 'Rol SII', 'text', '00000-00000')}${inp('supTotal', 'Sup. total (m²)', 'number')}${inp('supUtil', 'Sup. útil (m²)', 'number')}
-      ${inp('dormitorios', 'Dormitorios', 'number')}${inp('banos', 'Baños', 'number')}${inp('estacionamientos', 'Estacionamientos', 'number')}${inp('bodegas', 'Bodegas', 'number')}
-      ${inp('gastosComunes', 'Gastos comunes ($)', 'number')}<div class="im-opsel"><label class="im-ck"><input type="checkbox" id="pf_amoblado" ${p.amoblado ? 'checked' : ''} /> Amoblado</label></div>
-      <label class="s4">Descripción (pública)<textarea id="pf_descripcion" rows="4">${v('descripcion')}</textarea></label>
-      <label class="s4">Notas internas (solo tu equipo)<textarea id="pf_notasInternas" rows="2">${v('notasInternas')}</textarea></label>
-    </div><p class="error" id="pfErr"></p>
-    <div class="actions"><button class="secondary" id="mCancel">Cancelar</button><button class="primary" id="mOk">${n ? 'Crear propiedad' : 'Guardar cambios'}</button></div></div>`);
-  $('#modalCard').classList.add('im-wide');
-  const val = (k) => $('#pf_' + k).value;
-  const dir = window.Direcciones.conectar($('#pf_direccion'), { inicial: p, alElegir: (d) => { if (d.comuna) $('#pf_comuna').value = d.comuna; if (d.region) $('#pf_region').value = d.region; if (!$('#pf_unidad').value) $('#pf_unidad').focus(); } });
-  $('#mCancel').onclick = () => { $('#modalCard').classList.remove('im-wide'); closeModal(); };
-  $('#mOk').onclick = async () => {
-    const o = { id: p.id, titulo: val('titulo').trim(), tipo: val('tipo'), venta: $('#pf_venta').checked, arriendo: $('#pf_arriendo').checked,
-      precioVenta: { valor: val('precioVenta'), moneda: val('precioVentaM') }, precioArriendo: { valor: val('precioArriendo'), moneda: val('precioArriendoM') },
-      amoblado: $('#pf_amoblado').checked, descripcion: val('descripcion'), notasInternas: val('notasInternas') };
-    for (const k of ['direccion', 'unidad', 'comuna', 'region', 'rol', 'supTotal', 'supUtil', 'dormitorios', 'banos', 'estacionamientos', 'bodegas', 'gastosComunes']) o[k] = val(k).trim();
-    Object.assign(o, dir.valor()); // coordenadas de la dirección elegida (geolocalización)
-    if (val('codigo').trim()) o.codigo = val('codigo').trim();
+  // la ventana está en React (ventanas/inmo/Propiedad.tsx): devuelve lo escrito y aquí se arma y se guarda la propiedad
+  window.Ventanas.abrir('inmo.propiedad', { p, nuevo: n, tipos: TIPO, alGuardar: async (val) => {
+    const o = { id: p.id, titulo: val.titulo.trim(), tipo: val.tipo, venta: val.venta, arriendo: val.arriendo,
+      precioVenta: { valor: val.precioVenta, moneda: val.precioVentaM }, precioArriendo: { valor: val.precioArriendo, moneda: val.precioArriendoM },
+      amoblado: val.amoblado, descripcion: val.descripcion, notasInternas: val.notasInternas };
+    for (const k of ['direccion', 'unidad', 'comuna', 'region', 'rol', 'supTotal', 'supUtil', 'dormitorios', 'banos', 'estacionamientos', 'bodegas', 'gastosComunes']) o[k] = val[k].trim();
+    Object.assign(o, val.geo); // coordenadas de la dirección elegida (geolocalización)
+    if (val.codigo.trim()) o.codigo = val.codigo.trim();
     if (o.venta && !p.venta) o.estadoVenta = 'disponible'; if (o.arriendo && !p.arriendo) o.estadoArriendo = 'disponible';
     if (!o.venta) o.estadoVenta = null; if (!o.arriendo) o.estadoArriendo = null;
-    try { const r = await api('inmoPropGuardar', o); $('#modalCard').classList.remove('im-wide'); closeModal(); toast(n ? 'Propiedad creada.' : 'Ficha guardada.'); opt.despues ? opt.despues(r) : abrirFicha(r.id); }
-    catch (e) { $('#pfErr').textContent = e.message; }
-  };
-  $('#pf_titulo').focus();
+    const r = await api('inmoPropGuardar', o); closeModal(); toast(n ? 'Propiedad creada.' : 'Ficha guardada.'); opt.despues ? opt.despues(r) : abrirFicha(r.id); // si falla, la ventana muestra el error en #pfErr
+  } }, { clave: 'modal-26', ancho: true });
 }
 
 // ---------- Personas ----------
@@ -175,13 +152,12 @@ function formPersona(c, opt = {}) { window.__formPersona(c || null, opt); }
 // ---------- Importar desde Portalfirma ----------
 function importar() {
   members(async () => {
-    modal(`<div class="im-form" style="text-align:center"><div class="spinner"></div><h2>Importando tu cartera</h2><p class="muted" id="impTx">Leyendo propiedades de Portalfirma…</p></div>`);
-    const off = (x) => { const t = $('#impTx'); if (t) t.textContent = `Propiedad ${x.i} de ${x.total}…`; }; IM._prog = off;
+    const espera = (texto) => window.Ventanas.abrir('inmo.espera', { titulo: 'Importando tu cartera', texto, idTexto: 'impTx', icono: 'download' }, { clave: 'modal-27' });
+    espera('Leyendo propiedades de Portalfirma…');
+    const off = (x) => { if ($('#modalCard').dataset.clave === 'modal-27') espera(`Propiedad ${x.i} de ${x.total}…`); }; IM._prog = off;
     try {
       const r = await api('inmoImportar');
-      modal(`<div class="im-form"><h2>${icon('check', 18)} Cartera actualizada</h2><dl><dt>Propiedades leídas</dt><dd>${r.total}</dd><dt>Nuevas</dt><dd>${r.nuevas}</dd><dt>Actualizadas</dt><dd>${r.actualizadas}</dd><dt>Sin cambios</dt><dd>${r.sinCambios}</dd><dt>Personas nuevas en el CRM</dt><dd>${r.personas}</dd>${r.errores ? `<dt>No se pudieron leer</dt><dd>${r.errores} (se reintentan en la próxima importación)</dd>` : ''}</dl>
-        <p class="muted small">Los datos que edites aquí se respetan en las próximas importaciones.</p><div class="actions"><button class="primary" id="mOk">Ver cartera</button></div></div>`);
-      $('#mOk').onclick = () => { closeModal(); cartera({ op: 'todas', especial: '' }); };
+      window.Ventanas.abrir('inmo.importada', { r, alVerCartera: () => { closeModal(); cartera({ op: 'todas', especial: '' }); } }, { clave: 'modal-28' });
     } catch (e) { closeModal(); if (e.message !== 'NEEDS_LOGIN') toast('No se pudo importar: ' + e.message, 5000); }
     finally { IM._prog = null; }
   }, 'Para importar tus propiedades, inicia sesión con tu cuenta de Portalfirma.');
@@ -193,28 +169,16 @@ pf.onInmoProgreso((x) => IM._prog?.(x));
 // la pantalla Portales y «Vincular avisos existentes», que también se abren desde otras pantallas.
 const TIPO_AVISO = { silver: 'Publicación', gold: 'Destacado', gold_premium: 'Destacado premium' };
 async function publicarModal(p, op, opts = {}) {
-  modal(`<div class="im-form" style="text-align:center"><div class="spinner"></div><p class="muted">Revisando la ficha para Portal Inmobiliario…</p></div>`);
+  window.Ventanas.abrir('inmo.espera', { titulo: 'Publicar en Portal Inmobiliario', texto: 'Revisando la ficha para Portal Inmobiliario…', icono: 'search' }, { clave: 'modal-29' });
   let r; try { r = await api('mlRevisar', p.id, op, opts); } catch (e) { closeModal(); return toast(e.message, 5000); }
   const sinConexion = r.errores.some((e) => /Conecta la cuenta|WhatsApp de contacto/.test(e));
   const barrioSel = opts.barrio !== undefined ? opts.barrio?.id : p.portalBarrio?.id;
-  modal(`<div class="im-form"><h2 class="im-pih"><span class="im-pilogo">PI</span>Publicar en Portal Inmobiliario</h2><p class="muted small">${esc(p.codigo)} · ${op === 'venta' ? 'Venta' : 'Arriendo'} · también aparece en Mercado Libre</p>
-    <label>Título del aviso <span class="muted" id="piCnt"></span><input id="piTit" maxlength="${r.categoria?.maxTitulo || 60}" value="${esc(opts.tituloPortal ?? r.titulo ?? '')}" /></label>
-    <dl class="im-pidl"><dt>Categoría</dt><dd>${esc(r.categoria ? r.categoria.ruta.join(' › ') : '—')}</dd><dt>Comuna</dt><dd>${esc(r.ubicacion ? r.ubicacion.city.name + ', ' + r.ubicacion.state.name : '—')}</dd><dt>Fotos</dt><dd>${r.fotos} de ${r.minFotos} recomendadas</dd></dl>
-    <div class="im-fg2"><label>Barrio <span class="muted">(opcional)</span><select id="piBar"><option value="">Sin barrio</option>${(r.ubicacion?.barrios || []).map((b) => `<option value="${esc(b.id)}" ${barrioSel === b.id ? 'selected' : ''}>${esc(b.name)}</option>`).join('')}</select></label>
-      <label>Tipo de aviso<select id="piTipo">${Object.entries(TIPO_AVISO).map(([k, v]) => `<option value="${k}" ${r.tipoAviso === k ? 'selected' : ''}>${v}</option>`).join('')}</select>${r.paquete != null ? `<span class="muted small">Quedan ${r.paquete} en tu paquete</span>` : ''}</label></div>
-    ${r.errores.length ? `<div class="im-msg err"><b>Antes de publicar</b><ul>${r.errores.map((e) => `<li>${esc(e)}</li>`).join('')}</ul></div>` : ''}
-    ${r.avisos.length ? `<div class="im-msg warn"><b>Para mejorar el aviso</b><ul>${r.avisos.map((e) => `<li>${esc(e)}</li>`).join('')}</ul></div>` : ''}
-    <div class="actions">${sinConexion ? '<button class="ghost" id="piCfg">Ir a Portales</button><span class="spacer"></span>' : ''}<button class="secondary" id="mCancel">Cancelar</button><button class="primary" id="mOk" ${r.errores.length ? 'disabled' : ''}>Publicar</button></div></div>`);
-  $('#modalCard').classList.add('im-wide');
-  const cnt = () => { $('#piCnt').textContent = `${$('#piTit').value.length}/${r.categoria?.maxTitulo || 60}`; }; cnt(); $('#piTit').oninput = cnt;
-  const actuales = () => { const s = $('#piBar'); const id = s.value; return { tituloPortal: $('#piTit').value, barrio: id ? { id, name: s.selectedOptions[0].textContent } : null, tipoAviso: $('#piTipo').value }; };
-  $('#piTipo').onchange = () => publicarModal(p, op, actuales());
-  $('#mCancel').onclick = closeModal; if ($('#piCfg')) $('#piCfg').onclick = () => { closeModal(); portales(); };
-  $('#mOk').onclick = async () => {
-    const b = $('#mOk'); b.disabled = true; b.textContent = 'Publicando…';
-    try { await api('mlPublicar', p.id, op, actuales()); closeModal(); toast('Publicada en Portal Inmobiliario.'); await cargar(); renderFicha(); }
-    catch (e) { b.disabled = false; b.textContent = 'Publicar'; let m = $('#piErr'); if (!m) { m = document.createElement('p'); m.id = 'piErr'; m.className = 'error'; b.closest('.actions').before(m); } m.textContent = e.message; }
-  };
+  // la ventana está en React (ventanas/inmo/PortalInmobiliario.tsx); actuales = { tituloPortal, barrio, tipoAviso }
+  window.Ventanas.abrir('inmo.publicarPI', { p, op, r, opts, tiposAviso: TIPO_AVISO, barrioSel, sinConexion,
+    alCambiarTipo: (actuales) => publicarModal(p, op, actuales),
+    alIrPortales: () => { closeModal(); portales(); },
+    alPublicar: async (actuales) => { await api('mlPublicar', p.id, op, actuales); closeModal(); toast('Publicada en Portal Inmobiliario.'); await cargar(); renderFicha(); }, // si falla, la ventana muestra el error en #piErr
+  }, { clave: 'modal-30', ancho: true });
 }
 
 // Pantalla «Portales»: conexión de la cuenta, datos de contacto del aviso, sincronización y migración
@@ -257,20 +221,14 @@ async function portales() {
   if ($('#poExist')) $('#poExist').onclick = () => existentesModal();
 }
 async function existentesModal() {
-  modal(`<div class="im-form" style="text-align:center"><div class="spinner"></div><p class="muted">Buscando los avisos activos de la cuenta…</p></div>`);
+  window.Ventanas.abrir('inmo.espera', { titulo: 'Avisos existentes en Portal Inmobiliario', texto: 'Buscando los avisos activos de la cuenta…', icono: 'link' }, { clave: 'modal-31' });
   let l; try { l = await api('mlExistentes'); } catch (e) { closeModal(); return toast(e.message, 5000); }
   const props = IM.data.propiedades.filter((p) => !p.archivada);
-  modal(`<div class="im-form"><h2>Avisos existentes en Portal Inmobiliario</h2>
-    ${l.length ? `<p class="muted small">Asocia cada aviso a su ficha. Los que coinciden por código ya vienen marcados. Al vincularlos, la app los mantiene al día sin publicar de nuevo.</p>
-    <div class="im-exl">${l.map((x, i) => `<div class="im-ex"><input type="checkbox" data-i="${i}" ${x.propId ? 'checked' : ''} /><span class="im-ext"><b>${esc(x.titulo)}</b><small>${esc(x.itemId)}${x.codigo ? ' · código ' + esc(x.codigo) : ''} · ${esc(x.moneda === 'CLF' ? 'UF ' + fmtN(x.precio) : '$' + fmtN(x.precio))}</small></span>
-      <select data-p="${i}"><option value="">Elegir propiedad…</option>${props.map((p) => `<option value="${esc(p.id)}" ${x.propId === p.id ? 'selected' : ''}>${esc(p.codigo)} · ${esc(p.titulo.slice(0, 40))}</option>`).join('')}</select>
-      <select data-o="${i}"><option value="venta" ${x.op === 'venta' ? 'selected' : ''}>Venta</option><option value="arriendo" ${x.op === 'arriendo' ? 'selected' : ''}>Arriendo</option></select></div>`).join('')}</div>` : '<p>No hay avisos activos sin vincular en la cuenta.</p>'}
-    <div class="actions"><button class="secondary" id="mCancel">Cerrar</button>${l.length ? '<button class="primary" id="mOk">Vincular seleccionados</button>' : ''}</div></div>`);
-  $('#modalCard').classList.add('im-wide'); $('#mCancel').onclick = closeModal;
-  if ($('#mOk')) $('#mOk').onclick = async () => {
-    const sel = l.map((x, i) => ({ ...x, propId: $(`[data-p="${i}"]`).value, op: $(`[data-o="${i}"]`).value, ok: $(`[data-i="${i}"]`).checked })).filter((x) => x.ok && x.propId);
+  // la ventana está en React (ventanas/inmo/PortalInmobiliario.tsx); filas[i] = { propId, op, ok } de cada aviso
+  window.Ventanas.abrir('inmo.avisosExistentes', { l, propiedades: props, alVincular: async (filas) => {
+    const sel = l.map((x, i) => ({ ...x, propId: filas[i].propId, op: filas[i].op, ok: filas[i].ok })).filter((x) => x.ok && x.propId);
     const n = await api('mlVincular', sel); closeModal(); toast(`${n} ${n === 1 ? 'aviso vinculado' : 'avisos vinculados'}.`); portales();
-  };
+  } }, { clave: 'modal-32', ancho: true });
 }
 pf.onInmoPortal((m) => { toast(m.join(' '), 5000); if (IM.ficha && !$('#view-cartera').classList.contains('hidden')) cargar().then(renderFicha); });
 

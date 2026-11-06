@@ -1,4 +1,4 @@
-/* global $, esc, toast, modal, closeModal, api, ir, IM, cargar */
+/* global $, toast, closeModal, api, ir, IM, cargar */
 'use strict';
 // Agenda de PortalFirma Asset: visitas, reuniones, firmas, llamadas y tareas. Las visitas generan su orden de visita
 // (plantilla de la Notaría virtual) con un clic, igual que pidiéndoselo al Agente.
@@ -15,16 +15,15 @@ async function abrirAgenda() {
 }
 function nuevoEvento(pre = {}, despues) {
   const props = IM.data.propiedades.filter((p) => !p.archivada); const pers = [...IM.data.personas].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
-  modal(`<div class="im-form"><h2>Nuevo evento</h2><div class="im-fg2">
-    <label>Tipo<select id="evT">${Object.entries(AG_TIPO).map(([k, [v]]) => `<option value="${k}" ${(pre.tipo || 'visita') === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
-    <label>Fecha y hora<span class="ng-inl"><input id="evF" type="date" value="${esc(pre.fecha || agISO(new Date(Date.now() + 864e5)))}" /><input id="evH" type="time" value="${esc(pre.hora || '11:00')}" style="width:120px" /></span></label>
-    <label>Propiedad<select id="evP"><option value="">—</option>${props.map((p) => `<option value="${esc(p.id)}" ${pre.propId === p.id ? 'selected' : ''}>${esc(p.codigo)} · ${esc(p.titulo.slice(0, 40))}</option>`).join('')}</select></label>
-    <label>Persona<select id="evC"><option value="">—</option>${pers.map((c) => `<option value="${esc(c.id)}" ${pre.personaId === c.id ? 'selected' : ''}>${esc(c.nombre)} · ${esc(c.rut)}</option>`).join('')}</select></label>
-    <label>Duración (min)<input id="evD" type="number" value="45" /></label><label>Título <span class="muted">(opcional)</span><input id="evTi" /></label>
-    <label class="s2" style="grid-column:1/-1">Notas<input id="evN" /></label></div><p class="error" id="evErr"></p>
-    <div class="actions"><button class="secondary" id="mCancel">Cancelar</button><button class="primary" id="mOk">Agendar</button></div></div>`);
-  $('#modalCard').classList.add('im-wide'); $('#mCancel').onclick = closeModal;
-  $('#mOk').onclick = async () => { try { await api('agendaCrear', { tipo: $('#evT').value, fecha: $('#evF').value, hora: $('#evH').value, propId: $('#evP').value || null, personaIds: $('#evC').value ? [$('#evC').value] : [], duracion: $('#evD').value, titulo: $('#evTi').value, notas: $('#evN').value }); closeModal(); toast('Evento agendado.'); despues ? despues() : abrirAgenda(); } catch (e) { $('#evErr').textContent = e.message; } };
+  window.Ventanas.abrir('negocios.agendaNuevo', {
+    tipos: Object.entries(AG_TIPO).map(([k, [v]]) => [k, v]),
+    propiedades: props.map((p) => [p.id, `${p.codigo} · ${p.titulo.slice(0, 40)}`]),
+    personas: pers.map((c) => [c.id, `${c.nombre} · ${c.rut}`]),
+    tipo: AG_TIPO[pre.tipo] ? pre.tipo : 'visita', fecha: pre.fecha || agISO(new Date(Date.now() + 864e5)), hora: pre.hora || '11:00',
+    propId: props.some((p) => p.id === pre.propId) ? pre.propId : '', personaId: pers.some((c) => c.id === pre.personaId) ? pre.personaId : '',
+    // si falla, la ventana muestra el error (antes, #evErr)
+    alGuardar: async (v) => { await api('agendaCrear', { tipo: v.tipo, fecha: v.fecha, hora: v.hora, propId: v.propId || null, personaIds: v.personaId ? [v.personaId] : [], duracion: v.duracion, titulo: v.titulo, notas: v.notas }); closeModal(); toast('Evento agendado.'); despues ? despues() : abrirAgenda(); },
+  }, { clave: 'modal-1', ancho: true });
 }
 // La misma herramienta que usa el Agente: revisa los datos, muestra qué se enviará y pide confirmar el cobro
 async function ordenVisita(e, despues) {
@@ -32,12 +31,12 @@ async function ordenVisita(e, despues) {
   if (!e.personas.length) return toast('Agrega al visitante: la orden la firma él.', 4000);
   const args = { propiedad: e.prop.id, visitante: e.personas[0].id, fecha: e.fecha, hora: e.hora || undefined };
   window.members(async () => {
-    modal('<div class="im-form" style="text-align:center"><div class="spinner"></div><p class="muted">Preparando la orden de visita…</p></div>');
+    window.Ventanas.abrir('negocios.agendaPreparandoOrden', {}, { clave: 'modal-2' });
     let d; try { d = await api('assetPreparar', 'asset_orden_visita', args); } catch (er) { closeModal(); return toast(er.message, 6000); }
-    modal(`<div class="im-form"><h2>${esc(d.titulo)}</h2><dl class="im-pidl">${d.detalle.map((x) => { const [k, ...v] = x.split(': '); return `<dt>${esc(k)}</dt><dd>${esc(v.join(': '))}</dd>`; }).join('')}</dl><p class="muted small">${esc(d.aviso || '')}</p>
-      <div class="actions"><button class="secondary" id="mCancel">Cancelar</button><button class="primary" id="mOk">Generar y enviar a firmar</button></div></div>`);
-    $('#mCancel').onclick = closeModal;
-    $('#mOk').onclick = async () => { $('#mOk').disabled = true; $('#mOk').textContent = 'Enviando…'; try { const r = await api('assetEjecutar', 'asset_orden_visita', args); closeModal(); toast(`Orden de visita enviada a firmar: operación ${r.operacion}.`, 5000); despues ? despues(r) : abrirAgenda(); } catch (er) { closeModal(); toast(er.message, 6000); } };
+    window.Ventanas.abrir('negocios.agendaOrdenVisita', {
+      titulo: d.titulo, detalle: d.detalle, aviso: d.aviso || '',
+      alConfirmar: async () => { try { const r = await api('assetEjecutar', 'asset_orden_visita', args); closeModal(); toast(`Orden de visita enviada a firmar: operación ${r.operacion}.`, 5000); despues ? despues(r) : abrirAgenda(); } catch (er) { closeModal(); toast(er.message, 6000); } },
+    }, { clave: 'modal-3' });
   }, 'Para generar la orden de visita, inicia sesión con tu cuenta de Portalfirma.');
 }
 

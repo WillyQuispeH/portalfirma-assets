@@ -96,9 +96,20 @@ app.whenReady().then(() => {
   protocol.handle('pffoto', (req) => { const u = new URL(req.url); const base = u.host === 'l' ? (fs.mkdirSync(leadsDir(), { recursive: true }), leadsDir()) : fotosDir(); const f = path.resolve(base, decodeURIComponent(u.pathname).replace(/^\/+/, ''));
     if (!f.startsWith(base + path.sep) || !fs.existsSync(f)) return new Response('', { status: 404 }); return net.fetch(require('url').pathToFileURL(f).toString()); });
   createWindow();
-  if (process.argv.includes('--oculto') || app.getLoginItemSettings?.().wasOpenedAsHidden) { win.once('ready-to-show', () => win.hide()); setTimeout(() => { try { win.hide(); app.dock?.hide?.(); } catch {} }, 1500); }
+  // después de una actualización instalada sola con la ventana oculta, vuelve a quedar oculta (actualizaciones.js)
+  const trasActualizar = !!store.get('arrancarOculto'); if (trasActualizar) store.set('arrancarOculto', false);
+  if (trasActualizar || process.argv.includes('--oculto') || app.getLoginItemSettings?.().wasOpenedAsHidden) { win.once('ready-to-show', () => win.hide()); setTimeout(() => { try { win.hide(); app.dock?.hide?.(); } catch {} }, 1500); }
 });
 app.on('before-quit', () => { quitting = true; });
+
+// ---- Actualizaciones automáticas (src/actualizaciones.js, desde GitHub Releases) ----
+const actualizaciones = require('./actualizaciones');
+app.whenReady().then(() => actualizaciones.init({
+  alCambiar: () => toUI('act:estado', actualizaciones.estado()),
+  ventana: () => win,
+  sinCambios: () => !(docState.dirty || docState.dirtyNames?.length),
+  antesDeInstalar: ({ oculta }) => { quitting = true; if (oculta) store.set('arrancarOculto', true); },
+}));
 
 // ---- Menú nativo ----
 const send = (action, arg) => () => toUI('menu', action, arg);
@@ -1195,6 +1206,10 @@ const waAgente = require('./whatsapp-agente').crear({ store, wa: require('./post
     if (prep0) t.preparar = async (a) => { guard(a); return prep0(a); };
     t.run = async (a) => { guard(a); if (['asset_atencion_clientes', 'asset_plantillas_whatsapp'].includes(t.name) && Object.keys(a || {}).some((k) => !/^(consultar|ver)$/.test(k))) permisos.permiso('fernanda'); const out = await run0(a); if (!out || typeof out !== 'object') return out; const ef = out.efectos; const r = permisos.limpiar(out); if (ef) r.efectos = ef; return r; }; } }
 handle('wa:estado', () => ({ ...waAgente.estado(), ...reservas.estadoWa() }));
+handle('wa:canales', () => waSrv.canales()); // pantalla Integraciones
+handle('act:estado', () => actualizaciones.estado());
+handle('act:buscar', async () => { await actualizaciones.buscar(); return actualizaciones.estado(); });
+handle('act:instalar', () => actualizaciones.instalar());
 handle('app:siempreActivo', (v) => { if (typeof v === 'boolean') { permisos.permiso('fernanda'); store.set('siempreActivo', v); } return aplicarSiempreActivo(); });
 handle('wa:vincular', async (o) => { if (waSrv.enApi()) await waSrv.refrescarConexion(); if (!reservas.estadoWa().conectado) throw new Error('Primero conecta el WhatsApp de la empresa (clave de wechatia).'); return waAgente.vincular(o || {}); });
 handle('wa:desvincular', () => waAgente.desvincular());

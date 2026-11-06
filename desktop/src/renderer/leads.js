@@ -1,4 +1,4 @@
-/* global $, api, esc, icon, toast, modal, closeModal, ir, pf, liberar */
+/* global $, api, esc, icon, toast, closeModal, ir, pf, liberar */
 'use strict';
 // Leads (0.14): bandeja de clientes potenciales con su conversación de WhatsApp (como una ventana de WhatsApp,
 // de solo lectura), su búsqueda leída por IA, su estado y la próxima acción. Entrada: chat exportado (.txt o .zip).
@@ -30,15 +30,7 @@ async function abrir(id) {
 function mostrar(sel, data, filtro) { LD.sel = sel; LD.data = data; LD.filtro = filtro; detalle(); }
 // aquí → React: recargar la lista (con el elegido y el filtro que se hayan fijado aquí, p. ej. al importar)
 function lista() { window.dispatchEvent(new CustomEvent('pf:leads', { detail: { sel: LD.sel, filtro: LD.filtro } })); }
-function comoExportar() {
-  modal(`<h2>${icon('whatsapp', 18)} Cómo exportar un chat de WhatsApp</h2>
-    <div class="ld-pasos"><div><b>iPhone</b><span>Abre el chat › toca el nombre del contacto arriba › baja hasta <i>Exportar chat</i> › elige <i>Incluir archivos</i> (fotos y audios) o <i>Sin archivos</i> (más liviano).</span></div>
-    <div><b>Android</b><span>Abre el chat › ⋮ (arriba a la derecha) › <i>Más</i> › <i>Exportar chat</i> › <i>Incluir archivos</i> o <i>Sin archivos</i>.</span></div></div>
-    <p><b>Luego, una de dos:</b></p><ul class="ld-ul"><li>Envíalo por WhatsApp al número de la empresa (tu Agente lo registra y te confirma), o</li><li>guárdalo en el computador y arrástralo a esta ventana.</li></ul>
-    <p class="muted small">Si exportas el mismo chat otra vez más adelante, Asset agrega solo los mensajes nuevos.</p>
-    <div class="actions"><button class="primary" id="mCancel">Entendido</button></div>`);
-  $('#mCancel').onclick = closeModal;
-}
+function comoExportar() { window.Ventanas.abrir('leads.comoExportar', {}, { clave: 'modal-33' }); }
 
 // ---------- detalle: conversación + ficha ----------
 async function detalle() {
@@ -75,7 +67,7 @@ function chat(l) {
       <button class="ghost small" id="ldAct">${icon('upload', 13)} Agregar mensajes nuevos</button></div>`;
   const b = $('#ldChB'); b.scrollTop = b.scrollHeight;
   b.querySelectorAll('[data-url]').forEach((a) => (a.onclick = (e) => { e.preventDefault(); pf.openUrl?.(a.dataset.url); }));
-  b.querySelectorAll('[data-img]').forEach((im) => (im.onclick = () => { modal(`<img src="${esc(im.dataset.img)}" class="ld-big" alt="" /><div class="actions"><button class="secondary" id="mCancel">Cerrar</button></div>`); $('#mCancel').onclick = closeModal; }));
+  b.querySelectorAll('[data-img]').forEach((im) => (im.onclick = () => window.Ventanas.abrir('leads.verImagen', { src: im.dataset.img }, { clave: 'modal-34' })));
   $('#ldAct').onclick = () => (l.ig ? comoInstagram() : $('#ldFile').click());
   // 0.16.9 · tomar / devolver la conversación de WhatsApp y responder desde aquí
   const recargar = async () => { await detalle(); lista(); };
@@ -134,8 +126,8 @@ function ficha(l) {
   $('#ldPersona')?.addEventListener('click', () => window.Inmo.abrirPersona(l.personaId));
   $('#ldCor').onchange = async (e) => { try { await api('leadsAsignar', l.id, e.target.value || null); toast(e.target.value ? 'Lead asignado. Queda en su historial.' : 'El lead quedó sin corredor.'); await lista(); } catch (er) { toast(er.message, 5000); } };
   $('#ldDerivar').onclick = () => derivar(l);
-  $('#ldBorrar').onclick = () => { modal(`<h2>¿Eliminar este lead?</h2><p>Se borra la conversación guardada de <b>${esc(nombreDe(l))}</b> (${l.mensajes} mensajes) y sus fotos y audios. No se puede deshacer.</p><div class="actions"><button class="secondary" id="mCancel">Cancelar</button><button class="danger" id="mOk">Eliminar</button></div>`);
-    $('#mCancel').onclick = closeModal; $('#mOk').onclick = async () => { await api('leadsBorrar', l.id); closeModal(); LD.sel = null; toast('Lead eliminado.'); lista(); }; };
+  $('#ldBorrar').onclick = () => window.Ventanas.abrir('leads.eliminar', { nombre: nombreDe(l), mensajes: l.mensajes,
+    alEliminar: async () => { await api('leadsBorrar', l.id); closeModal(); LD.sel = null; toast('Lead eliminado.'); lista(); } }, { clave: 'modal-35' });
   f.querySelectorAll('[data-prop]').forEach((bt) => (bt.onclick = () => window.Inmo.abrirFicha(bt.dataset.prop)));
   f.querySelectorAll('[data-url]').forEach((a) => (a.onclick = (e) => { e.preventDefault(); pf.openUrl?.(a.dataset.url); }));
 }
@@ -144,18 +136,11 @@ function ficha(l) {
 async function derivar(l) {
   const v = await api('leadsDerivarVer', l.id).catch((e) => { toast(e.message); return null; }); if (!v) return;
   if (!v.corredor) return toast('Primero asigna el lead a un corredor.');
-  modal(`<div class="im-form"><h2>${icon('whatsapp', 18)} Avisar a ${esc(v.corredor.nombre)}</h2>
-    ${v.corredor.celular ? `<p>Se le envía este WhatsApp a <b>${esc(v.corredor.celular)}</b> desde el número de la empresa:</p><pre class="ld-pre">${esc(v.texto)}</pre>
-      <p class="muted small">Si ${esc(v.corredor.nombre.split(' ')[0])} no le ha escrito al número de la empresa en las últimas 24 horas, WhatsApp no deja enviarlo: en ese caso te dejo el enlace para mandárselo desde tu WhatsApp.</p>`
-      : `<p class="error">Falta el teléfono de ${esc(v.corredor.nombre)}. Agrégalo en Usuarios.</p>`}
-    <p class="error" id="ldDvErr"></p><div class="actions"><button class="secondary" id="mCancel">Cancelar</button>${v.corredor.celular ? '<button class="primary" id="mOk">Enviar aviso</button>' : '<button class="primary" id="ldDvCor">Usuarios</button>'}</div></div>`);
-  $('#mCancel').onclick = closeModal; if ($('#ldDvCor')) $('#ldDvCor').onclick = () => window.Usuarios?.abrir();
-  if ($('#mOk')) $('#mOk').onclick = async (e) => { const b = e.currentTarget; b.disabled = true; b.innerHTML = '<span class="spinner sm"></span> Enviando…';
-    try { const r = await api('leadsDerivar', l.id);
+  window.Ventanas.abrir('leads.derivar', { corredor: v.corredor, texto: v.texto, alUsuarios: () => window.Usuarios?.abrir(), alAbrirEnlace: (url) => pf.openUrl?.(url),
+    // si no sale por el número de la empresa, la ventana ofrece abrir tu WhatsApp con r.enlace
+    alEnviar: async () => { const r = await api('leadsDerivar', l.id);
       if (r.ok) { closeModal(); toast(`Listo: ${v.corredor.nombre} recibió el lead por WhatsApp.`, 5000); }
-      else { $('#ldDvErr').textContent = 'No salió desde el número de la empresa: ' + r.motivo; b.disabled = false; b.textContent = 'Abrir mi WhatsApp'; b.onclick = () => { pf.openUrl?.(r.enlace); closeModal(); }; }
-      detalle(); lista();
-    } catch (er) { $('#ldDvErr').textContent = er.message; b.disabled = false; b.textContent = 'Enviar aviso'; } };
+      detalle(); lista(); return r; } }, { clave: 'modal-36' });
 }
 // ---------- importar un chat exportado ----------
 async function importarRuta(ruta, canal) {
@@ -165,116 +150,40 @@ async function importarRuta(ruta, canal) {
   const fmt = (f) => (f ? `${f.slice(8, 10)}/${f.slice(5, 7)}/${f.slice(0, 4)}` : '');
   const med = Object.entries(a.medios || {}).sort((x, y) => ['imagen', 'audio', 'video', 'documento', 'contacto', 'omitido'].indexOf(x[0]) - ['imagen', 'audio', 'video', 'documento', 'contacto', 'omitido'].indexOf(y[0])).map(([k, n]) => `${n} ${{ imagen: n > 1 ? 'fotos' : 'foto', audio: n > 1 ? 'audios' : 'audio', video: n > 1 ? 'videos' : 'video', documento: n > 1 ? 'documentos' : 'documento', omitido: n > 1 ? 'archivos no incluidos' : 'archivo no incluido', contacto: 'contacto' }[k] || k}`).join(', ');
   const audios = a.conArchivos ? a.medios?.audio || 0 : 0;
-  modal(`<div class="ld-imp"><h2>${icon('whatsapp', 18)} Importar conversación</h2>
-    <p><b>${a.total} mensajes</b> del ${fmt(a.desde)} al ${fmt(a.hasta)}${med ? ` · ${esc(med)}` : ''}.</p>
-    ${a.existente ? `<p class="ld-ex">${icon('check', 13)} Ya tienes este chat con <b>${esc(a.existente.nombre || a.cliente)}</b>: se agregan solo los <b>${a.existente.nuevos}</b> mensajes nuevos.</p>` : ''}
-    <p class="ld-q">¿Quién es el cliente?</p><div class="ld-parts">${a.participantes.map((p) => `<label class="im-ck"><input type="radio" name="ldCli" value="${esc(p.nombre)}" ${p.nombre === a.cliente ? 'checked' : ''} /> ${esc(p.nombre)} <small class="muted">· ${p.n} mensajes</small></label>`).join('')}</div>
-    <label class="ld-tel">Teléfono del cliente <small class="muted">(si lo tienes guardado como contacto, la exportación no lo trae)</small><input id="ldTel" type="tel" value="${esc(a.telefono || '')}" placeholder="+56 9 …" /></label>
-    ${audios ? `<label class="im-ck"><input type="checkbox" id="ldTx" checked /> ${audios > 1 ? `Transcribir los ${audios} audios` : 'Transcribir el audio'} para leerlo${audios > 1 ? 's' : ''} y analizarlo${audios > 1 ? 's' : ''}</label>` : ''}
-    ${!a.conArchivos && (a.medios?.imagen || a.medios?.audio || a.medios?.omitido) ? '<p class="muted small">Se exportó sin archivos: las fotos y audios aparecerán como «no incluidos». Si los necesitas, exporta con «Incluir archivos».</p>' : ''}
-    <p class="muted small">Asset leerá la conversación con IA para anotar qué busca el cliente y la próxima acción (1 token).</p>
-    <p class="error" id="ldErr2"></p><div class="actions"><button class="secondary" id="mCancel">Cancelar</button><button class="primary" id="mOk">Importar</button></div></div>`);
-  $('#mCancel').onclick = closeModal;
-  $('#mOk').onclick = async (e) => {
-    const bt = e.currentTarget; const cli = document.querySelector('input[name="ldCli"]:checked')?.value;
-    if (!cli) { $('#ldErr2').textContent = 'Elige quién es el cliente.'; return; }
-    bt.disabled = true; bt.innerHTML = '<span class="spinner sm"></span> Importando…';
-    try {
-      const r = await api('leadsImportar', { token: a.token, cliente: cli, telefono: $('#ldTel').value.trim(), brokerNombre: await miNombre(), transcribir: !!$('#ldTx')?.checked });
+  window.Ventanas.abrir('leads.importar', { total: a.total, rango: `del ${fmt(a.desde)} al ${fmt(a.hasta)}`, medios: med, existente: a.existente, cliente: a.cliente,
+    participantes: a.participantes, telefono: a.telefono || '', audios, sinArchivos: !a.conArchivos && !!(a.medios?.imagen || a.medios?.audio || a.medios?.omitido),
+    alImportar: async ({ cliente: cli, telefono, transcribir }) => {
+      const r = await api('leadsImportar', { token: a.token, cliente: cli, telefono, brokerNombre: await miNombre(), transcribir });
       closeModal(); LD.sel = r.lead.id; LD.filtro = 'todos';
       toast(r.nuevo ? `Lead creado: ${r.agregados} mensajes.` : r.agregados ? `Se agregaron ${r.agregados} mensajes nuevos.` : 'No había mensajes nuevos.');
       if (r.ia?.error) toast('La conversación quedó guardada, pero no se pudo analizar con IA: ' + r.ia.error, 7000);
       abrir(r.lead.id);
-    } catch (er) { bt.disabled = false; bt.textContent = 'Importar'; $('#ldErr2').textContent = er.message; }
-  };
+    } }, { clave: 'modal-37' });
 }
-function modalError(msg, como = comoExportar) { modal(`<h2>No se pudo importar</h2><p>${esc(msg)}</p><div class="actions"><button class="secondary" id="ldVer">${como === comoInstagram ? 'Cómo descargar el historial de Instagram' : 'Cómo exportar un chat'}</button><button class="primary" id="mCancel">Cerrar</button></div>`); $('#mCancel').onclick = closeModal; $('#ldVer').onclick = como; }
+function modalError(msg, como = comoExportar) { window.Ventanas.abrir('leads.errorImportar', { mensaje: msg, instagram: como === comoInstagram, alVerComo: como }, { clave: 'modal-38' }); }
 
 // ---------- 0.16.21 · cuentas e historial: Instagram (archivo de «Descargar tu información»), WhatsApp, correo ----------
 async function cuentas() {
   const cons = await api('leadsConsentimientos').catch(() => []);
-  modal(`<div class="ld-cuentas"><h2>${icon('link', 18)} Cuentas e historial</h2>
-    <p class="muted">Trae a Leads las conversaciones que la corredora ya tuvo con clientes. Asset solo lee: no responde ni publica nada en esas cuentas.</p>
-    <div class="ld-cta"><div class="ld-cta-i ig">${icon('instagram', 20)}</div><div><b>Instagram · historial de mensajes</b><small>El dueño de la cuenta descarga sus mensajes desde Instagram y sube aquí el archivo. Cada conversación queda como un lead con su perfil y su historial.</small></div><button class="primary small" id="ldCtaIg">Importar</button></div>
-    <div class="ld-cta"><div class="ld-cta-i wa">${icon('whatsapp', 20)}</div><div><b>WhatsApp · chat exportado</b><small>Un chat a la vez, exportado desde el teléfono del corredor.</small></div><button class="secondary small" id="ldCtaWa">Importar</button></div>
-    <div class="ld-cta" id="ldObs"><div class="ld-cta-i vivo">${icon('sparkle', 20)}</div><div><b>En vivo desde wechatia · Instagram, Facebook y correo</b><small>Cada 2 minutos Asset lee los mensajes nuevos de las cuentas conectadas en wechatia y los anota en Leads. Solo lee: nunca responde por esos canales.</small></div><span class="ld-pronto">…</span></div>
-    <div id="ldObsCfg"></div>
-    ${cons.length ? `<h4 class="fb-sub">Autorizaciones registradas</h4><ul class="ld-cons">${cons.slice(0, 8).map((c) => `<li>${c.canal === 'instagram' ? icon('instagram', 12) : icon('whatsapp', 12)} <b>${esc(c.cuenta || '—')}</b> · autorizó ${esc(c.autorizadoPor || '—')} · ${esc(fechaCorta(c.fecha))} ${esc(c.fecha.slice(0, 4))} · ${c.conversaciones} conversaciones</li>`).join('')}</ul>` : ''}
-    <div class="actions"><button class="secondary" id="mCancel">Cerrar</button></div></div>`);
-  $('#mCancel').onclick = closeModal; $('#ldCtaIg').onclick = comoInstagram; $('#ldCtaWa').onclick = comoExportar;
-  pintarObs(await api('obsEstado').catch(() => null));
+  // el panel «En vivo desde wechatia» (Instagram, Facebook y correo) se dibuja en la ventana con el estado de obsEstado
+  window.Ventanas.abrir('leads.cuentas', { consentimientos: cons, fechaCorta, alInstagram: comoInstagram, alWhatsApp: comoExportar,
+    alCargarObs: () => api('obsEstado').catch(() => null),
+    alConfigurar: (cfg) => api('obsConfigurar', cfg),
+    alRevisar: async () => { const r = await api('obsRevisar');
+      toast(r.error ? r.error : r.mensajes ? `${r.mensajes} mensajes nuevos${r.nuevos ? ` · ${r.nuevos} lead${r.nuevos === 1 ? '' : 's'} nuevo${r.nuevos === 1 ? '' : 's'}` : ''}.` : 'No hay mensajes nuevos.', 5000); lista();
+      return r.estado; } }, { clave: 'modal-39' });
 }
-function pintarObs(o) {
-  const box = $('#ldObsCfg'); if (!box || !o) return;
-  const hace = (f) => { if (!f) return 'nunca'; const m = Math.round((Date.now() - new Date(f)) / 6e4); return m < 1 ? 'recién' : m < 60 ? `hace ${m} min` : fechaCorta(f); };
-  $('#ldObs .ld-pronto').textContent = o.activo ? 'Activo' : 'Apagado'; $('#ldObs .ld-pronto').classList.toggle('on', !!o.activo);
-  box.innerHTML = `<div class="ld-obs">
-    <div class="ld-obs-can">${Object.entries(o.canalesTxt).map(([k, t]) => `<label class="im-ck"><input type="checkbox" data-can="${k}" ${o.canales[k] ? 'checked' : ''} /> <span>${esc(t)}${o.porCanal?.[k] ? ` <small class="muted">· ${o.porCanal[k]}</small>` : ''}</span></label>`).join('')}
-      <label class="im-ck"><input type="checkbox" id="ldObsIA" ${o.ia ? 'checked' : ''} /> <span>Leer con IA (perfil, qué busca, contacto)</span></label></div>
-    ${o.activo ? `<p class="muted small">Última revisión: ${esc(hace(o.ultima))}${o.leads ? ` · ${o.leads} lead${o.leads === 1 ? '' : 's'} en seguimiento` : ''}${o.ultimo?.mensajes ? ` · ${o.ultimo.mensajes} mensajes nuevos en la última` : ''}.</p>` : `<p class="muted small">Al activarlo se traen las conversaciones de los últimos ${o.diasInicio} días y desde ahí, lo nuevo.</p>
-      <label class="im-ck ld-igok"><input type="checkbox" id="ldObsAut" /> <span>La corredora es dueña de estas cuentas y autoriza que Asset lea y guarde sus conversaciones.</span></label>`}
-    ${o.error ? `<p class="error">${esc(o.error)}</p>` : ''}<p class="error" id="ldObsErr"></p>
-    <div class="row">${o.activo ? `<button class="secondary small" id="ldObsYa">Revisar ahora</button><button class="ghost small" id="ldObsOff">Apagar</button>` : `<button class="primary small" id="ldObsOn">Activar</button>`}</div></div>`;
-  const canales = () => Object.fromEntries([...box.querySelectorAll('[data-can]')].map((x) => [x.dataset.can, x.checked]));
-  const cfg = async (o2) => { try { pintarObs(await api('obsConfigurar', { canales: canales(), ia: $('#ldObsIA').checked, ...o2 })); } catch (e) { $('#ldObsErr').textContent = e.message; } };
-  box.querySelectorAll('[data-can], #ldObsIA').forEach((x) => (x.onchange = () => { if (o.activo) cfg({}); }));
-  if ($('#ldObsOn')) $('#ldObsOn').onclick = () => { if (!$('#ldObsAut').checked) { $('#ldObsErr').textContent = 'Confirma la autorización de la corredora.'; return; } cfg({ activo: true, autorizado: true }).then(() => toast('Leads en vivo activado: Asset revisa wechatia cada 2 minutos.', 5000)); };
-  if ($('#ldObsOff')) $('#ldObsOff').onclick = () => cfg({ activo: false });
-  if ($('#ldObsYa')) $('#ldObsYa').onclick = async (e) => { const b = e.currentTarget; b.disabled = true; b.innerHTML = '<span class="spinner sm"></span> Revisando…';
-    try { const r = await api('obsRevisar'); pintarObs(r.estado); toast(r.error ? r.error : r.mensajes ? `${r.mensajes} mensajes nuevos${r.nuevos ? ` · ${r.nuevos} lead${r.nuevos === 1 ? '' : 's'} nuevo${r.nuevos === 1 ? '' : 's'}` : ''}.` : 'No hay mensajes nuevos.', 5000); lista(); }
-    catch (er) { $('#ldObsErr').textContent = er.message; b.disabled = false; b.textContent = 'Revisar ahora'; } };
-}
-function comoInstagram() {
-  modal(`<div class="ld-cuentas"><h2>${icon('instagram', 18)} Importar el historial de Instagram</h2>
-    <p>Lo hace <b>el dueño de la cuenta</b> (o alguien con su clave), desde la app o desde instagram.com. Instagram tarda desde unos minutos hasta un par de días en preparar el archivo y avisa por correo.</p>
-    <ol class="ld-ol">
-      <li>En Instagram: <i>tu perfil</i> › menú <i>☰</i> › <i>Centro de cuentas</i>.</li>
-      <li><i>Tu información y permisos</i> › <i>Descargar tu información</i> › <i>Descargar o transferir información</i>.</li>
-      <li>Elige la cuenta de Instagram de la corredora › <i>Parte de tu información</i> › marca solo <b>Mensajes</b>.</li>
-      <li><i>Descargar en el dispositivo</i> › Intervalo de fechas (por ejemplo, <i>Último año</i>) › Formato <b>JSON</b> (no HTML) › Calidad de archivos multimedia <i>Baja</i> (más liviano).</li>
-      <li><i>Crear archivos</i>. Cuando llegue el correo, vuelve a <i>Descargar tu información</i> y pulsa <i>Descargar</i>.</li>
-      <li>Sube aquí el .zip tal como se descargó (no lo descomprimas). Si Instagram lo dividió en varias partes, sube la que dice <i>messages</i>.</li>
-    </ol>
-    <p class="muted small">Asset muestra las conversaciones que trae el archivo y tú eliges cuáles importar. Queda registrado quién autorizó y cuándo. Si más adelante subes una descarga nueva, se agregan solo los mensajes nuevos.</p>
-    <div class="actions"><button class="secondary" id="mCancel">Cerrar</button><button class="primary" id="ldIgElegir">${icon('upload', 15)} Elegir el archivo .zip</button></div></div>`);
-  $('#mCancel').onclick = closeModal; $('#ldIgElegir').onclick = () => { closeModal(); $('#ldFileIg').click(); };
-}
+function comoInstagram() { window.Ventanas.abrir('leads.comoInstagram', { alElegir: () => { closeModal(); $('#ldFileIg').click(); } }, { clave: 'modal-40' }); }
 function importarInstagram(a) {
-  const fmt = (f) => (f ? `${f.slice(8, 10)}/${f.slice(5, 7)}/${f.slice(2, 4)}` : '');
-  const conv = a.conversaciones; const sugerido = (c) => c.delCliente > 0 && !c.grupo && (!c.existente || c.existente.nuevos > 0);
-  const partes = [...new Set(conv.flatMap((c) => c.participantes))];
-  modal(`<div class="ld-imp ld-igimp"><h2>${icon('instagram', 18)} Historial de Instagram</h2>
-    <p><b>${conv.length} conversaciones</b> en el archivo.</p>
-    <div class="ld-bq"><label>Cuenta de la corredora <small class="muted">(sus mensajes quedan como «Tú»)</small>${a.dueno ? `<input id="ldIgDueno" value="${esc(a.dueno)}" readonly />` : `<select id="ldIgDueno">${partes.map((p) => `<option>${esc(p)}</option>`).join('')}</select>`}</label>
-      <label>Usuario de Instagram <small class="muted">(opcional)</small><input id="ldIgCuenta" placeholder="@thelivingprop" /></label></div>
-    <div class="ld-igbar"><b>Conversaciones</b><span class="spacer"></span><button class="ghost small" id="ldIgTodas">Todas</button><button class="ghost small" id="ldIgNinguna">Ninguna</button></div>
-    <div class="ld-iglist">${conv.map((c) => `<label class="ld-igc-it"><input type="checkbox" data-hilo="${esc(c.id)}" ${sugerido(c) ? 'checked' : ''} />
-      <span class="ld-av">${esc(ini(c.cliente))}</span><span><b>${esc(c.cliente || c.usuario)}</b>${c.usuario ? ` <small class="muted">@${esc(c.usuario)}</small>` : ''}
-      <small>${c.total} mensajes · ${fmt(c.desde)} a ${fmt(c.hasta)}${c.fotos ? ` · ${c.fotos} foto${c.fotos > 1 ? 's' : ''}` : ''}${c.solicitud ? ' · <i>solicitud de mensaje</i>' : ''}${c.grupo ? ' · <i>grupo</i>' : ''}${!c.delCliente ? ' · <i>sin respuesta del cliente</i>' : ''}${c.existente ? ` · <i>ya está en Leads: ${c.existente.nuevos} nuevos</i>` : ''}</small></span></label>`).join('')}</div>
-    <label class="im-ck"><input type="checkbox" id="ldIgIA" checked /> <span>Leer cada conversación con IA para anotar perfil, qué busca y próxima acción (<span id="ldIgN">0</span> token<span id="ldIgS">s</span>)</span></label>
-    <label class="im-ck ld-igok"><input type="checkbox" id="ldIgAut" /> <span>Soy el dueño de esta cuenta de Instagram o tengo su autorización para guardar estas conversaciones en Asset.</span></label>
-    <p class="error" id="ldErr2"></p><div class="actions"><button class="secondary" id="mCancel">Cancelar</button><button class="primary" id="mOk">Importar</button></div></div>`);
-  $('#modalCard').classList.add('im-wide');
-  const marcadas = () => [...document.querySelectorAll('[data-hilo]')].filter((x) => x.checked).map((x) => x.dataset.hilo);
-  const contar = () => { const n = conv.filter((c) => marcadas().includes(c.id) && c.delCliente).length; $('#ldIgN').textContent = n; $('#ldIgS').textContent = n === 1 ? '' : 's'; $('#mOk').textContent = `Importar ${marcadas().length}`; };
-  document.querySelectorAll('[data-hilo]').forEach((x) => (x.onchange = contar)); contar();
-  $('#ldIgTodas').onclick = () => { document.querySelectorAll('[data-hilo]').forEach((x) => (x.checked = true)); contar(); };
-  $('#ldIgNinguna').onclick = () => { document.querySelectorAll('[data-hilo]').forEach((x) => (x.checked = false)); contar(); };
-  const cerrar = () => { $('#modalCard').classList.remove('im-wide'); closeModal(); };
-  $('#mCancel').onclick = cerrar;
-  $('#mOk').onclick = async (e) => {
-    const bt = e.currentTarget; const hilos = marcadas();
-    if (!hilos.length) { $('#ldErr2').textContent = 'Elige al menos una conversación.'; return; }
-    if (!$('#ldIgAut').checked) { $('#ldErr2').textContent = 'Confirma que tienes la autorización del dueño de la cuenta.'; return; }
-    bt.disabled = true; bt.innerHTML = '<span class="spinner sm"></span> Importando…';
-    try {
-      const r = await api('leadsImportarInstagram', { token: a.token, hilos, dueno: $('#ldIgDueno').value, cuenta: $('#ldIgCuenta').value.trim(), autorizado: true, autorizadoPor: await miNombre(), analizarIA: $('#ldIgIA').checked });
-      cerrar(); LD.filtro = 'todos'; if (r.primero) LD.sel = r.primero;
+  const partes = [...new Set(a.conversaciones.flatMap((c) => c.participantes))];
+  window.Ventanas.abrir('leads.importarInstagram', { conversaciones: a.conversaciones, dueno: a.dueno || null, participantes: partes,
+    alImportar: async ({ hilos, dueno, cuenta, analizarIA }) => {
+      const r = await api('leadsImportarInstagram', { token: a.token, hilos, dueno, cuenta, autorizado: true, autorizadoPor: await miNombre(), analizarIA });
+      closeModal(); LD.filtro = 'todos'; if (r.primero) LD.sel = r.primero;
       toast(`Instagram: ${r.nuevos} lead${r.nuevos === 1 ? '' : 's'} nuevo${r.nuevos === 1 ? '' : 's'}${r.actualizados ? `, ${r.actualizados} actualizado${r.actualizados === 1 ? '' : 's'}` : ''} · ${r.mensajes} mensajes${r.analizados ? ` · ${r.analizados} leído${r.analizados === 1 ? '' : 's'} con IA` : ''}.`, 6000);
       if (r.errores?.length) toast('Algunas conversaciones no se pudieron leer con IA: ' + r.errores[0], 7000);
       abrir(LD.sel);
-    } catch (er) { bt.disabled = false; contar(); $('#ldErr2').textContent = er.message; }
-  };
+    } }, { clave: 'modal-41', ancho: true });
 }
 function dropFiles(paths) { const p = (paths || []).find((x) => /\.(txt|zip)$/i.test(x)); if (!p) return modalError('Arrastra el archivo .txt o .zip que genera WhatsApp al exportar un chat.'); importarRuta(p); }
 

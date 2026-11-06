@@ -1,22 +1,9 @@
-/* Estilos globales de React: Tailwind v4. Se compilan a src/renderer/react/react-ui.css.
- *
- * Convive con la interfaz actual (src/renderer/styles.css), que se carga en la misma ventana:
- *  - Sin Preflight (el reset de Tailwind): rompería las pantallas que aún no están en React.
- *  - Con prefijo tw: (tw:flex, tw:gap-3, tw:hover:bg-card…) para no chocar con clases
- *    que ya existen en la app, como hidden, small o active.
- *  - Solo revisa src/ui para generar clases.
- *  - Sin cascade layers: una clase tw: y una de styles.css compiten por especificidad,
- *    como dos reglas normales. Si estuvieran en capas, styles.css ganaría siempre.
- */
 @import "tailwindcss/theme.css" prefix(tw);
 @import "tailwindcss/utilities.css" source(none);
 @source "../";
 
-/* tw:dark:… se aplica con el tema oscuro de la app (html[data-theme="dark"], lo pone src/renderer). */
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
-/* Colores de la app: usan las variables de styles.css, así el tema oscuro funciona solo.
- * Ejemplos: tw:bg-card, tw:text-muted, tw:border-line, tw:text-brand. */
 @theme inline {
   --color-bg: var(--bg);
   --color-card: var(--card);
@@ -31,15 +18,6 @@
   --radius-app: var(--radius);
 }
 
-/* ---------------------------------------------------------------------------
- * Kit de componentes (components/ui): estilo táctil. Borde inferior más grueso que «se hunde» al presionar,
- * esquinas redondeadas y tonos pastel con texto oscuro. Cada tono tiene:
- *   --ui-T       relleno (botones, tarjetas de color)
- *   --ui-T-edge  borde
- *   --ui-T-ink   texto sobre el relleno
- *   --ui-T-soft  fondo suave (badges) y --ui-T-softink, su texto
- * En modo oscuro los rellenos se mantienen claros (como el botón principal) y los suaves se oscurecen.
- * ------------------------------------------------------------------------- */
 :root {
   --ui-edge: color-mix(in srgb, var(--text) 14%, transparent);
   --ui-edge-b: color-mix(in srgb, var(--text) 26%, transparent);
@@ -47,15 +25,43 @@
   --ui-hover: color-mix(in srgb, var(--text) 5%, transparent);
   --ui-sunken: color-mix(in srgb, var(--text) 5%, var(--card));
 
-  --ui-lav: #ddd3ff;    --ui-lav-edge: #9d8bef;    --ui-lav-ink: #23195a;    --ui-lav-soft: #eee9ff;    --ui-lav-softink: #4b3bb0;
-  --ui-green: #b7e6b2;  --ui-green-edge: #5daa5a;  --ui-green-ink: #133b16;  --ui-green-soft: #e3f5e0;  --ui-green-softink: #23722a;
-  --ui-yellow: #fae08a; --ui-yellow-edge: #c7a23a; --ui-yellow-ink: #423207; --ui-yellow-soft: #fdf3cf; --ui-yellow-softink: #7d5d05;
-  --ui-peach: #ffcdb6;  --ui-peach-edge: #d98a64;  --ui-peach-ink: #53250f;  --ui-peach-soft: #ffeadf;  --ui-peach-softink: #a14a1f;
-  --ui-blue: #b8d6fc;   --ui-blue-edge: #5d93d8;   --ui-blue-ink: #0e325e;   --ui-blue-soft: #e3effe;   --ui-blue-softink: #1f5ea8;
-  --ui-red: #ffcdc7;    --ui-red-edge: #dc7569;    --ui-red-ink: #5b1610;    --ui-red-soft: #ffe7e4;    --ui-red-softink: #b3362a;
-  --ui-gray: color-mix(in srgb, var(--text) 8%, var(--card)); --ui-gray-edge: var(--ui-edge-b); --ui-gray-ink: var(--text);
-  --ui-gray-soft: color-mix(in srgb, var(--text) 7%, var(--card)); --ui-gray-softink: var(--muted);
+  --ui-lav: #ddd3ff;
+  --ui-lav-edge: #9d8bef;
+  --ui-lav-ink: #23195a;
+  --ui-lav-soft: #eee9ff;
+  --ui-lav-softink: #4b3bb0;
+  --ui-green: #b7e6b2;
+  --ui-green-edge: #5daa5a;
+  --ui-green-ink: #133b16;
+  --ui-green-soft: #e3f5e0;
+  --ui-green-softink: #23722a;
+  --ui-yellow: #fae08a;
+  --ui-yellow-edge: #c7a23a;
+  --ui-yellow-ink: #423207;
+  --ui-yellow-soft: #fdf3cf;
+  --ui-yellow-softink: #7d5d05;
+  --ui-peach: #ffcdb6;
+  --ui-peach-edge: #d98a64;
+  --ui-peach-ink: #53250f;
+  --ui-peach-soft: #ffeadf;
+  --ui-peach-softink: #a14a1f;
+  --ui-blue: #b8d6fc;
+  --ui-blue-edge: #5d93d8;
+  --ui-blue-ink: #0e325e;
+  --ui-blue-soft: #e3effe;
+  --ui-blue-softink: #1f5ea8;
+  --ui-red: #ffcdc7;
+  --ui-red-edge: #dc7569;
+  --ui-red-ink: #5b1610;
+  --ui-red-soft: #ffe7e4;
+  --ui-red-softink: #b3362a;
+  --ui-gray: color-mix(in srgb, var(--text) 8%, var(--card));
+  --ui-gray-edge: var(--ui-edge-b);
+  --ui-gray-ink: var(--text);
+  --ui-gray-soft: color-mix(in srgb, var(--text) 7%, var(--card));
+  --ui-gray-softink: var(--muted);
 }
+
 html[data-theme="dark"] {
   --ui-edge: color-mix(in srgb, #fff 10%, transparent);
   --ui-edge-b: color-mix(in srgb, #000 55%, transparent);
@@ -63,37 +69,88 @@ html[data-theme="dark"] {
   --ui-hover: color-mix(in srgb, #fff 6%, transparent);
   --ui-sunken: #17191e;
 
-  --ui-lav: #d6cbff;    --ui-lav-edge: #8f7de6;    --ui-lav-ink: #1d1548;    --ui-lav-soft: #2c2752;    --ui-lav-softink: #c9bdff;
-  --ui-green: #a6dba1;  --ui-green-edge: #4f9a4c;  --ui-green-ink: #0f2e12;  --ui-green-soft: #1d3320;  --ui-green-softink: #8fd68a;
-  --ui-yellow: #f0d47a; --ui-yellow-edge: #b18f2c; --ui-yellow-ink: #352805; --ui-yellow-soft: #352d14; --ui-yellow-softink: #f0d47a;
-  --ui-peach: #f6c0a6;  --ui-peach-edge: #c87b56;  --ui-peach-ink: #43200c;  --ui-peach-soft: #3a2519;  --ui-peach-softink: #f6b593;
-  --ui-blue: #a9cbf6;   --ui-blue-edge: #4f86cc;   --ui-blue-ink: #0b2a4f;   --ui-blue-soft: #18283d;   --ui-blue-softink: #8fbdf6;
-  --ui-red: #f7bdb6;    --ui-red-edge: #cc665b;    --ui-red-ink: #4a120d;    --ui-red-soft: #3a1c19;    --ui-red-softink: #ff9a8e;
-  --ui-gray: #30333a; --ui-gray-edge: #1a1c20; --ui-gray-ink: var(--text);
-  --ui-gray-soft: #2a2d33; --ui-gray-softink: var(--muted);
+  --ui-lav: #d6cbff;
+  --ui-lav-edge: #8f7de6;
+  --ui-lav-ink: #1d1548;
+  --ui-lav-soft: #2c2752;
+  --ui-lav-softink: #c9bdff;
+  --ui-green: #a6dba1;
+  --ui-green-edge: #4f9a4c;
+  --ui-green-ink: #0f2e12;
+  --ui-green-soft: #1d3320;
+  --ui-green-softink: #8fd68a;
+  --ui-yellow: #f0d47a;
+  --ui-yellow-edge: #b18f2c;
+  --ui-yellow-ink: #352805;
+  --ui-yellow-soft: #352d14;
+  --ui-yellow-softink: #f0d47a;
+  --ui-peach: #f6c0a6;
+  --ui-peach-edge: #c87b56;
+  --ui-peach-ink: #43200c;
+  --ui-peach-soft: #3a2519;
+  --ui-peach-softink: #f6b593;
+  --ui-blue: #a9cbf6;
+  --ui-blue-edge: #4f86cc;
+  --ui-blue-ink: #0b2a4f;
+  --ui-blue-soft: #18283d;
+  --ui-blue-softink: #8fbdf6;
+  --ui-red: #f7bdb6;
+  --ui-red-edge: #cc665b;
+  --ui-red-ink: #4a120d;
+  --ui-red-soft: #3a1c19;
+  --ui-red-softink: #ff9a8e;
+  --ui-gray: #30333a;
+  --ui-gray-edge: #1a1c20;
+  --ui-gray-ink: var(--text);
+  --ui-gray-soft: #2a2d33;
+  --ui-gray-softink: var(--muted);
 }
 
-/* Los tonos como colores de Tailwind: tw:bg-lav, tw:border-lav-edge, tw:text-lav-ink, tw:bg-lav-soft… */
 @theme inline {
-  --color-edge: var(--ui-edge); --color-edge-b: var(--ui-edge-b); --color-field: var(--ui-field);
-  --color-hover: var(--ui-hover); --color-sunken: var(--ui-sunken);
-  --color-lav: var(--ui-lav); --color-lav-edge: var(--ui-lav-edge); --color-lav-ink: var(--ui-lav-ink); --color-lav-soft: var(--ui-lav-soft); --color-lav-softink: var(--ui-lav-softink);
-  --color-green: var(--ui-green); --color-green-edge: var(--ui-green-edge); --color-green-ink: var(--ui-green-ink); --color-green-soft: var(--ui-green-soft); --color-green-softink: var(--ui-green-softink);
-  --color-yellow: var(--ui-yellow); --color-yellow-edge: var(--ui-yellow-edge); --color-yellow-ink: var(--ui-yellow-ink); --color-yellow-soft: var(--ui-yellow-soft); --color-yellow-softink: var(--ui-yellow-softink);
-  --color-peach: var(--ui-peach); --color-peach-edge: var(--ui-peach-edge); --color-peach-ink: var(--ui-peach-ink); --color-peach-soft: var(--ui-peach-soft); --color-peach-softink: var(--ui-peach-softink);
-  --color-blue: var(--ui-blue); --color-blue-edge: var(--ui-blue-edge); --color-blue-ink: var(--ui-blue-ink); --color-blue-soft: var(--ui-blue-soft); --color-blue-softink: var(--ui-blue-softink);
-  --color-red: var(--ui-red); --color-red-edge: var(--ui-red-edge); --color-red-ink: var(--ui-red-ink); --color-red-soft: var(--ui-red-soft); --color-red-softink: var(--ui-red-softink);
-  --color-gray: var(--ui-gray); --color-gray-edge: var(--ui-gray-edge); --color-gray-ink: var(--ui-gray-ink); --color-gray-soft: var(--ui-gray-soft); --color-gray-softink: var(--ui-gray-softink);
+  --color-edge: var(--ui-edge);
+  --color-edge-b: var(--ui-edge-b);
+  --color-field: var(--ui-field);
+  --color-hover: var(--ui-hover);
+  --color-sunken: var(--ui-sunken);
+  --color-lav: var(--ui-lav);
+  --color-lav-edge: var(--ui-lav-edge);
+  --color-lav-ink: var(--ui-lav-ink);
+  --color-lav-soft: var(--ui-lav-soft);
+  --color-lav-softink: var(--ui-lav-softink);
+  --color-green: var(--ui-green);
+  --color-green-edge: var(--ui-green-edge);
+  --color-green-ink: var(--ui-green-ink);
+  --color-green-soft: var(--ui-green-soft);
+  --color-green-softink: var(--ui-green-softink);
+  --color-yellow: var(--ui-yellow);
+  --color-yellow-edge: var(--ui-yellow-edge);
+  --color-yellow-ink: var(--ui-yellow-ink);
+  --color-yellow-soft: var(--ui-yellow-soft);
+  --color-yellow-softink: var(--ui-yellow-softink);
+  --color-peach: var(--ui-peach);
+  --color-peach-edge: var(--ui-peach-edge);
+  --color-peach-ink: var(--ui-peach-ink);
+  --color-peach-soft: var(--ui-peach-soft);
+  --color-peach-softink: var(--ui-peach-softink);
+  --color-blue: var(--ui-blue);
+  --color-blue-edge: var(--ui-blue-edge);
+  --color-blue-ink: var(--ui-blue-ink);
+  --color-blue-soft: var(--ui-blue-soft);
+  --color-blue-softink: var(--ui-blue-softink);
+  --color-red: var(--ui-red);
+  --color-red-edge: var(--ui-red-edge);
+  --color-red-ink: var(--ui-red-ink);
+  --color-red-soft: var(--ui-red-soft);
+  --color-red-softink: var(--ui-red-softink);
+  --color-gray: var(--ui-gray);
+  --color-gray-edge: var(--ui-gray-edge);
+  --color-gray-ink: var(--ui-gray-ink);
+  --color-gray-soft: var(--ui-gray-soft);
+  --color-gray-softink: var(--ui-gray-softink);
 }
 
-/* ---------------------------------------------------------------------------
- * Botón degradado (components/ui/Boton.tsx): el relleno y el borde (también el inferior grueso que se hunde al
- * presionar) son degradados. Dos fondos en capas: el relleno ocupa la zona interior (padding-box) y el degradado
- * del borde va detrás (border-box) y se asoma solo por el borde, que es transparente. Así se conservan el radio,
- * el grosor de cada lado y la animación de presionar.
- * ------------------------------------------------------------------------- */
+
 :root {
-  /* principal: el degradado de marca del botón principal de siempre (--grad de styles.css), con borde más oscuro */
   --ui-brand-grad: var(--grad);
   --ui-brand-edge-grad: linear-gradient(90deg, #2678c8 0%, #2a37bd 55%, #4f1db8 100%);
   --ui-green-grad: linear-gradient(135deg, #c9eec4 0%, #9fda98 100%);
@@ -103,6 +160,7 @@ html[data-theme="dark"] {
   --ui-card-grad: linear-gradient(180deg, var(--card) 0%, var(--ui-sunken) 100%);
   --ui-card-edge-grad: linear-gradient(90deg, var(--ui-edge-b) 0%, color-mix(in srgb, var(--text) 38%, transparent) 100%);
 }
+
 html[data-theme="dark"] {
   --ui-brand-edge-grad: linear-gradient(90deg, #1f64a8 0%, #222d9e 55%, #42189a 100%);
   --ui-green-grad: linear-gradient(135deg, #b5e2b0 0%, #8fcf88 100%);
@@ -112,35 +170,204 @@ html[data-theme="dark"] {
   --ui-card-grad: linear-gradient(180deg, #34373e 0%, #2a2d33 100%);
   --ui-card-edge-grad: linear-gradient(90deg, #1d1f24 0%, #0f1013 100%);
 }
-@utility boton-brand { border-color: transparent; background: var(--ui-brand-grad) padding-box, var(--ui-brand-edge-grad) border-box; }
-@utility boton-green { border-color: transparent; background: var(--ui-green-grad) padding-box, var(--ui-green-edge-grad) border-box; }
-@utility boton-red { border-color: transparent; background: var(--ui-red-grad) padding-box, var(--ui-red-edge-grad) border-box; }
-@utility boton-card { border-color: transparent; background: var(--ui-card-grad) padding-box, var(--ui-card-edge-grad) border-box; }
 
-/* Modal del kit (components/ui/Modal.tsx): el fondo aparece y la ventana sube un poco al abrir. */
-@keyframes modal-fondo { from { opacity: 0; } }
-@keyframes modal-entra { from { opacity: 0; transform: translateY(8px) scale(.985); } }
+@utility boton-brand {
+  border-color: transparent;
+  background: var(--ui-brand-grad) padding-box, var(--ui-brand-edge-grad) border-box;
+}
 
-/* ---------------------------------------------------------------------------
- * Firmas presenciales (gestion/firmas-presenciales): la raíz de la pantalla lleva la clase .es.
- * Define el borde suave, la sombra y el radio que usan sus piezas (var(--es-line), var(--es-soft), var(--es-r))
- * y ajusta los elementos comunes de la app que hay adentro (títulos, botones, campos, etiquetas). Queda como CSS
- * porque son selectores de descendientes genéricos (button, input:focus, .ghost:hover…) y su orden importa.
- * Las piezas propias de la pantalla usan tw: (ver firmas-presenciales/estilos.ts).
- * ------------------------------------------------------------------------- */
-.es { --es-line: color-mix(in srgb, var(--line) 75%, transparent); --es-soft: 0 1px 2px rgba(16, 24, 64, .04), 0 10px 30px -12px rgba(16, 24, 64, .10); --es-r: 20px; }
-.es h2 { font-weight: 650; letter-spacing: -.015em; }
-.es h3 { font-weight: 600; letter-spacing: -.01em; font-size: 16.5px; }
-.es h4 { font-weight: 600; font-size: 13px; color: var(--text); margin: 22px 0 6px; }
-.es button { border-radius: 999px; }
-.es button.small { padding: 6px 13px; }
-.es .primary { box-shadow: 0 6px 16px -8px rgba(63, 79, 230, .55); }
-.es .ghost { background: transparent; border: 1px solid var(--es-line); color: var(--text); }
-.es .ghost:hover:not(:disabled) { background: color-mix(in srgb, var(--brand) 5%, var(--card)); border-color: color-mix(in srgb, var(--brand) 25%, var(--line)); }
-.es input:not([type=checkbox]), .es select, .es textarea { border-radius: 11px; border: 1px solid var(--es-line); background: color-mix(in srgb, var(--bg) 55%, var(--card)); transition: border-color .15s, background .15s, box-shadow .15s; }
-.es input:focus, .es select:focus, .es textarea:focus { outline: none; background: var(--card); border-color: color-mix(in srgb, var(--brand) 45%, transparent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand) 10%, transparent); }
-.es .ops-chip { font-weight: 550; background: color-mix(in srgb, var(--c) 9%, var(--card)); }
-.es .xp-ic { border-radius: 12px; background: color-mix(in srgb, var(--brand) 8%, var(--card)); }
+@utility boton-green {
+  border-color: transparent;
+  background: var(--ui-green-grad) padding-box, var(--ui-green-edge-grad) border-box;
+}
 
-/* Google Drive (drive/Drive.tsx): la ventana del explorador es más ancha. #modalCard es de index.html, fuera de React. */
-#modalCard:has(.drv) { width: min(880px, 94vw); }
+@utility boton-red {
+  border-color: transparent;
+  background: var(--ui-red-grad) padding-box, var(--ui-red-edge-grad) border-box;
+}
+
+@utility boton-card {
+  border-color: transparent;
+  background: var(--ui-card-grad) padding-box, var(--ui-card-edge-grad) border-box;
+}
+
+@keyframes modal-fondo {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes modal-entra {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(.985);
+  }
+}
+
+/* menú «⋯» (components/ui/MenuMas.tsx): aparece desde el botón */
+@keyframes menu-entra {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(.97);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-menu-mas] {
+    animation: none;
+  }
+}
+
+
+.es {
+  --es-line: color-mix(in srgb, var(--line) 75%, transparent);
+  --es-soft: 0 1px 2px rgba(16, 24, 64, .04), 0 10px 30px -12px rgba(16, 24, 64, .10);
+  --es-r: 20px;
+}
+
+.es h2 {
+  font-weight: 650;
+  letter-spacing: -.015em;
+}
+
+.es h3 {
+  font-weight: 600;
+  letter-spacing: -.01em;
+  font-size: 16.5px;
+}
+
+.es h4 {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text);
+  margin: 22px 0 6px;
+}
+
+.es button {
+  border-radius: 999px;
+}
+
+.es button.small {
+  padding: 6px 13px;
+}
+
+.es .primary {
+  box-shadow: 0 6px 16px -8px rgba(63, 79, 230, .55);
+}
+
+.es .ghost {
+  background: transparent;
+  border: 1px solid var(--es-line);
+  color: var(--text);
+}
+
+.es .ghost:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--brand) 5%, var(--card));
+  border-color: color-mix(in srgb, var(--brand) 25%, var(--line));
+}
+
+.es input:not([type=checkbox]),
+.es select,
+.es textarea {
+  border-radius: 11px;
+  border: 1px solid var(--es-line);
+  background: color-mix(in srgb, var(--bg) 55%, var(--card));
+  transition: border-color .15s, background .15s, box-shadow .15s;
+}
+
+.es input:focus,
+.es select:focus,
+.es textarea:focus {
+  outline: none;
+  background: var(--card);
+  border-color: color-mix(in srgb, var(--brand) 45%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand) 10%, transparent);
+}
+
+.es .ops-chip {
+  font-weight: 550;
+  background: color-mix(in srgb, var(--c) 9%, var(--card));
+}
+
+.es .xp-ic {
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--brand) 8%, var(--card));
+}
+
+#modalCard:has(.drv) {
+  width: min(880px, 94vw);
+}
+
+
+/* título de CabeceraPagina: el degradado del botón principal (--grad) y una escala que armoniza con los botones del kit
+   (botón: 40px de alto, 14px y grosor 600 → título: 22px y 700, subtítulo: 14px). Le gana a «.im-wrap h1» y «h1» de
+   styles.css por cargarse después con la misma especificidad. fit-content: el degradado recorre el texto, no la fila. */
+[data-cabecera] h1 {
+  width: fit-content;
+  max-width: 100%;
+  margin: 0;
+  padding-bottom: .06em;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -.012em;
+  background: black;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+main:has(> .view:not(.hidden) [data-layout]) {
+  max-width: none;
+}
+
+.ui-cabecera-pegada {
+  --cab-lado: calc(50vw - 50% - var(--ancho-barra, 0px) / 2);
+  --cab-fondo: color-mix(in srgb, var(--text) 6%, var(--card));
+  margin-top: calc(-1 * var(--layout-arriba, 26px));
+  margin-inline: calc(-1 * var(--cab-lado));
+  padding: 14px var(--cab-lado) 22px;
+  background: var(--cab-fondo);
+  /* el borde inferior de las Card del kit (grueso, el que «se hunde») */
+  border-bottom: 3px solid var(--ui-edge-b);
+  /* fija bajo el menú principal (.topbar, sticky de 56px y z-index 5 en styles.css); las migas se van con el scroll */
+  position: sticky;
+  top: calc(56px - var(--cab-oculta, 0px));
+  z-index: 4;
+  transition: box-shadow .2s cubic-bezier(.25, 1, .5, 1);
+}
+
+/* con el contenido pasando por debajo, una sombra suave separa la cabecera (Layout marca html[data-desplazada]) */
+html[data-desplazada] .ui-cabecera-pegada {
+  box-shadow: 0 12px 24px -16px rgb(16 24 64 / .35);
+}
+
+/* la ilustración: una capa de fondo, tenue y difuminada, que se desvanece hacia el texto */
+.ui-cabecera-pegada[data-ilustracion]::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: var(--cab-ilustracion) no-repeat right -12px bottom -30px / auto 120%;
+  opacity: .5;
+  filter: blur(1.5px) saturate(.8);
+  -webkit-mask-image: linear-gradient(90deg, transparent 35%, #000 80%);
+  mask-image: linear-gradient(90deg, transparent 35%, #000 80%);
+}
+
+/* en ventanas angostas el texto y las acciones necesitan todo el ancho */
+@media (max-width: 900px) {
+  .ui-cabecera-pegada[data-ilustracion]::before {
+    display: none;
+  }
+}
+
+/* que lo que se lleva a la vista (scrollIntoView, foco con Tab) no quede tapado por el menú y la cabecera fija */
+html:has(.view:not(.hidden) .ui-cabecera-pegada) {
+  scroll-padding-top: calc(56px + var(--cab-visible, 0px) + 12px);
+}
+
+body:has(.view:not(.hidden) .ui-cabecera-pegada) {
+  overflow-x: clip;
+}

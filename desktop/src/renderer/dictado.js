@@ -151,16 +151,12 @@ async function fotosDrive(propId) {
   const st = await api('driveStatus').catch(() => ({}));
   if (st && st.configured === false) return toast('Google Drive no está configurado en esta versión de Asset.', 6000);
   if (!st.connected) {
-    const ok = await new Promise((res) => { window.modal(`<h2>${icon('drive', 18)} Conectar Google Drive</h2><p>Para cargar las fotos, conecta la cuenta de Google que tiene acceso a la carpeta de <b>captaciones</b> de la empresa. Se abrirá tu navegador para autorizar.</p>
-      <p class="muted small">Asset solo puede abrir los archivos que tú elijas en el selector de Google; no ve el resto del Drive.</p><div class="actions"><button class="secondary" id="mCancel">Cancelar</button><button class="primary" id="mOk">Conectar</button></div>`);
-      $('#mCancel').onclick = () => { window.closeModal(); res(false); }; $('#mOk').onclick = () => { window.closeModal(); res(true); }; });
+    const ok = await new Promise((res) => { window.Ventanas.abrir('agente.conectarDriveFotos', { alResponder: (si) => { window.closeModal(); res(si); } }, { clave: 'modal-10' }); });
     if (!ok) return; try { const r = await api('driveConnect'); if (!r.connected) return; toast(`Google Drive conectado${r.email ? ': ' + r.email : ''}.`); } catch (e) { return toast('No se pudo conectar Google Drive: ' + e.message, 8000); }
   }
   else {
     const st2 = await api('driveStatus').catch(() => ({}));
-    const ir = await new Promise((res) => { window.modal(`<h2>${icon('drive', 18)} Fotos desde Google Drive</h2><p>Vas a elegir las fotos con la cuenta <b>${esc(st2.email || 'conectada')}</b>.</p><p class="muted small">¿La carpeta de captaciones está en otra cuenta de Google? Cámbiala aquí.</p>
-      <div class="actions"><button class="ghost" id="fdCambiar">Cambiar cuenta</button><span class="spacer"></span><button class="secondary" id="mCancel">Cancelar</button><button class="primary" id="mOk">Elegir fotos</button></div>`);
-      $('#mCancel').onclick = () => { window.closeModal(); res('no'); }; $('#mOk').onclick = () => { window.closeModal(); res('si'); }; $('#fdCambiar').onclick = () => res('cambiar'); });
+    const ir = await new Promise((res) => { window.Ventanas.abrir('agente.fotosDrive', { email: st2.email, alResponder: (x) => { if (x !== 'cambiar') window.closeModal(); res(x); } }, { clave: 'modal-11' }); });
     if (ir === 'no') return;
     if (ir === 'cambiar') { const c = await window.Drive.cambiarCuenta(); if (!c) return; }
   }

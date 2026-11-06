@@ -78,9 +78,10 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     ok(await w.evaluate(() => document.querySelector('.im-ficha')?.dataset.marca === '1'), 'después de «Datos básicos» la ficha se recarga en su lugar');
 
     // archivar y restaurar
-    await w.click('#fArch'); await w.waitForSelector('#fArch:has-text("Restaurar")');
+    const mas = '.im-ficha [data-mas]'; // Archivar está en el menú «⋯» de la cabecera
+    await w.click(mas); await w.click('#fArch'); await w.waitForTimeout(400); await w.click(mas); await w.waitForSelector('#fArch:has-text("Restaurar")');
     ok((await call('inmoListar')).propiedades.find((x) => x.id === p.id).archivada, 'archivar');
-    await w.click('#fArch'); await w.waitForSelector('#fArch:has-text("Archivar")');
+    await w.click('#fArch'); await w.waitForTimeout(400); await w.click(mas); await w.waitForSelector('#fArch:has-text("Archivar")'); await w.keyboard.press('Escape');
 
     // detalle de la persona
     await w.click('[data-pane="resumen"] [data-per]'); await w.waitForSelector('#view-personas #pBack');

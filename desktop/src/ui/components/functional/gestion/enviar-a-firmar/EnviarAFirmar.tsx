@@ -62,7 +62,7 @@ function Revisar() {
     if (!correoValido(pagador)) return envioDatos({ error: 'Ingresa el correo del pagador.' });
     envioDatos({ error: '' });
     const p = construirPayload(analisis, firmantes, { tipoFirma, protocolizacion, pagador, descuento });
-    abrirModal(<ConfirmarEnvio analisis={analisis} archivo={archivo!} payload={p} />);
+    abrirModal(<ConfirmarEnvio analisis={analisis} archivo={archivo!} payload={p} />, { clave: 'modal-102' });
   };
   return <>
     {archivo?.converted && (

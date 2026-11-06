@@ -35,16 +35,15 @@ import { cx } from '../../../utils/cx';
 import type { ReactNode } from 'react';
 import type { IPropiedad } from '../../../store/interfaces/propiedad.interface';
 
-// Acciones de la cabecera
-function Acciones({ p }: { p: IPropiedad }) {
-  const { fichaRecargar, fichaArchivar } = useFicha();
+// Acciones de la cabecera: van sueltas (no en un componente) para que CabeceraPagina deje dos a la vista y el resto en «⋯»
+function acciones(p: IPropiedad, recargar: () => void, archivar: (si: boolean) => Promise<Parameters<typeof avisar>[0]>) {
   return <>
+    <Boton id="fEdit" variante="secundario" icono="edit" onClick={() => editarPropiedad(p)}>Datos básicos</Boton>
     <Boton id="fPub" icono="export" onClick={() => publicarPropiedad(p.id)}>Publicar</Boton>
     <Boton id="fAg" variante="secundario" icono="sparkle" onClick={() => verPropiedadEnAgente(p.id, p.codigo)}>Ver en el Agente</Boton>
     <Boton id="fGen" variante="secundario" icono="filePlus" onClick={() => generarDocumentoPropiedad(p.id)}>Generar documento</Boton>
-    <Boton id="fFicha" variante="secundario" icono="edit" onClick={() => fichaCompleta(p.id, () => { fichaRecargar(); })}>Ficha completa</Boton>
-    <Boton id="fEdit" variante="secundario" onClick={() => editarPropiedad(p)}>Datos básicos</Boton>
-    <Boton id="fArch" variante="fantasma" onClick={async () => avisar(await fichaArchivar(!p.archivada))}>{p.archivada ? 'Restaurar' : 'Archivar'}</Boton>
+    <Boton id="fFicha" variante="secundario" icono="listCheck" onClick={() => fichaCompleta(p.id, recargar)}>Ficha completa</Boton>
+    <Boton id="fArch" variante="secundario" icono={p.archivada ? 'undo' : 'folder'} onClick={async () => avisar(await archivar(!p.archivada))}>{p.archivada ? 'Restaurar' : 'Archivar'}</Boton>
   </>;
 }
 
@@ -117,7 +116,7 @@ interface IFichaPropiedadProps {
 }
 
 export default function FichaPropiedad({ id, vez }: IFichaPropiedadProps) {
-  const { propiedad: p, cargado, error, tab, negocios, version, fichaGet, fichaSetTab } = useFicha();
+  const { propiedad: p, cargado, error, tab, negocios, version, fichaGet, fichaSetTab, fichaRecargar, fichaArchivar } = useFicha();
   const { perfilGet } = usePerfil();
 
   useEffect(() => { fichaGet(id); perfilGet(); }, [id, vez, fichaGet, perfilGet]);
@@ -148,11 +147,11 @@ export default function FichaPropiedad({ id, vez }: IFichaPropiedadProps) {
       sobretitulo={<span className="im-code">{p.codigo || ''} · {TIPO[p.tipo] || p.tipo}{p.rol ? ' · Rol ' + p.rol : ''}</span>}
       titulo={p.titulo}
       subtitulo={<Subtitulo p={p} />}
-      acciones={<Acciones p={p} />}
+      acciones={acciones(p, () => { fichaRecargar(); }, fichaArchivar)}
     >
-      {/* la franja y las pestañas quedan fijas arriba al bajar por la ficha */}
-      <div data-ficha-fija className="tw:sticky tw:top-0 tw:z-[5] tw:-mx-1 tw:flex tw:flex-col tw:gap-3 tw:px-1 tw:py-2 tw:bg-[color-mix(in_srgb,var(--bg)_90%,transparent)] tw:backdrop-blur-sm">
-        <Franja p={p} irA={irA} />
+      <Franja p={p} irA={irA} />
+      {/* las pestañas quedan fijas bajo la cabecera de la pantalla (--cab-visible: su alto fija, lo pone CabeceraPagina) */}
+      <div data-ficha-fija className="tw:sticky tw:top-[calc(56px+var(--cab-visible,0px))] tw:z-[3] tw:-mx-1 tw:px-1 tw:bg-bg">
         <Tabs variante="linea" etiqueta="Secciones de la ficha" className="im-ftabs tw:max-w-full tw:overflow-x-auto tw:overflow-y-hidden" opciones={TABS} valor={tab} alCambiar={irA} />
       </div>
       {pane('resumen', <Resumen p={p} irA={irA} version={version} />)}

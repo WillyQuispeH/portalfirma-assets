@@ -11,6 +11,9 @@
 //   <ModalConfirmar abierto={…} onCerrar={…} titulo="¿Eliminar la propiedad?" mensaje="No se puede deshacer."
 //     textoConfirmar="Eliminar" peligro onConfirmar={async () => { … }} />
 //
+// `clave` (p. ej. "modal-23"): un código chiquito en la esquina inferior derecha, para saber en qué ventana se está
+// al pedir un cambio. Cada ventana de la app tiene la suya (búscala en el código para llegar a ella).
+//
 // Accesible: role="dialog" con aria-modal y su título; Esc y el fondo lo cierran (se puede desactivar); el foco
 // queda dentro mientras está abierto y vuelve a donde estaba al cerrar; la página de atrás no se desplaza.
 // Se dibuja en <body> (portal), por encima de la app y por debajo de la pantalla de ingreso.
@@ -41,8 +44,20 @@ interface IModalProps {
   /** sin padding en el cuerpo (tablas o listas que llegan al borde) */
   sinRelleno?: boolean;
   id?: string;
+  /** código de la ventana («modal-23»), visible chiquito en una esquina */
+  clave?: string;
   className?: string;
   children?: ReactNode;
+}
+
+/** el código de la ventana, chiquito en la esquina inferior derecha (seleccionable, para copiarlo) */
+export function ClaveModal({ clave }: { clave?: string }) {
+  if (!clave) return null;
+  return (
+    <span data-clave-modal className="tw:absolute tw:bottom-1 tw:right-2.5 tw:font-mono tw:text-[9.5px] tw:leading-none tw:text-muted tw:opacity-60 tw:select-all tw:pointer-events-auto">
+      {clave}
+    </span>
+  );
 }
 
 const ANCHO: Record<TModalTamano, string> = {
@@ -70,6 +85,7 @@ export default function Modal({
   fondoNoCierra = false,
   sinRelleno = false,
   id,
+  clave,
   className,
   children,
 }: IModalProps) {
@@ -139,7 +155,8 @@ export default function Modal({
         )}
       >
         {(titulo || descripcion || icono) && (
-          <header className="tw:flex tw:items-start tw:gap-3 tw:px-6 tw:pt-5 tw:pb-3">
+          // encabezado y pie un tono más oscuro que el cuerpo, con una línea que los separa; solo el cuerpo se desplaza
+          <header className="tw:flex-none tw:flex tw:items-start tw:gap-3 tw:px-6 tw:pt-4 tw:pb-3.5 tw:bg-sunken tw:rounded-t-[15px] tw:border-b tw:border-solid tw:border-x-0 tw:border-t-0 tw:border-edge">
             {icono && (
               <span className={cx('tw:flex-none tw:grid tw:place-items-center tw:w-10 tw:h-10 tw:rounded-xl', SUAVE[tonoIcono])}>
                 <Icono nombre={icono} tam={19} />
@@ -162,12 +179,13 @@ export default function Modal({
           </header>
         )}
         {children != null && children !== false && (
-          <div data-modal-cuerpo className={cx('tw:flex-1 tw:min-h-0 tw:overflow-y-auto', !sinRelleno && 'tw:px-6 tw:pb-5', !sinRelleno && !(titulo || descripcion || icono) && 'tw:pt-5')}>
+          <div data-modal-cuerpo className={cx('tw:flex-1 tw:min-h-0 tw:overflow-y-auto', !sinRelleno && 'tw:px-6 tw:py-5')}>
             {children}
           </div>
         )}
+        <ClaveModal clave={clave} />
         {pie && (
-          <footer className="tw:flex tw:flex-wrap tw:items-center tw:justify-end tw:gap-2 tw:px-6 tw:py-4 tw:border-t tw:border-solid tw:border-x-0 tw:border-b-0 tw:border-edge tw:bg-sunken tw:rounded-b-[14px]">
+          <footer className="tw:flex-none tw:flex tw:flex-wrap tw:items-center tw:justify-end tw:gap-2 tw:px-6 tw:py-4 tw:border-t tw:border-solid tw:border-x-0 tw:border-b-0 tw:border-edge tw:bg-sunken tw:rounded-b-[14px]">
             {pie}
           </footer>
         )}
@@ -191,6 +209,8 @@ interface IModalConfirmarProps {
   /** id de los botones (para pruebas o atajos) */
   idConfirmar?: string;
   idCancelar?: string;
+  /** código de la ventana («modal-23») */
+  clave?: string;
 }
 
 /** Pregunta de sí o no. Si onConfirmar lanza un error, el modal queda abierto y lo muestra. */
@@ -206,6 +226,7 @@ export function ModalConfirmar({
   icono,
   idConfirmar,
   idCancelar,
+  clave,
 }: IModalConfirmarProps) {
   const [ocupado, setOcupado] = useState(false);
   const [error, setError] = useState('');
@@ -225,6 +246,7 @@ export function ModalConfirmar({
       icono={icono ?? (peligro ? 'alert' : undefined)}
       tonoIcono={peligro ? 'rojo' : 'lavanda'}
       tamano="sm"
+      clave={clave}
       cerrable={!ocupado}
       pie={<>
         <Boton id={idCancelar} variante="secundario" onClick={onCerrar} disabled={ocupado}>{textoCancelar}</Boton>

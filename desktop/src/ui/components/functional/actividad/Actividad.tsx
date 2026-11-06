@@ -33,7 +33,6 @@ export default function Actividad() {
 
   return (
     <Layout
-      className="tw:max-w-[920px]"
       volver={{ texto: 'Inicio', alTocar: abrirInicio, id: 'acVolver' }}
       titulo="Actividad"
       subtitulo={<span id="acCont">{total ? `${total} ${total === 1 ? 'movimiento' : 'movimientos'}` : ''}</span>}

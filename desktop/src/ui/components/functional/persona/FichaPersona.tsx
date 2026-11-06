@@ -153,7 +153,7 @@ export default function FichaPersona({ id, vez }: IFichaPersonaProps) {
         <Historial />
       </div>
 
-      <ModalConfirmar abierto={borrar} onCerrar={() => setBorrar(false)} peligro
+      <ModalConfirmar clave="modal-120" abierto={borrar} onCerrar={() => setBorrar(false)} peligro
         titulo={`¿Eliminar a ${c.nombre}?`} mensaje="Se quita de tu CRM. Si está vinculada a una propiedad, primero hay que quitar el vínculo."
         textoConfirmar="Eliminar" idConfirmar="mOk" idCancelar="mCancel"
         onConfirmar={async () => {

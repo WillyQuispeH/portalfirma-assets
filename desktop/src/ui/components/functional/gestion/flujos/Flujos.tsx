@@ -26,8 +26,8 @@ function Chips({ c, orden }: { c: ReturnType<typeof conteoEjecucion>; orden: TCh
 
 function Inicio() {
   const { recetas, modelos, ejecuciones, cola, ops, asistenteIniciar, asistenteVerEjecucion, recetaBorrar, ejecucionBorrar } = useFlujo();
-  const borrarReceta = async (id: string, nombre: string) => { if (await confirmar({ titulo: 'Eliminar receta', texto: `¿Eliminar «${nombre}»? Las ejecuciones anteriores y los documentos enviados no se tocan.`, boton: 'Eliminar' })) recetaBorrar(id); };
-  const borrarEjecucion = async (r: IEjecucion) => { if (await confirmar({ titulo: 'Borrar documentos generados', texto: `Se borrarán de este computador los ${r.total} PDF generados en esta ejecución (tienen datos personales de la nómina). Las operaciones ya enviadas a Portalfirma no se tocan.`, boton: 'Borrar' })) ejecucionBorrar(r.id); };
+  const borrarReceta = async (id: string, nombre: string) => { if (await confirmar({ clave: 'modal-113', titulo: 'Eliminar receta', texto: `¿Eliminar «${nombre}»? Las ejecuciones anteriores y los documentos enviados no se tocan.`, boton: 'Eliminar', peligro: true })) recetaBorrar(id); };
+  const borrarEjecucion = async (r: IEjecucion) => { if (await confirmar({ clave: 'modal-114', titulo: 'Borrar documentos generados', texto: `Se borrarán de este computador los ${r.total} PDF generados en esta ejecución (tienen datos personales de la nómina). Las operaciones ya enviadas a Portalfirma no se tocan.`, boton: 'Borrar', peligro: true })) ejecucionBorrar(r.id); };
   return (
     <div className="bulk fl">
       <div className="ops-head">

@@ -12,12 +12,12 @@ export async function consentimiento(): Promise<boolean> {
   const s = await asistenteEstado().asistenteEstado();
   if (s.consent) return true;
   const proveedor = s.providers?.[s.provider || '']?.label || s.provider || 'el proveedor de IA';
-  return new Promise((resolver) => abrirModal(<Consentimiento proveedor={proveedor} alResponder={resolver} />));
+  return new Promise((resolver) => abrirModal(<Consentimiento proveedor={proveedor} alResponder={resolver} />, { clave: 'modal-59' }));
 }
 
 export async function verTokens(motivo?: string) {
   await asistenteEstado().asistenteBilletera(true);
-  abrirModal(<Tokens motivo={motivo} alActivar={pintarTokensEditor} />);
+  abrirModal(<Tokens motivo={motivo} alActivar={pintarTokensEditor} />, { clave: 'modal-60' });
 }
 
 export function redactar(inicial = '') {
@@ -26,7 +26,7 @@ export function redactar(inicial = '') {
     const s = await asistenteEstado().asistenteEstado(true);
     if (!s.hasKey) { toast('El asistente no está configurado. Abre «Asistente» → Ajustes.', 6000); return; }
     redactarBorrador(pedido);
-  }} />);
+  }} />, { clave: 'modal-61' });
 }
 
 export function instalarAsistente() {
