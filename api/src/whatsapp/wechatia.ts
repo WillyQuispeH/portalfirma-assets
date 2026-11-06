@@ -6,6 +6,10 @@
 //  · PUT    /whatsapp/conexion   { token, locationId }: se prueba contra wechatia antes de guardarla. El administrador
 //                                 siempre; otro usuario solo si la corredora aún no tiene (la sube su app la primera vez);
 //  · DELETE /whatsapp/conexion   (administrador) la quita.
+//  · GET    /whatsapp/canales    qué canales de la subcuenta (WhatsApp, Instagram, Facebook, correo…) están en uso y los
+//                                 enlaces al panel de wechatia para conectarlos (la API de wechatia no conecta canales: se
+//                                 hace en su panel, con el inicio de sesión de Meta). Un canal está «en uso» si en las
+//                                 últimas conversaciones hay alguna por ese canal.
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return --
    las respuestas de wechatia son JSON sin tipo (Json) y se leen campo a campo, con respaldo si falta alguno */
 import {
@@ -27,6 +31,18 @@ import { CifradoService } from '../conexiones/cifrado';
 import type { Env } from '../config/env';
 
 const V2 = 'https://services.leadconnectorhq.com';
+/** el panel web de wechatia (donde la corredora conecta sus canales). Las rutas son las del panel de GoHighLevel. */
+const PANEL = 'https://app.wechatia.com';
+
+/** canales de la subcuenta: id en Asset ← tipos de conversación de wechatia, y la página del panel donde se conecta */
+export const CANALES = [
+  { id: 'whatsapp', nombre: 'WhatsApp', tipos: ['TYPE_WHATSAPP'], pagina: 'settings/whatsapp' },
+  { id: 'instagram', nombre: 'Instagram', tipos: ['TYPE_INSTAGRAM'], pagina: 'settings/integrations' },
+  { id: 'facebook', nombre: 'Facebook Messenger', tipos: ['TYPE_FACEBOOK'], pagina: 'settings/integrations' },
+  { id: 'correo', nombre: 'Correo', tipos: ['TYPE_EMAIL'], pagina: 'settings/email-services' },
+  { id: 'chat', nombre: 'Chat del sitio web', tipos: ['TYPE_LIVE_CHAT', 'TYPE_WEBCHAT'], pagina: 'chat-widget' },
+] as const;
+
 const PROVEEDOR = 'wechatia';
 const DUENO = 'corredora';
 
@@ -441,10 +457,52 @@ export class WechatiaService {
     return this.estado(u);
   }
 
+  /** los canales de la subcuenta: en uso (con la fecha del último mensaje) o no, y dónde conectarlos */
+  async canales(u: UsuarioToken) {
+    const cred = await this.credenciales(u.corredoraId);
+    const enlace = (pagina: string) =>
+      cred ? `${PANEL}/v2/location/${encodeURIComponent(cred.locationId)}/${pagina}` : null;
+    let ultimas: Conversacion[] = [];
+    let error: string | null = null;
+    if (cred) {
+      try {
+        ultimas = await new Wechatia(cred).conversaciones(100);
+      } catch (e) {
+        error = (e as Error).message;
+      }
+    }
+    return {
+      conectado: !!cred,
+      error,
+      panel: enlace('dashboard'),
+      canales: CANALES.map((c) => {
+        const ultimo = ultimas
+          .filter((x) => (c.tipos as readonly string[]).includes(x.tipo))
+          .map((x) => x.marca)
+          .filter((f): f is string => !!f)
+          .map((f) => (/^\d+$/.test(f) ? new Date(Number(f)) : new Date(f)))
+          .filter((f) => !isNaN(f.getTime()))
+          .sort((a, b) => b.getTime() - a.getTime())[0];
+        const enUso = ultimas.some((x) => (c.tipos as readonly string[]).includes(x.tipo));
+        return { id: c.id, nombre: c.nombre, enUso, ultimo: ultimo?.toISOString() ?? null, conectar: enlace(c.pagina) };
+      }),
+    };
+  }
+
   async desconectar(u: UsuarioToken) {
     if (u.rol !== 'ADMIN') throw new ForbiddenException('Desconectar el WhatsApp de la empresa es del administrador.');
     await this.db.conexion.deleteMany({ where: { corredoraId: u.corredoraId, proveedor: PROVEEDOR, dueno: DUENO } });
     return { ok: true };
+  }
+}
+
+@Controller('whatsapp/canales')
+export class CanalesController {
+  constructor(private readonly s: WechatiaService) {}
+
+  @Get()
+  canales(@UsuarioActual() u: UsuarioToken) {
+    return this.s.canales(u);
   }
 }
 

@@ -25,7 +25,7 @@ import { ConexionesController, ConexionesService } from './conexiones/conexiones
 import { PortalfirmaOAuth } from './conexiones/portalfirma.oauth';
 import { PortalfirmaController, PortalfirmaService } from './conexiones/portalfirma';
 import { ContadoresController, RegistrosController, RegistrosService } from './registros/registros';
-import { WechatiaController, WechatiaService } from './whatsapp/wechatia';
+import { CanalesController, WechatiaController, WechatiaService } from './whatsapp/wechatia';
 import { ProgramadosController, ProgramadosService } from './whatsapp/programados';
 import { AvisosController, AvisosService } from './avisos/avisos';
 import { FirmasRondaController, FirmasRondaService } from './firmas/ronda';
@@ -64,6 +64,7 @@ import { LectorController, LectorService } from './whatsapp/lector';
     AgenteController,
     ReglasNotarialesController,
     WechatiaController,
+    CanalesController,
     ProgramadosController,
     AvisosController,
     FirmasRondaController,

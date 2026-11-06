@@ -135,6 +135,7 @@ const firmante = (name, rut, signed, alias) => ({ name, rut, signed, email: name
     r = await req('POST', '/firmas/revisar', null, tO);
     ok(r.s === 409 && r.j.codigo === 'NECESITA_CONEXION', 'una corredora sin Portalfirma conectado: 409 NECESITA_CONEXION');
   } finally {
+    srv.closeAllConnections(); // sin esto, close() espera las conexiones keep-alive y el proceso no termina
     srv.close();
     const cos = [co?.id, otra?.id].filter(Boolean);
     await db.aviso.deleteMany({ where: { corredoraId: { in: cos } } });

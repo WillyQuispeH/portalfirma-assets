@@ -205,6 +205,9 @@ function iaFalsa() {
     ok((await req('PUT', '/whatsapp/asistentes', { clientesActivo: false }, t1)).s === 403, 'un corredor no apaga la atención de clientes');
     r = await req('PUT', '/whatsapp/asistentes', { clientesActivo: false }, tA);
     ok(r.s === 200 && r.j.clientesActivo === false, 'el administrador la apaga');
+    // la respuesta de Tomás a «Quiero agendar una visita» puede salir después del recado al corredor: se espera a que
+    // termine antes de contar, o esa respuesta (legítima, de antes de apagarla) se contaría como una nueva
+    for (let previo = -1; previo !== salidas(cc).length;) { previo = salidas(cc).length; await esperar(3000); }
     antes = salidas(cc).length; escribe(cc, 'Hola?');
     await esperar(8000);
     ok(salidas(cc).length === antes, 'apagada, Tomás no responde a las personas del CRM');
@@ -235,6 +238,11 @@ function iaFalsa() {
     ok(li2 && /Ñuñoa/.test(li2.datos.resumen) && li2.corredorId === c1.id && li2.estado === 'contactado', 'la IA deja qué busca y el corredor a cargo es el «propietario» del contacto en wechatia');
     ok(!salidas(ci).length, 'el observador nunca responde');
     ok(await db.registro.findFirst({ where: { corredoraId: co.id, coleccion: 'consentimientos' } }), 'la autorización quedó registrada');
+    r = await req('GET', '/whatsapp/canales', null, t1);
+    const canal = (id) => r.j.canales?.find((x) => x.id === id);
+    ok(r.s === 200 && r.j.conectado && canal('whatsapp')?.enUso && canal('instagram')?.enUso && canal('instagram').ultimo && !canal('facebook')?.enUso,
+      'la pantalla de integraciones sabe qué canales se usan (WhatsApp e Instagram sí, Facebook no)');
+    ok(/\/v2\/location\/.+\/settings\/integrations$/.test(canal('instagram')?.conectar || ''), 'y a qué página del panel de wechatia ir para conectar otro');
 
     // ---- 8. el aviso de un programado sale del servidor
     await req('POST', '/whatsapp/programados', { id: `wp${SUF}`, telefono: '+56 9 8765 4321', nombre: 'Juan Pérez', texto: 'Juan, nos vemos mañana.', cuando: new Date(Date.now() - 1000).toISOString() }, t1);
