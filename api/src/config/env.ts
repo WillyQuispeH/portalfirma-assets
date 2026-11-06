@@ -55,6 +55,19 @@ const esquema = z.object({
   IA_MODELO: z.string().default('claude-opus-5-5'),
   /** solo fuera de producción: otra dirección para la API de IA (las pruebas levantan una falsa) */
   IA_URL: z.url().optional(),
+  /** IA de la app de escritorio (ia/ia-app.ts): el agente, leer documentos y el asistente legal */
+  IA_MODELO_APP: z.string().default('claude-sonnet-5-5'),
+  /** IA de la app para textos cortos y rápidos (retocar un WhatsApp de postventa) */
+  IA_MODELO_CORTO: z.string().default('claude-haiku-5-5'),
+  /** solo para el dictado de la app: Claude no transcribe audio, así que eso usa la transcripción de OpenAI.
+   *  Sin esta clave, el dictado pide escribir o pegar la descripción. */
+  OPENAI_CLAVE: z.string().optional(),
+  /** app de Asset en Mercado Libre (Portal Inmobiliario); sin las dos, la integración no aparece */
+  ML_CLIENT_ID: z.string().optional(),
+  ML_CLIENT_SECRET: z.string().optional(),
+  /** solo fuera de producción: otras direcciones para la API y la autorización de Mercado Libre (las pruebas) */
+  ML_API_URL: z.url().optional(),
+  ML_AUTH_URL: z.url().optional(),
 });
 
 export type Env = z.infer<typeof esquema>;

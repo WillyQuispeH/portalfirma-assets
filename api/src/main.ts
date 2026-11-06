@@ -16,6 +16,8 @@ async function bootstrap() {
   app.use('/v1/agente/conversaciones', json({ limit: '8mb' }));
   // las reglas de la plataforma (hasta 2 MB) y los casos corregidos (lotes de hasta 50)
   app.use('/v1/reglas-notariales', json({ limit: '4mb' }));
+  // la IA de la app manda páginas de documentos como imágenes y el dictado manda audio
+  app.use('/v1/ia', json({ limit: '30mb' }));
   app.use(json({ limit: '100kb' }));
   app.use(urlencoded({ extended: true, limit: '100kb' }));
   app.setGlobalPrefix('v1');
@@ -25,6 +27,9 @@ async function bootstrap() {
   app.enableShutdownHooks();
   const config = app.get<ConfigService<Env, true>>(ConfigService);
   // en producción solo la ve nginx (mismo servidor); en desarrollo, todas las interfaces
-  await app.listen(config.get('PORT', { infer: true }), config.get('NODE_ENV', { infer: true }) === 'production' ? '127.0.0.1' : '0.0.0.0');
+  await app.listen(
+    config.get('PORT', { infer: true }),
+    config.get('NODE_ENV', { infer: true }) === 'production' ? '127.0.0.1' : '0.0.0.0',
+  );
 }
 void bootstrap();

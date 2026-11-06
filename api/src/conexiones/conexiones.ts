@@ -29,6 +29,7 @@ import type { Env } from '../config/env';
 import { CifradoService } from './cifrado';
 import { esSesionVencida, SesionVencidaError, type ProveedorOAuth, type TokensOAuth } from './proveedores';
 import { PortalfirmaOAuth } from './portalfirma.oauth';
+import { MercadoLibreOAuth } from './mercadolibre.oauth';
 
 const PENDIENTE_MIN = 10;
 /** se renueva si al token le queda menos que esto */
@@ -57,10 +58,16 @@ export class ConexionesService {
     private readonly cifrado: CifradoService,
     config: ConfigService<Env, true>,
     portalfirma: PortalfirmaOAuth,
+    mercadolibre: MercadoLibreOAuth,
   ) {
     this.base = config.get('API_URL_PUBLICA', { infer: true });
     for (const p of [portalfirma]) this.proveedores.set(p.id, p);
+    // Mercado Libre solo si el servidor tiene la app (ML_CLIENT_ID y ML_CLIENT_SECRET)
+    if (mercadolibre.configurado) this.proveedores.set(mercadolibre.id, mercadolibre);
   }
+
+  /** ¿ese proveedor está disponible en este servidor? */
+  hay = (id: string) => this.proveedores.has(id);
 
   proveedor(id: string): ProveedorOAuth {
     const p = this.proveedores.get(id);
@@ -190,6 +197,7 @@ export class ConexionesService {
     return {
       estado: c.estado,
       cuenta: c.cuentaNombre,
+      cuentaId: c.cuentaId,
       conectadoEn: c.conectadoEn,
       expiraEn: c.expiraEn,
       usadoEn: c.usadoEn,

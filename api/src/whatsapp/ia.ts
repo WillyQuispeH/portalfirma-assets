@@ -76,13 +76,17 @@ export class IaService {
     corredoraId: string,
     uso: string,
     p: Omit<Anthropic.Beta.MessageCreateParamsNonStreaming, 'model' | 'betas' | 'fallbacks'>,
+    modelo = this.modelo,
   ) {
     const cliente = await this.clienteDe(corredoraId);
     if (!cliente) throw new SinIaError();
+    // respaldo ante un rechazo de los filtros (otro modelo en la misma llamada): Opus, Sonnet y Fable; Haiku no lo tiene
+    const respaldo = /opus|sonnet|fable/.test(modelo)
+      ? { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' as const }
+      : {};
     const r = await cliente.beta.messages.create({
-      model: this.modelo,
-      betas: ['server-side-fallback-2026-07-01'],
-      fallbacks: 'default',
+      model: modelo,
+      ...respaldo,
       ...p,
     } as Anthropic.Beta.MessageCreateParamsNonStreaming);
     await this.db.iaConsumo
@@ -97,6 +101,16 @@ export class IaService {
       })
       .catch((e: Error) => this.log.warn(`consumo: ${e.message}`));
     return r;
+  }
+
+  /** una llamada con el modelo que se elija (la usa la IA de la app de escritorio, ia/ia-app.ts) */
+  mensaje(
+    corredoraId: string,
+    uso: string,
+    modelo: string,
+    p: Omit<Anthropic.Beta.MessageCreateParamsNonStreaming, 'model' | 'betas' | 'fallbacks'>,
+  ) {
+    return this.llamar(corredoraId, uso, p, modelo);
   }
 
   private texto(r: Anthropic.Beta.BetaMessage) {

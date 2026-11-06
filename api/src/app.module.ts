@@ -24,12 +24,15 @@ import { CifradoService } from './conexiones/cifrado';
 import { ConexionesController, ConexionesService } from './conexiones/conexiones';
 import { PortalfirmaOAuth } from './conexiones/portalfirma.oauth';
 import { PortalfirmaController, PortalfirmaService } from './conexiones/portalfirma';
+import { MercadoLibreOAuth } from './conexiones/mercadolibre.oauth';
+import { MercadoLibreController, MercadoLibreService } from './conexiones/mercadolibre';
 import { ContadoresController, RegistrosController, RegistrosService } from './registros/registros';
 import { CanalesController, WechatiaController, WechatiaService } from './whatsapp/wechatia';
 import { ProgramadosController, ProgramadosService } from './whatsapp/programados';
 import { AvisosController, AvisosService } from './avisos/avisos';
 import { FirmasRondaController, FirmasRondaService } from './firmas/ronda';
 import { IaService } from './whatsapp/ia';
+import { IaAppController } from './ia/ia-app';
 import { EnviadosController, EnviadosService } from './whatsapp/enviados';
 import { EjecutivoController, EjecutivoService } from './whatsapp/ejecutivo';
 import { LeadsWaService } from './whatsapp/leads-wa';
@@ -61,10 +64,12 @@ import { LectorController, LectorService } from './whatsapp/lector';
     ContadoresController,
     ConexionesController,
     PortalfirmaController,
+    MercadoLibreController,
     AgenteController,
     ReglasNotarialesController,
     WechatiaController,
     CanalesController,
+    IaAppController,
     ProgramadosController,
     AvisosController,
     FirmasRondaController,
@@ -85,8 +90,10 @@ import { LectorController, LectorService } from './whatsapp/lector';
     RegistrosService,
     CifradoService,
     PortalfirmaOAuth,
+    MercadoLibreOAuth,
     ConexionesService,
     PortalfirmaService,
+    MercadoLibreService,
     AgenteService,
     ReglasNotarialesService,
     WechatiaService,
