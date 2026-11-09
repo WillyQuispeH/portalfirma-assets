@@ -15,7 +15,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
   try {
     await w.setViewportSize({ width: 1500, height: 920 }); await w.waitForSelector('.hub-card'); await w.waitForTimeout(500);
     await w.evaluate(() => window.studio.goHome()); await w.waitForTimeout(300);
-    ok(await w.isVisible('#agBtn') && await w.isVisible('#hubAgQ'), 'botón «Agente» en la barra y acceso desde el inicio');
+    ok(await w.isVisible('#agBtn'), 'botón «Agente» en la barra');
     await w.click('#agBtn'); await w.waitForSelector('#agDrawer:not(.hidden)');
     ok((await w.$$('.ag-sug button')).length >= 4, 'panel lateral con sugerencias');
     await w.screenshot({ path: path.resolve(__dirname, 'ag1-panel.png') });
@@ -60,9 +60,9 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     await w.screenshot({ path: path.resolve(__dirname, 'ag3-cds.png') });
 
     await w.click('#agNew'); await w.waitForTimeout(200); ok(await w.isVisible('.ag-empty') && !(await w.$('.ag-chip')), 'nueva conversación');
-    await w.click('#agClose'); await w.evaluate(() => window.studio.goHome()); await w.waitForSelector('#hubAgQ');
-    await w.fill('#hubAgQ', '¿Quién falta por firmar en la operación 4424?'); n = 0; await w.press('#hubAgQ', 'Enter');
-    r = await respuesta(0); ok(await w.isVisible('#agDrawer') && /Detalle de operación/.test(await txt('#agBody')), 'desde el inicio abre el agente y consulta la operación');
+    await w.click('#agClose'); await w.evaluate(() => window.studio.goHome()); await w.click('#agBtn'); await w.waitForSelector('#agQ');
+    await w.fill('#agQ', '¿Quién falta por firmar en la operación 4424?'); n = 0; await w.press('#agQ', 'Enter');
+    r = await respuesta(0); ok(await w.isVisible('#agDrawer') && /Detalle de operación/.test(await txt('#agBody')), 'desde la barra abre el agente y consulta la operación');
     const tk = await w.evaluate(async () => (await window.pf.aiWallet()).data); ok(tk.balance < 5, `cobra tokens del asistente (saldo ${tk.balance})`);
     ok(!errs.length, 'sin errores de JavaScript' + (errs.length ? ': ' + errs.join(' | ') : ''));
     console.log('OK agente');

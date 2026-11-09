@@ -115,7 +115,6 @@ export const abrirReciente = (ruta: string) => window.studio.abrirReciente(ruta)
 export const abrirDocumento = () => window.editor.openDialog(true);
 export const abrirDrive = (proposito = 'sign') => window.Drive.open({ purpose: proposito });
 export const abrirAyudaNivel = (nivel: string) => window.Ayuda?.open?.({ level: nivel });
-export const enviarAlAgenteDesdeGestion = (texto: string) => window.members(() => { window.Agente.open(); if (texto) window.Agente.enviar?.(texto); }, 'El Agente Portalfirma trabaja con tu cuenta. Inicia sesión para usarlo.');
 
 // Expedientes (src/renderer/expedientes.js): formularios, Drive y las acciones sobre los archivos marcados
 export const nuevoExpediente = () => window.Expedientes.createDialog();

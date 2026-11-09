@@ -1,29 +1,27 @@
 // La cuenta arriba a la derecha (#account): el botón del usuario de Asset (iniciales, nombre y tokens del asistente)
 // que abre su menú: corredora, usuarios de la corredora (administrarlos, si es ADMIN), la conexión con Portalfirma (saldo, conectar o desconectar), tokens, accesos rápidos,
-// Google Drive, ayuda, apariencia y cierre de sesión. Mientras Portalfirma no esté conectado, al lado va
+// Google Drive, ayuda, Configuración (apariencia, WhatsApp e integraciones) y cierre de sesión. Mientras Portalfirma no esté conectado, al lado va
 // «Conectar Portalfirma» (#topLoginBtn): Portalfirma ya no es el login de la app, solo se usa para firmar. El menú (#userMenu) va en <body>, como antes. Los id, clases y data-um los usan
 // las pruebas; los estilos son las clases u-*, um-* y user-* de styles.css.
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import Icono from '../../ui/Icono';
 import { useCuenta } from '../../../store/hooks/useCuenta.hook';
 import { useAcceso } from '../../../store/hooks/useAcceso.hook';
 import {
-  abrirAyuda, abrirExpedientes, abrirOperaciones, abrirPlazos, abrirUrl, cambiarTema, mostrarVista,
-  pedirInicioSesion, recorridoDePantalla, sesionCerrada, soporteWhatsAppGeneral, temaActual, toast, verCuentaDrive, versionApp,
+  abrirAyuda, abrirExpedientes, abrirOperaciones, abrirPlazos, abrirUrl, mostrarVista,
+  pedirInicioSesion, recorridoDePantalla, sesionCerrada, soporteWhatsAppGeneral, toast, verCuentaDrive, versionApp,
 } from '../../../utils/app';
 import { verTokens } from '../asistente/controlador';
-import { abrirAgenteWhatsApp } from '../whatsapp/controlador';
 import { refrescarCuenta } from './controlador';
 import { abrirUsuarios } from '../usuarios/controlador';
-import { abrirIntegraciones } from '../integraciones/controlador';
+import { abrirConfiguracion } from '../integraciones/controlador';
 import AvisoActualizacion, { buscarActualizaciones } from './Actualizacion';
 
 const iniciales = (n: string) => String(n || '').trim().split(/\s+/).map((x) => x[0]).slice(0, 2).join('').toUpperCase() || '?';
 const primero = (n: string) => String(n || '').trim().split(/\s+/)[0] || '';
 const tokens = (n: number | null) => (n == null ? '…' : `${n} token${n === 1 ? '' : 's'}`);
 const pesos = (n: number | null | undefined) => (n == null ? '—' : '$' + Number(n).toLocaleString('es-CL'));
-const TEMAS: [string, string][] = [['light', 'Claro'], ['dark', 'Oscuro'], ['system', 'Sistema']];
 
 export default function MenuUsuario() {
   const { conectado, tokens: tk, menu, cuentaMenu, cuentaDrive } = useCuenta();
@@ -58,7 +56,6 @@ export default function MenuUsuario() {
 function Menu() {
   const { usuario, sesion, saldo, tokens: tk, drive, conectado, cuentaMenu, cuentaSalir } = useCuenta();
   const { usuario: yo, accesoSalir } = useAcceso();
-  const [tema, setTema] = useState(temaActual());
   const pfu = usuario || {};
   const monto = usuario ? saldo : sesion?.balance;
   // cada acción cierra el menú primero
@@ -82,23 +79,19 @@ function Menu() {
       </div>
       <div className="um-sec">
         <button data-um="usuarios" onClick={ir(abrirUsuarios)}><Icono nombre="users" tam={15} /><span>{yo.rol === 'ADMIN' ? 'Usuarios de la corredora' : 'Equipo de la corredora'}</span></button>
-        <button data-um="integraciones" onClick={ir(abrirIntegraciones)}><Icono nombre="link" tam={15} /><span>Integraciones</span></button>
+        <button data-um="config" onClick={ir(() => abrirConfiguracion('general'))}><Icono nombre="sun" tam={15} /><span>Configuración</span></button>
+        <button data-um="integraciones" onClick={ir(() => abrirConfiguracion('integraciones'))}><Icono nombre="link" tam={15} /><span>Integraciones</span></button>
         <button data-um="ops" onClick={ir(abrirOperaciones)}><Icono nombre="listCheck" tam={15} /><span>Mis operaciones</span></button>
         <button data-um="plazos" onClick={ir(abrirPlazos)}><Icono nombre="calendar" tam={15} /><span>Plazos y vencimientos</span></button>
         <button data-um="exp" onClick={ir(abrirExpedientes)}><Icono nombre="folderOpen" tam={15} /><span>Expedientes</span></button>
         <button data-um="drive" onClick={ir(verCuentaDrive)}><Icono nombre="drive" tam={15} /><span>Google Drive</span><small id="umDrive">{drive || ''}</small></button>
       </div>
       <div className="um-sec">
-        <button data-um="waag" onClick={ir(abrirAgenteWhatsApp)}><Icono nombre="whatsapp" tam={15} /><span>Agente por WhatsApp</span></button>
+        <button data-um="waag" onClick={ir(() => abrirConfiguracion('whatsapp'))}><Icono nombre="whatsapp" tam={15} /><span>Agente por WhatsApp</span></button>
         <button data-um="help" onClick={ir(abrirAyuda)}><Icono nombre="help" tam={15} /><span>Ayuda y guías</span></button>
         <button data-um="tour" onClick={ir(recorridoDePantalla)}><Icono nombre="compass" tam={15} /><span>Ver el recorrido de esta pantalla</span></button>
         <button data-um="wa" onClick={ir(soporteWhatsAppGeneral)}><Icono nombre="whatsapp" tam={15} /><span>Soporte por WhatsApp</span></button>
         <button data-um="web" onClick={ir(() => abrirUrl('https://empresa.portalfirma.cl/dashboard'))}><Icono nombre="building" tam={15} /><span>Abrir mi cuenta en la web</span></button>
-      </div>
-      <div className="um-tema"><span><Icono nombre="sun" tam={15} /> Apariencia</span>
-        <div className="pv-seg" id="umTema">
-          {TEMAS.map(([v, t]) => <button type="button" key={v} data-tema={v} className={tema === v ? 'on' : ''} onClick={async () => { await cambiarTema(v); setTema(v); }}>{t}</button>)}
-        </div>
       </div>
       <div className="um-sec"><button data-um="out" className="danger" onClick={ir(salir)}><Icono nombre="logout" tam={15} /><span>Cerrar sesión</span></button></div>
       <div className="um-foot">PortalFirma Asset {versionApp()} · <a href="#" id="umAct" onClick={(e) => { e.preventDefault(); buscarActualizaciones(); }}>Buscar actualizaciones</a></div>

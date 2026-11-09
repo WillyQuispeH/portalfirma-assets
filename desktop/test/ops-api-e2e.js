@@ -1,4 +1,4 @@
-// Mis operaciones por la API: inicio de sesión con correo y contraseña, sin teléfono; lista, detalle y documento.
+// Mis operaciones por la API: sin Portalfirma conectado por la corredora pide correo y contraseña (no el teléfono); lista, detalle y documento.
 const { _electron: electron } = require('playwright'); const path = require('path'); const fs = require('fs'); const os = require('os'); const http = require('http');
 const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  ✔ ' + m); };
 const pdf = fs.readFileSync(path.join(__dirname, 'fixtures', 'contrato_prueba.pdf'));
@@ -23,23 +23,23 @@ const srv = http.createServer((req, res) => {
 (async () => {
   await new Promise((r) => srv.on('listening', r)); const port = srv.address().port;
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'pfoa-'));
-  const app = await electron.launch({ args: ['.', '--no-sandbox', `--user-data-dir=${userData}`], cwd: path.join(__dirname, '..'), env: { ...process.env, PF_MOCK: '1', PF_MOCK_LOGGED: '1', PF_API_BASE: `http://127.0.0.1:${port}/api` } });
+  const app = await electron.launch({ args: ['.', '--no-sandbox', `--user-data-dir=${userData}`], cwd: path.join(__dirname, '..'), env: { ...process.env, PF_MOCK: '1', PF_MOCK_LOGGED: '', PF_API_BASE: `http://127.0.0.1:${port}/api` } });
   const w = await app.firstWindow(); const errs = []; w.on('pageerror', (e) => errs.push(e.message));
   await w.setViewportSize({ width: 1440, height: 900 }); await w.waitForFunction(() => window.studio && window.Inmo, null, { timeout: 15000 }); await w.waitForTimeout(300); await w.evaluate(() => window.studio.goHome()); await w.waitForSelector('.hub-card');
   await w.click('.hub-card[data-act="ops"]'); await w.waitForSelector('#adEmail');
   ok(!(await w.$('#opPhone')) && /correo y la contraseña/.test(await w.textContent('#modalCard')), 'pide correo y contraseña, no el teléfono');
   await w.fill('#adEmail', 'jgomez@portalfirma.cl'); await w.fill('#adPass', 'x'); await w.click('#mOk');
-  await w.waitForFunction(() => document.querySelectorAll('.ops-row').length >= 100, null, { timeout: 30000 });
-  const n = await w.locator('.ops-row').count(); ok(n === 134, `trae todas las operaciones de la cuenta, con varias páginas (${n})`);
+  await w.waitForFunction(() => document.querySelectorAll('.op-fila').length >= 100, null, { timeout: 30000 });
+  const n = await w.locator('.op-fila').count(); ok(n === 134, `trae todas las operaciones de la cuenta, con varias páginas (${n})`);
   ok(seen.filter((x) => x.u.includes('getPaginatedContracts') && x.body.stage === 'finalized').length === 2, 'pagina la lista (100 por página)');
-  const f = await w.evaluate(() => Object.fromEntries([...document.querySelectorAll('.ops-f')].map((b) => [b.dataset.f, Number(b.querySelector('b').textContent)])));
+  const f = await w.evaluate(() => Object.fromEntries([...document.querySelectorAll('#opsFilters [data-f]')].map((b) => [b.dataset.f, Number(b.lastElementChild.textContent)])));
   console.log('    filtros:', JSON.stringify(f));
   ok(f.signed === 129 && f.notary === 1 && f.pending === 3 && f.action === 1, 'estados desde la lista: firmadas, legalizada, en firma y por pagar');
-  await w.click('.ops-row[data-op="24000"]'); await w.waitForSelector('#opdCanvas canvas', { timeout: 20000 });
-  ok(/Contrato 24000/.test(await w.textContent('.opd-head h3')), 'nombre del documento');
-  ok(/2 de 2 firmaron/.test(await w.textContent('.opd-side h4')) && /20\.346\.942-K/.test(await w.textContent('.opd-sigs')), 'firmantes con RUT desde la API');
+  await w.click('.op-fila[data-op="24000"]'); await w.waitForSelector('#opdCanvas canvas', { timeout: 20000 });
+  ok(/Contrato 24000/.test(await w.textContent('.op-cab h3')), 'nombre del documento');
+  ok(/2 de 2 firmaron/.test(await w.textContent('.op-firmas header')) && /20\.346\.942-K/.test(await w.textContent('.op-firmantes')), 'firmantes con RUT desde la API');
   ok(seen.some((x) => x.u === '/api/file/getById' && x.body.contract_id === U(10) && /auth-token=t1/.test(x.ck)), 'documento por getById con el contract_id y la sesión');
-  await w.click('.ops-row[data-op="30002"]'); await w.waitForSelector('.opd-sig-acts', { timeout: 20000 }).catch(() => {});
+  await w.click('.op-fila[data-op="30002"]'); await w.waitForSelector('.op-reenviar', { timeout: 20000 }).catch(() => {});
   ok(true, 'operación en firma abre su detalle');
   await w.screenshot({ path: path.resolve(__dirname, 'oa1-api.png') });
   console.log('errores:', errs); if (errs.length) process.exitCode = 1;

@@ -1,7 +1,8 @@
 // Vista previa del documento de una operación, página por página (pdf.js, que carga index.html como pdfjsLib).
 // El PDF viene SOLO del servicio oficial de archivos de Portalfirma (getById).
 import { useEffect, useRef, useState } from 'react';
-import Icono from '../../../ui/Icono';
+import Boton from '../../../ui/Boton';
+import EstadoVacio from '../../../ui/EstadoVacio';
 import { operacionArchivo } from '../../../../store/hooks/useOperacion.hook';
 import { abrirUrl, configurarAccesoDocumentos } from '../../../../utils/app';
 
@@ -38,26 +39,27 @@ export default function VistaPrevia({ op }: { op: number }) {
     return () => { vivo = false; };
   }, [pdf, pagina]);
 
+  // fondo hundido del kit; el canvas de la página lo pone el efecto de arriba (#opdCanvas lo usan las pruebas)
+  const caja0 = 'tw:grid tw:place-items-center tw:min-h-[320px] tw:p-3 tw:rounded-xl tw:bg-sunken tw:border tw:border-solid tw:border-edge tw:[&_canvas]:max-w-full tw:[&_canvas]:rounded tw:[&_canvas]:bg-white tw:[&_canvas]:shadow-md';
   if (problema) return (
-    <div className="opd-canvas" id="opdCanvas">
-      <div className="opd-nofile"><Icono nombre="file" tam={30} />
-        {problema.sinAcceso
-          ? <><p><b>Falta el acceso a los documentos</b><br /><small>{problema.texto}</small></p><button className="secondary small" id="opdKey" onClick={() => configurarAccesoDocumentos(() => setIntento((x) => x + 1))}>Configurar acceso</button></>
-          : <><p><b>Vista previa no disponible</b><br /><small>{problema.texto}</small></p><button className="secondary small" id="opdWeb" onClick={() => abrirUrl('https://cliente.portalfirma.cl/')}>Ver en portalfirma.cl</button></>}
-      </div>
+    <div className={caja0} id="opdCanvas">
+      {problema.sinAcceso
+        ? <EstadoVacio icono="lock" titulo="Falta el acceso a los documentos" texto={problema.texto}
+          accion={<Boton variante="secundario" tamano="sm" id="opdKey" icono="key" onClick={() => configurarAccesoDocumentos(() => setIntento((x) => x + 1))}>Configurar acceso</Boton>} />
+        : <EstadoVacio icono="file" titulo="Vista previa no disponible" texto={problema.texto}
+          accion={<Boton variante="secundario" tamano="sm" id="opdWeb" icono="link" onClick={() => abrirUrl('https://cliente.portalfirma.cl/')}>Ver en portalfirma.cl</Boton>} />}
     </div>
   );
   return (
-    <>
-      {/* el canvas de la página lo pone el efecto de arriba */}
-      <div className="opd-canvas" id="opdCanvas" ref={caja}>{!pdf && <div className="spinner" />}</div>
-      <div className="opd-pager" id="opdPager">
-        {pdf?.numPages > 1 && <>
-          <button className="ibtn" data-p="-1" disabled={pagina <= 1} onClick={() => setPagina((p) => p - 1)}><Icono nombre="chevL" tam={15} /></button>
+    <div className="tw:flex tw:flex-col tw:gap-2">
+      <div className={caja0} id="opdCanvas" ref={caja}>{!pdf && <div className="spinner" />}</div>
+      {pdf?.numPages > 1 && (
+        <div className="tw:flex tw:items-center tw:justify-center tw:gap-2 tw:text-xs tw:text-muted" id="opdPager">
+          <Boton variante="secundario" tamano="sm" data-p="-1" icono="chevL" aria-label="Página anterior" disabled={pagina <= 1} onClick={() => setPagina((p) => p - 1)} />
           <span>Página {pagina} de {pdf.numPages}</span>
-          <button className="ibtn" data-p="1" disabled={pagina >= pdf.numPages} onClick={() => setPagina((p) => p + 1)}><Icono nombre="chevR" tam={15} /></button>
-        </>}
-      </div>
-    </>
+          <Boton variante="secundario" tamano="sm" data-p="1" icono="chevR" aria-label="Página siguiente" disabled={pagina >= pdf.numPages} onClick={() => setPagina((p) => p + 1)} />
+        </div>
+      )}
+    </div>
   );
 }

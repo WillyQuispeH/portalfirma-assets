@@ -38,9 +38,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     const m = await txt('#userMenu');
     ok(/Corredor Demo/.test(m) && /Corredora Demo/.test(m) && /Portalfirma/.test(await txt('#umPf')) && await w.isVisible('[data-um="pfOut"]') && /Mis operaciones/.test(m) && /Agente por WhatsApp/.test(m) && /PortalFirma Asset 0\./.test(m), 'menú con el usuario de Asset, Portalfirma conectado, accesos y versión');
     ok(await w.evaluate(() => document.querySelector('#userMenu').parentElement === document.body), 'el menú va en <body>');
-    await w.click('#umTema [data-tema="dark"]');
-    ok(await w.evaluate(() => document.documentElement.dataset.theme === 'dark') && await w.isVisible('#umTema [data-tema="dark"].on'), 'apariencia: cambia a oscuro');
-    await w.click('#umTema [data-tema="system"]');
+    ok(!(await w.$('#umTema')) && !!(await w.$('[data-um="config"]')), 'la apariencia ya no está en el menú: va en Configuración');
     await w.mouse.click(700, 500); await w.waitForTimeout(200);
     ok(!(await w.$('#userMenu')) && !(await w.evaluate(() => document.querySelector('#userBtn').classList.contains('on'))), 'tocar fuera cierra el menú');
 

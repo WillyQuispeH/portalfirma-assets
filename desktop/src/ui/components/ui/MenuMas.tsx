@@ -22,10 +22,16 @@ interface IMenuMasProps {
   opciones: IOpcionMenu[];
   /** para lectores de pantalla y el globo del botón */
   etiqueta?: string;
+  /** id del botón «⋯» */
+  id?: string;
+  /** contenido del botón (por defecto, el ícono «⋯») */
+  contenido?: ReactNode;
   className?: string;
+  /** el tamaño del botón «⋯» (el de Boton) */
+  tamano?: 'sm' | 'md';
 }
 
-export default function MenuMas({ opciones, etiqueta = 'Más acciones', className }: IMenuMasProps) {
+export default function MenuMas({ opciones, etiqueta = 'Más acciones', id, contenido, className, tamano = 'md' }: IMenuMasProps) {
   const [abierto, setAbierto] = useState(false);
   const [pos, setPos] = useState({ top: 0, right: 0 });
   const boton = useRef<HTMLButtonElement>(null);
@@ -83,13 +89,13 @@ export default function MenuMas({ opciones, etiqueta = 'Más acciones', classNam
 
   return (
     <>
-      <Boton ref={boton} variante="secundario" data-mas aria-label={etiqueta} title={etiqueta} aria-haspopup="menu" aria-expanded={abierto}
-        onClick={() => setAbierto((a) => !a)} onKeyDown={tecladoBoton} className={cx('tw:w-10 tw:px-0', className)}>
-        <Icono nombre="dots" tam={18} />
+      <Boton ref={boton} id={id} variante="secundario" tamano={tamano} data-mas aria-label={etiqueta} title={etiqueta} aria-haspopup="menu" aria-expanded={abierto}
+        onClick={() => setAbierto((a) => !a)} onKeyDown={tecladoBoton} className={cx(tamano === 'sm' ? 'tw:w-8' : 'tw:w-10', 'tw:px-0', className)}>
+        {contenido ?? <Icono nombre="dots" tam={tamano === 'sm' ? 16 : 18} />}
       </Boton>
       {abierto && createPortal(
         <div ref={menu} role="menu" data-menu-mas aria-label={etiqueta} onKeyDown={tecladoMenu} style={{ top: pos.top, right: pos.right }}
-          className="tw:fixed tw:z-30 tw:min-w-[220px] tw:max-w-[320px] tw:p-1.5 tw:rounded-xl tw:border tw:border-solid tw:border-edge tw:border-b-[3px] tw:border-b-edge-b tw:bg-card tw:shadow-[0_16px_40px_-12px_rgb(16_24_64/.28)] tw:origin-top-right tw:animate-[menu-entra_.16s_cubic-bezier(.25,1,.5,1)]">
+          className="tw:fixed tw:z-[90] tw:min-w-[220px] tw:max-w-[320px] tw:p-1.5 tw:rounded-xl tw:border tw:border-solid tw:border-edge tw:border-b-[3px] tw:border-b-edge-b tw:bg-card tw:shadow-[0_16px_40px_-12px_rgb(16_24_64/.28)] tw:origin-top-right tw:animate-[menu-entra_.16s_cubic-bezier(.25,1,.5,1)]">
           {opciones.map((o, k) => (
             <button key={o.id ?? k} type="button" role="menuitem" id={o.id} title={o.title} disabled={o.disabled} tabIndex={-1}
               onClick={(e) => { cerrar(); o.alTocar?.(e); }}

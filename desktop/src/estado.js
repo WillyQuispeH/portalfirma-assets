@@ -108,7 +108,7 @@ function crear({ inmo, negocios, agenda }) {
   const SEM = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
   const telWa = (t) => { let d = String(t || '').replace(/\D/g, ''); if (!d) return null; if (d.length === 8) d = '569' + d; else if (d.length === 9) d = '56' + d; return d.length >= 10 ? d : null; };
   function confirmacion(eventoId, personaId) {
-    const e = agenda.obtener(eventoId); const p = e.propId ? inmo.obtener(e.propId) : null;
+    const e = agenda.ver(eventoId); const p = e.propId ? inmo.obtener(e.propId) : null; // ver: solo el evento (obtener es asíncrona: trae también el historial)
     const ps = (e.personas || []).map((c) => inmo.personaPorId(c.id)).filter(Boolean);
     const c = (personaId && ps.find((x) => x.id === personaId)) || ps.find((x) => telWa(x.telefono)) || ps[0] || null;
     const d = new Date(e.fecha + 'T12:00'); const dia = `${SEM[d.getDay()]} ${d.getDate()} de ${MESES[d.getMonth()]}`;

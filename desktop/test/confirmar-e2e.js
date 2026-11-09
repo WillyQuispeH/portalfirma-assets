@@ -20,7 +20,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
 
     await w.fill('#agQ', 'CV-9002'); await w.press('#agQ', 'Enter'); await w.waitForSelector('.ga-est');
     await w.click('.ga-est [data-a="agendar"]'); await w.waitForSelector('.ga-agd [data-ok]:not(.hidden)');
-    await w.fill('.ga-agd [data-f="fecha"]', '2026-10-22'); await w.fill('.ga-agd [data-f="hora"]', '11:00'); await w.click('.ga-agd [data-ok]');
+    await w.fill('.ga-agd [data-f="fecha"]', '2037-10-22'); await w.fill('.ga-agd [data-f="hora"]', '11:00'); await w.click('.ga-agd [data-ok]');
     await w.waitForSelector('.ag-sig.sug2 button:has-text("Confirmar por WhatsApp a Juan")');
     ok(true, 'después de agendar la visita propone «Confirmar por WhatsApp a Juan»');
     await w.click('.ag-sig.sug2 button:has-text("Confirmar por WhatsApp")'); await w.waitForSelector('.ga-wa textarea');
@@ -35,7 +35,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     await w.waitForSelector('#agCanvas .lz-wa.ok'); ok(/Confirmación de la visita enviada por WhatsApp/.test(await txt('#agCanvas')), 'el lienzo la muestra confirmada y queda en el historial');
 
     // persona sin celular: se escribe ahí mismo y queda en su ficha
-    const ev2 = await w.evaluate((o) => window.pf.assetEjecutar('asset_crear_evento', { tipo: 'visita', fecha: '2026-10-23', hora: '16:00', propiedad: o.p, personas: [o.o] }).then((r) => r.data.evento.id), ids);
+    const ev2 = await w.evaluate((o) => window.pf.assetEjecutar('asset_crear_evento', { tipo: 'visita', fecha: '2037-10-23', hora: '16:00', propiedad: o.p, personas: [o.o] }).then((r) => r.data.evento.id), ids);
     await w.evaluate((id) => window.Gestion.confirmar(id), ev2); await w.waitForSelector('.ga-wa [data-cel]');
     await w.click('.ga-wa:last-of-type [data-ok]').catch(() => {}); 
     await w.fill('.ga-wa [data-cel]', '+56 9 1212 3434'); await w.click('.ga-wa [data-gcel]'); await w.waitForFunction(() => !document.querySelector('.ga-wa [data-cel]'));
@@ -48,7 +48,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     // 0.10.3 · con el WhatsApp de wechatia conectado, la confirmación sale sola desde Asset
     await w.evaluate(() => window.pf.pvClaveWa({ token: 'pit-f0e1d2c3f0e1d2c3f0e1d2c3', locationId: 'PlPVNYvbNWr6nrRB9VHG' }));
     await app.evaluate(() => { global.__waMock = { convs: [], msgs: {}, enviados: [], contactos: [] }; });
-    const ev3 = await w.evaluate((o) => window.pf.assetEjecutar('asset_crear_evento', { tipo: 'visita', fecha: '2026-10-24', hora: '10:00', propiedad: o.p, personas: [o.c] }).then((r) => r.data.evento.id), ids);
+    const ev3 = await w.evaluate((o) => window.pf.assetEjecutar('asset_crear_evento', { tipo: 'visita', fecha: '2037-10-24', hora: '10:00', propiedad: o.p, personas: [o.c] }).then((r) => r.data.evento.id), ids);
     const nAb = (await abiertos()).length;
     await w.evaluate((id) => window.Gestion.confirmar(id), ev3); await w.waitForSelector('.ga-wa [data-abrir]');
     ok(/Se envía desde el WhatsApp de tu cuenta de wechatia/.test(await txt('.ga-wa:last-child')) && /Enviar por WhatsApp/.test(await txt('.ga-wa [data-ok]')), 'con wechatia conectado, el botón es «Enviar por WhatsApp» (sin abrir WhatsApp Web)');
@@ -61,6 +61,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     // fuera de la ventana de 24 h, WhatsApp exige plantilla: se explica y se puede abrir en el WhatsApp propio
     await app.evaluate(() => { global.__waMock.fallar24h = true; });
     await w.evaluate((id) => window.Gestion.confirmar(id), ev3); await w.waitForSelector('.ga-wa:last-child [data-abrir]');
+    await w.fill('.ga-wa:last-child textarea', (await w.inputValue('.ga-wa:last-child textarea')) + ' Te espero.'); // el mismo texto no se repite antes de 15 min
     await w.click('.ga-wa:last-child [data-ok]'); await w.waitForFunction(() => /24 horas/.test(document.querySelector('.ga-wa:last-child .ga-falta')?.textContent || ''));
     ok(/plantilla aprobada por Meta/.test(await txt('.ga-wa:last-child .ga-falta')), 'si WhatsApp no lo entrega (24 h sin respuesta del cliente), lo explica');
     await w.click('.ga-wa:last-child [data-abrir]'); await w.waitForSelector('.ga.hecha:has-text("se abrió WhatsApp")');
@@ -68,6 +69,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     // la clave sin permiso de contactos: dice exactamente qué permiso agregar
     await app.evaluate(() => { Object.assign(global.__waMock, { fallar24h: false, sinPermisoContactos: true, contactos: [] }); });
     await w.evaluate((id) => window.Gestion.confirmar(id), ev3); await w.waitForSelector('.ga-wa:last-child [data-abrir]');
+    await w.fill('.ga-wa:last-child textarea', (await w.inputValue('.ga-wa:last-child textarea')) + ' Saludos.');
     await w.click('.ga-wa:last-child [data-ok]'); await w.waitForFunction(() => /Editar contactos/.test(document.querySelector('.ga-wa:last-child .ga-falta')?.textContent || ''));
     ok(true, 'si a la clave le falta el permiso de contactos, indica cuál agregar en wechatia'); await shot('cf3-auto.png');
     ok(!errs.length, 'sin errores de JavaScript' + (errs.length ? ': ' + errs.join(' | ') : ''));

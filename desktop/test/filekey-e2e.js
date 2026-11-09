@@ -7,8 +7,8 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
   const w = await app.firstWindow(); const errs = []; w.on('pageerror', (e) => errs.push(e.message));
   await w.setViewportSize({ width: 1440, height: 900 }); await w.waitForFunction(() => window.studio && window.Inmo, null, { timeout: 15000 }); await w.waitForTimeout(300); await w.evaluate(() => window.studio.goHome()); await w.waitForSelector('.hub-card');
   await w.click('.hub-card[data-act="ops"]'); await w.waitForSelector('#opPhone'); await w.fill('#opPhone', '9 8727 6858'); await w.click('#mOk');
-  await w.waitForSelector('.ops-row[data-op="20900"]', { timeout: 30000 });
-  await w.click('.ops-row[data-op="20900"]'); await w.waitForSelector('#opdKey', { timeout: 20000 });
+  await w.waitForSelector('.op-fila[data-op="20900"]', { timeout: 30000 });
+  await w.click('.op-fila[data-op="20900"]'); await w.waitForSelector('#opdKey', { timeout: 20000 });
   ok(/Falta el acceso a los documentos/.test(await w.textContent('#opdCanvas')), 'sin código de acceso: lo explica en la vista previa');
   await w.click('#opdKey'); await w.waitForSelector('#fkVal');
   await w.fill('#fkVal', 'a b'); await w.click('#mOk'); await w.waitForSelector('#fkErr:has-text("no es válido")');

@@ -21,7 +21,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     await w.click('#userBtn'); await w.click('[data-um="integraciones"]');
     await w.waitForSelector('#view-integraciones:not(.hidden) [data-integracion="portalfirma"]');
     ok(true, 'se abre desde el menú del usuario');
-    ok(/Inicio Integraciones/.test(await txt('#view-integraciones [data-migas]')), 'con sus migas: Inicio › Integraciones');
+    ok(/Inicio Configuración/.test(await txt('#view-integraciones [data-migas]')) && await w.isVisible('#cfgTabs [data-t="integraciones"][aria-selected="true"]'), 'abre Configuración en la pestaña Integraciones');
     for (const id of ['portalfirma', 'wechatia', 'canal-whatsapp', 'canal-instagram', 'canal-facebook', 'canal-correo', 'mercadolibre', 'drive', 'maps', 'ia'])
       ok(await w.$(fila(id)), `muestra ${id}`);
     ok(/Entra con tu cuenta de Asset/.test(await txt(fila('canal-instagram'))), 'sin la cuenta de Asset, los canales dicen que no se puede saber su estado');

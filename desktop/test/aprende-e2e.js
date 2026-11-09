@@ -9,7 +9,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÃ“: ' + m); console.log('  â
   const shot = (n) => w.screenshot({ path: path.resolve(__dirname, n) });
   try {
     await w.setViewportSize({ width: 1440, height: 900 }); await w.waitForSelector('#view-inicio [data-cabecera]');
-    ok(/inicio-propiedades\.jpg/.test(await w.evaluate(() => getComputedStyle(document.querySelector('#view-inicio .hoy-bg')).backgroundImage)), 'el inicio usa la imagen entregada');
+    ok(!!(await w.$('#view-inicio [data-layout-fondo]')), 'el inicio usa el fondo del kit (Layout)');
     await w.click('#view-inicio [data-do="importar"]'); await w.waitForSelector('text=Cartera actualizada', { timeout: 15000 }); await w.click('#mOk'); await w.waitForSelector('.im-card');
     await w.evaluate(() => window.Inmo.inicio()); await w.waitForSelector('#view-inicio .hoy-ks'); await w.waitForTimeout(700); await shot('ap1-inicio.png');
     await w.evaluate(() => window.Inmo.cartera()); await w.waitForSelector('.im-card'); await w.waitForTimeout(300);

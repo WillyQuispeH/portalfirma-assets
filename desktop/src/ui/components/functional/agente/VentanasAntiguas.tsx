@@ -1,7 +1,7 @@
-// Ventanas del Agente que abre el código antiguo (src/renderer/agente.js y dictado.js) con window.Ventanas.abrir:
+// Ventanas del Agente (las abre modales.ts y el dictado con window.Ventanas.abrir):
 // adjuntar el documento abierto, las herramientas, la actividad, renombrar o borrar una conversación, la clave de IA
 // y, del dictado, conectar Google Drive o elegir las fotos. Están registradas en ventanas/agente.tsx.
-// La lógica (llamadas a pf, toasts, qué se refresca) llega en las props desde el JS antiguo.
+// La lógica (llamadas a pf, toasts, qué se refresca) llega en las props desde modales.ts y dictado/controlador.tsx.
 // Los id (#agDoc, #agFile, #agNo, #agOk, #cvN, #cvE, #iaK, #iaErr, #iaQuitar, #fdCambiar, #mOk, #mCancel) y la clase
 // ag-tl (con un div por fila) los usan las pruebas.
 import { useEffect, useState } from 'react';
@@ -14,10 +14,10 @@ import { cerrarModal } from '../../../utils/modal';
 import { cx } from '../../../utils/cx';
 
 // lista de herramientas o de actividad: .ag-tl con un div por fila (las pruebas cuentan «.ag-tl > div»)
-const LISTA = 'ag-tl tw:flex tw:flex-col tw:gap-1.5 tw:m-0 tw:min-w-[min(560px,80vw)]';
-const FILA = 'tw:flex tw:flex-col tw:gap-0.5 tw:py-2 tw:px-2.5 tw:rounded-[10px] tw:bg-bg';
-const CODIGO = 'tw:text-[11px] tw:text-brand';
-const CHICO = 'tw:text-[11.5px] tw:text-muted tw:leading-snug';
+const LISTA = 'ag-tl tw:flex tw:flex-col tw:gap-1.5 tw:m-0 tw:min-w-0';
+const FILA = 'tw:flex tw:flex-col tw:gap-0.5 tw:min-w-0 tw:py-2 tw:px-2.5 tw:rounded-[10px] tw:bg-bg';
+const CODIGO = 'tw:text-[11px] tw:text-brand tw:break-all';
+const CHICO = 'tw:text-[11.5px] tw:text-muted tw:leading-snug tw:break-words';
 
 // ---------- modal-4: adjuntar al agente ----------
 export function Adjuntar({ doc, alDocumento, alArchivo }: { doc: string; alDocumento: () => void; alArchivo: () => void }) {
@@ -102,8 +102,17 @@ export function BorrarConversacion({ titulo, alConfirmar }: { titulo: string; al
 
 // ---------- modal-9: clave de IA ----------
 /** alGuardar y alQuitar devuelven el error a mostrar, o nada si salió bien */
-export function ClaveIA({ propia, incluida, termina, alGuardar, alQuitar }: { propia?: boolean; incluida?: boolean; termina?: string; alGuardar: (clave: string) => Promise<string | void>; alQuitar: () => Promise<string | void> }) {
+export function ClaveIA({ servidor, propia, incluida, termina, alGuardar, alQuitar }: { servidor?: boolean; propia?: boolean; incluida?: boolean; termina?: string; alGuardar: (clave: string) => Promise<string | void>; alQuitar: () => Promise<string | void> }) {
   const [clave, setClave] = useState(''); const [error, setError] = useState('');
+  // con la cuenta de Asset, la IA la pone Portalfirma desde el servidor: no hay clave que poner en este computador
+  if (servidor) return <>
+    <VentanaCabecera icono="sparkle" titulo="IA de Asset" />
+    <VentanaCuerpo>
+      <p className={P}>El Agente, la atención de clientes (Sofía y Tomás) y la lectura de documentos usan la IA de Portalfirma (Claude), a través del servidor de Asset.</p>
+      <p className={NOTA}>No necesitas una clave propia: tu cuenta ya la tiene incluida y nada queda guardado en este computador.</p>
+    </VentanaCuerpo>
+    <VentanaPie><Boton id="mOk" onClick={cerrarModal}>Entendido</Boton></VentanaPie>
+  </>;
   const ahora = propia ? `Ahora usa una clave propia (termina en …${termina}).` : incluida ? 'Ahora usa la clave incluida con la app.' : termina ? `Clave guardada: termina en …${termina}.` : 'No hay clave.';
   const guardar = async () => { const k = clave.trim(); if (!k) { setError('Pega la clave.'); return; } const e = await alGuardar(k); setClave(''); if (e) setError(e); };
   const quitar = async () => { const e = await alQuitar(); if (e) setError(e); };

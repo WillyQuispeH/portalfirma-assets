@@ -9,7 +9,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
   const txt = (s) => w.textContent(s).then((t) => t || '');
   const shot = (n) => w.screenshot({ path: path.resolve(__dirname, n) });
   const datos = () => w.evaluate(() => window.pf.inmoListar().then((r) => r.data));
-  const completar = async () => { for (const i of await w.$$('.ga-form .ga-fs label.falta input')) { const t = await i.getAttribute('type'); const cp = await i.getAttribute('data-cp'); await i.fill(cp === 'rut' ? '12.345.678-5' : t === 'email' ? 'corredor@demo.cl' : t === 'tel' ? '+56 9 5555 4444' : 'Dato de prueba'); } };
+  const completar = async () => { for (const i of await w.$$('.ga-form .ga-fs .falta input')) { const t = await i.getAttribute('type'); const cp = await i.getAttribute('data-cp'); await i.fill(cp === 'rut' ? '12.345.678-5' : t === 'email' ? 'corredor@demo.cl' : t === 'tel' ? '+56 9 5555 4444' : 'Dato de prueba'); } };
   try {
     await w.setViewportSize({ width: 1440, height: 920 }); await w.waitForSelector('#view-inicio [data-cabecera]');
     await w.click('#view-inicio [data-do="importar"]'); await w.waitForSelector('text=Cartera actualizada', { timeout: 15000 }); await w.click('#mOk'); await w.waitForSelector('.im-card');
@@ -44,7 +44,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     const val = (id) => w.inputValue(`.ga-form input[data-c="${id}"]`);
     ok(await val('nombre_mandante_signer') === 'MARIA GONZALEZ ROJAS' && await val('rut_mandante_signer') === '22.222.222-2' && await val('email_mandante_signer') === 'maria@demo.cl', 'el mandante sale de la propietaria vinculada (CRM)');
     ok(await val('tipo-de-gestion_documento_nosigner') === 'arriendo' && await val('precio-o-canon-de-referencia_documento_nosigner') === '$950.000' && /^\d{4}-\d{2}-\d{2}$/.test(await val('fecha_documento_nosigner')), 'operación, canon y fecha desde la ficha');
-    ok(/Faltan \d+ datos/.test(await txt('.ga-falta')) && (await w.$$('.ga-form label.falta')).length >= 4, 'marca lo que falta (comisión, mandato, corredor…)');
+    ok(/Faltan \d+ datos/.test(await txt('.ga-falta')) && (await w.$$('.ga-form .falta')).length >= 4, 'marca lo que falta (comisión, mandato, corredor…)');
     await shot('ge5-formulario.png');
     await w.click('.ga-form [data-rev]'); ok(/Completa/.test(await txt('#toast')), 'no deja enviar con datos faltantes');
     await completar(); await w.fill('.ga-form input[data-c="nombre_corredor_signer"]', 'Jerónimo Gómez'); await w.fill('.ga-form input[data-c="nombre-de-la-corredora-o-inmobiliaria_corredor_nosigner"]', 'Corredora Demo SpA');

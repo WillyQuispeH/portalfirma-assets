@@ -22,7 +22,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     const d = { tipo: await val('tipo'), arr: await w.isChecked('.ga-dc [data-k="arriendo"]'), pr: await val('precioArriendo'), m: await val('precioArriendoM'), dir: await val('direccion'), un: await val('unidad'), com: await val('comuna'), dor: await val('dormitorios'), ban: await val('banos'), su: await val('supUtil'), st: await val('supTotal'), gc: await val('gastosComunes') };
     ok(d.tipo === 'departamento' && d.arr && d.pr === '850000' && d.m === 'CLP' && /Avenida del Tranque 1234/.test(d.dir) && d.un === '26B' && d.com === 'Lo Barnechea', `entendió tipo, arriendo, 850 lucas = $850.000, dirección, depto y comuna (${d.dir}, ${d.un})`);
     ok(d.dor === '3' && d.ban === '2' && d.su === '85' && d.st === '92' && d.gc === '120000', 'y dormitorios, baños, metros y gastos comunes');
-    ok(/Lista para crear/.test(await txt('.ga-dc > .ga-foot .ga-falta')) && /piso 7/.test(await txt('.ga-dc')) && /Cocina amplia/.test(await val('caracteristicas')), 'nada falta; anota piso y orientación, y las características');
+    ok(/Lista para crear/.test(await txt('.ga-dc .ga-foot .ga-falta')) && /piso 7/.test(await txt('.ga-dc')) && /Cocina amplia/.test(await val('caracteristicas')), 'nada falta; anota piso y orientación, y las características');
     await shot('dc1-ficha.png');
     // 2. corregir dictando (escrito)
     await w.click('.ga-dc [data-cor]'); await w.fill('.ga-dc [data-t2]', 'perdón, son tres baños'); await w.click('.ga-dc [data-c2ok]');
@@ -56,10 +56,10 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     // 4. dictado incompleto: dice qué falta
     await w.evaluate(() => window.Dictado.abrir()); await w.waitForSelector('.ga-dc:last-of-type [data-txt]');
     await w.fill('.ga-dc [data-txt]', 'Casa en venta en Calle Los Olmos 55, Lo Barnechea'); await w.click('.ga-dc [data-ok]'); await w.waitForSelector('.ga-dc .dc-g');
-    const f = await txt('.ga-dc > .ga-foot .ga-falta');
+    const f = await txt('.ga-dc .ga-foot .ga-falta');
     ok(/Me falta: precio de venta, dormitorios, baños, superficie construida \/ útil \(m²\)/.test(f), `si falta algo, lo dice: «${f}»`);
-    ok(await w.evaluate(() => ['precioVenta', 'dormitorios', 'banos', 'supUtil'].every((k) => document.querySelector(`.ga-dc [data-f="${k}"]`)?.classList.contains('falta'))), 'y marca esos campos para completarlos ahí mismo');
-    await w.fill('.ga-dc [data-k="precioVenta"]', '9500'); await w.waitForFunction(() => !document.querySelector('.ga-dc [data-f="precioVenta"]').classList.contains('falta'));
+    ok(await w.evaluate(() => ['precioVenta', 'dormitorios', 'banos', 'supUtil'].every((k) => document.querySelector(`.ga-dc [data-k="${k}"]`)?.closest('.falta'))), 'y marca esos campos para completarlos ahí mismo');
+    await w.fill('.ga-dc [data-k="precioVenta"]', '9500'); await w.waitForFunction(() => !document.querySelector('.ga-dc [data-k="precioVenta"]').closest('.falta'));
     ok(true, 'al completar un dato, deja de marcarlo'); await shot('dc2-falta.png');
     // 5. hablarle al Agente con el micrófono del cuadro de texto: transcribe, envía y el agente llena la ficha
     const antes = (await w.$$('.ga-dc')).length;

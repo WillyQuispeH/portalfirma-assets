@@ -861,6 +861,62 @@ ${
    * Los mensajes nuevos de un cliente (llegados juntos se responden en una sola vuelta). `recientes` es todo lo llegado
    * a la conversación desde la última lectura (para ver si el corredor escribió a mano). Devuelve true si respondió.
    */
+  /**
+   * Un número que nadie conoce escribe al WhatsApp de la empresa: se crea su lead (origen WhatsApp, sin corredor a cargo:
+   * los avisos van a los administradores) para que lo atienda Sofía. No se crea si el número es de alguien del equipo
+   * de la corredora (un usuario con ese teléfono), de una persona del CRM, ni si ya existe un lead con él.
+   */
+  async leadNuevo(corredoraId: string, cv: Conversacion): Promise<Cliente | null> {
+    const t = telNorm(cv.telefono);
+    if (!t) return null;
+    const delEquipo = await this.db.$queryRaw<{ id: string }[]>`
+      SELECT id FROM usuarios WHERE corredora_id = ${corredoraId}::uuid AND telefono IS NOT NULL
+        AND right(regexp_replace(telefono, '\\D', '', 'g'), 9) = ${t} LIMIT 1`;
+    if (delEquipo.length) return null;
+    // una persona del CRM (con Tomás apagado quien() no la devuelve): no es un lead nuevo
+    const persona = await this.db.$queryRaw<{ id: string }[]>`
+      SELECT id FROM personas WHERE corredora_id = ${corredoraId}::uuid AND eliminado_en IS NULL AND telefono IS NOT NULL
+        AND right(regexp_replace(telefono, '\\D', '', 'g'), 9) = ${t} LIMIT 1`;
+    if (persona.length) return null;
+    const nombre = (cv.nombre || '').trim();
+    await this.leads.crear(corredoraId, {
+      nombre,
+      telefono: cv.telefono ?? '',
+      email: cv.email || '',
+      origen: 'whatsapp',
+      canal: { canal: 'whatsapp', conv: cv.id, contactId: cv.contactId ?? '' },
+      datos: { chatCon: nombre || cv.telefono || '' },
+    });
+    this.log.log(`lead nuevo por WhatsApp: ${nombre || cv.telefono}`);
+    return this.quien(corredoraId, cv.telefono, false);
+  }
+
+  /** Sofía apagada: lo que escribió el lead (y lo que le escribió el corredor a mano) solo se anota en el lead */
+  async soloAnotar(corredoraId: string, cli: Cliente, nuevos: MensajeWa[], recientes: MensajeWa[]) {
+    if (!cli.lead) return;
+    const t = telNorm(cli.telefono);
+    const manuales = t
+      ? this.manuales(recientes, await this.enviados.propios(corredoraId, t, new Date(Date.now() - 2 * 864e5)))
+      : [];
+    const ms: MensajeLead[] = [
+      ...manuales.map((m) => ({
+        k: 'wc' + m.id,
+        fecha: horaChile(new Date(m.fecha)),
+        de: 'broker' as const,
+        autor: 'Corredor',
+        texto: m.texto || '📎 Archivo',
+      })),
+      ...nuevos.map((m) => ({
+        k: 'wc' + m.id,
+        fecha: horaChile(new Date(m.fecha)),
+        de: 'cliente' as const,
+        autor: cli.nombre,
+        texto: m.texto.trim() || (m.adjuntos.length ? '📎 Envió un archivo (míralo en wechatia)' : ''),
+      })),
+    ].filter((m) => m.texto);
+    if (ms.length) await this.leads.anotar(cli.lead, ms);
+  }
+
   async manejar(
     wa: Wechatia,
     corredoraId: string,

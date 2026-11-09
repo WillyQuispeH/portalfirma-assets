@@ -14,13 +14,12 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     const ids = await w.evaluate(async () => { const d = (await window.pf.inmoListar()).data; const p = d.propiedades.find((x) => x.codigo === 'CV-9002').id; const ana = (await window.pf.inmoPerGuardar({ nombre: 'ANA ROJAS VERA', rut: '12.345.678-5', telefono: '+56 9 5555 1111' })).data; const ps = [d.personas.find((x) => /JUAN PEREZ/.test(x.nombre)), ana];
       const n1 = (await window.pf.negGuardar({ tipo: 'arriendo', propId: p, clienteId: ps[0].id })).data; const n2 = (await window.pf.negGuardar({ tipo: 'arriendo', propId: p, clienteId: ps[1].id })).data;
       for (let i = 0; i < 6; i++) await window.pf.inmoNota(p, 'Nota de prueba ' + (i + 1));
-      await window.pf.assetEjecutar('asset_crear_evento', { tipo: 'visita', fecha: '2026-10-22', hora: '11:00', propiedad: p, personas: [ps[0].id], negocio: n1.id });
+      await window.pf.assetEjecutar('asset_crear_evento', { tipo: 'visita', fecha: '2037-10-22', hora: '11:00', propiedad: p, personas: [ps[0].id], negocio: n1.id });
       return { p, n1: n1.id, n2: n2.id }; });
 
-    // 1. Inicio compacto → pantalla Actividad
-    await w.evaluate(() => window.Inmo.inicio()); await w.waitForSelector('#view-inicio [data-do="actividad"]');
-    ok((await w.$$('#view-inicio .im-act li')).length <= 4, 'el Inicio muestra solo las 4 últimas actividades');
-    await w.click('#view-inicio [data-do="actividad"]'); await w.waitForSelector('#view-actividad .ac-it');
+    // 1. «Hoy» → pantalla Actividad
+    await w.evaluate(() => window.Hoy.abrir()); await w.waitForSelector('#hoyNuevo');
+    await w.click('#view-inicio [data-cabecera] button[aria-label="Más acciones"]'); await w.waitForSelector('#hoyActividad'); await w.click('#hoyActividad'); await w.waitForSelector('#view-actividad .ac-it');
     ok(await w.isVisible('#view-actividad') && /Hoy/.test(await txt('.ac-dia')) && (await w.$$('.ac-it')).length >= 8, `pantalla Actividad propia, agrupada por día (${await txt('#acCont')})`);
     await w.click('#acCl [data-c="negocio"]'); await w.waitForFunction(() => [...document.querySelectorAll('.ac-it')].every((x) => x.dataset.clase === 'negocio'));
     ok((await w.$$('.ac-it')).length >= 2, 'filtra por negocios');

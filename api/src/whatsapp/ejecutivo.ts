@@ -1,14 +1,17 @@
 // El celular del ejecutivo (Agente por WhatsApp), HÍBRIDO: el servidor lee el WhatsApp de la empresa y le entrega a su
 // Asset abierto lo que escribe desde su celular; su Asset lo atiende con el Agente (Pedro, Juanita, Diego, Fernanda,
-// con su cartera y sus herramientas) y responde por aquí. Si su Asset está cerrado, los mensajes esperan en la cola y
-// el servidor se lo dice una vez («lo veo apenas abras Asset»).
+// con su cartera y sus herramientas) y responde por aquí. Si su Asset está cerrado, le responde el equipo DESDE EL
+// SERVIDOR (equipo.ts: consultas, agenda, notas; lo que necesita el computador queda en la cola para cuando lo abra).
+// Si el servidor no puede (sin IA), los mensajes esperan en la cola y se le dice una vez («lo veo apenas abras Asset»).
 //  · GET  /whatsapp/ejecutivo              estado del vínculo;
 //  · POST /whatsapp/ejecutivo/vincular     { nombre?, email? } → código «ASSET 1234» para enviar desde el celular;
 //  · POST /whatsapp/ejecutivo/desvincular;
 //  · PUT  /whatsapp/ejecutivo              { activo?, apodo?, email?, numeroEmpresa? };
 //  · GET  /whatsapp/ejecutivo/entrantes    los mensajes nuevos (se toman una sola vez; también es la señal de que su
 //                                           Asset está abierto);
-//  · POST /whatsapp/ejecutivo/responder    { texto } → al celular vinculado.
+//  · POST /whatsapp/ejecutivo/responder    { texto } → al celular vinculado;
+//  · GET  /whatsapp/ejecutivo/equipo       quién de la corredora tiene su celular vinculado (Usuarios de la corredora);
+//  · POST /whatsapp/ejecutivo/pedir        { usuarioId } (administrador) → le deja un aviso con los pasos para vincular.
 // También avisa al ejecutivo (avisar): por WhatsApp si tiene el celular vinculado; si no, queda en sus avisos de la app.
 import { BadRequestException, Body, Controller, Get, HttpCode, Injectable, Logger, Post, Put } from '@nestjs/common';
 import type { Prisma, WaVinculo } from '@prisma/client';
@@ -20,12 +23,14 @@ import { AvisosService } from '../avisos/avisos';
 import { WechatiaService, type Conversacion, type MensajeWa, type Wechatia } from './wechatia';
 import { EnviadosService } from './enviados';
 import { firma, norm, telNorm } from './comun';
+import { EquipoService } from './equipo';
 
 /** sin señal de su Asset en este tiempo, está cerrado */
 const ABIERTO_MS = 60_000;
 /** «tu Asset está cerrado» a lo más cada tanto */
 const AVISO_CERRADO_MS = 30 * 60_000;
-const NUMERO_EMPRESA = '+56 9 4497 5958';
+/** el WhatsApp de la empresa (la línea conectada en wechatia): ahí escriben los clientes y los ejecutivos */
+export const NUMERO_EMPRESA = '+56 9 4497 5958';
 
 const vincularEsquema = z.object({
   nombre: z.string().trim().max(120).optional(),
@@ -38,6 +43,7 @@ const configurarEsquema = z.object({
   numeroEmpresa: z.string().trim().max(30).optional(),
 });
 const responderEsquema = z.object({ texto: z.string().trim().min(1).max(3500) });
+const pedirEsquema = z.object({ usuarioId: z.string().uuid() });
 
 interface DatosVinculo {
   nombre?: string;
@@ -56,6 +62,7 @@ export class EjecutivoService {
     private readonly wa: WechatiaService,
     private readonly enviados: EnviadosService,
     private readonly avisos: AvisosService,
+    private readonly equipo: EquipoService,
   ) {}
 
   private vista(v: WaVinculo | null) {
@@ -185,6 +192,12 @@ export class EjecutivoService {
         vinculadoEn: new Date(),
       },
     });
+    // el celular vinculado queda como teléfono del usuario, si no tenía uno (lo usan los avisos y el equipo)
+    if (cv.telefono)
+      await this.db.usuario.updateMany({
+        where: { id: v.usuarioId, OR: [{ telefono: null }, { telefono: '' }] },
+        data: { telefono: cv.telefono },
+      });
     const d = (v.datos ?? {}) as DatosVinculo;
     if (cv.contactId) {
       const texto = `Listo, este celular quedó conectado a PortalFirma Asset${d.nombre ? ' de ' + d.nombre : ''}.\n\n${MENU}`;
@@ -203,6 +216,15 @@ export class EjecutivoService {
   async recibir(wa: Wechatia, v: WaVinculo, cv: Conversacion, nuevos: MensajeWa[]) {
     if (cv.contactId && cv.contactId !== v.contactId)
       await this.db.waVinculo.update({ where: { usuarioId: v.usuarioId }, data: { contactId: cv.contactId } });
+    const abierto = v.senalEn && Date.now() - v.senalEn.getTime() < ABIERTO_MS;
+    // con su Asset cerrado, el equipo le responde desde el servidor
+    if (!abierto) {
+      try {
+        if (await this.equipo.atender(wa, v, cv, nuevos)) return;
+      } catch (e) {
+        this.log.warn(`equipo en el servidor: ${(e as Error).message}`);
+      }
+    }
     await this.db.waEntrante.createMany({
       data: nuevos.map((m) => ({
         corredoraId: v.corredoraId,
@@ -210,7 +232,6 @@ export class EjecutivoService {
         mensaje: { id: m.id, body: m.texto, attachments: m.adjuntos, dateAdded: m.fecha },
       })),
     });
-    const abierto = v.senalEn && Date.now() - v.senalEn.getTime() < ABIERTO_MS;
     const avisado = v.avisoCerradoEn && Date.now() - v.avisoCerradoEn.getTime() < AVISO_CERRADO_MS;
     if (!abierto && !avisado && cv.contactId) {
       const texto =
@@ -297,13 +318,47 @@ export class EjecutivoService {
   }
 }
 
+/** quién de la corredora tiene su celular vinculado y desde cuándo (para Usuarios de la corredora) */
+export async function equipoVinculado(db: PrismaService, corredoraId: string) {
+  const l = await db.waVinculo.findMany({ where: { corredoraId, telefono: { not: null } } });
+  return l.map((v) => ({
+    usuarioId: v.usuarioId,
+    telefono: v.telefono,
+    vinculadoEn: v.vinculadoEn?.toISOString() ?? null,
+  }));
+}
+
 @Controller('whatsapp/ejecutivo')
 export class EjecutivoController {
-  constructor(private readonly s: EjecutivoService) {}
+  constructor(
+    private readonly s: EjecutivoService,
+    private readonly db: PrismaService,
+    private readonly avisos: AvisosService,
+  ) {}
 
   @Get()
   estado(@UsuarioActual() u: UsuarioToken) {
     return this.s.estado(u);
+  }
+
+  @Get('equipo')
+  async equipo(@UsuarioActual() u: UsuarioToken) {
+    return { items: await equipoVinculado(this.db, u.corredoraId), numeroEmpresa: NUMERO_EMPRESA };
+  }
+
+  @Post('pedir')
+  @HttpCode(200)
+  async pedir(@UsuarioActual() u: UsuarioToken, @Body(new ZodPipe(pedirEsquema)) b: z.infer<typeof pedirEsquema>) {
+    if (u.rol !== 'ADMIN') throw new BadRequestException('Solo el administrador puede pedirlo.');
+    const otro = await this.db.usuario.findFirst({ where: { id: b.usuarioId, corredoraId: u.corredoraId } });
+    if (!otro) throw new BadRequestException('Ese usuario no es de tu corredora.');
+    await this.avisos.crear({
+      corredoraId: u.corredoraId,
+      usuarioId: otro.id,
+      tipo: 'wa_pedir_vinculo',
+      texto: `Vincula tu celular con tu equipo de Asset: abre Configuración › WhatsApp y asistentes › «Vincular mi celular» y manda el código por WhatsApp al ${NUMERO_EMPRESA}.`,
+    });
+    return { ok: true };
   }
 
   @Post('vincular')

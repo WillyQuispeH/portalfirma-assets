@@ -169,12 +169,15 @@ function abrirArriendos() {
   const el = $('#view-arriendos'); show('arriendos');
   window.ReactUI.desmontar(el); window.ReactUI.montar('Arriendos', el);
 }
-// Integraciones (React, src/ui/components/functional/integraciones): desde el menú del usuario; se vuelve a montar al
-// abrirla, así el estado de cada conexión está al día
-function abrirIntegraciones() {
+// Configuración (React, src/ui/components/functional/configuracion): desde el menú del usuario, con pestañas (General,
+// WhatsApp y asistentes, Integraciones). Usa #view-integraciones; se vuelve a montar al abrirla, así el estado de cada
+// conexión está al día. «Integraciones» abre su pestaña.
+function abrirConfiguracion(pestana) {
   const el = $('#view-integraciones'); show('integraciones');
-  window.ReactUI.desmontar(el); window.ReactUI.montar('Integraciones', el);
+  window.ReactUI.desmontar(el); window.ReactUI.montar('Configuracion', el, { pestana: pestana || 'general' });
 }
+const abrirIntegraciones = () => abrirConfiguracion('integraciones');
+window.abrirConfiguracion = abrirConfiguracion;
 window.abrirIntegraciones = abrirIntegraciones;
 document.querySelectorAll('.tab').forEach((t) => (t.onclick = () => {
   const v = t.dataset.view;

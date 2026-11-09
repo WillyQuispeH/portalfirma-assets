@@ -50,6 +50,9 @@ const ej = {
   /** lo nuevo de su celular (y la señal de que su Asset está abierto) */
   entrantes: async () => { const r = await api('GET', '/whatsapp/ejecutivo/entrantes'); guardarEj(r.estado); return r.items || []; },
   responder: (texto) => api('POST', '/whatsapp/ejecutivo/responder', { texto: String(texto).slice(0, 3500) }),
+  /** Usuarios de la corredora: quién tiene su celular vinculado, y pedirle a alguien que lo vincule (administrador) */
+  equipo: () => api('GET', '/whatsapp/ejecutivo/equipo'),
+  pedir: (usuarioId) => api('POST', '/whatsapp/ejecutivo/pedir', { usuarioId }),
 };
 
 // ---------------------------------------------------------------- atención de clientes y observador
@@ -58,6 +61,8 @@ const at = {
   estado: () => asistentes || { activo: true, clientesActivo: true },
   refrescar: async () => { const r = await api('GET', '/whatsapp/asistentes'); asistentes = { ...r, activo: r.clientesActivo }; return asistentes; },
   configurar: async (activo) => { const r = await api('PUT', '/whatsapp/asistentes', { clientesActivo: !!activo }); asistentes = { ...r, activo: r.clientesActivo }; return asistentes; },
+  /** pantalla Configuración: Sofía (leadsActivo) y Tomás (clientesActivo), del administrador */
+  ajustar: async (o) => { const r = await api('PUT', '/whatsapp/asistentes', o); asistentes = { ...r, activo: r.clientesActivo }; return asistentes; },
   pausa: async (telefono) => (await api('GET', '/whatsapp/asistentes/pausa?telefono=' + encodeURIComponent(telefono))).pausaHasta || null,
   pausar: async (telefono, horas) => (await api('POST', '/whatsapp/asistentes/pausar', { telefono, ...(horas ? { horas } : {}) })).pausaHasta,
   reanudar: (telefono) => api('POST', '/whatsapp/asistentes/reanudar', { telefono }),

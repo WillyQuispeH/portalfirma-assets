@@ -814,8 +814,10 @@ model Aviso {
 /// (`lectorHasta` se toma con UPDATE … WHERE lector_hasta < now(), aunque corran dos API).
 model WaAjustes {
   corredoraId    String    @id @map("corredora_id") @db.Uuid
-  /// Tomás atiende a las personas del CRM (Sofía atiende siempre a los leads)
+  /// Tomás atiende a las personas del CRM
   clientesActivo Boolean   @default(true) @map("clientes_activo")
+  /// Sofía atiende a los leads (apagada: sus mensajes solo se anotan en el lead y se avisa al corredor a cargo)
+  leadsActivo    Boolean   @default(true) @map("leads_activo")
   /// { activo, canales: { instagram, facebook, email }, ia, diasInicio, autorizadoPor, autorizadoEn }
   observador     Json      @default("{}")
   lectorHasta    DateTime? @map("lector_hasta")

@@ -6,6 +6,8 @@
 // Con el kit: las partes de la ventana (VentanaCabecera, VentanaCuerpo y VentanaPie), Boton, Input, Select, Switch,
 // Badge, Avatar y EstadoVacio. Cada vista (la lista, agregar, editar y la clave nueva) tiene sus tres partes; los
 // formularios se envían desde el pie con <Boton form="usrForm">.
+// WhatsApp: cada uno vincula su celular con su equipo (Pedro, Juanita, Diego, Fernanda) desde Configuración; aquí se ve
+// quién lo tiene ([data-usr-wa]) y el administrador le puede pedir que lo vincule ([data-usr-pedir]: le llega un aviso).
 // Los id (#usrPanel, #usrNuevo, #usrForm, #usrNombre…, [data-usr], [data-usr-ed], [data-usr-clave], [data-usr-conv]) los usan las pruebas.
 import { useEffect, useState, type FormEvent } from 'react';
 import Boton from '../../ui/Boton';
@@ -24,6 +26,7 @@ import type { IUsuario } from '../../../store/interfaces/usuario.interface';
 import type { RolAsset } from '../../../store/interfaces/acceso.interface';
 import { cerrarModal } from '../../../utils/modal';
 import { toast } from '../../../utils/app';
+import { api } from '../../../utils/api';
 import { fechaHora } from '../../../utils/formato';
 
 const ROLES: [RolAsset, string][] = [['CORREDOR', 'Corredor'], ['ADMIN', 'Administrador']];
@@ -43,6 +46,15 @@ export default function Usuarios() {
   const [verAgente, setVerAgente] = useState<IUsuario | null>(null);
   const [trayendo, setTrayendo] = useState(false);
   const [listoPerfil, setListoPerfil] = useState(false);
+  // el celular vinculado de cada usuario (por id)
+  const [wa, setWa] = useState<Record<string, string>>({});
+  const cargarWa = () => api<{ items: { usuarioId: string; telefono: string }[] }>('waEquipo')
+    .then((r) => setWa(Object.fromEntries(r.items.map((x) => [x.usuarioId, x.telefono])))).catch(() => setWa({}));
+  useEffect(() => { cargarWa(); }, []); // eslint-disable-line react-hooks/exhaustive-deps -- al abrir
+  const pedirVinculo = async (u: IUsuario) => {
+    try { await api('waPedirVinculo', u.id); toast(`Le dejamos un aviso a ${u.nombre} con los pasos para vincular su celular.`); }
+    catch (e) { toast((e as Error).message, 5000); }
+  };
   useEffect(() => { perfilGet().then(() => setListoPerfil(true)); }, [perfilGet]);
   useEffect(() => { if (listoPerfil) usuarioGetAll(admin); }, [usuarioGetAll, admin, listoPerfil, yo.id]);
 
@@ -69,7 +81,7 @@ export default function Usuarios() {
       <div id="usrPanel" className="usr tw:flex tw:flex-col tw:gap-4 tw:min-w-0">
         {error && <p role="alert" className="tw:m-0 tw:text-red-softink tw:text-sm" id="usrErrLista">{error}</p>}
         <ul className="tw:list-none tw:m-0 tw:p-0 tw:flex tw:flex-col tw:gap-2" id="usrLista">
-          {lista.map((u) => <Fila key={u.id} u={u} yo={yo.id} admin={admin} onEditar={() => setModo({ tipo: 'editar', u })} onClave={() => setModo({ tipo: 'clave', u })} onAgente={() => setVerAgente(u)} />)}
+          {lista.map((u) => <Fila key={u.id} u={u} yo={yo.id} admin={admin} onEditar={() => setModo({ tipo: 'editar', u })} onClave={() => setModo({ tipo: 'clave', u })} onAgente={() => setVerAgente(u)} wa={wa[u.id] || ''} onPedir={() => pedirVinculo(u)} />)}
           {!lista.length && !cargando && <li><EstadoVacio icono="users" texto="Aún no hay usuarios." /></li>}
           {cargando && !lista.length && <li><EstadoVacio compacto texto="Cargando…" /></li>}
         </ul>
@@ -92,7 +104,7 @@ export default function Usuarios() {
   </>;
 }
 
-function Fila({ u, yo, admin, onEditar, onClave, onAgente }: { u: IUsuario; yo: string; admin: boolean; onEditar: () => void; onClave: () => void; onAgente: () => void }) {
+function Fila({ u, yo, admin, onEditar, onClave, onAgente, wa, onPedir }: { u: IUsuario; yo: string; admin: boolean; onEditar: () => void; onClave: () => void; onAgente: () => void; wa: string; onPedir: () => void }) {
   return (
     <li data-usr={u.id} className={`tw:flex tw:items-center tw:gap-3 tw:p-3 tw:rounded-xl tw:border tw:border-solid tw:border-edge tw:border-b-2 tw:border-b-edge-b tw:bg-card ${u.activo ? '' : 'tw:opacity-60'}`}>
       <Avatar nombre={u.nombre} />
@@ -101,6 +113,9 @@ function Fila({ u, yo, admin, onEditar, onClave, onAgente }: { u: IUsuario; yo: 
           <b className="tw:text-sm">{u.nombre}</b>{u.id === yo && <span className="tw:text-xs tw:text-muted">(tú)</span>}
           <Badge tono={u.rol === 'ADMIN' ? 'lavanda' : 'azul'}>{u.rol === 'ADMIN' ? 'Administrador' : 'Corredor'}</Badge>
           {!u.activo && <Badge tono="rojo" punto>Inactivo</Badge>}
+          <span data-usr-wa={u.id}>
+            {wa ? <Badge tono="verde" icono="whatsapp" ajustar>WhatsApp · {wa}</Badge> : <Badge tono="gris" icono="whatsapp" ajustar>Sin WhatsApp</Badge>}
+          </span>
         </div>
         <small className="tw:block tw:text-xs tw:text-muted tw:truncate">
           {[u.email, u.telefono].filter(Boolean).join(' · ')}
@@ -109,6 +124,7 @@ function Fila({ u, yo, admin, onEditar, onClave, onAgente }: { u: IUsuario; yo: 
         </small>
       </div>
       {admin && <div className="tw:flex tw:gap-1 tw:flex-none">
+        {!wa && u.activo && u.id !== yo && <Boton variante="secundario" tamano="sm" icono="whatsapp" data-usr-pedir={u.id} title="Le llega un aviso con los pasos para vincular su celular con su equipo" onClick={onPedir}>Pedir que vincule</Boton>}
         <Boton variante="fantasma" tamano="sm" data-usr-ed={u.id} onClick={onEditar}>Editar</Boton>
         <Boton variante="fantasma" tamano="sm" data-usr-clave={u.id} onClick={onClave}>Clave</Boton>
         <Boton variante="fantasma" tamano="sm" data-usr-conv={u.id} onClick={onAgente}>Conversaciones</Boton>

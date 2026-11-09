@@ -2,7 +2,8 @@
 // código y decidir si este computador responde. Lo hecho por WhatsApp queda en la conversación «WhatsApp» del Agente.
 // Va en el modal de la app (ancho), con las partes del kit (VentanaCabecera, VentanaCuerpo y VentanaPie). Los id (#waAg,
 // #waKey, #waVin, #waAct…) los usan las pruebas; #waAg va dentro del cuerpo (lo busca refrescar() del controlador).
-// Los estilos son las clases wa-* de styles.css; los botones son Boton del kit.
+// Los estilos son las clases wa-* de styles.css; los botones son Boton del kit. Los pasos (PasosWhatsApp) también van en
+// Configuración › WhatsApp, sin la ventana.
 import { useEffect, useRef, useState } from 'react';
 import Icono from '../../ui/Icono';
 import Boton from '../../ui/Boton';
@@ -18,7 +19,8 @@ const Pie = () => <VentanaPie><Boton variante="secundario" id="mCancel" onClick=
 
 const fmtTel = (t?: string | null) => { const d = String(t || '').replace(/\D/g, ''); return d.length >= 11 ? `+${d.slice(0, 2)} ${d.slice(2, 3)} ${d.slice(3, 7)} ${d.slice(7)}` : t || ''; };
 
-export default function AgenteWhatsApp() {
+/** los pasos: WhatsApp de la empresa, tu celular y responder desde este computador */
+export function PasosWhatsApp() {
   const { estado: e, waCargar, waConectar, waVincular, waDesvincular, waConfigurar, waRevisarVinculo } = useWhatsApp();
   const { usuario } = useCuenta();
   const [listo, setListo] = useState(false);
@@ -33,11 +35,7 @@ export default function AgenteWhatsApp() {
     return () => clearInterval(t);
   }, [codigo, waRevisarVinculo]);
 
-  if (!listo || !e) return <>
-    <Cabecera />
-    <VentanaCuerpo><div className="wa-ag" id="waAg"><div className="ga-load"><span className="spinner sm" />Cargando…</div></div></VentanaCuerpo>
-    <Pie />
-  </>;
+  if (!listo || !e) return <div className="wa-ag" id="waAg"><div className="tw:flex tw:items-center tw:gap-2 tw:text-muted"><span className="spinner sm" />Cargando…</div></div>;
 
   const paso1 = !!e.conectado;
   const conectar = async () => {
@@ -56,9 +54,7 @@ export default function AgenteWhatsApp() {
     toast(activo ? 'El Agente responde tu WhatsApp desde este computador.' : 'Agente por WhatsApp en pausa.');
   };
 
-  return <>
-    <Cabecera />
-    <VentanaCuerpo>
+  return (
     <div className="wa-ag" id="waAg">
       <p className="tw:mt-0 tw:mb-3 tw:leading-relaxed tw:text-muted">Habla con tu equipo desde el celular, por texto o notas de voz. Escribe el nombre de quien necesitas y te atiende: <b>Pedro</b> (Captación), <b>Juanita</b> (Documentos), <b>Diego</b> (Seguimiento) o <b>Fernanda</b> (Leads). Cada uno guarda su propia conversación, así puedes cambiar de uno a otro sin perder el hilo. Todo queda aquí, en la conversación <b>WhatsApp</b> del Agente.</p>
 
@@ -101,7 +97,13 @@ export default function AgenteWhatsApp() {
         </label>
       </details>
     </div>
-    </VentanaCuerpo>
+  );
+}
+
+export default function AgenteWhatsApp() {
+  return <>
+    <Cabecera />
+    <VentanaCuerpo><PasosWhatsApp /></VentanaCuerpo>
     <Pie />
   </>;
 }

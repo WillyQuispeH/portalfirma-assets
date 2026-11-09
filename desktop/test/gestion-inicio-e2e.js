@@ -27,7 +27,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     ok(/Gestión documental/.test(await txt('#homeBody h1')), 'abre el inicio de Gestión documental');
     ok((await w.$$('#homeBody .hub-card')).length >= 13 && (await w.$$('#homeBody .tool-chip')).length === 7, 'lo esencial, lo que ahorra tiempo, lo avanzado y las 7 herramientas de PDF');
     ok(!!(await w.$('#homeBody [data-act="send"][data-member] .lock-badge')), 'lo exclusivo para clientes lleva candado');
-    ok(!!(await w.$('#hubAgQ')) && !!(await w.$('#hubDrop')) && !!(await w.$('.hn-card[data-act="tpl"]')), 'preguntarle al Agente, abrir arrastrando y la Notaría');
+    ok(!(await w.$('#hubAgQ')) && !!(await w.$('#hubDrop')) && !!(await w.$('.hn-card[data-act="tpl"]')), 'sin barra del Agente (está arriba), abrir arrastrando y la Notaría');
     await w.waitForFunction(() => document.querySelector('#tplLibHost')?.childElementCount > 0, null, { timeout: 8000 });
     ok(true, 'la biblioteca de plantillas (plantillas.js) se dibuja en su contenedor');
     await w.waitForSelector('#homeBody .recent-item');

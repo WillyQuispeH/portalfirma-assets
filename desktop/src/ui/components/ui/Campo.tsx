@@ -10,6 +10,10 @@ export const CAJA = 'tw:block tw:w-full tw:m-0 tw:h-10 tw:py-0 tw:px-3 tw:text-s
   + 'tw:placeholder:text-muted tw:focus:outline-none tw:focus:border-lav-edge tw:focus:ring-[3px] tw:focus:ring-lav/60 '
   + 'tw:disabled:opacity-60 tw:disabled:cursor-not-allowed';
 export const CAJA_ERROR = 'tw:border-red-edge tw:focus:border-red-edge tw:focus:ring-red/50';
+// falta completarlo (sin ser un error): borde amarillo
+export const CAJA_PENDIENTE = 'tw:border-yellow-edge tw:border-b-yellow-edge';
+// el valor lo propuso Asset (dictado, IA, ficha): fondo lila hasta que se edita
+export const CAJA_RESALTADA = 'tw:bg-lav-soft';
 
 interface ICampoProps {
   id: string;

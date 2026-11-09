@@ -20,11 +20,11 @@ declare global {
       importar: () => void; portales: () => void; cartera: () => void; personas: () => void;
       publicarPI: (p: object, op: string) => void; cargar: () => Promise<void>;
     };
-    Dictado: { abrir: () => void }; // src/renderer/dictado.js
-    AgenteModales: { adjuntar: () => void; herramientas: () => void; actividad: () => void; claveIA: () => void; renombrar: (c: object) => void; borrar: (c: object) => void }; // src/renderer/agente.js
+    Dictado: { abrir: () => void; mostrar: (r: object, texto?: string) => void }; // la instala components/functional/agente/dictado/controlador.tsx
+    AgenteModales: { adjuntar: () => void; herramientas: () => void; actividad: () => void; claveIA: () => void; renombrar: (c: object) => void; borrar: (c: object) => void }; // la instala components/functional/agente/modales.ts
     WhatsAppAgente?: { abrir: () => void; refrescar: () => void }; // la instala components/functional/whatsapp/controlador.tsx
     Usuarios?: { abrir: () => void }; // la instala components/functional/usuarios/controlador.tsx
-    Gestion: { estado: (propId: string, o?: object) => void; documento: (propId: string) => void; firmas: (propId: string) => void; operaciones: (n: number) => void }; // src/renderer/gestion.js
+    Gestion: { estado: (propId: string, o?: object) => void; documento: (propId: string) => void; firmas: (propId: string) => void; operaciones: (n: number) => void }; // la instala components/functional/agente/tarjetas/gestion.tsx
     Plazos: { open: () => void; afterAdd?: (r: unknown) => void }; // src/renderer/plazos.js
     Flujos: { open: () => void; muestra: (pedido: object, n: number) => void; confirmarEnvio: (ids: string[], opciones: object) => void }; // src/renderer/flujos.js
     studio: { accion: (k: string) => void; abrirReciente: (ruta: string) => void; goEditor: () => void; goHome?: () => void; whatsapp: (texto: string) => void }; // src/renderer/home.js
@@ -113,6 +113,7 @@ declare global {
     abrirIntegraciones?: () => void; // app.js: la pantalla Integraciones (components/functional/integraciones)
     requireLogin: (fn: () => void, motivo?: string, pestana?: string) => void; // app.js
     cancelarInicioSesion?: () => void; // app.js: olvida lo pedido («Volver al editor»)
+    abrirConfiguracion?: (pestana?: string) => void; // src/renderer/app.js: menú del usuario › Configuración
     Tema?: { get: () => string; set: (t: string) => Promise<void> }; // src/renderer/tema.js
     // lo que app.js le pide a la pantalla «Conecta tu cuenta de Portalfirma» (#view-login)
     __cuenta: { motivo: (t?: string) => void; aviso: (t?: string) => void };

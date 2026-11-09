@@ -14,6 +14,10 @@ import { useAgenteStore } from '../../../store/zustand/agente.store';
 import { toast } from '../../../utils/app';
 import Agente from './Agente';
 import { nombreHerramienta } from './Mensaje';
+import { instalarGestion } from './tarjetas/gestion';
+import { instalarDictado } from './dictado/controlador';
+import { actual as actualLienzo, instalarLienzo, mostrar as mostrarLienzo, refrescar as refrescarLienzo } from './lienzo/controlador';
+import { instalarAgenteModales } from './modales';
 import type { IAgenteItem, TContexto } from '../../../store/interfaces/agente.interface';
 
 const W = window as unknown as Record<string, any>;
@@ -63,7 +67,7 @@ export const RAPIDAS: [string, string, string, () => unknown][] = [
 
 // lo que se sabe del trabajo en curso (lienzo + contexto), para que los botones no pregunten de nuevo
 export function datos(extra: Record<string, unknown> = {}) {
-  const L = W.Lienzo?.actual() || {}; const c: any = st().ctx || {};
+  const L = actualLienzo() || {}; const c: any = st().ctx || {};
   return {
     propId: c.tipo === 'propiedad' ? c.id : c.propId || L.prop?.id || L.negocio?.propId || null, negocioId: c.tipo === 'negocio' ? c.id : L.negocio?.id || null,
     personaId: L.negocio?.clienteId || null, op: c.op || L.op || null, eventoId: c.eventoId || null, codigo: L.prop?.codigo || null, ...extra,
@@ -80,10 +84,11 @@ function shell() {
   flushSync(() => raiz.render(<StrictMode><Agente /></StrictMode>));
   // enlaces de los mensajes y de las tarjetas: se abren en el navegador
   d.addEventListener('click', (e) => { const a = (e.target as HTMLElement).closest('[data-url]') as HTMLElement | null; if (a) { e.preventDefault(); W.pf.openUrl(a.dataset.url); } });
-  W.Dictado?.microfono($('#agMic'), { alTexto: (t: string) => { const q = $('#agQ') as HTMLTextAreaElement; q.value = [q.value.trim(), t].filter(Boolean).join(' '); ajustarCaja(); enviar(); } });
   ahora({ nombre: primerNombre() });
 }
 const primerNombre = () => { const x = String(W.Usuario?._u?.user?.namePerson || '').trim().split(/\s+/)[0] || ''; return x ? x[0].toUpperCase() + x.slice(1).toLowerCase() : ''; };
+// lo que se dictó con el micrófono del cuadro: se suma a lo escrito y se envía
+export function alDictar(t: string) { const q = $('#agQ') as HTMLTextAreaElement; q.value = [q.value.trim(), t].filter(Boolean).join(' '); ajustarCaja(); enviar(); }
 export function ajustarCaja() { const q = $('#agQ') as HTMLTextAreaElement | null; if (q) { q.style.height = 'auto'; q.style.height = Math.min(q.scrollHeight, 180) + 'px'; } }
 export function bajar() { const b = $('#agBody'); if (b) b.scrollTop = b.scrollHeight; }
 
@@ -101,7 +106,7 @@ export function vista() {
   return W.members(() => {
     shell(); W.ir('agente'); const d = $('#agDrawer')!; $('#view-agente')!.appendChild(d); d.classList.add('ag-full'); d.classList.remove('hidden');
     ahora({ modo: 'full', abierto: true, nombre: primerNombre() }); document.body.classList.remove('ag-on'); $('#agBtn')?.classList.remove('on');
-    bajar(); listarConvs(); lienzoOn(); W.Lienzo.mostrar(st().ctx); setTimeout(() => $('#agQ')?.focus(), 60);
+    bajar(); listarConvs(); lienzoOn(); mostrarLienzo(st().ctx); setTimeout(() => $('#agQ')?.focus(), 60);
   }, 'El Agente Portalfirma trabaja con tu cuenta. Inicia sesión para usarlo.');
 }
 // cada vez que cambia la pantalla: si el chat estaba a pantalla completa, pasa a panel (abierto si se pidió acoplar)
@@ -116,7 +121,7 @@ const lienzoOn = () => { const c = st().ctx; const on = !!(c && c.tipo && c.tipo
 const lienzoVisible = () => { const cv = $('#agCanvas'); return st().modo === 'full' && st().abierto && !!cv && lienzoOn() && getComputedStyle(cv).display !== 'none'; };
 export function contexto(c: TContexto & { type?: string }, { ver }: { ver?: boolean } = {}) {
   const { type: _t, ...x } = c; ahora({ ctx: x as TContexto });
-  if (lienzoVisible()) W.Lienzo.mostrar(x); else if (ver) vista();
+  if (lienzoVisible()) mostrarLienzo(x); else if (ver) vista();
   guardar();
 }
 function festejo() {
@@ -137,7 +142,7 @@ export function usar(i: number) { items((l) => l.map((x, j) => (j === i && (x.k 
 // tarjetas del flujo guiado: viven dentro de la conversación con su propio estado (el nodo se reutiliza)
 function tarjeta(node: HTMLElement, { usuario }: { usuario?: string } = {}) {
   shell(); if (!st().abierto) openPanel(); const id = ++n;
-  if (!node.querySelector(':scope > .ga-x')) { const x = document.createElement('button'); x.className = 'ga-x'; x.title = 'Cerrar'; x.innerHTML = W.icon('x', 14); x.onclick = () => quitar(node); node.prepend(x); }
+  if (node.dataset.kit === undefined && !node.querySelector(':scope > .ga-x')) { const x = document.createElement('button'); x.className = 'ga-x'; x.title = 'Cerrar'; x.innerHTML = W.icon('x', 14); x.onclick = () => quitar(node); node.prepend(x); }
   items((l) => [...l.filter((x) => st().busy || x.k !== 'pensando'), ...(usuario ? [{ k: 'user' as const, text: usuario, deCard: id }] : []), { k: 'card' as const, id, node }]);
   bajar(); guardar(); irA(node); return id;
 }
@@ -146,7 +151,7 @@ function irA(node: HTMLElement) {
   const b = $('#agBody'); if (!b) return;
   const ir = () => {
     const slot = node.parentElement; const prev = slot?.previousElementSibling; const ancla = (prev?.classList.contains('user') ? prev : node) as HTMLElement;
-    const top = ancla.getBoundingClientRect().top - b.getBoundingClientRect().top + b.scrollTop - 10; b.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+    const top = ancla.getBoundingClientRect().top - b.getBoundingClientRect().top + b.scrollTop - 10; b.scrollTo({ top: Math.max(0, top) });
   };
   requestAnimationFrame(() => requestAnimationFrame(ir));
   node.querySelectorAll('img').forEach((im) => { if (!im.complete) im.addEventListener('load', ir, { once: true }); });
@@ -196,7 +201,7 @@ export async function accion(a: any = {}) {
   if (!st().busy) esperar();
   setTimeout(() => { if (!st().busy && st().items.some((x) => x.k === 'pensando')) quitarEspera(); }, 8000);
   try {
-    const t = a.tipo; const ref = () => { W.AssetRefrescar?.(); if (lienzoVisible()) W.Lienzo.refrescar(); };
+    const t = a.tipo; const ref = () => { W.AssetRefrescar?.(); if (lienzoVisible()) refrescarLienzo(); };
     if (t === 'agendar') return W.Gestion.agendar({ tipo: 'visita', propId: a.propId || null, personaId: a.personaId || null, negocioId: a.negocioId || null, fecha: a.fecha || undefined, hora: a.hora || undefined });
     if (t === 'documento') return a.propId ? W.Gestion.documento(a.propId) : W.Gestion.iniciar({ destino: 'documento' });
     if (t === 'orden') { const e = await W.api('agendaObtener', a.eventoId); return W.Agenda.ordenVisita(e, (r: any) => { decir(`Orden de visita enviada a firmar: operación ${r.operacion}.`); contexto({ tipo: 'operacion', op: r.operacion, propId: e.prop?.id || null }); festejo(); sugerir(['estado', 'ops'], { op: r.operacion, propId: e.prop?.id || null }); }); }
@@ -236,17 +241,17 @@ export async function abrirConv(id: string) {
   if (ocupado()) return;
   const r = await agenteService.abrir(id); if (!r.ok) return toast(r.error || 'No se pudo abrir.', 4000);
   ahora({ conv: { id, titulo: r.data?.titulo }, items: r.data?.items || [], adjuntos: [], ctx: r.data?.ctx || { tipo: 'inicio' } });
-  bajar(); listarConvs(); if (lienzoVisible()) W.Lienzo.mostrar(st().ctx);
+  bajar(); listarConvs(); if (lienzoVisible()) mostrarLienzo(st().ctx);
   const c: any = st().ctx; if (c.tipo === 'propiedad' && c.id) W.Gestion.estado(c.id); // continuidad: cómo está hoy la propiedad de esa conversación
 }
 export async function fijarConv(id: string, fijada: boolean) { await agenteService.fijar(id, fijada); listarConvs(); }
 export async function nueva() {
   if (ocupado()) return;
   await agenteService.nueva(); ahora({ conv: null, items: [], adjuntos: [], ctx: { tipo: 'inicio' } });
-  listarConvs(); if (lienzoVisible()) W.Lienzo.mostrar(st().ctx); setTimeout(() => $('#agQ')?.focus(), 30);
+  listarConvs(); if (lienzoVisible()) mostrarLienzo(st().ctx); setTimeout(() => $('#agQ')?.focus(), 30);
 }
-// el nombre cambió o se borró en el formulario (src/renderer/agente.js): se refleja aquí
-function alCambiarConv(id: string, cambio: { titulo?: string; borrada?: boolean }) {
+// el nombre cambió o se borró en el formulario (modales.ts): se refleja aquí
+export function alCambiarConv(id: string, cambio: { titulo?: string; borrada?: boolean }) {
   if (st().conv?.id === id) { if (cambio.borrada) nueva(); else ahora({ conv: { id, titulo: cambio.titulo } }); }
   listarConvs();
 }
@@ -254,8 +259,8 @@ function alCambiarConv(id: string, cambio: { titulo?: string; borrada?: boolean 
 // ---------- adjuntos ----------
 export async function elegirArchivo() { const r = await agenteService.elegirArchivo(); if (!r.ok) return toast(r.error || '', 4000); if (r.data) ahora({ adjuntos: r.data }); }
 export async function quitarAdjunto(nombre: string) { const r = await agenteService.quitarAdjunto(nombre); if (r.ok) ahora({ adjuntos: r.data || [] }); }
-// adjuntar el documento abierto en el editor (desde el formulario de src/renderer/agente.js)
-async function adjuntarBytes(nombre: string, bytes: unknown) { const r = await agenteService.adjuntar(nombre, bytes); if (!r.ok) return toast(r.error || '', 4000); ahora({ adjuntos: r.data || [] }); $('#agQ')?.focus(); }
+// adjuntar el documento abierto en el editor (desde el formulario de modales.ts)
+export async function adjuntarBytes(nombre: string, bytes: unknown) { const r = await agenteService.adjuntar(nombre, bytes); if (!r.ok) return toast(r.error || '', 4000); ahora({ adjuntos: r.data || [] }); $('#agQ')?.focus(); }
 
 // ---------- eventos del proceso principal ----------
 function alEvento(e: any) {
@@ -282,7 +287,7 @@ function alEvento(e: any) {
   } else if (e.type === 'aviso') { toast(e.texto, 10000); return;
   } else if (e.type === 'tarjeta' && e.tipo === 'dictado') { W.Dictado?.mostrar(e.r, e.texto); return;
   } else if (e.type === 'datos' && e.que === 'postventa') { W.Postventa?.refrescar?.(); return;
-  } else if (e.type === 'datos') { clearTimeout(tRefresco); tRefresco = setTimeout(() => { W.AssetRefrescar?.(); if (lienzoVisible()) W.Lienzo.refrescar(); }, 250); return;
+  } else if (e.type === 'datos') { clearTimeout(tRefresco); tRefresco = setTimeout(() => { W.AssetRefrescar?.(); if (lienzoVisible()) refrescarLienzo(); }, 250); return;
   } else if (e.type === 'contexto') { contexto(e); return;
   } else if (e.type === 'sugerencias') { sugeridas = e.lista; return;
   } else if (e.type === 'nota') { items((l) => { const p = l.findIndex((x) => x.k === 'pensando'); const it: IAgenteItem = { k: 'nota', text: e.text }; return p >= 0 ? [...l.slice(0, p), it, ...l.slice(p)] : [...l, it]; }); }
@@ -292,9 +297,10 @@ function alEvento(e: any) {
 // ---------- instalación: API pública, eventos y botón de la barra superior ----------
 export function instalarAgente() {
   W.pf?.onAgentEvent?.(alEvento);
+  instalarGestion(); instalarDictado(); instalarLienzo(); instalarAgenteModales();
   W.Agente = {
     open, close, toggle, enviar, vista, alMostrar, acoplar, tarjeta, decir, bajar, prellenar, sugerir, sugerencias, accion, quitar, contexto, festejo, guardar, nueva,
-    alCambiarConv, adjuntarBytes, elegirArchivo, nombreHerramienta, // para los formularios de src/renderer/agente.js
+    alCambiarConv, adjuntarBytes, elegirArchivo, nombreHerramienta,
     get _a() { const s = st(); return { ...s, open: s.abierto, ctx: s.ctx }; }, // lectura (pruebas y depuración)
   };
   const ponerBoton = () => {

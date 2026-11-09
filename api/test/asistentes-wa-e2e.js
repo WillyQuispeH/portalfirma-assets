@@ -77,6 +77,8 @@ function respuestaIa(b) {
   const tr = Array.isArray(ult.content) && ult.content.find((x) => x.type === 'tool_result');
   if (tr) {
     const r = JSON.parse(tr.content);
+    if (typeof r.propiedades === 'number') return texto(`Tienes ${r.propiedades} propiedad${r.propiedades === 1 ? '' : 'es'} en la cartera.`);
+    if (r.nota && r.ok) return texto('Listo: lo dejo para cuando abras Asset.');
     if (r.horarios) return texto(r.horarios.length ? `Tengo el ${r.horarios[0].fecha} a las ${r.horarios[0].horas[0]}. ¿Te acomoda?` : 'Esta semana no tengo horarios.');
     if (r.agendada) return texto(`Listo, quedó tu visita a ${r.agendada.direccion} el ${r.agendada.fecha} a las ${r.agendada.hora}.${r.pedir ? ' ' + r.pedir : ''}`);
     if (r.instruccion) return texto('Perfecto, le paso tu disponibilidad a tu corredor y te confirma.');
@@ -84,6 +86,9 @@ function respuestaIa(b) {
     if (r.guardado) return texto('Gracias, lo anoté.');
     return texto('Uy: ' + (r.error || 'listo'));
   }
+  // el equipo del ejecutivo en el servidor (Asset cerrado): consulta el resumen; un contrato lo deja para Asset
+  if ((b.tools || []).some((t) => t.name === 'resumen'))
+    return /contrato/i.test(contenido) ? herramienta('dejar_para_asset', { pedido: contenido.slice(-200) }) : herramienta('resumen', {});
   const sofia = (b.tools || []).some((t) => t.name.startsWith('lead_'));
   const ag = contenido.match(/(\d{4}-\d{2}-\d{2}) a las (\d{2}:\d{2})/);
   if (sofia && ag) return herramienta('lead_agendar_visita', { propiedad: (contenido.match(/PF-\d+/) || [''])[0], fecha: ag[1], hora: ag[2] });
@@ -142,16 +147,25 @@ function iaFalsa() {
     ok(await hasta(() => salidas(cel).some((t) => /quedó conectado a PortalFirma Asset de Corredor B/.test(t))), 'al mandar el código desde su celular, queda vinculado y se le confirma por WhatsApp');
     r = await req('GET', '/whatsapp/ejecutivo', null, t1);
     ok(r.j.activo && r.j.telefono === '+56 9 9111 1111' && !r.j.codigo, 'su vínculo queda activo con ese celular');
+    // Usuarios de la corredora: quién tiene su celular vinculado; el celular queda como su teléfono; pedirle a otro
+    r = await req('GET', '/whatsapp/ejecutivo/equipo', null, tA);
+    ok(r.s === 200 && r.j.items.some((x) => x.usuarioId === c1.id && x.telefono === '+56 9 9111 1111') && /4497 5958/.test(r.j.numeroEmpresa), 'el equipo de la corredora muestra quién tiene su celular vinculado');
+    ok((await db.usuario.findUnique({ where: { id: c1.id } })).telefono === '+56 9 9111 1111', 'el celular vinculado queda como teléfono del usuario (no tenía)');
+    ok((await req('POST', '/whatsapp/ejecutivo/pedir', { usuarioId: adm.id }, t1)).s === 400, 'un corredor no le pide a otro que vincule');
+    r = await req('POST', '/whatsapp/ejecutivo/pedir', { usuarioId: c1.id }, tA);
+    ok(r.s === 200 && (await db.aviso.findFirst({ where: { usuarioId: c1.id, tipo: 'wa_pedir_vinculo' } })), 'el administrador le pide que vincule: le llega un aviso con los pasos');
     escribe(cel, 'Pedro, ¿cómo va la cartera?');
-    ok(await hasta(() => salidas(cel).some((t) => /Tu Asset está cerrado/.test(t))), 'con su Asset cerrado, el servidor le avisa una vez que lo verá al abrirlo');
+    ok(await hasta(() => salidas(cel).some((t) => /^\*Pedro\* · Captación\nTienes \d+ propiedad/.test(t))), 'con su Asset cerrado, Pedro le responde desde el servidor (con los datos de la base)');
+    escribe(cel, 'Juanita, prepárame el contrato de arriendo de la PF-1');
+    ok(await hasta(() => salidas(cel).some((t) => /^\*Juanita\* · Documentos\nListo: lo dejo para cuando abras Asset/.test(t))), 'lo que necesita el computador (un contrato) Juanita lo deja para cuando abra Asset');
     r = await req('GET', '/whatsapp/ejecutivo/entrantes', null, t1);
-    ok(r.j.items.length === 1 && /cómo va la cartera/.test(r.j.items[0].body), 'su Asset, al abrirse, toma el mensaje de la cola');
+    ok(r.j.items.length === 1 && /contrato/.test(r.j.items[0].body) && !r.j.items.some((x) => /cómo va la cartera/.test(x.body)), 'su Asset, al abrirse, toma solo lo pendiente (lo ya respondido no)');
     ok((await req('GET', '/whatsapp/ejecutivo/entrantes', null, t1)).j.items.length === 0, 'y no se entrega dos veces');
+    escribe(cel, 'Pedro, ¿y los leads?');
+    ok(await hasta(async () => (await req('GET', '/whatsapp/ejecutivo/entrantes', null, t1)).j.items.some((x) => /y los leads/.test(x.body)), 15), 'con su Asset abierto, lo atiende su Asset (no el servidor)');
     r = await req('POST', '/whatsapp/ejecutivo/responder', { texto: '*Pedro* · Captación\nTienes 1 propiedad.' }, t1);
     ok(r.s === 200 && salidas(cel).some((t) => /Tienes 1 propiedad/.test(t)), 'la respuesta de su Asset sale a su celular');
-    escribe(cel, 'gracias');
-    await hasta(async () => (await req('GET', '/whatsapp/ejecutivo/entrantes', null, t1)).j.items.length, 15);
-    ok(salidas(cel).filter((t) => /Tu Asset está cerrado/.test(t)).length === 1, 'con su Asset abierto no se repite el aviso de cerrado');
+    ok(!salidas(cel).some((t) => /Tu Asset está cerrado/.test(t)), 'ya no hace falta el aviso de «Asset cerrado»: el equipo responde igual');
 
     // ---- 2. Sofía con un lead
     const cj = conv({ telefono: '+56 9 8765 4321', nombre: 'Juan Pérez' });
@@ -212,6 +226,24 @@ function iaFalsa() {
     await esperar(8000);
     ok(salidas(cc).length === antes, 'apagada, Tomás no responde a las personas del CRM');
     await req('PUT', '/whatsapp/asistentes', { clientesActivo: true }, tA);
+
+    // ---- 5b. un número que nadie conoce: se crea su lead y Sofía lo atiende; con Sofía apagada, solo queda en Leads
+    const cn = conv({ telefono: '+56 9 6666 2222', nombre: 'Pedro Nuevo' });
+    escribe(cn, 'Hola, vi un depto en Ñuñoa, ¿sigue disponible?');
+    ok(await hasta(() => salidas(cn).length > 0), 'a un número que nadie conoce le responde Sofía');
+    const ln = await db.lead.findFirst({ where: { corredoraId: co.id, telefonoNorm: '966662222' } });
+    ok(ln && ln.datos.chatCon === 'Pedro Nuevo' && /WhatsApp/.test(ln.datos.historial[0].texto), 'y queda como lead nuevo, con origen WhatsApp');
+    ok((await req('PUT', '/whatsapp/asistentes', { leadsActivo: false }, t1)).s === 403, 'un corredor no apaga a Sofía');
+    r = await req('PUT', '/whatsapp/asistentes', { leadsActivo: false }, tA);
+    ok(r.s === 200 && r.j.leadsActivo === false && r.j.clientesActivo === true, 'el administrador apaga a Sofía (Tomás sigue encendido)');
+    const cn2 = conv({ telefono: '+56 9 6666 3333', nombre: 'Rosa Nueva' });
+    escribe(cn2, 'Hola, busco arriendo en Providencia');
+    const ln2 = await hasta(() => db.lead.findFirst({ where: { corredoraId: co.id, telefonoNorm: '966663333' } }), 20);
+    await esperar(6000);
+    ok(ln2 && !salidas(cn2).length, 'con Sofía apagada, el número nuevo queda como lead pero nadie le responde');
+    antes = salidas(cj).length; escribe(cj, '¿Me confirmas la visita?'); await esperar(8000);
+    ok(salidas(cj).length === antes, 'y a los leads que ya existían tampoco');
+    await req('PUT', '/whatsapp/asistentes', { leadsActivo: true }, tA);
 
     // ---- 6. postventa
     const cp = conv({ telefono: '+56 9 7777 7777', nombre: 'Ana Rojas' });

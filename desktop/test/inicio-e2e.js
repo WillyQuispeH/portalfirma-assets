@@ -1,4 +1,4 @@
-// Inicio de Gestión documental: fondo fotográfico, bloque «Notaría» al centro (Gestión de firmas presenciales + Notaría virtual),
+// Inicio de Gestión documental: Layout del kit, bloque «Notaría» al centro (Gestión de firmas presenciales + Notaría virtual),
 // 3 recientes en el inicio y «Recientes» (dentro de Gestión documental) con búsqueda, filtro por tipo y páginas de 20.
 const { _electron: electron } = require('playwright'); const path = require('path'); const fs = require('fs'); const os = require('os');
 const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  ✔ ' + m); };
@@ -13,7 +13,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
   try {
     await w.setViewportSize({ width: 1500, height: 920 }); await w.waitForFunction(() => window.studio && window.ReactUI, null, { timeout: 20000 }); await w.waitForTimeout(400);
     await w.click('#nav [data-view="home"]'); await w.waitForSelector('#homeBody .hub-card'); await w.waitForTimeout(500);
-    ok(/inicio-fondo\.jpg/.test(await w.evaluate(() => getComputedStyle(document.body).backgroundImage)), 'el inicio usa la imagen de fondo');
+    ok(!!(await w.$('#homeBody [data-layout] [data-layout-fondo]')), 'el inicio usa el Layout del kit (con su fondo)');
     ok(await w.isVisible('.hub-center .hub-not [data-act="escr"]') && await w.isVisible('.hub-center .hub-not [data-act="tpl"]') && !(await w.$('.hub-col [data-act="escr"]')), 'Notaría al centro: Gestión de firmas presenciales y Notaría virtual');
     ok(/Gestión de firmas presenciales/.test(await txt('.hub-not')) && !/Trámites notariales/.test(await txt('#homeBody')), 'ya no dice «Trámites notariales»');
     for (const f of files) await w.evaluate((p) => window.pf.recentAdd(p), f);

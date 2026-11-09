@@ -23,7 +23,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     ok((await w.$$('.of-pj')).length === 4 && /Pedro/.test(await txt('.of-dock')) && /Juanita/.test(await txt('.of-dock')) && /Diego/.test(await txt('.of-dock')) && /Fernanda/.test(await txt('.of-dock')), 'el inicio es la oficina: Pedro, Juanita, Diego y Fernanda, con la barra del equipo');
     const p1 = await w.evaluate(() => window.OfLienzo.estado('fernanda')); await w.waitForTimeout(1200); const p2 = await w.evaluate(() => window.OfLienzo.estado('fernanda'));
     ok(await w.$('.of-escena canvas.of-lienzo') && p2.tl > p1.tl, 'los personajes caminan por la oficina (se dibujan en un canvas con su propio reloj)');
-    ok(/Buenas|Buenos/.test(await txt('.of-cab')) && /Te toca hoy · \d+/.test(await txt('#ofToca')) && !(await w.$('.of-toca')), 'arriba solo el saludo y «Te toca hoy · N» (minimizado)');
+    ok(!/Buenas|Buenos/.test(await txt('.of-cab')) && /Te toca hoy · \d+/.test(await txt('#ofToca')) && !(await w.$('.of-toca')), 'arriba, sin saludo: «Te toca hoy · N» (minimizado)');
     const g = await txt('.of-pj-diego .of-globo');
     ok(/No logrado/i.test(g) && /Visita agendada/.test(g), 'Diego muestra en una nube lo no logrado (la visita cancelada)');
     await w.click('#ofToca'); await w.waitForSelector('.of-toca'); ok((await w.$$('.of-toca')).length >= 2, 'al desplegar «Te toca hoy» aparece la lista, lo urgente primero');
@@ -43,9 +43,16 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     await w.click('.of-dock [data-p="yo"]'); await w.waitForSelector('#ofPide'); ok(/Tu mesa/.test(await txt('.of-panel')), '«Pedir algo» abre tu mesa para pedirle algo al Agente');
     await w.click('#ofCerrar'); await w.waitForSelector('.of-panel', { state: 'detached' }); ok(true, 'el panel se cierra y la oficina queda despejada');
     // la luz
-    await w.click('[data-luz="noche"]'); ok(/fondo_noche\.jpg/.test(await w.getAttribute('.of-fondo', 'src')) && await w.$('.of.l-noche'), 'la luz cambia a noche');
+    // la luz se elige en Configuración › General (Luz de la oficina), ya no en la pantalla
+    ok(!(await w.$('.of [data-luz]')), 'la oficina no tiene botones de luz');
+    await w.evaluate(() => window.abrirConfiguracion('general')); await w.waitForSelector('#cfgLuz');
+    await w.click('#cfgLuz [data-luz="noche"]');
+    ok(await w.evaluate(() => localStorage.getItem('pfLuzOficina')) === 'noche', 'la luz elegida en Configuración queda guardada');
+    await w.evaluate(() => window.Oficina.abrir()); await w.waitForSelector('#view-inicio .of .of-escena');
+    ok(/fondo_noche\.jpg/.test(await w.getAttribute('.of-fondo', 'src')) && await w.$('.of.l-noche'), 'la oficina queda de noche');
     await shot('of3-noche.png');
-    await w.click('[data-luz="dia"]');
+    await w.evaluate(() => window.abrirConfiguracion('general')); await w.waitForSelector('#cfgLuz'); await w.click('#cfgLuz [data-luz="auto"]');
+    await w.evaluate(() => window.Oficina.abrir()); await w.waitForSelector('#view-inicio .of .of-escena');
     // WhatsApp: cómo hablarle a cada uno
     await w.click('.of-dock [data-p="fernanda"]'); await w.waitForSelector('.of-panel'); ok(/Leads/.test(await txt('.of-panel')) && /WhatsApp/.test(await txt('.of-panel')), 'Fernanda (Leads) explica cómo hablarle por WhatsApp');
     // vista lista y vuelta a la oficina

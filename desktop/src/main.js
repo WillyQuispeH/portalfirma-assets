@@ -25,6 +25,8 @@ function createWindow() {
     title: APP_NAME,
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#12141a' : '#f6f7fb',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
+    // Windows/Linux: la barra de menú (Archivo, Edición…) queda oculta; aparece con Alt. Los atajos siguen funcionando.
+    autoHideMenuBar: true,
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
@@ -768,6 +770,7 @@ const avisarFirmas = (t) => { toUI('agent:event', { type: 'aviso', texto: t }); 
 const avisosServidor = require('./avisos').crear({
   mostrar: (t) => toUI('agent:event', { type: 'aviso', texto: t }),
   manejadores: {
+    wa_pedir_vinculo: async (a) => { toUI('agent:event', { type: 'aviso', texto: a.texto }); },
     firmas: async (a) => { try { await inmo.sincronizar(); } catch {} avisarFirmas(a.texto); },
     // la firma de la etapa actual de un negocio: con el negocio ya sincronizado, avanza (lo hace la app: las etapas viven aquí)
     firma_negocio: async (a) => {
@@ -1207,6 +1210,34 @@ const waAgente = require('./whatsapp-agente').crear({ store, wa: require('./post
     t.run = async (a) => { guard(a); if (['asset_atencion_clientes', 'asset_plantillas_whatsapp'].includes(t.name) && Object.keys(a || {}).some((k) => !/^(consultar|ver)$/.test(k))) permisos.permiso('fernanda'); const out = await run0(a); if (!out || typeof out !== 'object') return out; const ef = out.efectos; const r = permisos.limpiar(out); if (ef) r.efectos = ef; return r; }; } }
 handle('wa:estado', () => ({ ...waAgente.estado(), ...reservas.estadoWa() }));
 handle('wa:canales', () => waSrv.canales()); // pantalla Integraciones
+// pantalla Configuración › WhatsApp: el número de la empresa, si el servidor está leyendo, y Sofía / Tomás / postventa.
+// En modo de prueba (sin la API) los interruptores quedan en este equipo.
+const ASIST_PRUEBA = { enServidor: false, lectorEncendido: false, numeroEmpresa: '+56 9 4497 5958', clientesActivo: true, leadsActivo: true, ultimaLectura: null, error: null };
+// Usuarios de la corredora: el celular vinculado de cada uno (en modo de prueba, solo el de este equipo)
+handle('wa:equipo', async () => {
+  if (waSrv.enApi()) return waSrv.ejecutivo.equipo();
+  const e = waAgente.estado(); const yo = usuarioAsset()?.id;
+  return { items: e.telefono && yo ? [{ usuarioId: yo, telefono: e.telefono, vinculadoEn: null }] : [], numeroEmpresa: e.numeroEmpresa || '+56 9 4497 5958' };
+});
+handle('wa:pedirVinculo', async (usuarioId) => {
+  if (!permisos.esAdmin()) throw new Error('Solo el administrador puede pedirlo.');
+  if (waSrv.enApi()) return waSrv.ejecutivo.pedir(usuarioId);
+  return { ok: true, prueba: true };
+});
+handle('wa:asistentes', async () => {
+  const pv = postventa.config();
+  if (!waSrv.enApi()) return { ...ASIST_PRUEBA, ...(store.get('waAsistPrueba') || {}), conectado: !!reservas.estadoWa().conectado, postventa: !!pv.auto };
+  return { ...(await waSrv.asistentes.refrescar()), postventa: !!pv.auto };
+});
+handle('wa:asistentesAjustar', async (o) => {
+  const c = {}; for (const k of ['clientesActivo', 'leadsActivo']) if (typeof o?.[k] === 'boolean') c[k] = o[k];
+  if (Object.keys(c).length) {
+    if (!permisos.esAdmin()) throw new Error('Los asistentes de WhatsApp los enciende o apaga el administrador.');
+    if (waSrv.enApi()) await waSrv.asistentes.ajustar(c); else store.set('waAsistPrueba', { ...(store.get('waAsistPrueba') || {}), ...c });
+  }
+  if (typeof o?.postventa === 'boolean') await postventa.configurar({ auto: o.postventa });
+  return null;
+});
 handle('act:estado', () => actualizaciones.estado());
 handle('act:buscar', async () => { await actualizaciones.buscar(); return actualizaciones.estado(); });
 handle('act:instalar', () => actualizaciones.instalar());

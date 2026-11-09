@@ -61,7 +61,8 @@ function Lista({ children }: { children: ReactNode }) {
 
 // ---------------------------------------------------------------- pantalla
 
-export default function Integraciones() {
+/** las tarjetas de las integraciones (pantalla Configuración › Integraciones) */
+export function IntegracionesContenido() {
   const { wechatia, canales, ml, drive, maps, ia, cargando, ocupado, integCargar, integAccion } = useIntegraciones();
   const { conectado: pfConectado, usuario: pfUsuario, sesion, saldo } = useCuenta();
   const { usuario: yo } = useAcceso();
@@ -77,13 +78,11 @@ export default function Integraciones() {
   const saldoTxt = saldo != null ? ` · saldo $${Number(saldo).toLocaleString('es-CL')}` : '';
 
   return (
-    <Layout
-      id="integraciones"
-      titulo="Integraciones"
-      subtitulo="Los servicios con los que trabaja tu corredora: firma, mensajes y redes, portales y archivos."
-      ilustracion={{ imagen: 'img/formas/portales.svg', tinte: '#3346c7' }}
-      acciones={<Boton variante="secundario" icono="rotateR" cargando={cargando} onClick={() => { integCargar(); refrescarCuenta(); }}>Actualizar</Boton>}
-    >
+    <div id="integraciones" className="tw:flex tw:flex-col tw:gap-4">
+      <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-3">
+        <p className="tw:m-0 tw:flex-1 tw:text-sm tw:text-muted">Los servicios con los que trabaja tu corredora: firma, mensajes y redes, portales y archivos.</p>
+        <Boton variante="secundario" tamano="sm" icono="rotateR" cargando={cargando} onClick={() => { integCargar(); refrescarCuenta(); }}>Actualizar</Boton>
+      </div>
       <Card titulo="Firma electrónica">
         <Lista>
           <Fila id="portalfirma" logo={<Logo icono="sign" color="#3346c7" />} nombre="Portalfirma"
@@ -148,8 +147,13 @@ export default function Integraciones() {
             estado={ia?.managed ? 'incluido' : ia?.hasKey ? 'conectado' : 'sin-conectar'} />
         </Lista>
       </Card>
-    </Layout>
+    </div>
   );
+}
+
+/** la pantalla sola (se mantiene por compatibilidad; desde el menú se abre Configuración › Integraciones) */
+export default function Integraciones() {
+  return <Layout titulo="Integraciones" ilustracion={{ imagen: 'img/formas/portales.svg', tinte: '#3346c7' }}><IntegracionesContenido /></Layout>;
 }
 
 // ---------------------------------------------------------------- wechatia y sus canales

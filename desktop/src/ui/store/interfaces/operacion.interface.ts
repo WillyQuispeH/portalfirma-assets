@@ -27,4 +27,4 @@ export interface IDetalleOperacion {
   versions: { label: string; done: boolean }[];
   signatories?: IFirmante[];
 }
-export interface IEstadoCuenta { api?: boolean; apiAvailable?: boolean; phone?: string; account?: string }
+export interface IEstadoCuenta { api?: boolean; apiAvailable?: boolean; corredora?: boolean; phone?: string; account?: string }

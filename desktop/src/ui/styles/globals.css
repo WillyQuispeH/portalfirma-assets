@@ -311,7 +311,8 @@ html[data-theme="dark"] {
   font-weight: 700;
   line-height: 1.2;
   letter-spacing: -.012em;
-  background: black;
+  /* el color del texto del tema (claro u oscuro); antes era «black» fijo y en modo oscuro no se leía */
+  background: var(--text);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;

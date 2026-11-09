@@ -40,9 +40,9 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     await w.click('.ga-agd [data-listo]'); await w.waitForSelector('.ga-agd .ga-falta svg');
     ok(/Todavía no veo la reserva/.test(await txt('.ga-agd .ga-falta')), '«Listo» antes de reservar: avisa que aún no llega');
     // el corredor reserva en el widget (simulado en la API)
-    await app.evaluate(() => { global.__resMock = { eventos: [{ id: 'ap1', title: 'Visita', startTime: '2026-10-22T15:00:00-03:00', appointmentStatus: 'confirmed', contactId: 'ct1', dateAdded: new Date().toISOString() }], contactos: { ct1: { firstName: 'Juan', lastName: 'Perez Soto', email: 'juan@ejemplo.cl', phone: '+56 9 1111 1111' } } }; });
+    await app.evaluate(() => { global.__resMock = { eventos: [{ id: 'ap1', title: 'Visita', startTime: '2037-10-22T15:00:00-03:00', appointmentStatus: 'confirmed', contactId: 'ct1', dateAdded: new Date().toISOString() }], contactos: { ct1: { firstName: 'Juan', lastName: 'Perez Soto', email: 'juan@ejemplo.cl', phone: '+56 9 1111 1111' } } }; });
     await w.click('.ga-agd [data-listo]'); await w.waitForSelector('.ga.hecha:has-text("Visita reservada")');
-    ok(/2026-10-22 15:00 · CV-9002/.test(await txt('.ga.hecha:has-text("Visita reservada")')), 'la reserva llega a Asset con su día y hora, ligada a la propiedad');
+    ok(/2037-10-22 15:00 · CV-9002/.test(await txt('.ga.hecha:has-text("Visita reservada")')), 'la reserva llega a Asset con su día y hora, ligada a la propiedad');
     let n = await neg(); let e = (await evs()).find((x) => x.ext?.id === 'ap1');
     ok(e && e.tipo === 'visita' && e.propId === ids.p && e.personaIds.includes(ids.c) && e.negocioId === n.id, 'queda en la agenda como visita de Juan, con su negocio');
     ok(n.etapa === 'visita' && /Hito registrado/.test(await txt('.ag-body')), 'y es un hito: el negocio pasa a «Visita»');
@@ -52,7 +52,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     await shot('rs3-reservada.png');
 
     // reprogramación, reserva externa y cancelación
-    await app.evaluate(() => { const M = global.__resMock; M.eventos[0].startTime = '2026-10-22T16:30:00-03:00'; M.eventos.push({ id: 'ap2', title: 'Visita', startTime: '2026-10-23T10:00:00-03:00', appointmentStatus: 'confirmed', contactId: 'ct2', dateAdded: new Date().toISOString() }); M.contactos.ct2 = { firstName: 'Ana', lastName: 'Rojas', phone: '+56 9 2222 2222' }; });
+    await app.evaluate(() => { const M = global.__resMock; M.eventos[0].startTime = '2037-10-22T16:30:00-03:00'; M.eventos.push({ id: 'ap2', title: 'Visita', startTime: '2037-10-23T10:00:00-03:00', appointmentStatus: 'confirmed', contactId: 'ct2', dateAdded: new Date().toISOString() }); M.contactos.ct2 = { firstName: 'Ana', lastName: 'Rojas', phone: '+56 9 2222 2222' }; });
     let r = await w.evaluate(() => window.pf.resSincronizar(null).then((x) => x.data));
     e = (await evs()).find((x) => x.ext?.id === 'ap1'); const e2 = (await evs()).find((x) => x.ext?.id === 'ap2');
     ok(r.actualizadas === 1 && e.hora === '16:30', 'si la reprograman en el calendario, Asset la mueve');

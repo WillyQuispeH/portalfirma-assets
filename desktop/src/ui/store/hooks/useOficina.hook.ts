@@ -10,6 +10,7 @@ export function useOficina() {
     sel: s.sel,
     toca: s.toca,
     luz: s.luz,
+    luzPref: s.luzPref,
     oficinaGetAll: s.oficinaGetAll,
     oficinaElegir: s.oficinaElegir,
     oficinaAlternarToca: s.oficinaAlternarToca,
@@ -17,4 +18,4 @@ export function useOficina() {
   })));
 }
 
-export type { TLuz, TSeleccion } from '../zustand/oficina.store';
+export type { TLuz, TLuzPref, TSeleccion } from '../zustand/oficina.store';

@@ -1,13 +1,14 @@
 // Leads: la bandeja de conversaciones (WhatsApp, Instagram, correo) con KPIs, filtros y lista.
-// Hecha con el kit: Layout (cabecera con ilustración y, en la barra, los KPIs que filtran), Boton, Buscador y Select.
+// Hecha con el kit: Layout (cabecera con ilustración), Boton, Buscador y Select. Los filtros de la lista llevan su número
+// (antes eran 4 tarjetas arriba: se quitaron para dar el alto a la bandeja).
 //
 // La conversación y la ficha del lead (columnas #ldChat y #ldFicha) siguen en src/renderer/leads.js:
 // React deja esos dos contenedores vacíos y nunca dibuja dentro. Puente en los dos sentidos:
 //  - React → leads.js: mostrarLead() con el elegido y los datos de la lista (los usa la ficha).
 //  - leads.js → React: el evento «pf:leads» (al guardar, asignar, importar…) pide recargar la lista.
-// Los id ldQ, ldChips (con data-f en cada filtro), ldKs, ldItems, ldOrigen, ldBroker, ldFile, ldFileIg, ldCorBtn,
+// Los id ldQ, ldChips (con data-f en cada filtro), ldItems, ldOrigen, ldBroker, ldFile, ldFileIg, ldCorBtn,
 // ldCuentas, ldImp2, ldIg2 y la clase .ld-vacio los usan las pruebas y leads.js.
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import { useLead } from '../../../store/hooks/useLead.hook';
 import { leadsComoExportar, leadsComoInstagram, leadsCuentas, leadsImportar, mostrarLead, rutaDe } from '../../../utils/app';
 import { cx } from '../../../utils/cx';
@@ -26,27 +27,29 @@ interface ILeadsProps {
   filtro?: TLeadFiltro;
 }
 
-// un KPI que además filtra la lista (el Kpi del kit no se puede tocar): mismo aspecto que una Card del kit
-function KpiFiltro({ n, t, s, on, alTocar, filtro }: { n?: number; t: string; s?: string; on: boolean; alTocar: () => void; filtro: TLeadFiltro }) {
-  return (
-    <button type="button" data-f={filtro} aria-pressed={on} onClick={alTocar}
-      className={cx(
-        'tw:flex tw:flex-col tw:items-start tw:gap-0.5 tw:m-0 tw:px-5 tw:py-3 tw:text-left tw:rounded-2xl tw:cursor-pointer',
-        'tw:border tw:border-solid tw:border-b-[3px] tw:transition-colors tw:duration-100',
-        'tw:focus-visible:outline-2 tw:focus-visible:outline-offset-2 tw:focus-visible:outline-lav-edge',
-        on ? 'tw:bg-lav-soft tw:border-lav-edge tw:text-lav-softink' : 'tw:bg-card tw:border-edge tw:border-b-edge-b tw:text-text tw:hover:bg-hover',
-      )}>
-      <b className="tw:text-2xl tw:font-bold tw:leading-tight tw:tabular-nums">{n ?? 0}</b>
-      <span className={cx('tw:text-sm tw:font-semibold', !on && 'tw:text-muted')}>{t}</span>
-      {s && <small className={cx('tw:text-xs', on ? 'tw:opacity-80' : 'tw:text-muted')}>{s}</small>}
-    </button>
-  );
+/** alto de las columnas: desde donde empiezan hasta el borde de abajo de la ventana (en pantallas anchas) */
+function useAltoHastaAbajo() {
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current; if (!el) return;
+    const medir = () => {
+      if (!el.offsetParent || window.innerWidth <= 1180) { el.style.height = ''; return; } // oculta o angosta: la de styles.css
+      const arriba = el.getBoundingClientRect().top + window.scrollY;
+      el.style.height = `${Math.max(460, window.innerHeight - arriba - 20)}px`;
+    };
+    medir();
+    const obs = new ResizeObserver(medir); obs.observe(document.body);
+    window.addEventListener('resize', medir);
+    return () => { obs.disconnect(); window.removeEventListener('resize', medir); };
+  }, []);
+  return ref;
 }
 
 export default function Leads({ sel: selInicial, filtro: filtroInicial }: ILeadsProps) {
   const { datos, sel, cargado, error, filtros: f, leadGetAll, leadSetFiltros, leadSeleccionar } = useLead();
   const archivo = useRef<HTMLInputElement>(null);
   const archivoIg = useRef<HTMLInputElement>(null);
+  const columnas = useAltoHastaAbajo();
   // el filtro actual, para el listener (vive mientras la pantalla esté montada y no debe ver un valor viejo)
   const filtroRef = useRef(f.filtro); filtroRef.current = f.filtro;
 
@@ -79,8 +82,13 @@ export default function Leads({ sel: selInicial, filtro: filtroInicial }: ILeads
     if (a) leadsImportar(rutaDe(a), canal);
   };
 
+  // cuántos hay en cada filtro (al lado de su nombre) y qué significa cada uno (en el globo)
   const k = datos?.kpis;
-  const kpi = (filtro: TLeadFiltro) => ({ filtro, on: f.filtro === filtro, alTocar: () => leadSetFiltros({ filtro }) });
+  const cuantos: Record<string, number | undefined> = {
+    abiertos: k?.abiertos, nuevo: k?.nuevos, seguimiento: k?.seguimiento, visita: k?.visitas,
+    ganado: datos?.cuenta.ganado, perdido: datos?.cuenta.perdido, todos: datos ? total : undefined,
+  };
+  const AYUDA: Record<string, string> = { nuevo: 'Sin trabajar', seguimiento: 'Sin respuesta o con la acción vencida', visita: 'Con visita agendada' };
   const cajaFiltro = 'tw:h-9 tw:pl-2.5 tw:pr-7 tw:text-[13px]';
   // las tres columnas con el borde de una Card del kit (react-ui.css va después de styles.css: gana a .ld-lista…)
   const columna = 'tw:rounded-2xl tw:border-edge tw:border-b-[3px] tw:border-b-edge-b';
@@ -99,33 +107,27 @@ export default function Leads({ sel: selInicial, filtro: filtroInicial }: ILeads
         <input ref={archivo} type="file" id="ldFile" accept=".txt,.zip,text/plain,application/zip" className="hidden" onChange={(e) => importar(e.target)} />
         <input ref={archivoIg} type="file" id="ldFileIg" accept=".zip,application/zip" className="hidden" onChange={(e) => importar(e.target, 'instagram')} />
       </>}
-      barra={
-        <div id="ldKs" className="tw:grid tw:w-full tw:grid-cols-2 tw:lg:grid-cols-4 tw:gap-3">
-          <KpiFiltro n={k?.abiertos} t="abiertos" {...kpi('abiertos')} />
-          <KpiFiltro n={k?.nuevos} t="nuevos" s="sin trabajar" {...kpi('nuevo')} />
-          <KpiFiltro n={k?.seguimiento} t="por seguir" s="sin respuesta o acción vencida" {...kpi('seguimiento')} />
-          <KpiFiltro n={k?.visitas} t="con visita" s="agendada" {...kpi('visita')} />
-        </div>
-      }
     >
       {error && <p role="alert" className="tw:m-0 tw:text-red-softink">No se pudieron leer los leads: {error}</p>}
 
-      <div className="ld-cols">
+      <div className="ld-cols" ref={columnas}>
         <div className={cx('ld-lista', columna)}>
           <div className="tw:flex tw:flex-col tw:gap-2.5 tw:p-3 tw:border-0 tw:border-b tw:border-solid tw:border-edge">
             <Buscador kit id="ldQ" className="tw:w-full" valor={f.q} alCambiar={(q) => leadSetFiltros({ q })} espera={200} placeholder="Nombre, teléfono, comuna o mensaje" />
             {/* fichas de una sola opción (Chips del kit es de selección múltiple y Tabs no cabe en esta columna) */}
             <div id="ldChips" role="group" aria-label="Estado del lead" className="tw:flex tw:flex-wrap tw:gap-1.5">
               {FILTROS.map(([k2, t]) => {
-                const on = f.filtro === k2;
+                const on = f.filtro === k2; const n = cuantos[k2];
                 return (
-                  <button key={k2} type="button" data-f={k2} aria-pressed={on} onClick={() => leadSetFiltros({ filtro: k2 as TLeadFiltro })}
+                  <button key={k2} type="button" data-f={k2} aria-pressed={on} title={AYUDA[k2]} onClick={() => leadSetFiltros({ filtro: k2 as TLeadFiltro })}
                     className={cx(
                       'tw:inline-flex tw:items-center tw:h-7 tw:m-0 tw:px-2.5 tw:rounded-full tw:text-[12.5px] tw:font-semibold tw:cursor-pointer',
                       'tw:border tw:border-solid tw:transition-colors tw:duration-100 tw:focus-visible:outline-2 tw:focus-visible:outline-offset-1 tw:focus-visible:outline-lav-edge',
                       on ? 'tw:bg-lav-soft tw:text-lav-softink tw:border-lav-edge' : 'tw:bg-card tw:text-muted tw:border-edge tw:hover:text-text tw:hover:bg-hover',
                     )}>
                     {t}
+                    {n != null && <span className={cx('tw:ml-1.5 tw:min-w-[18px] tw:h-[18px] tw:px-1 tw:rounded-full tw:text-[11px] tw:leading-[18px] tw:text-center tw:tabular-nums',
+                      on ? 'tw:bg-card tw:text-lav-softink' : 'tw:bg-gray-soft tw:text-gray-softink')}>{n}</span>}
                   </button>
                 );
               })}

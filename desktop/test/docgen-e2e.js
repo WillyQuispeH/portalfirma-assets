@@ -34,7 +34,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     // corredor: completar sus datos
     for (const [k, v] of [['nombre', 'Corredora Demo SpA'], ['rut', '76.123.456-0'], ['email', 'pagos@corredora.cl'], ['telefono', '+56 9 1111 2222']]) await w.fill(`.ga-dnf[data-i="1"] [data-k="${k}"]`, v);
     await w.waitForFunction(() => /Corredora Demo SpA, RUT 76\.123\.456-0, declara haber recibido/.test(document.querySelector('.ga-dn [data-texto]').value));
-    ok(/Todo completo/.test(await txt('.ga-dn > .ga-foot .ga-falta')), 'con todo completo, queda listo');
+    ok(/Todo completo/.test(await txt('.ga-dn .ga-foot .ga-falta')), 'con todo completo, queda listo');
     await w.click('.ga-dn [data-pdf]'); await w.waitForFunction(() => true); await w.waitForTimeout(1500);
     const ab = await app.evaluate(() => global.__abiertos || []); const borr = ab.find((x) => /\.pdf$/.test(x));
     ok(borr && fs.readFileSync(borr).slice(0, 5).toString() === '%PDF-' && fs.statSync(borr).size > 3000, '«Ver PDF» genera un PDF real de borrador');

@@ -14,7 +14,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     await w.waitForSelector('#view-agente .ag.ag-full', { timeout: 15000 });
     ok((await txt('#nav [data-view="inicio"]')).trim() === 'Hoy', 'la pestaña «Inicio» ahora se llama «Hoy»');
     await w.click('#nav [data-view="inicio"]'); await w.waitForSelector('#view-inicio .hoy');
-    ok(await w.$('#view-inicio .hoy-bg') && /inicio-propiedades\.jpg/.test(await w.evaluate(() => getComputedStyle(document.querySelector('.hoy-bg')).backgroundImage)) && /blur/.test(await w.evaluate(() => getComputedStyle(document.querySelector('.hoy-bg')).filter)), 'el fondo es la foto del inicio, desenfocada');
+    ok(!!(await w.$('#view-inicio [data-layout-fondo]')) && !(await w.$('#view-inicio .hoy-bg')), 'la vista lista usa el diseño del kit (sin la foto de fondo)');
     await w.click('#view-inicio [data-do="importar"]'); await w.waitForSelector('text=Cartera actualizada', { timeout: 15000 }); await w.click('#mOk');
     // datos: una propiedad en arriendo con un negocio en visita, y un cliente
     const d = await call('inmoListar'); const pA = d.propiedades.find((p) => p.arriendo); const pV = d.propiedades.find((p) => p.venta && p.id !== pA.id);

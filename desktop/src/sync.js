@@ -19,10 +19,20 @@ const useApi = () => !!api?.user();
 const cache = () => store.get('opsCache') || { items: {}, details: {}, lastSync: null, phone: '' };
 const save = (c) => store.set('opsCache', c);
 
-function status() {
+// Teléfono con el que se buscan las operaciones: el que el usuario escribió aquí o, si no, el de su cuenta de Asset
+const telefonoCuenta = () => { try { return String(require('./inmo').usuario()?.telefono || '').replace(/\D/g, ''); } catch { return ''; } };
+const telefono = () => store.get('syncPhone') || (telefonoCuenta().length >= 8 ? telefonoCuenta() : '');
+// Portalfirma conectado por la corredora (en el servidor de Asset): basta para «Mis operaciones», sin iniciar
+// sesión con correo y contraseña en este equipo
+async function corredoraConectada() {
+  if (pf?.isConnected?.() === true) return true;
+  try { return !!(await pf?.tryRestore?.()); } catch { return false; }
+}
+async function status() {
   const c = cache();
   const u = useApi() ? api.user() : null;
-  return { phone: store.get('syncPhone') || '', apiAvailable: !!api, api: !!u, account: u ? (u.nameEntity || u.email) : '', lastSync: (u ? c.mode === 'api' : c.mode !== 'api') ? c.lastSync : null, count: Object.keys(c.items).length };
+  const corredora = !u && await corredoraConectada();
+  return { phone: telefono(), apiAvailable: !!api, api: !!u, corredora, account: u ? (u.nameEntity || u.email) : '', lastSync: (u ? c.mode === 'api' : c.mode !== 'api') ? c.lastSync : null, count: Object.keys(c.items).length };
 }
 function setPhone(phone) {
   const d = String(phone || '').replace(/\D/g, '');
@@ -47,8 +57,8 @@ async function sync({ full = false } = {}) {
   if (running) return running;
   running = (async () => {
     if (useApi()) return apiSync();
-    const phone = store.get('syncPhone'); if (!phone) { const e = new Error('Falta el teléfono de la cuenta.'); e.code = 'NO_PHONE'; throw e; }
-    let c = cache(); if (c.mode === 'api') c = { items: {}, details: {}, lastSync: null }; const now = Date.now();
+    const phone = telefono(); if (!phone) { const e = new Error('Falta el teléfono de la cuenta.'); e.code = 'NO_PHONE'; throw e; }
+    let c = cache(); if (c.mode === 'api' || (c.phone && c.phone !== phone)) c = { items: {}, details: {}, lastSync: null }; c.phone = phone; const now = Date.now();
     const from = !full && c.lastSync ? new Date(c.lastSync).getTime() - 45 * DAY : now - YEARS_BACK * 365 * DAY;
     const ranges = []; for (let end = now; end > from; end -= 366 * DAY) ranges.push([Math.max(from, end - 365 * DAY), end]);
     let found = 0;
@@ -105,7 +115,7 @@ function list() {
   const base = { ...c.items }; for (const [n, h] of Object.entries(hist)) if (!base[n]) base[n] = { operation: Number(n), name: h.name || 'Documento', stage: 'process', created: h.date, updated: h.date, local: true };   // recién enviado desde Asset
   const items = Object.values(base).map((it) => { const h = hist[it.operation]; return { ...it, ...apiSummary(it), ...summary(c.details[it.operation]?.d), ...(h?.propId || h?.origen ? { asset: { propId: h.propId || null, negocioId: h.negocioId || null, origen: h.origen || null, firmantes: h.firmantes || [], tipoFirma: h.tipoFirma || null, tramite: h.tramite || null } } : {}) }; })
     .sort((a, b) => String(b.updated || b.created).localeCompare(String(a.updated || a.created)));
-  return { items, lastSync: c.lastSync, phone: store.get('syncPhone') || '' };
+  return { items, lastSync: c.lastSync, phone: telefono() };
 }
 // Resumen que se agrega a la lista cuando ya se conoce el detalle
 function summary(d) {

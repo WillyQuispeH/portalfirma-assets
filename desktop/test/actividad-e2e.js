@@ -55,9 +55,9 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     await abrir(); await w.click('#acCl [data-c="propiedad"]'); await w.click(`#acLista .ac-it[data-clase="propiedad"][data-ir="${prop.id}"] >> nth=0`); await w.waitForSelector('#view-cartera:not(.hidden) .im-ficha');
     ok(true, 'tocar un movimiento de propiedad abre su ficha');
     // se llega desde los dos inicios: «La oficina» y la lista «Hoy»
-    await w.evaluate(() => { window.Oficina.pref.set('oficina'); window.Inmo.inicio(); }); await w.click('#ofActividad'); await w.waitForSelector('#view-actividad:not(.hidden) #acQ');
+    await w.evaluate(() => { window.Oficina.pref.set('oficina'); window.Inmo.inicio(); }); await w.click('#ofMas'); await w.click('#ofActividad'); await w.waitForSelector('#view-actividad:not(.hidden) #acQ');
     ok(true, '«La oficina» tiene el botón «Actividad»');
-    await w.evaluate(() => { window.Oficina.pref.set('clasica'); window.Inmo.inicio(); }); await w.click('#hoyActividad'); await w.waitForSelector('#view-actividad:not(.hidden) #acQ');
+    await w.evaluate(() => { window.Oficina.pref.set('clasica'); window.Inmo.inicio(); }); await w.waitForSelector('#hoyNuevo'); await w.click('#view-inicio [data-cabecera] button[aria-label="Más acciones"]'); await w.waitForSelector('#hoyActividad'); await w.click('#hoyActividad'); await w.waitForSelector('#view-actividad:not(.hidden) #acQ');
     ok(true, 'la lista «Hoy» tiene el botón «Actividad»');
     await abrir(); await w.click('#acVolver'); await w.waitForSelector('#view-actividad.hidden', { state: 'attached' });
     ok(true, '«Inicio» vuelve al inicio');

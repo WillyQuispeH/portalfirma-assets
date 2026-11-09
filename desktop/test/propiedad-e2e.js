@@ -31,7 +31,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     // 1b. Tocar «Anotar» por error: se cierra sin dejar nada
     await w.click('.ga-est [data-a="anotar"]'); await w.waitForSelector('.ga-anot'); await w.click('.ga-anot [data-cancel]');
     ok(!(await w.$('.ga-anot')) && !/Anotar · CV-9002/.test(await txt('.ag-body')), '«Cancelar» cierra Anotar sin dejar rastro');
-    await w.click('.ga-est [data-a="agendar"]'); await w.waitForSelector('.ga-agd'); await w.click('.ga-agd > .ga-x');
+    await w.click('.ga-est [data-a="agendar"]'); await w.waitForSelector('.ga-agd'); await w.click('.ga-agd .ga-x');
     ok(!(await w.$('.ga-agd')), 'la X cierra cualquier tarjeta (aquí, Agendar)');
 
     // 2. Anotar lo que pasó por teléfono → sugiere el siguiente paso
@@ -99,7 +99,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     const vis = e6.proximos.filter((e) => e.tipo === 'visita'); const ords = e6.sugerencias.filter((x) => x.accion.tipo === 'orden');
     ok(vis.length === 2 && e6.totalProximos >= 2 && ords.length === 2 && new Set(ords.map((x) => x.accion.eventoId)).size === 2, `dos visitas agendadas, cada una con su sugerencia de orden: ${ords.map((x) => x.label).join(' | ')}`);
     await w.fill('#agQ', 'CV-9002'); await w.press('#agQ', 'Enter'); await w.waitForFunction(() => /2 negocios en curso/.test([...document.querySelectorAll('.ga-est')].pop()?.textContent || ''));
-    await w.waitForSelector('#agCanvas .lz-clis'); ok(/Próximas visitas \(2\)/.test(await lz()) && (await w.$$('#agCanvas .lz-cli')).length === 2, 'la tarjeta muestra los 2 negocios; el lienzo, las 2 visitas y una pestaña por negocio');
+    await w.waitForSelector('#agCanvas .lz-clis'); ok(/Próximas visitas\s*2/.test(await lz()) && (await w.$$('#agCanvas .lz-cli')).length === 2, 'la tarjeta muestra los 2 negocios; el lienzo, las 2 visitas y una pestaña por negocio');
     await shot('pr7-varias-visitas.png');
 
     // 7. Desde la ficha: «Ver en el Agente»
