@@ -364,6 +364,12 @@ function iaFalsa() {
     escribe(cc, 'Mi oferta por el departamento es 90.000 mensuales');
     ok(await hasta(() => salidas(cc).some((t) => /Le pasé tu oferta a Corredor B/.test(t))), 'Tomás responde que le pasó la oferta al corredor');
     ok(await hasta(() => salidas(cel).slice(antesRec).some((t) => /📩 \*Recado de Carla Ruiz\*[\s\S]*El cliente escribió: «Mi oferta por el departamento es 90\.000 mensuales»/.test(t))), 'y como no llamó a la herramienta, el servidor deja el recado con lo que escribió la cliente (lo dicho es cierto)');
+    // la misma oferta otra vez: el recado no se repite al corredor (antes llegaban ~18 avisos casi iguales)
+    const antesRep = salidas(cel).length;
+    escribe(cc, 'Mi oferta por el departamento es 90.000 mensuales, ¿la consideran?');
+    ok(await hasta(() => salidas(cc).filter((t) => /Le pasé tu oferta a Corredor B/.test(t)).length >= 2), 'la cliente repite su oferta y el asistente responde');
+    await esperar(5000);
+    ok(!salidas(cel).slice(antesRep).some((t) => /Recado de Carla Ruiz/.test(t)), 'pero el mismo recado no se le manda otra vez al corredor');
     // la nota de voz de una cliente se transcribe (antes: «Recibí tu archivo»)
     T.actual = { primera: 'Hola, ¿me pueden confirmar la visita para el sábado?' };
     const antesAud = salidas(cc).length; const recAntes = salidas(cel).length;

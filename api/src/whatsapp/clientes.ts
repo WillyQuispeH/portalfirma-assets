@@ -216,6 +216,8 @@ const FIJOS =
 @Injectable()
 export class ClientesService {
   private readonly log = new Logger('Clientes');
+  /** los recados que ya se le pasaron al corredor por cada cliente (para no repetirlos): ver cliente_recado */
+  private readonly recadosRecientes = new Map<string, { tipo: string; palabras: Set<string>; en: number }[]>();
   constructor(
     private readonly db: PrismaService,
     private readonly ia: IaService,
@@ -825,6 +827,34 @@ export class ClientesService {
       const detalle = String(a.detalle || '').slice(0, 400);
       const disp = a.disponibilidad ? String(a.disponibilidad).slice(0, 200) : '';
       const yo = ATENCION[c.cli.quien].nombre;
+      // un mismo recado no se repite: en cada mensaje del cliente el modelo volvía a llamar esta herramienta con lo pendiente
+      // de antes (una oferta, un cambio de visita) y el corredor recibió ~18 avisos casi iguales. Si ya hay un aviso de este
+      // cliente, del mismo tipo y con casi las mismas palabras en las últimas 12 horas, no se vuelve a mandar.
+      const palabras = (t: string) =>
+        new Set(
+          norm(t)
+            .replace(/[^a-z0-9\s]/g, ' ')
+            .split(/\s+/)
+            .filter((w) => w.length > 3),
+        );
+      const nuevo = palabras(detalle);
+      // en memoria y no en los avisos: con el celular del corredor vinculado el recado le llega por WhatsApp y no queda
+      // como aviso en la base (un reinicio del servidor lo olvida, y está bien: solo cubre una conversación)
+      const llave = `${c.corredoraId}:${telNorm(c.cli.telefono) ?? c.cli.nombre}`;
+      const vistos = (this.recadosRecientes.get(llave) ?? []).filter((x) => Date.now() - x.en < 12 * 3600_000);
+      const repetido =
+        nuevo.size > 0 &&
+        vistos.some((x) => x.tipo === tipo && [...nuevo].filter((w) => x.palabras.has(w)).length / nuevo.size >= 0.6);
+      if (!repetido) vistos.push({ tipo, palabras: nuevo, en: Date.now() });
+      this.recadosRecientes.set(llave, vistos.slice(-30));
+      if (repetido) {
+        c.recados.push(tipo);
+        return {
+          ok: true,
+          yaEstabaAvisado: true,
+          instruccion: `Este recado ya se le había pasado a ${await this.nombreCorredor(c)} hace poco: NO vuelvas a llamar esta herramienta por lo mismo ni se lo repitas al cliente como si fuera nuevo. Solo dile, en una línea, que ya lo tiene y le confirmará.`,
+        };
+      }
       await this.registrarPersona(
         c,
         `WhatsApp · ${TIP[tipo]}: ${detalle.slice(0, 200)}${disp ? ' · Disponibilidad: ' + disp : ''}`,
@@ -864,6 +894,7 @@ ${
 - Firma: el enlace para firmar le llega por correo desde Portalfirma (y a veces por este WhatsApp). Si lo pide y hay ultimoEnlaceDeFirma, compártelo. Puedes revisar si ya firmó con cliente_estado_firma. Si tiene un problema o dudas del contrato, usa cliente_recado.
 - Precio, negociación, dudas legales o cualquier otro tema: cliente_recado y dile que ${corredor} lo contactará.
 - NUNCA digas que le pasaste, avisaste, pediste o anotaste algo a ${corredor} si no llamaste a cliente_recado en ESTE mismo turno: primero llama la herramienta y recién después responde. Decirlo sin hacerlo es mentirle al cliente.
+- NO repitas recados ni avisos: si en mensajes anteriores ya le pasaste algo a ${corredor} (una oferta, un cambio de visita…), no vuelvas a llamar cliente_recado por eso ni se lo menciones otra vez al cliente, salvo que pregunte por ello. En cada mensaje responde solo a lo NUEVO que pide.
 - Si te preguntan si eres una persona, di con naturalidad que eres el asistente virtual de ${corredor}.`;
   }
 
