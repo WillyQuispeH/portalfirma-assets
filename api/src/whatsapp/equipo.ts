@@ -161,10 +161,16 @@ export class EquipoService {
     private readonly actividad: ActividadService,
   ) {}
 
-  /** a quién le habla: el nombre al comienzo del mensaje («Pedro, …»), o el de la última vez (Pedro si es la primera) */
+  /** a quién le habla: el personaje que nombra («Juanita, …», «mis documentos Juanita»; si nombra varios, el primero),
+   *  o el de la última vez (Pedro si es la primera) */
   private personaDe(texto: string, previa: unknown): TPersona {
     const t = norm(texto);
-    for (const id of Object.keys(PERSONAS) as TPersona[]) if (new RegExp(`^(hola\\s+)?${id}\\b`).test(t)) return id;
+    let mejor: { id: TPersona; en: number } | null = null;
+    for (const id of Object.keys(PERSONAS) as TPersona[]) {
+      const m = new RegExp(`(^|[^a-z])${id}([^a-z]|$)`).exec(t);
+      if (m && (!mejor || m.index < mejor.en)) mejor = { id, en: m.index };
+    }
+    if (mejor) return mejor.id;
     return previa && (previa as string) in PERSONAS ? (previa as TPersona) : 'pedro';
   }
 

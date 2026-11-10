@@ -156,6 +156,12 @@ function iaFalsa() {
     ok(r.s === 200 && (await db.aviso.findFirst({ where: { usuarioId: c1.id, tipo: 'wa_pedir_vinculo' } })), 'el administrador le pide que vincule: le llega un aviso con los pasos');
     escribe(cel, 'Pedro, ¿cómo va la cartera?');
     ok(await hasta(() => salidas(cel).some((t) => /^\*Pedro\* · Captación\nTienes \d+ propiedad/.test(t))), 'con su Asset cerrado, Pedro le responde desde el servidor (con los datos de la base)');
+    let antesEq = salidas(cel).length;
+    escribe(cel, 'mis documentos Juanita');
+    ok(await hasta(() => salidas(cel).slice(antesEq).some((t) => /^\*Juanita\* · Documentos\n/.test(t))), 'el nombre del personaje al final del mensaje («mis documentos Juanita») también lo elige');
+    antesEq = salidas(cel).length;
+    escribe(cel, '¿qué hay de nuevo, pedro?');
+    ok(await hasta(() => salidas(cel).slice(antesEq).some((t) => /^\*Pedro\* · Captación\n/.test(t))), 'y al nombrar a otro, cambia de personaje');
     escribe(cel, 'Juanita, prepárame el contrato de arriendo de la PF-1');
     ok(await hasta(() => salidas(cel).some((t) => /^\*Juanita\* · Documentos\nListo: lo dejo para cuando abras Asset/.test(t))), 'lo que necesita el computador (un contrato) Juanita lo deja para cuando abra Asset');
     r = await req('GET', '/whatsapp/ejecutivo/entrantes', null, t1);

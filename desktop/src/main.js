@@ -5,6 +5,10 @@ const store = require('./store');
 const { openForEditor, EXTENSIONS, tmpDir, htmlToPdf } = require('./convert');
 const ai = require('./ai');
 const pf = process.env.PF_MOCK === '1' ? require('./mock') : require('./portalfirma');
+// WhatsApp desde este equipo (leer wechatia, responder con la IA local, enviar programados): solo en pruebas (PF_MOCK).
+// Con la app real lo hace el servidor de Asset; sin sesión (pantalla de ingreso, sesión vencida) la app no toca el
+// WhatsApp: antes volvía al modo antiguo y respondía en paralelo con el servidor (dos respuestas, «Falta la clave»).
+const WA_LOCAL = process.env.PF_MOCK === '1';
 
 const MAX_BYTES = 20 * 1024 * 1024; // límite del conector (~20 MB)
 const APP_NAME = 'PortalFirma Asset';
@@ -838,7 +842,16 @@ handle('pv:importar', async (ruta) => {
 });
 handle('pv:plantilla', async () => { const r = await dialog.showSaveDialog(win, { title: 'Guardar plantilla de unidades', defaultPath: 'plantilla-unidades-postventa.xlsx', filters: [{ name: 'Excel', extensions: ['xlsx'] }] }); if (r.canceled || !r.filePath) return null; const f = /\.xlsx$/i.test(r.filePath) ? r.filePath : r.filePath + '.xlsx'; fs.writeFileSync(f, postventa.plantillaXLSX()); shell.showItemInFolder(f); return f; });
 handle('pv:config', () => ({ ...postventa.config(), ...reservas.estadoWa() }));
-handle('pv:claveWa', async (o) => { const r = await reservas.configurarWa(o || {}); if (o?.token) waProg.subirClave({ forzar: true }).catch(() => {}); return r; });
+// con cuenta de Asset: se espera a que el servidor tenga la clave y se relee la conexión, para que la pantalla
+// muestre «conectado» de inmediato (antes subía en segundo plano y la caché decía «sin conectar» hasta reabrir)
+handle('pv:claveWa', async (o) => {
+  const r = await reservas.configurarWa(o || {});
+  if (!o?.token || !waSrv.enApi()) return r;
+  await waProg.subirClave({ forzar: true }).catch(() => null);
+  const c = await waSrv.refrescarConexion();
+  if (!c?.conectado) throw new Error(c && c.puedeConectar === false ? 'La conexión de wechatia de la corredora solo la puede cambiar el administrador.' : 'La clave quedó en este equipo, pero el servidor de Asset no la recibió. Vuelve a intentarlo en un momento.');
+  return reservas.estadoWa();
+});
 handle('pv:configurar', (o) => postventa.configurar(o || {}));
 handle('pv:chats', () => postventa.chats());
 // Apariencia: claro, oscuro o como el sistema (cambia prefers-color-scheme en la ventana)
@@ -853,7 +866,7 @@ handle('pv:revisar', () => waSrv.enApi() ? { activo: true, procesados: 0, enServ
 let pvOcupado = false;
 const pvCiclo = async () => {
   if (waSrv.enApi()) { setTimeout(pvCiclo, 30e3).unref?.(); return; } // con la cuenta de Asset responde el servidor
-  if (!pvOcupado && reservas.estadoWa().conectado && postventa.config().auto) { pvOcupado = true; try { pvAviso(await postventa.revisarWhatsApp({ excluir: [(store.get('waAgente') || {}).telefono] })); } catch {} pvOcupado = false; }
+  if (WA_LOCAL && !pvOcupado && reservas.estadoWa().conectado && postventa.config().auto) { pvOcupado = true; try { pvAviso(await postventa.revisarWhatsApp({ excluir: [(store.get('waAgente') || {}).telefono] })); } catch {} pvOcupado = false; }
   setTimeout(pvCiclo, postventa.ritmo()).unref?.();
 };
 if (process.env.PF_POSTVENTA === '1') setTimeout(pvCiclo, 5e3).unref?.(); // Postventa en pausa (0.13): su WhatsApp lo usa ahora el Agente
@@ -1051,7 +1064,7 @@ let enviandoProgramados = false;
 setInterval(async () => {
   if (enviandoProgramados) return;   // 0.16.18 · una sola ronda a la vez (si no, los envíos lentos se repetían)
   enviandoProgramados = true;
-  try { if (waProg.enApi()) await waProg.traer(); else await enviarProgramados(); } catch (e) { if (waProg.enApi()) console.warn('[programados]', e.message); } finally { enviandoProgramados = false; }
+  try { if (waProg.enApi()) await waProg.traer(); else if (WA_LOCAL) await enviarProgramados(); } catch (e) { if (waProg.enApi()) console.warn('[programados]', e.message); } finally { enviandoProgramados = false; }
 }, process.env.PF_MOCK === '1' ? 3000 : 30000).unref?.();
 async function enviarProgramados() {
   const l = store.get('waProgramados') || []; const ahora = new Date(); const hhmm = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
@@ -1149,7 +1162,7 @@ const observador = require('./observador').crear({ res: reservas, leads, store, 
 handle('obs:estado', () => (waSrv.enApi() ? waSrv.observador.estado() : observador.estado()));
 handle('obs:configurar', (o) => { if (waSrv.enApi()) return waSrv.observador.configurar({ autorizadoPor: miNombre(), ...(o || {}) }); const r = observador.configurar({ autorizadoPor: miNombre(), ...(o || {}) }); if (r.activo) observador.revisar().catch(() => {}); return r; });
 handle('obs:revisar', async () => { if (waSrv.enApi()) return waSrv.observador.revisar(); const r = await observador.revisar({ forzar: true }); return { ...r, estado: observador.estado() }; });
-const obsLocal = () => { if (!waSrv.enApi()) observador.revisar().catch(() => {}); };
+const obsLocal = () => { if (WA_LOCAL && !waSrv.enApi()) observador.revisar().catch(() => {}); };
 setTimeout(obsLocal, 20000); setInterval(obsLocal, 2 * 60000);
 handle('leads:importar', (o) => leads.importar(o || {}));
 handle('leads:actualizar', (id, c) => leads.actualizar(id, c || {}));
@@ -1248,7 +1261,7 @@ handle('wa:configurar', (o) => waAgente.configurar(o || {}));
 handle('wa:revisar', () => waAgente.revisar());
 let waOcupado = false;
 const waCiclo = async () => { const e = waAgente.estado();
-  if (!waOcupado && reservas.estadoWa().conectado && (e.activo || e.codigo || waSrv.enApi())) { waOcupado = true; try { await waAgente.revisar(); } catch {} waOcupado = false; }
+  if (!waOcupado && reservas.estadoWa().conectado && (waSrv.enApi() || (WA_LOCAL && (e.activo || e.codigo)))) { waOcupado = true; try { await waAgente.revisar(); } catch {} waOcupado = false; }
   setTimeout(waCiclo, waAgente.ritmo()).unref?.(); };
 setTimeout(waCiclo, 4e3).unref?.();
 handle('dict:mic', async () => { if (process.platform !== 'darwin') return true; const { systemPreferences } = require('electron'); const st = systemPreferences.getMediaAccessStatus('microphone'); if (st === 'granted') return true; if (st === 'denied' || st === 'restricted') return false; return systemPreferences.askForMediaAccess('microphone'); });

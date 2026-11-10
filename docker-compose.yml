@@ -1,0 +1,61 @@
+# PortalFirma Asset · producción en la Linode (la misma de matchoncard), en /home/asset.
+# nginx del servidor (sitio asset.matchoncard.cl) reenvía /v1 a 127.0.0.1:4570.
+# La base es el PostgreSQL del propio servidor, que escucha solo en 127.0.0.1:5432 (no se toca su configuración):
+# por eso la API usa la red del servidor (network_mode: host) y, con NODE_ENV=production, escucha solo en 127.0.0.1.
+#
+#   docker compose build api && docker compose run --rm migrar && docker compose up -d api
+#   (lo hace api/scripts/desplegar.sh desde el equipo de desarrollo)
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+services:
+  api:
+    build:
+      context: ./api
+      target: runner
+    image: asset/api:latest
+    container_name: asset-api
+    restart: unless-stopped
+    network_mode: host
+    env_file:
+      - ./api/.env
+    user: "1000:1000"
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=100m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 768M
+        reservations:
+          cpus: "0.25"
+          memory: 192M
+    logging: *logging
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:4570/v1/salud', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # migraciones de la base (prisma migrate deploy). No queda corriendo: `docker compose run --rm migrar`
+  migrar:
+    build:
+      context: ./api
+      target: builder
+    image: asset/api-migrar:latest
+    profiles: ["herramientas"]
+    network_mode: host
+    env_file:
+      - ./api/.env
+    command: ["npx", "prisma", "migrate", "deploy"]
+    logging: *logging
