@@ -170,7 +170,7 @@ export class OrdenVisitaService {
       if (/telefono|fono|celular/.test(k)) return corredor.telefono || null;
       if (/nombre/.test(k)) return corredor.nombre || null;
     }
-    if (v.kind === 'image' || v.input_type === 'image' || /imagen|foto/.test(k)) return p.fotos.find((f) => /^https:\/\//.test(f.url))?.url ?? null;
+    if (v.kind === 'image' || v.input_type === 'image' || /imagen|foto/.test(k)) return (p.fotos.find((f) => /^https:\/\/.*\.(jpe?g|png)(\?|$)/i.test(f.url)) ?? p.fotos.find((f) => /^https:\/\//.test(f.url)))?.url ?? null;
     if (/ciudad/.test(k)) return 'Santiago';
     if (/comuna/.test(k)) return p.comuna;
     if (/region/.test(k)) return p.region;

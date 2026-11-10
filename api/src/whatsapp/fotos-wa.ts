@@ -6,6 +6,7 @@
 // Las fotos se bajan de wechatia, se suben a R2 (c/<corredora>/p/<propiedad>/fotos/wa_…) y quedan al final de la
 // galería de la propiedad (sube su versión: la app la trae en su próxima sincronización).
 import { Injectable, Logger } from '@nestjs/common';
+import sharp from 'sharp';
 import type { Prisma, WaVinculo } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AlmacenamientoService } from '../archivos/almacenamiento.service';
@@ -182,8 +183,15 @@ export class FotosWaService {
         const buf = Buffer.from(await r.arrayBuffer());
         const ext = TIPOS[tipo] ?? (/\.png(\?|$)/i.test(u) ? 'png' : /\.webp(\?|$)/i.test(u) ? 'webp' : /\.jpe?g(\?|$)/i.test(u) ? 'jpg' : null);
         if (!ext || !buf.length || buf.length > FOTO_MAX) throw new Error(`no es una foto JPG, PNG o WebP (${tipo || 'sin tipo'}, ${buf.length} bytes)`);
-        const clave = this.r2.nuevaClave(v.corredoraId, prop.id, 'fotos', ext, 'wa');
-        nuevas.push(await this.r2.subir(clave, buf, ext === 'jpg' ? 'image/jpeg' : `image/${ext}`));
+        // todas quedan como JPG de hasta 2048 px, igual que las que sube la app: Portalfirma rechaza el WebP que manda
+        // WhatsApp al usarlas en un documento (p. ej. la orden de visita)
+        const jpg = await sharp(buf)
+          .rotate()
+          .resize({ width: 2048, height: 2048, fit: 'inside', withoutEnlargement: true })
+          .jpeg({ quality: 86 })
+          .toBuffer();
+        const clave = this.r2.nuevaClave(v.corredoraId, prop.id, 'fotos', 'jpg', 'wa');
+        nuevas.push(await this.r2.subir(clave, jpg, 'image/jpeg'));
       } catch (e) {
         fallidas++;
         this.log.warn(`foto de WhatsApp para ${prop.codigo}: ${(e as Error).message}`);

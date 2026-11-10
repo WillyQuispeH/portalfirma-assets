@@ -56,7 +56,7 @@ function wechatiaFalso() {
       const out = (code, j) => { rs.writeHead(code, { 'content-type': 'application/json' }); rs.end(JSON.stringify(j)); };
       // las fotos que mandan por WhatsApp quedan en una URL pública (sin clave)
       if (p.startsWith('/audio/')) { rs.writeHead(200, { 'content-type': 'audio/ogg' }); return rs.end(Buffer.alloc(3000, 7)); }
-      if (p.startsWith('/media/')) { rs.writeHead(200, { 'content-type': 'image/jpeg' }); return rs.end(Buffer.from([0xff, 0xd8, 0xff, 0xe0, ...Buffer.from('foto de prueba ' + p), 0xff, 0xd9])); }
+      if (p.startsWith('/media/')) { rs.writeHead(200, { 'content-type': 'image/webp' }); return rs.end(IMG); } // WhatsApp manda WebP
       if (rq.headers.authorization !== 'Bearer ' + TOKEN) return out(401, { message: 'no' });
       if (p === '/conversations/search') {
         const cid = u.searchParams.get('contactId');
@@ -123,6 +123,7 @@ function respuestaIa(b) {
   return herramienta('cliente_info', {});
 }
 // la transcripción falsa (API de audio de OpenAI): responde según el escenario; con «con letras» en el prompt es la segunda pasada
+let IMG = null; // la foto que sirve el wechatia falso (una imagen real: el servidor la decodifica y la pasa a JPG)
 const T = { actual: { primera: '' }, llamadas: [] };
 function transcripcionFalsa() {
   const s = http.createServer((rq, rs) => {
@@ -172,6 +173,7 @@ function iaFalsa() {
 
 (async () => {
   const db = new PrismaClient();
+  IMG = await require('sharp')({ create: { width: 3000, height: 2000, channels: 3, background: '#6a8caf' } }).webp().toBuffer();
   const srv = await wechatiaFalso(); const ia = await iaFalsa(); const trf = await transcripcionFalsa(); const pfs = await portalfirmaFalso();
   const base = `http://127.0.0.1:${srv.address().port}`; const iaBase = `http://127.0.0.1:${ia.address().port}`; const transcribirBase = `http://127.0.0.1:${trf.address().port}`;
   let co = null; const usuarios = [];
@@ -283,6 +285,9 @@ function iaFalsa() {
     const fotosDe = () => db.propiedadFoto.count({ where: { propiedadId: prop.id } });
     escribe(cel, 'Fotos de la PF-9001', { attachments: [`${base}/media/f1.jpg`] });
     ok(await hasta(() => salidas(cel).some((t) => /^\*Pedro\* · Captación\nListo: agregué la foto a la \*PF-9001\*/.test(t))) && (await fotosDe()) === 1, 'una foto con el código en el texto queda en la galería de esa propiedad');
+    const f1 = await db.propiedadFoto.findFirst({ where: { propiedadId: prop.id } });
+    const meta = await require('sharp')(Buffer.from(await (await fetch(f1.url)).arrayBuffer())).metadata();
+    ok(/\.jpg$/.test(f1.url) && meta.format === 'jpeg' && meta.width === 2048, `la foto de WhatsApp (WebP de 3000 px) se guarda como JPG de hasta 2048 px (${meta.format} ${meta.width}x${meta.height})`);
     escribe(cel, '', { attachments: [`${base}/media/f2.jpg`] }); escribe(cel, '', { attachments: [`${base}/media/f3.jpg`] });
     ok(await hasta(() => salidas(cel).some((t) => /Recibí 2 fotos\. ¿A qué propiedad las agrego\?[\s\S]*\*PF-9001\*/.test(t))), 'fotos sin código: pregunta a qué propiedad y sugiere la última que tocó');
     escribe(cel, 'sí');
