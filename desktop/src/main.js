@@ -1156,6 +1156,7 @@ handle('usr:wechatia', () => equipo.usuariosWechatia({ admin: permisos.esAdmin()
 const miNombre = () => (inmo.API && inmo.usuario()?.nombre) || store.get('leadsBroker') || '';
 inmo.alCargar(async () => { if (store.get('leadsBroker') !== undefined) store.set('leadsBroker', undefined); return null; });
 const leads = require('./leads').crear({ dir: leadsDir, ai: require('./ai'), inmo, broker: () => ({ nombre: (store.get('waAgente') || {}).nombre || miNombre() }), emit: (e) => toUI('agent:event', e), corredores: () => equipo.lista() });
+if (process.env.PF_MOCK === '1') global.__leads = leads; // las pruebas lo usan (app.evaluate)
 global.__leads = leads; // para las pruebas e2e (app.evaluate)
 setTimeout(() => { try { leads.repararDuplicados(); } catch {} try { leads.sincronizarTodos(); } catch {} }, 3000); // 0.16.23 · leads anteriores quedan como persona
 handle('leads:asignar', (id, corredorId) => leads.asignar(id, corredorId || null, 'manual'));

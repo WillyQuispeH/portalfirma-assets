@@ -524,6 +524,7 @@ Reglas: «lucas» = miles de pesos (290 lucas = 290000 CLP). Usa solo lo que dic
     guardarMsgs(l.id, todos);
     l.mensajes = todos.length; l.ultimo = { fecha: m.fecha, de: de === 'cliente' ? 'cliente' : 'broker', texto: resumenMsg(m) }; l.wa = true; l.atiende ||= 'agente';
     if (de === 'cliente') l.noLeidos = (l.noLeidos || 0) + 1;
+    if (de === 'broker') contactado(l, 'El corredor respondió'); // no cuenta lo que responde Sofía ('agente')
     l.actualizado = now(); save(); emit({ type: 'datos', que: 'leads', id: l.id });
     return l.id;
   }
@@ -552,7 +553,11 @@ Reglas: «lucas» = miles de pesos (290 lucas = 290000 CLP). Usa solo lo que dic
     db().leads.unshift(l); evento(l, `Registrado a mano (${ORIGENES[l.origen]})`, 'canal'); sync(l); save(); emit({ type: 'datos', que: 'leads', id: l.id });
     return { lead: vista(l), yaExistia: false };
   }
-  function atencion(id, quien) { const l = lead(id); if (!['agente', 'corredor'].includes(quien)) throw err('Valor no válido.'); l.atiende = quien; l.wa = true; l.actualizado = now(); save(); emit({ type: 'datos', que: 'leads', id }); return vista(l); }
+  // «Nuevo» → «Contactado» cuando el corredor responde o toma la conversación (no retrocede ni pisa un estado más avanzado)
+  function contactado(l, motivo) { if (l.estado !== 'nuevo') return; l.estado = 'contactado'; evento(l, motivo, 'estado'); }
+  function atencion(id, quien) { const l = lead(id); if (!['agente', 'corredor'].includes(quien)) throw err('Valor no válido.'); l.atiende = quien; l.wa = true;
+    if (quien === 'corredor') contactado(l, 'El corredor tomó la conversación'); // regla: «Contactado» cuando el corredor responde o toma el lead
+    l.actualizado = now(); save(); emit({ type: 'datos', que: 'leads', id }); return vista(l); }
   const mediaDir = () => base();
   // 0.16.18 · WhatsApp rechazó un mensaje que ya figuraba como enviado: queda marcado «No entregado»
   function marcarFallido(telefono, texto, motivo = '') { const l = porTelefono(telefono); if (!l) return false; const ms = mensajesDe(l.id); const t = String(texto || '').trim().slice(0, 200);
