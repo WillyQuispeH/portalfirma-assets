@@ -135,7 +135,8 @@ function transcripcionFalsa() {
   return new Promise((ok) => s.listen(0, '127.0.0.1', () => ok(s)));
 }
 // Portalfirma falso: la plantilla «Orden de visita» de la Notaría virtual. Registra lo que se manda a firmar.
-const PFTOKEN = 'tok-pf-' + SUF; const ENVIOS = []; const OPERACION = 800000000 + Math.floor(Math.random() * 90000000);
+const PFTOKEN = 'tok-pf-' + SUF; const ENVIOS = []; const FIRMANTE = []; // lo que se hace con el firmante después de enviar
+const ENVIOS_PLANTILLA = ENVIOS; const OPERACION = 800000000 + Math.floor(Math.random() * 90000000);
 const FORMULARIO = { groups: [
   { type: 'signer', variables: [{ id: 'v-nom', name: 'nombre_visitante_signer', label: 'Nombre del visitante', required: true }, { id: 'v-rut', name: 'rut_visitante_signer', label: 'RUT del visitante', required: true }, { id: 'v-mail', name: 'correo_visitante_signer', label: 'Correo del visitante', required: true }] },
   { type: 'nosigner', variables: [{ id: 'v-fecha', name: 'fecha_visita', label: 'Fecha de la visita', required: true }, { id: 'v-dir', name: 'direccion', label: 'Dirección de la propiedad', required: true }, { id: 'v-foto', name: 'foto', label: 'Foto de la propiedad', kind: 'image', required: true }, { id: 'v-cor', name: 'corredor_nombre', label: 'Nombre del corredor', required: true }] },
@@ -152,6 +153,8 @@ function portalfirmaFalso() {
       if (a.action === 'send_sign') { ENVIOS.push({ values: a.values, plantilla: a.template_version_id }); return t({ operation: OPERACION, message: 'Enviado a firmar' }); }
       return { content: [{ type: 'text', text: 'Error: acción desconocida' }], isError: true };
     });
+    srv.tool('process_detail_get_by_operation', { operation: z.number() }, async ({ operation }) => ({ content: [{ type: 'text', text: JSON.stringify({ processId: 'pid-1', operation, status: 'starting', signatories: [{ personId: 'per-1', contractSignatoryId: 'cs-1', rut: '11.111.111-1', name: 'ANA', paternalLastName: 'VISITANTE', maternalLastName: '', email: '', phone: '', url: ' https://cliente.portalfirma.cl/v?c=cs-1&h=portalfirma', signed: false }] }) }] }));
+    srv.tool('operation_manage_signing_tools', { action: z.string(), person_id: z.string().optional(), email: z.string().optional(), phone: z.string().optional(), operation: z.union([z.number(), z.string()]).optional(), link: z.string().optional(), name: z.string().optional() }, async (a) => { FIRMANTE.push(a); return { content: [{ type: 'text', text: JSON.stringify(a.action === 'send_signature_link_by_email' ? { sent: true } : { person_id: a.person_id, email: a.email, phone: a.phone }) }] }; });
     const tr = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
     rs.on('close', () => { tr.close(); srv.close(); });
     await srv.connect(tr);
@@ -201,7 +204,7 @@ function iaFalsa() {
     const cx = await db.conexion.findFirst({ where: { corredoraId: co.id, proveedor: 'wechatia' } });
     await db.conexion.update({ where: { id: cx.id }, data: { datos: { ...cx.datos, iaBase, transcribirBase } } });
     await db.conexion.create({ data: { corredoraId: co.id, usuarioId: null, dueno: 'corredora', proveedor: 'portalfirma', tipo: 'oauth', estado: 'activa', accesoCif: cifrar(PFTOKEN), datos: { mcpUrl: `http://127.0.0.1:${pfs.address().port}/mcp` } } });
-    const prop2 = await db.propiedad.create({ data: { corredoraId: co.id, codigo: 'PF-9002', titulo: 'Casa La Reina', tipo: 'casa', venta: true, precioVenta: 9500, monedaVenta: 'UF', direccion: 'Larraín 6200', comuna: 'La Reina', dormitorios: 4, banos: 3, captadorId: c1.id, fotos: { create: [{ url: 'https://example.com/casa.jpg', orden: 0, destacada: true }] } } });
+    const prop2 = await db.propiedad.create({ data: { corredoraId: co.id, codigo: 'PF-9002', titulo: 'Casa La Reina', tipo: 'casa', venta: true, precioVenta: 9500, monedaVenta: 'UF', direccion: 'Larraín 6200', comuna: 'La Reina', dormitorios: 4, banos: 3, captadorId: c1.id, fotos: { create: [{ url: `${base}/media/casa.jpg`, orden: 0, destacada: true }] } } });
     r = await req('GET', '/whatsapp/asistentes', null, t1);
     ok(r.j.conectado && r.j.ia && r.j.clientesActivo && r.j.enServidor, 'estado: conectado, con IA y la atención de clientes encendida');
 
@@ -239,7 +242,9 @@ function iaFalsa() {
     antesOv = salidas(cel).length;
     escribe(cel, 'sí');
     ok(await hasta(() => salidas(cel).slice(antesOv).some((t) => new RegExp(`Orden enviada, operación ${OPERACION}\\.`).test(t))), 'con el sí del corredor, la envía a firmar (operación ' + OPERACION + ')');
-    ok(ENVIOS.length === enviosAntes + 1 && ENVIOS.at(-1).values['v-rut'] === '11.111.111-1' && ENVIOS.at(-1).values['v-mail'] === 'ana.visitante@prueba.cl' && ENVIOS.at(-1).values['v-fecha'] === '2037-12-01' && /Larraín 6200/.test(ENVIOS.at(-1).values['v-dir']) && ENVIOS.at(-1).values['v-foto'] === 'https://example.com/casa.jpg' && /Corredor B/.test(ENVIOS.at(-1).values['v-cor']), 'el documento salió con los datos de la ficha (dirección, foto), del visitante y del corredor');
+    ok(ENVIOS.length === enviosAntes + 1 && ENVIOS.at(-1).values['v-rut'] === '11.111.111-1' && ENVIOS.at(-1).values['v-mail'] === 'ana.visitante@prueba.cl' && ENVIOS.at(-1).values['v-fecha'] === '2037-12-01' && /Larraín 6200/.test(ENVIOS.at(-1).values['v-dir']) && /^data:image\/jpeg;base64,/.test(ENVIOS.at(-1).values['v-foto']) && /Corredor B/.test(ENVIOS.at(-1).values['v-cor']), 'el documento salió con los datos de la ficha (dirección), del visitante y del corredor, y la foto como imagen en base64 (Portalfirma no acepta un enlace)');
+    ok(FIRMANTE.length === 2 && FIRMANTE[0].action === 'update_signatory_data' && FIRMANTE[0].person_id === 'per-1' && FIRMANTE[0].email === 'ana.visitante@prueba.cl', 'completa los datos del firmante (correo) porque la plantilla no los pide');
+    ok(FIRMANTE[1].action === 'send_signature_link_by_email' && FIRMANTE[1].email === 'ana.visitante@prueba.cl' && FIRMANTE[1].link === 'https://cliente.portalfirma.cl/v?c=cs-1&h=portalfirma' && Number(FIRMANTE[1].operation) === OPERACION, 'y le manda el enlace de firma por correo');
     const fOv = await db.firma.findFirst({ where: { corredoraId: co.id, operacion: OPERACION } });
     ok(fOv && fOv.documento === 'Orden de visita' && fOv.estado === 'en_firma' && fOv.enviadoPorId === c1.id && fOv.propiedadIds.includes(prop2.id) && fOv.firmantes[0].rut === '11.111.111-1', 'la firma queda registrada (en firma, de quien la envió, ligada a la propiedad)');
     const pAna = await db.persona.findFirst({ where: { corredoraId: co.id, rut: '111111111' }, include: { vinculos: true } });

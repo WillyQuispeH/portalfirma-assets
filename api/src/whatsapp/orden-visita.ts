@@ -12,6 +12,7 @@
 // hay que usar la app.
 import { Injectable, Logger } from '@nestjs/common';
 import { createHash, randomBytes } from 'crypto';
+import sharp from 'sharp';
 import type { Prisma, Propiedad, PropiedadFoto } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { PortalfirmaService } from '../conexiones/portalfirma';
@@ -120,13 +121,52 @@ export class OrdenVisitaService {
   ) {}
 
   // ---------------------------------------------------------------- Portalfirma
-  private async herramienta(corredoraId: string, args: Record<string, unknown>) {
-    const r = await this.pf.llamarComo({ corredoraId, usuarioId: null }, 'template_manage_tools', args);
+  private async herramienta(corredoraId: string, args: Record<string, unknown>, nombre = 'template_manage_tools') {
+    const r = await this.pf.llamarComo({ corredoraId, usuarioId: null }, nombre, args);
     const texto = (r.content || [])
       .map((c) => (c.type === 'text' ? (c.text ?? '') : ''))
       .join('\n')
       .trim();
     return { texto, error: !!r.isError || /^\s*Error\b/.test(texto) };
+  }
+
+  /**
+   * La foto de la ficha como imagen para el documento. Portalfirma NO acepta un enlace en el campo de imagen («Debes subir
+   * una imagen válida»): hay que pasarla como `data:image/jpeg;base64,…` (verificado enviando una orden real). Se prefiere
+   * una foto JPG o PNG y se achica a 1024 px para que el envío sea liviano.
+   */
+  private async imagenDe(p: { fotos: PropiedadFoto[] }): Promise<string | null> {
+    const f = p.fotos.find((x) => /^https?:\/\/.*\.(jpe?g|png)(\?|$)/i.test(x.url)) ?? p.fotos.find((x) => /^https?:\/\//.test(x.url));
+    if (!f) return null;
+    try {
+      const r = await fetch(f.url, { signal: AbortSignal.timeout(30_000) });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const jpg = await sharp(Buffer.from(await r.arrayBuffer()))
+        .rotate()
+        .resize({ width: 1024, height: 1024, fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: 80 })
+        .toBuffer();
+      return `data:image/jpeg;base64,${jpg.toString('base64')}`;
+    } catch (e) {
+      this.log.warn(`foto de la ficha ${f.url.slice(-40)}: ${(e as Error).message}`);
+      return null;
+    }
+  }
+
+  /**
+   * La plantilla no pide el correo ni el celular del visitante, así que Portalfirma crea al firmante sin ellos y no le
+   * llega el enlace: se completan sus datos y se le manda el enlace de firma por correo.
+   */
+  private async avisarFirmante(corredoraId: string, operacion: number, vis: { nombre: string; email: string; telefono: string }) {
+    const d = await this.herramienta(corredoraId, { operation: operacion }, 'process_detail_get_by_operation');
+    const det = JSON.parse(d.texto) as { signatories?: { personId?: string; url?: string; name?: string; paternalLastName?: string; maternalLastName?: string }[] };
+    const s = det.signatories?.[0];
+    if (!s?.personId || !s.url) throw new Error('Portalfirma no devolvió los datos del firmante');
+    const a = await this.herramienta(corredoraId, { action: 'update_signatory_data', person_id: s.personId, email: vis.email, ...(vis.telefono ? { phone: vis.telefono } : {}) }, 'operation_manage_signing_tools');
+    if (a.error) throw new Error(`no pude completar los datos del firmante: ${a.texto.slice(0, 160)}`);
+    const nombre = [s.name, s.paternalLastName, s.maternalLastName].filter(Boolean).join(' ') || vis.nombre;
+    const e = await this.herramienta(corredoraId, { action: 'send_signature_link_by_email', operation: operacion, link: s.url.trim(), name: nombre, email: vis.email }, 'operation_manage_signing_tools');
+    if (e.error) throw new Error(`no pude enviar el enlace por correo: ${e.texto.slice(0, 160)}`);
   }
 
   // ---------------------------------------------------------------- el visitante
@@ -264,12 +304,14 @@ export class OrdenVisitaService {
     const values: Record<string, string> = {};
     const datosDelDocumento: { campo: string; valor: string }[] = [];
     const faltan: string[] = [];
+    let imagen: string | null | undefined;
     for (const g of formulario.groups ?? [])
       for (const v of g.variables ?? []) {
         const k = norm(`${v.name ?? ''} ${v.label ?? ''}`);
         let val: string | null = null;
         if (g.type === 'signer')
           val = /rut/.test(k) ? vis.rut : /correo|email|mail/.test(k) ? vis.email : /telefono|fono|celular/.test(k) ? vis.telefono : /nombre/.test(k) ? vis.nombre : null;
+        else if (v.kind === 'image' || v.input_type === 'image' || /imagen|foto/.test(k)) val = imagen !== undefined ? imagen : (imagen = await this.imagenDe(p));
         else val = this.valorDe(v, p, op, corredor, fecha);
         if (val) {
           values[v.id] = String(val);
@@ -320,6 +362,16 @@ export class OrdenVisitaService {
     this.preparadas.delete(c.usuarioId);
     if (r.error) return { error: `Portalfirma no generó la orden: ${r.texto.slice(0, 240)}` };
     const operacion = operacionDe(r.texto);
+    let enlace: string | null = null;
+    if (operacion) {
+      try {
+        await this.avisarFirmante(c.corredoraId, operacion, vis);
+        enlace = vis.email;
+      } catch (e) {
+        this.log.error(`orden ${operacion} enviada, sin enlace por correo: ${(e as Error).message}`);
+        enlace = `ERROR: ${(e as Error).message}`;
+      }
+    }
 
     // ---- lo que queda registrado
     try {
@@ -388,7 +440,7 @@ export class OrdenVisitaService {
     } catch (e) {
       // la orden ya salió: lo que falle al registrar no debe esconderlo
       this.log.error(`orden de visita enviada pero sin registrar del todo: ${(e as Error).message}`);
-      return { ok: true, enviada: true, operacion, visitante: vis.nombre, aviso: 'La orden se envió, pero no pude registrarla del todo en Asset: ábrelo para revisarla.' };
+      return { ok: true, enviada: true, operacion, visitante: vis.nombre, enlaceEnviadoA: enlace?.startsWith('ERROR') ? null : enlace, aviso: 'La orden se envió, pero no pude registrarla del todo en Asset: ábrelo para revisarla.' };
     }
     return {
       ok: true,
@@ -398,7 +450,10 @@ export class OrdenVisitaService {
       correo: vis.email,
       fecha,
       hora: hora || null,
-      indicacion: `La orden se envió a firmar${operacion ? ` (operación ${operacion})` : ''}: ${vis.nombre} recibe el enlace en ${vis.email}. Se cobró del saldo de Portalfirma. La visita quedó en la agenda.`,
+      enlaceEnviadoA: enlace?.startsWith('ERROR') ? null : enlace,
+      indicacion: enlace && !enlace.startsWith('ERROR')
+        ? `La orden se envió a firmar${operacion ? ` (operación ${operacion})` : ''}: le mandé el enlace de firma por correo a ${vis.nombre} (${vis.email}). Se cobró del saldo de Portalfirma. La visita quedó en la agenda.`
+        : `La orden se envió a firmar${operacion ? ` (operación ${operacion})` : ''} y se cobró del saldo de Portalfirma, PERO el enlace de firma no pudo enviarse por correo (${enlace ?? 'sin número de operación'}). Avísale al corredor: puede reenviarlo desde Asset › Mis operaciones. La visita quedó en la agenda.`,
     };
   }
 }
