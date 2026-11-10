@@ -64,6 +64,32 @@ igual(n('la WE045 y la PF1001', ['PF', 'WE']).texto, 'la WE-045 y la PF-1001', '
 igual(n('por 7100 UF y la CV1234', ['PF']).texto, 'por 7100 UF y la CV1234', 'prefijos que la corredora no usa no se tocan');
 igual(n('precio UF 6900', ['PF', 'UF']).texto, 'precio UF 6900', 'nunca convierte UF 6900 en un código');
 
+// ---- casos reales de la voz del usuario (notas por WhatsApp, 2026-11-10)
+r = n('busca a la persona con RUT uno cinco cuatro tres dos ocho siete seis guión nueve y dime su teléfono');
+igual(r.texto, 'busca a la persona con RUT 15.432.876-9 y dime su teléfono', 'RUT dicho dígito por dígito («uno cinco cuatro … guión nueve») → 15.432.876-9');
+ok(!r.avisos.length, 'y su verificador cuadra: sin avisos');
+r = n('con RUT 1-5-4-3-2-8-7-6-9 está en el CRM');
+igual(r.texto, 'con RUT 15.432.876-9 está en el CRM', 'RUT con los dígitos separados por guiones («1-5-4-3-2-8-7-6-9») → 15.432.876-9');
+r = n('Catalina Fuentes Ríos con RUT uno nueve dos tres cuatro cinco seis siete guión siete está en el CRM');
+igual(r.texto, 'Catalina Fuentes Ríos con RUT 19.234.567-7 está en el CRM', 'otro RUT dígito por dígito (19.234.567-7)');
+r = n('Catalina Fuentes Ríos, con RUT 192345678-7, está en el CRM');
+ok(/RUT 19\.234\.567\.8-7|RUT 192\.345\.678-7/.test(r.texto) && r.avisos.length === 1 && /no es válido/.test(r.avisos[0]), 'RUT con un dígito de más («192345678-7»): se detecta y se avisa (antes pasaba sin aviso): ' + r.texto);
+r = n('con RUT 15.432.876-9 y dime su teléfono y 1-5-4');
+igual(r.texto, 'con RUT 15.432.876-9 y dime su teléfono y 1-5-4', 'un RUT ya bien escrito no se rehace ni se come lo que sigue');
+r = n('RUT 1 2');
+igual(r.texto, 'RUT 1 2', 'pocos dígitos después de «RUT»: no se toca');
+igual(n('¿qué visitas hay en la PF mil uno y a qué hora?', ['PF']).texto, '¿qué visitas hay en la PF-1001 y a qué hora?', '«PF mil uno» con palabras → PF-1001');
+igual(n('la PF mil quinientos dos, y listo', ['PF']).texto, 'la PF-1502, y listo', '«PF mil quinientos dos» → PF-1502');
+igual(n('en la PF dos cosas', ['PF']).texto, 'en la PF dos cosas', '«PF dos» no es un código (número muy chico)');
+const cods = ['PF-1001', 'WE-045'];
+igual(n('qué visitas hay agendadas en el APF-1001 y a qué hora', ['PF'], cods).texto, 'qué visitas hay agendadas en el PF-1001 y a qué hora', '«APF-1001» (mal oído) → PF-1001 si ese código existe en la cartera');
+igual(n('Sí, hablamos de la P1001.', ['PF'], cods).texto, 'Sí, hablamos de la PF-1001.', '«P1001» → PF-1001');
+igual(n('Sí, hablamos de la APC1001.', ['PF'], cods).texto, 'Sí, hablamos de la PF-1001.', '«APC1001» → PF-1001');
+igual(n('el precio es UF 1001 y CLP 1001', ['PF'], cods).texto, 'el precio es UF 1001 y CLP 1001', 'UF y CLP nunca se toman por un código');
+igual(n('vale en 1001 pesos', ['PF'], cods).texto, 'vale en 1001 pesos', 'en minúsculas y sin letras de código no se toca');
+igual(n('la APF-2002 no existe', ['PF'], cods).texto, 'la APF-2002 no existe', 'si el número no es de ningún código de la cartera, no se inventa uno');
+igual(n('RUT USD 9999', ['PF'], cods).texto, 'RUT USD 9999', 'siglas ajenas no se tocan');
+
 // ---- varios a la vez
 r = n('Pedro, el RUT del dueño es quince millones cuatrocientos treinta y dos mil ochocientos setenta y seis guion nueve, su teléfono 981234567, de la PF1001.');
 igual(r.texto, 'Pedro, el RUT del dueño es 15.432.876-9, su teléfono +56 9 8123 4567, de la PF-1001.', 'RUT, celular y código en el mismo audio');

@@ -1,20 +1,24 @@
 // Audio → texto, compartido por el dictado de la app (POST /v1/ia/transcribir) y los audios de WhatsApp que atiende el
 // servidor. Claude no transcribe audio: se usa la transcripción de OpenAI (OPENAI_CLAVE).
 //
-// Afinado con audios de prueba (notas de voz en opus a 16 kbps con ruido; ver api/test/transcripcion-unit.js):
-//  · gpt-4o-mini-transcribe con un prompt de VOCABULARIO (equipo, términos del negocio, comunas y calles de la cartera)
-//    sube de 89 % a 95-96 % los datos bien transcritos frente al prompt anterior; gpt-4o-transcribe no mejora y
-//    whisper-1 entiende «guion» como «WIA» (solo queda de respaldo).
-//  · El prompt NO lleva cifras de ejemplo: el modelo las copiaba en la transcripción (un teléfono inventado).
-//  · Los números largos (RUT, teléfonos) a veces salen mal dichos en dígitos: se validan y se normalizan aquí, y si algo
-//    no cuadra se devuelve un aviso para que el asistente pida confirmarlo en vez de guardarlo.
+// Afinado con audios de prueba y con la voz real del usuario (notas de voz de WhatsApp, 2026-11-10):
+//  · gpt-4o-transcribe es el modelo principal: sobre una nota real de 33 s repetida 16 veces acierta 98 % de los datos
+//    clave (RUT, código, teléfono) contra 85 % de gpt-4o-mini-transcribe, y responde más rápido (~1,2 s). Con voz
+//    sintética limpia parecían iguales: solo la voz real mostró la diferencia. whisper-1 entiende «guion» como «WIA».
+//  · El prompt es de VOCABULARIO (equipo, términos del negocio, comunas y calles de la cartera) y NO lleva cifras de
+//    ejemplo: el modelo las copiaba en la transcripción (un teléfono inventado).
+//  · Los números largos a veces salen mal: se normalizan y validan aquí (RUT dicho con palabras o dígito por dígito,
+//    verificador, celulares, códigos «PF1002» o mal oídos «APF-1001» contra la cartera) y, si algo no cuadra, se
+//    repite una vez con esos números en letras (que se convierten sin errores) o se devuelve un aviso para que el
+//    asistente pida confirmarlo en vez de guardarlo.
 import { BadRequestException, Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import type { Env } from '../config/env';
 
-const MODELO = 'gpt-4o-mini-transcribe';
-const MODELO_RESPALDO = 'whisper-1';
+const MODELO = 'gpt-4o-transcribe';
+// si el modelo principal no existe (404) se prueba con estos, en orden
+const MODELOS_RESPALDO = ['gpt-4o-mini-transcribe', 'whisper-1'];
 const BASE_OPENAI = 'https://api.openai.com/v1';
 const MAX_AUDIO = 25 * 1024 * 1024;
 const VOCAB_MS = 10 * 60_000;
@@ -99,6 +103,18 @@ export function celularChileno(digitos: string) {
   return d.length === 9 && d[0] === '9' ? `+56 9 ${d.slice(1, 5)} ${d.slice(5)}` : null;
 }
 
+/** monedas, unidades y siglas que van con un número y nunca son un código de propiedad */
+const SIN_CODIGO = new Set(['UF', 'CLP', 'USD', 'IVA', 'UTM', 'RUT', 'M2', 'DOM', 'CBR', 'SII']);
+/** cambios mínimos para pasar de una palabra a otra (Levenshtein) */
+function distancia(a: string, b: string) {
+  const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array<number>(b.length).fill(0)]);
+  for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++)
+    for (let j = 1; j <= b.length; j++)
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  return d[a.length][b.length];
+}
+
 const DV_PALABRA: Record<string, string> = {
   cero: '0', uno: '1', dos: '2', tres: '3', cuatro: '4', cinco: '5', seis: '6', siete: '7', ocho: '8', nueve: '9', k: 'K', ka: 'K', kilo: 'K',
 };
@@ -109,7 +125,11 @@ const DV_PALABRA: Record<string, string> = {
  *  · celulares tras «teléfono / celular / fono / WhatsApp» con el formato +56 9 XXXX XXXX (o aviso si no es un celular);
  *  · códigos de propiedad «PF1002», «pf 1002» → «PF-1002» (según los prefijos de la corredora).
  */
-export function normalizarTranscripcion(entrada: string, prefijos: string[] = ['PF']): { texto: string; avisos: string[] } {
+export function normalizarTranscripcion(
+  entrada: string,
+  prefijos: string[] = ['PF'],
+  codigos: string[] = [],
+): { texto: string; avisos: string[] } {
   let t = String(entrada || '').trim();
   const avisos = new Set<string>();
 
@@ -137,6 +157,31 @@ export function normalizarTranscripcion(entrada: string, prefijos: string[] = ['
   });
   // RUT en dígitos (con puntos, espacios o pegado) y guion
   t = t.replace(/\b(\d{1,2}(?:[.\s]?\d{3}){2})\s*[-–—]\s*([\dkK])\b/g, (_m, cuerpo: string, dv: string) => rut(cuerpo, dv));
+
+  // RUT dicho dígito por dígito o pegado, después de la palabra RUT: «RUT uno cinco cuatro … guion nueve»,
+  // «RUT 1-5-4-3-2-8-7-6-9», «RUT 192345678-7» (un dígito de más: se avisa)
+  {
+    const llave = /\bRUT\b\s*(?:(?:es|de|del|n[uú]mero)\s+)*:?\s*/g;
+    const cambios: [number, number, string][] = [];
+    for (let m = llave.exec(t); m; m = llave.exec(t)) {
+      const ini = m.index + m[0].length;
+      const resto = t.slice(ini);
+      let digitos = '';
+      let fin = 0;
+      let n = 0;
+      for (const tk of resto.matchAll(/[A-Za-zÁÉÍÓÚáéíóúÑñ]+|\d+/g)) {
+        if (n ? !/^[\s,.\-–—]*$/.test(resto.slice(fin, tk.index)) : tk.index !== 0) break;
+        const w = sinTildes(tk[0]);
+        if (/^\d+$/.test(w)) digitos += w;
+        else if (w in DV_PALABRA) digitos += DV_PALABRA[w];
+        else if (w !== 'guion') break;
+        fin = tk.index + tk[0].length;
+        n++;
+      }
+      if (digitos.length >= 8 && digitos.length <= 10) cambios.push([ini, ini + fin, rut(digitos.slice(0, -1), digitos.slice(-1))]);
+    }
+    for (const [d, h, x] of cambios.reverse()) t = t.slice(0, d) + x + t.slice(h);
+  }
 
   // celulares dichos con palabras después de la palabra que los anuncia («celular nueve ochenta y uno veintitrés …»)
   const aviso = /\b(?:tel[eé]fono|celular|fono|m[oó]vil|whatsapp|wasap|n[uú]mero de (?:contacto|tel[eé]fono|celular))\b(?:\s+(?:es|era)|:)?\s+/gi;
@@ -180,7 +225,31 @@ export function normalizarTranscripcion(entrada: string, prefijos: string[] = ['
   for (const p of prefijos) {
     if (!/^[A-Z]{2,4}$/.test(p) || p === 'UF') continue;
     t = t.replace(new RegExp(`\\b(${p})[\\s-]?(\\d{3,6})\\b`, 'gi'), (_m, pre: string, n: string) => `${pre.toUpperCase()}-${n}`);
+    // «PF mil uno» dicho con palabras
+    t = t.replace(new RegExp(`\\b(${p})((?:\\s+[a-záéíóúñ]+){1,6})`, 'gi'), (todo, pre: string, resto: string) => {
+      const ws = resto.trim().split(/\s+/);
+      for (let k = ws.length; k >= 1; k--) {
+        if (ws[k - 1].toLowerCase() === 'y') continue;
+        const n = palabrasANumero(ws.slice(0, k));
+        if (n != null && n >= 100 && n <= 999_999) return `${pre.toUpperCase()}-${n}${ws.length > k ? ' ' + ws.slice(k).join(' ') : ''}`;
+      }
+      return todo;
+    });
   }
+
+  // códigos mal oídos («APF-1001», «P1001») que corresponden a un código real de la cartera (mismo número): solo si
+  // las letras se parecen al prefijo (hasta 2 cambios) y están en mayúsculas, para no tocar «en 1001» ni «UF 7100»
+  const porNumero = new Map<string, string>();
+  for (const c of codigos) {
+    const m = /^([A-Z]{2,4})-(\d{3,6})$/.exec(c);
+    if (m) porNumero.set(m[2], c);
+  }
+  if (porNumero.size)
+    t = t.replace(/\b([A-ZÁÉÍÓÚÑ]{1,4})[-\s]?(\d{3,6})\b/g, (todo, letras: string, n: string) => {
+      const c = porNumero.get(n);
+      if (!c || SIN_CODIGO.has(sinTildes(letras).toUpperCase()) || distancia(sinTildes(letras).toUpperCase(), c.split('-')[0]) > 2) return todo;
+      return c;
+    });
   return { texto: t, avisos: [...avisos] };
 }
 
@@ -190,7 +259,9 @@ export class TranscripcionService {
   private readonly log = new Logger('Transcripcion');
   private readonly openai?: string;
   private readonly prod: boolean;
-  private readonly vocab = new Map<string, { en: number; prompt: string; prefijos: string[] }>();
+  /** el modelo de transcripción (público para poder compararlo en pruebas) */
+  modelo = MODELO;
+  private readonly vocab = new Map<string, { en: number; prompt: string; prefijos: string[]; codigos: string[] }>();
 
   constructor(
     private readonly db: PrismaService,
@@ -250,7 +321,8 @@ export class TranscripcionService {
     ]
       .filter(Boolean)
       .join(' ');
-    const r = { en: Date.now(), prompt, prefijos };
+    const codigos = props.map((p) => p.codigo.toUpperCase());
+    const r = { en: Date.now(), prompt, prefijos, codigos };
     this.vocab.set(corredoraId, r);
     return r;
   }
@@ -285,22 +357,29 @@ export class TranscripcionService {
     const v = await this.vocabulario(corredoraId);
     let crudo: string;
     try {
-      crudo = await this.pedir(base, MODELO, audio, tipo, v.prompt);
+      crudo = await this.pedir(base, this.modelo, audio, tipo, v.prompt);
     } catch (e) {
       if ((e as { status?: number }).status !== 404)
         throw new BadRequestException(`No se pudo transcribir el audio: ${(e as Error).message}`);
-      try {
-        crudo = await this.pedir(base, MODELO_RESPALDO, audio, tipo, v.prompt);
-      } catch (e2) {
-        throw new BadRequestException(`No se pudo transcribir el audio: ${(e2 as Error).message}`);
+      let ultimo: unknown = e;
+      let hecho: string | null = null;
+      for (const m of MODELOS_RESPALDO) {
+        try {
+          hecho = await this.pedir(base, m, audio, tipo, v.prompt);
+          break;
+        } catch (e2) {
+          ultimo = e2;
+        }
       }
+      if (hecho == null) throw new BadRequestException(`No se pudo transcribir el audio: ${(ultimo as Error).message}`);
+      crudo = hecho;
     }
-    let { texto, avisos } = normalizarTranscripcion(crudo, v.prefijos);
+    let { texto, avisos } = normalizarTranscripcion(crudo, v.prefijos, v.codigos);
     let reintento = false;
     if (avisos.length) {
       // el modelo a veces escribe mal los números largos en dígitos: se vuelve a pedir con esos números en letras
       try {
-        const otro = normalizarTranscripcion(await this.pedir(base, MODELO, audio, tipo, `${v.prompt} ${REGLA_LETRAS}`), v.prefijos);
+        const otro = normalizarTranscripcion(await this.pedir(base, this.modelo, audio, tipo, `${v.prompt} ${REGLA_LETRAS}`), v.prefijos, v.codigos);
         if (otro.avisos.length < avisos.length) {
           ({ texto, avisos } = otro);
           reintento = true;
