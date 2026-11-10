@@ -307,6 +307,11 @@ Agenda muestra los eventos agrupados por día, con filtros de rango y tipo, que 
 
 Finanzas muestra las comisiones de los negocios (`negListar`): las ganadas y perdidas del período, las que están en curso, el detalle por corredor (solo el administrador) y los negocios que aún no tienen comisión. El proceso principal ya filtra por perfil, así que el corredor ve solo sus negocios. La facturación (boletas y facturas) queda para la etapa 4. Bajo 1600 px de ancho, `styles.css` oculta las pestañas Arriendos y Finanzas.
 
+**0.18.2 (2026-11-10):**
+- Con la IA del servidor de Asset ya no se cobra la billetera local de tokens (`ai.js`: `costOf`, `agentCheck`, `agentCharge`); al acabarse los 5 de bienvenida, el equipo por WhatsApp respondía «No te quedan tokens».
+- Conectar Portalfirma desde Configuración › Integraciones vuelve a Integraciones al terminar (antes quedaba en «Conecta tu cuenta»).
+- `yarn dev` guarda sus datos en «PortalFirma Asset (desarrollo)» (no comparte la sesión con el Asset instalado).
+
 **0.18.1 (2026-11-10):**
 - Sin sesión de Asset la app ya no lee ni envía WhatsApp por su cuenta (`WA_LOCAL` en `main.js`, solo con `PF_MOCK`): antes volvía al modo antiguo y respondía en paralelo con el servidor, sin clave de IA («Falta la clave de API del asistente»).
 - Al conectar wechatia (`pv:claveWa`) se espera a que el servidor tenga la clave y se relee la conexión: la pantalla muestra «conectado» de inmediato.
