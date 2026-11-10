@@ -33,7 +33,7 @@ function aFicha(a) {
   return o;
 }
 
-function crear({ inmo, negocios, agenda, ml, pf, cambiarPropiedad, docs, pubs, est, docgen, dictado, formatos = null, firmas = null, acceso = null }) {
+function crear({ inmo, negocios, agenda, ml, pf, cambiarPropiedad, docs, pubs, est, docgen, dictado, formatos = null, firmas = null, acceso = null, leads = () => null }) {
   const negsVisibles = () => negocios.listar().negocios.filter((n) => !acceso || acceso.verNegocio(n)); // 0.16.27 · el corredor ve sus negocios
   // ---------- resolución de referencias (el modelo puede decir «CV-5514», «la casa de Colina» o «Ana Rojas») ----------
   const varias = (tipo, l, f) => err(`Hay ${l.length} ${tipo} que coinciden: ${l.slice(0, 6).map(f).join(' | ')}. Pregunta al usuario cuál.`);
@@ -51,7 +51,7 @@ function crear({ inmo, negocios, agenda, ml, pf, cambiarPropiedad, docs, pubs, e
     const all = inmo.listar().personas; const r = norm(ref); const rr = cleanRut(ref);
     let l = all.filter((c) => c.id === ref || (rr.length > 6 && cleanRut(c.rut) === rr));
     if (!l.length) { const tok = r.split(/\s+/).filter((t) => t.length > 1); l = all.filter((c) => tok.every((t) => norm(c.nombre + ' ' + c.email).includes(t))); }
-    if (!l.length) { if (opcional) return null; throw err(`No encontré a «${ref}» en el CRM. Puedes crearla con asset_crear_persona (necesita nombre y RUT).`); }
+    if (!l.length) { if (opcional) return null; throw err(`No encontré a «${ref}» en el CRM. Puedes crearla con asset_crear_persona (necesita el nombre; el RUT es opcional).`); }
     if (l.length > 1) throw varias('personas', l, (c) => `${c.nombre} ${c.rut}`);
     return l[0];
   }
@@ -100,17 +100,17 @@ function crear({ inmo, negocios, agenda, ml, pf, cambiarPropiedad, docs, pubs, e
     const vis = c || nueva; const fecha = a.fecha || hoy();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) throw err('La fecha debe ir como AAAA-MM-DD.');
     const t = await plantillaOrden();
-    const { f: form, pfId, aviso } = await docs.getForms(t.template_version_id, p); const values = {}; const faltan = [];
+    const { f: form, pfId, aviso } = await docs.getForms(t.template_version_id, p); const values = {}; const faltan = []; const resumen = [];
     const op = p.arriendo && !p.venta ? 'arriendo' : 'venta';
     for (const g of form.groups || []) for (const v of g.variables || []) {
       const k = norm(v.name + ' ' + v.label); let val = null;
       if (/fecha/.test(k)) val = fecha;
       else if (g.type === 'signer') val = /rut/.test(k) ? inmo.fmtRut(vis.rut) : /correo|email|mail/.test(k) ? (vis.email || a.email || '') : /telefono|fono|celular/.test(k) ? (vis.telefono || a.telefono || '') : /nombre/.test(k) ? vis.nombre : null;
       else val = docs.valorInmueble(v, p, op)[0];
-      if (val) values[v.id] = String(val); else if (v.required) faltan.push(v.kind === 'image' || v.input_type === 'image' ? 'una foto de la propiedad' : /corredor/.test(k) ? `${v.label.toLowerCase()} (pídeselo al usuario y pásalo en corredor_nombre / corredor_email: queda guardado en la cuenta)` : `${v.label.toLowerCase()} de la propiedad`);
+      if (val) { values[v.id] = String(val); resumen.push({ campo: v.label, valor: v.kind === 'image' || v.input_type === 'image' ? '(foto de la propiedad)' : String(val).slice(0, 120) }); } else if (v.required) faltan.push(v.kind === 'image' || v.input_type === 'image' ? 'una foto de la propiedad' : /corredor/.test(k) ? `${v.label.toLowerCase()} (pídeselo al usuario y pásalo en corredor_nombre / corredor_email: queda guardado en la cuenta)` : `${v.label.toLowerCase()} de la propiedad`);
     }
     if (faltan.length) throw err(`Para la orden de visita faltan: ${faltan.join(', ')}.${aviso ? ' ' + aviso : ''} Completa la ficha y vuelve a intentarlo.`);
-    return { p, c, nueva, fecha, t, pfId, values, aviso };
+    return { p, c, nueva, fecha, t, pfId, values, aviso, resumen };
   }
 
   // 0.16.17 · orden de visita con el formato propio de la corredora (si la cuenta lo tiene): sale de la ficha y del CRM
@@ -220,10 +220,14 @@ function crear({ inmo, negocios, agenda, ml, pf, cambiarPropiedad, docs, pubs, e
         return { ok: true, guardado, dudas: r.dudas, portal: msgs, sigueFaltando: sg.bloque ? { bloque: sg.bloque.t, pedir: sg.pedir } : null, ...datos('propiedades') }; } },
     { name: 'asset_cambiar_estado', modo: 'escribir', description: 'Cambia el estado comercial (disponible, reservada, vendida, arrendada, no_disponible). Pausa o reactiva el aviso del portal solo.', parameters: S({ propiedad: REF_PROP, operacion: en(['venta', 'arriendo']), estado: en(['disponible', 'reservada', 'vendida', 'arrendada', 'no_disponible']) }, ['propiedad', 'operacion', 'estado']),
       run: async (a) => { const p = prop(a.propiedad); if (!p[a.operacion]) throw err(`${p.codigo} no está en ${a.operacion}.`); const msgs = await cambiarPropiedad(p.id, { [a.operacion === 'venta' ? 'estadoVenta' : 'estadoArriendo']: a.estado }); return { ok: true, propiedad: resumenProp(inmo.obtener(p.id)), portal: msgs, ...datos('propiedades') }; } },
-    { name: 'asset_crear_persona', modo: 'escribir', description: 'Agrega una persona al CRM (RUT único). Opcionalmente la vincula a una propiedad con su rol.', parameters: S({ nombre: str('Nombre o razón social'), rut: str('RUT'), email: str('Correo'), telefono: str('Teléfono'), roles: { type: 'array', items: en(ROLES) }, tipo: en(['natural', 'juridica']), direccion: str('Dirección'), estado_civil: str('Estado civil'), profesion: str('Profesión'), notas: str('Notas'), propiedad: REF_PROP, rol_en_propiedad: en(ROLES) }, ['nombre', 'rut']),
+    { name: 'asset_crear_persona', modo: 'escribir', description: 'Agrega una persona al CRM. El RUT es OPCIONAL (un interesado puede no tenerlo aún; si lo da debe ser válido y es único). Opcionalmente la vincula a una propiedad con su rol. Para un interesado que llegó por un portal, Instagram o un referido, mejor usa asset_crear_lead.', parameters: S({ nombre: str('Nombre o razón social'), rut: str('RUT (opcional)'), email: str('Correo'), telefono: str('Teléfono'), roles: { type: 'array', items: en(ROLES) }, tipo: en(['natural', 'juridica']), direccion: str('Dirección'), estado_civil: str('Estado civil'), profesion: str('Profesión'), notas: str('Notas'), propiedad: REF_PROP, rol_en_propiedad: en(ROLES) }, ['nombre']),
       run: async (a) => { const c = await inmo.guardarPersona({ nombre: a.nombre, rut: a.rut, email: a.email, telefono: a.telefono, roles: a.roles || (a.rol_en_propiedad ? [a.rol_en_propiedad] : []), tipo: a.tipo, direccion: a.direccion, estadoCivil: a.estado_civil, profesion: a.profesion, notas: a.notas });
         let p = null; if (a.propiedad) { p = prop(a.propiedad); await inmo.vincular(p.id, c.id, a.rol_en_propiedad || 'interesado'); }
         return { ok: true, persona: { id: c.id, nombre: c.nombre, rut: c.rut }, vinculadaA: p?.codigo || null, ...datos('personas') }; } },
+    { name: 'asset_crear_lead', modo: 'escribir', description: 'Registra un LEAD (interesado que llegó por un portal, Instagram, un referido o el teléfono) en Leads, SIN pedir RUT y SIN escribirle al cliente (no queda atendido por Sofía). Guarda lo que busca. Si ya hay un lead con ese celular o correo, no lo duplica. Para alguien que ya es cliente del CRM (comprador, arrendatario, propietario) usa asset_crear_persona.', parameters: S({ nombre: str('Nombre'), telefono: str('Celular'), email: str('Correo'), canal: en(['whatsapp', 'instagram', 'facebook', 'email', 'portal', 'web', 'referido', 'otro'], 'Por dónde llegó'), operacion: en(['venta', 'arriendo'], 'Qué busca'), tipo: str('Tipo de propiedad (departamento, casa…)'), comunas: { type: 'array', items: { type: 'string' }, description: 'Comunas de interés' }, presupuesto: num('Presupuesto máximo'), moneda: en(['CLP', 'UF']), dormitorios: num('Dormitorios'), banos: num('Baños'), notas: str('Notas'), proxima_accion: str('Próxima acción para el corredor'), fecha_proxima_accion: str('AAAA-MM-DD') }),
+      run: async (a) => { const L = leads(); if (!L) throw err('Leads no está disponible.');
+        const r = L.crearManual({ nombre: a.nombre, telefono: a.telefono, email: a.email, origen: a.canal || 'otro', busqueda: { operacion: a.operacion, tipo: a.tipo, comunas: a.comunas, presupuesto: a.presupuesto, moneda: a.moneda, dormitorios: a.dormitorios, banos: a.banos }, notas: a.notas, proximaAccion: a.proxima_accion ? { texto: a.proxima_accion, fecha: a.fecha_proxima_accion || null } : null });
+        return { ok: true, yaExistia: r.yaExistia, lead: { id: r.lead.id, nombre: r.lead.nombre, telefono: r.lead.telefono, estado: r.lead.estadoTxt || r.lead.estado }, indicacion: r.yaExistia ? 'Ya existía un lead con ese celular o correo: no se duplicó.' : 'Quedó en Leads y también en Personas. No se le escribió al cliente.', ...datos('leads') }; } },
     { name: 'asset_vincular_persona', modo: 'escribir', description: 'Vincula una persona del CRM a una propiedad con un rol (propietario, arrendatario, comprador, codeudor, interesado).', parameters: S({ propiedad: REF_PROP, persona: REF_PER, rol: en(ROLES) }, ['propiedad', 'persona', 'rol']),
       run: async (a) => { const p = prop(a.propiedad); const c = persona(a.persona); await inmo.vincular(p.id, c.id, a.rol); return { ok: true, texto: `${c.nombre} vinculado a ${p.codigo} como ${a.rol}`, ...datos('propiedades') }; } },
     { name: 'asset_nota', modo: 'escribir', description: 'Agrega una nota al historial de una propiedad, una persona o un negocio.', parameters: S({ propiedad: REF_PROP, persona: REF_PER, negocio: REF_NEG, texto: str('La nota') }, ['texto']),
@@ -256,6 +260,17 @@ function crear({ inmo, negocios, agenda, ml, pf, cambiarPropiedad, docs, pubs, e
         return { ok: true, evento: resumenEv(e), ...(hito ? { negocio: hito } : {}), efectos: { datos: hito ? 'negocios' : 'agenda' } }; } },
     { name: 'asset_actualizar_evento', modo: 'escribir', description: 'Reprograma, marca como hecho o cancela un evento de la agenda.', parameters: S({ evento: str('Id del evento (de asset_agenda)'), fecha: str('AAAA-MM-DD'), hora: str('HH:MM'), estado: en(['programado', 'hecho', 'cancelado']), notas: str('Notas') }, ['evento']),
       run: async (a) => { const { evento, ...o } = a; const e = agenda.actualizar(evento, Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined))); return { ok: true, evento: resumenEv(e), ...datos('agenda') }; } },
+    { name: 'asset_revisar_orden_visita', modo: 'leer', description: 'Arma la ORDEN de visita para REVISARLA ANTES de enviarla: muestra los datos que llevaría el documento y qué falta. NO la envía a firmar, NO cobra y NO agenda. Úsala cuando pidan «prepárala», «déjala lista» o «para revisarla». Cuando pidan enviarla o mandarla a firmar, usa asset_orden_visita (con los mismos datos).', parameters: S({ propiedad: REF_PROP, visitante: str('Persona del CRM (id, RUT o nombre) o nombre completo si es nueva'), rut: str('RUT del visitante si es nuevo'), email: str('Correo del visitante'), telefono: str('Teléfono del visitante'), fecha: str('Fecha de la visita AAAA-MM-DD'), hora: str('Hora HH:MM'), corredor_nombre: str('Nombre del corredor (si falta en la cuenta; queda guardado)'), corredor_email: str('Correo del corredor (si falta en la cuenta; queda guardado)'), operacion: en(['venta', 'arriendo'], 'Venta o arriendo'), otras_propiedades: { type: 'array', items: { type: 'string' }, description: 'Otras propiedades que el visitante verá' } }, ['propiedad', 'visitante']),
+      run: async (a) => {
+        const nota = 'La orden NO se envió, NO se cobró y NO se agendó. Muéstrale los datos para que los revise; si están bien, que pida enviarla (asset_orden_visita).';
+        if (usaFormatoOrden()) {
+          const r0 = await prepararOrdenPropia(a); // valida y lanza qué falta
+          const { p, c, base } = await datosOrden(a); const archivo = await formatos.vistaPrevia(base);
+          return { ok: true, enviada: false, listo: true, propiedad: `${p.codigo} · ${p.titulo}`, visitante: c.nombre, detalle: r0.detalle, archivo, indicacion: nota + ' El borrador en PDF quedó guardado en este computador.' };
+        }
+        const x = await prepararOrden(a);
+        return { ok: true, enviada: false, listo: true, propiedad: `${x.p.codigo} · ${x.p.titulo}`, visitante: (x.c || x.nueva).nombre, fecha: x.fecha, hora: a.hora || null, plantilla: x.t.name, datosDelDocumento: x.resumen, aviso: x.aviso || null, indicacion: nota };
+      } },
     { name: 'asset_orden_visita', modo: 'confirmar', description: 'SOLO cuando el usuario pide explícitamente la ORDEN de visita (el documento que firma el visitante). Genera la «Orden de visita» de la Notaría virtual con los datos de la propiedad y del visitante, la envía a firmar (cobra del saldo) y agenda la visita. Si el visitante no está en el CRM, pasa nombre y RUT.', parameters: S({ propiedad: REF_PROP, visitante: str('Persona del CRM (id, RUT o nombre) o nombre completo si es nueva'), rut: str('RUT del visitante si es nuevo'), email: str('Correo del visitante'), telefono: str('Teléfono del visitante'), fecha: str('Fecha de la visita AAAA-MM-DD'), hora: str('Hora HH:MM'), corredor_nombre: str('Nombre del corredor (si falta en la cuenta; queda guardado)'), corredor_email: str('Correo del corredor (si falta en la cuenta; queda guardado)'), operacion: en(['venta', 'arriendo'], 'Venta o arriendo (si la propiedad va en ambas y no hay negocio con el visitante)'), otras_propiedades: { type: 'array', items: { type: 'string' }, description: 'Otras propiedades que el visitante verá (van en la misma orden)' } }, ['propiedad', 'visitante']),
       preparar: async (a) => { if (usaFormatoOrden()) return prepararOrdenPropia(a); const x = await prepararOrden(a); a.__orden = x; return { titulo: 'Generar la orden de visita y enviarla a firmar', detalle: [`Propiedad: ${x.p.codigo} · ${x.p.titulo}`, `Dirección: ${[x.p.direccion, x.p.unidad, x.p.comuna].filter(Boolean).join(', ')}`, `Visitante: ${(x.c || x.nueva).nombre} · ${inmo.fmtRut((x.c || x.nueva).rut)}${x.nueva ? ' (se agrega al CRM)' : ''}`, `Fecha de la visita: ${x.fecha}${a.hora ? ' ' + a.hora : ''}`, `Plantilla: ${x.t.name}`], aviso: `${x.aviso ? x.aviso + ' ' : ''}Se cobra del saldo de Portalfirma y el visitante recibe el enlace para firmar. La visita queda en la agenda.` }; },
       run: async (a) => { if (usaFormatoOrden()) return enviarOrdenPropia(a); const x = a.__orden || await prepararOrden(a); const c = x.c || await inmo.guardarPersona(x.nueva);

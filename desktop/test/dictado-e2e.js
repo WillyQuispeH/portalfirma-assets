@@ -32,11 +32,11 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     await w.click('.ga-dc [data-crear]'); await w.waitForSelector('.ga.hecha:has-text("creada dictando")');
     const p = (await w.evaluate(() => window.pf.inmoListar().then((r) => r.data))).propiedades.find((x) => /Tranque/.test(x.direccion || ''));
     ok(p && p.tipo === 'departamento' && p.arriendo && p.precioArriendo.valor === 850000 && p.dormitorios === 3 && p.banos === 3 && p.supUtil === 85 && p.estacionamientos === 1 && p.bodegas === 1 && /piso 7/.test(p.notasInternas) && p.etiquetas.includes('Piso flotante'), `crea la propiedad ${p?.codigo} con todo lo dictado`);
-    await w.waitForSelector('.ag-sig.sug2 button:has-text("Cargar fotos desde Drive")'); ok(true, 'y sugiere cargar las fotos desde Drive, ver la ficha, gestionar o publicar');
+    await w.waitForSelector('.ag-sig.sug2 button:has-text("Fotos desde Drive")'); ok(true, 'y sugiere subir fotos, traerlas de Drive, ver la ficha, gestionar o publicar');
     // 3b. fotos desde Google Drive (selector simulado): se bajan, se pasan a JPG y se ven en la ficha
     await app.evaluate(({ nativeImage }) => { const png = nativeImage.createFromDataURL('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAAAwCAIAAAAuKetIAAAAU0lEQVR4nO3PQQ3AIADAQEANmlCMrIngcVnSU9DOfe74s6UDXjWgNaA1oDWgNaA1oDWgNaA1oDWgNaA1oDWgNaA1oDWgNaA1oDWgNaA1oDWgNaB9kvcBqqohxzcAAAAASUVORK5CYII=').toPNG();
       global.__driveFotos = [{ id: 'fotoA1', name: 'living.png', mimeType: 'image/png', bytes: png }, { id: 'fotoB2', name: 'cocina.png', mimeType: 'image/png', bytes: png }, { id: 'fotoC3', name: 'IMG_0001.HEIC', mimeType: 'image/heic', bytes: Buffer.from('no-es-imagen') }]; });
-    await w.click('.ag-sig.sug2 button:has-text("Cargar fotos desde Drive")'); await w.waitForSelector('#mOk:has-text("Conectar")'); await w.click('#mOk');
+    await w.click('.ag-sig.sug2 button:has-text("Fotos desde Drive")'); await w.waitForSelector('#mOk:has-text("Conectar")'); await w.click('#mOk');
     await w.waitForSelector('text=fotos cargadas', { timeout: 15000 });
     ok(/2 fotos cargadas/.test(await txt('body')) && /IMG_0001\.HEIC/.test(await txt('body')), 'carga las fotos elegidas y avisa la que no pudo leer');
     ok(await app.evaluate(() => global.__drivePickQuery) === 'Avenida del Tranque 1234', 'el selector de Drive se abre buscando la dirección de la propiedad');

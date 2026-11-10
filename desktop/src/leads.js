@@ -535,6 +535,23 @@ Reglas: «lucas» = miles de pesos (290 lucas = 290000 CLP). Usa solo lo que dic
       proximaAccion: null, personaId, notas: '', creado: now(), actualizado: now(), mensajes: 0, ultimo: null, noLeidos: 0, importaciones: [], wa: true, atiende: 'agente' };
     db().leads.unshift(l); evento(l, 'Llegó por WhatsApp de la empresa', 'canal'); sync(l); save(); emit({ type: 'datos', que: 'leads', id: l.id }); return l;
   }
+  // alta a mano (p. ej. «registra un lead» al Agente): sin RUT y sin escribirle al cliente (no queda atendido por Sofía)
+  function crearManual({ nombre = '', telefono = '', email = '', origen = 'otro', busqueda = null, notas = '', proximaAccion = null } = {}) {
+    nombre = String(nombre || '').trim().slice(0, 120); telefono = String(telefono || '').trim().slice(0, 40); email = String(email || '').trim().toLowerCase().slice(0, 120);
+    if (!nombre && !telefono && !email) throw err('Indica al menos el nombre, el celular o el correo del lead.');
+    if (telefono && dig(telefono).length < 8) throw err('El celular no es válido.');
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw err('El correo no es válido.');
+    const ya = (telefono && porTelefono(telefono)) || (email && db().leads.find((x) => String(x.email || '').toLowerCase() === email)) || null;
+    if (ya) return { lead: vista(ya), yaExistia: true };
+    const b = busqueda || {}; const n = (v) => (v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
+    const l = { id: uid(), nombre, chatCon: nombre || telefono || email, telefono, email, rut: '', origen: ORIGENES[origen] ? origen : 'otro', broker: broker().nombre || '', estado: 'nuevo',
+      busqueda: { operacion: ['arriendo', 'venta'].includes(b.operacion) ? b.operacion : null, tipo: b.tipo ? String(b.tipo).slice(0, 40) : null, comunas: (Array.isArray(b.comunas) ? b.comunas : []).map(String).filter(Boolean).slice(0, 8),
+        presupuesto: n(b.presupuesto) ? { valor: n(b.presupuesto), moneda: b.moneda === 'UF' ? 'UF' : 'CLP' } : null, dormitorios: n(b.dormitorios), banos: n(b.banos), estacionamiento: null, mascotas: null, plazo: null, otros: [] },
+      resumen: '', propiedades: [], links: [], proximaAccion: proximaAccion && proximaAccion.texto ? { texto: String(proximaAccion.texto).slice(0, 160), fecha: proximaAccion.fecha || null, manual: true } : null,
+      personaId: null, notas: String(notas || '').slice(0, 2000), creado: now(), actualizado: now(), mensajes: 0, ultimo: null, noLeidos: 0, importaciones: [] };
+    db().leads.unshift(l); evento(l, `Registrado a mano (${ORIGENES[l.origen]})`, 'canal'); sync(l); save(); emit({ type: 'datos', que: 'leads', id: l.id });
+    return { lead: vista(l), yaExistia: false };
+  }
   function atencion(id, quien) { const l = lead(id); if (!['agente', 'corredor'].includes(quien)) throw err('Valor no válido.'); l.atiende = quien; l.wa = true; l.actualizado = now(); save(); emit({ type: 'datos', que: 'leads', id }); return vista(l); }
   const mediaDir = () => base();
   // 0.16.18 · WhatsApp rechazó un mensaje que ya figuraba como enviado: queda marcado «No entregado»
@@ -544,7 +561,7 @@ Reglas: «lucas» = miles de pesos (290 lucas = 290000 CLP). Usa solo lo que dic
   // ¿la persona escribió en las últimas 24 h? (lo que Asset tiene registrado de la conversación)
   function escribioEn24(telefono) { const l = porTelefono(telefono); if (!l) return false; const lim = Date.now() - 24 * 36e5;
     return mensajesDe(l.id).some((m) => m.de === 'cliente' && new Date(String(m.fecha).replace(' ', 'T')).getTime() > lim); }
-  return { traerMensajes, subirLocales, fusionar, repararDuplicados, asignar, registrarEvento, sincronizarTodos, registrarCanal, consentir, analizarInstagram, importarInstagram, consentimientos, marcarFallido, escribioEn24, porTelefono, registrarWa, atencion, crearDesdeWa, analizar, importar, analizarConIA, listar, obtener, actualizar, borrar, mediaDir, ESTADOS, ORIGENES, _db: db };
+  return { traerMensajes, subirLocales, fusionar, repararDuplicados, asignar, registrarEvento, sincronizarTodos, registrarCanal, consentir, analizarInstagram, importarInstagram, consentimientos, marcarFallido, escribioEn24, porTelefono, registrarWa, atencion, crearDesdeWa, crearManual, analizar, importar, analizarConIA, listar, obtener, actualizar, borrar, mediaDir, ESTADOS, ORIGENES, _db: db };
 }
 
 module.exports = { crear, parsear, leerExportacion, nombreDelChat, ESTADOS };

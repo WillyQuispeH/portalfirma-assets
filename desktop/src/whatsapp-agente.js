@@ -73,15 +73,18 @@ function crear({ store, wa, crearAgente, locales, dictado, inmo, convs, leads = 
     const l = [`*${c.titulo || 'Propiedad nueva'}*`, [c.tipo, op].filter(Boolean).join(' en '), [c.direccion, c.unidad ? 'depto. ' + c.unidad : '', c.comuna].filter(Boolean).join(', '),
       [c.dormitorios != null && `${c.dormitorios}D`, c.banos != null && `${c.banos}B`, c.supUtil != null && `${c.supUtil} m² útiles`, c.supTotal != null && `${c.supTotal} m² totales`].filter(Boolean).join(' · '),
       [c.precioVenta && 'Venta ' + pr(c.precioVenta), c.precioArriendo && 'Arriendo ' + pr(c.precioArriendo), c.gastosComunes && 'GC $' + Number(c.gastosComunes).toLocaleString('es-CL')].filter(Boolean).join(' · '),
-      (c.caracteristicas || []).length ? 'Incluye: ' + c.caracteristicas.join(', ') : ''].filter(Boolean);
-    return `${l.join('\n')}${f.length ? `\n\nMe falta: ${f.map((x) => x.t.toLowerCase()).join(', ')}.` : ''}${(c.dudas || []).length ? '\nOjo: ' + c.dudas.join(' ') : ''}\n\nResponde *CREAR* para guardarla, o dime qué corregir o agregar.`;
+      (c.caracteristicas || []).length ? 'Incluye: ' + c.caracteristicas.join(', ') : '',
+      c.propietario ? 'Propietario: ' + [c.propietario.nombre, c.propietario.rut, c.propietario.telefono, c.propietario.email].filter(Boolean).join(' · ') : ''].filter(Boolean);
+    return `${l.join('\n')}${f.length ? `\n\nMe falta: ${f.map((x) => x.t.toLowerCase()).join(', ')}.` : ''}${(c.dudas || []).length ? '\nOjo: ' + c.dudas.join(' ') : ''}${dictado.avisos(c).map((x) => '\n⚠️ ' + x).join('')}\n\nResponde *CREAR* para guardarla, o dime qué corregir o agregar.`;
   }
   async function crearDesdeFicha() {
     const c = S.ficha.campos; const f = dictado.faltan(c).filter((x) => ['tipo', 'operacion', 'direccion'].includes(x.id));
     if (f.length) return enviar(`Para crearla necesito al menos: ${f.map((x) => x.t.toLowerCase()).join(', ')}.`);
-    const p = await inmo.guardarPropiedad(dictado.aFicha(c)); inmo.registrar(p.id, 'Propiedad creada dictando por WhatsApp'); inmo.guardar(); S.ficha = null;
+    const p = await inmo.guardarPropiedad(dictado.aFicha(c)); inmo.registrar(p.id, 'Propiedad creada dictando por WhatsApp');
+    const pr = await dictado.registrarPropietario(inmo, p.id, c.propietario); inmo.guardar(); S.ficha = null;
     emitUI({ type: 'datos', que: 'propiedades' });
-    return enviar(`Listo: *${p.codigo}* · ${p.titulo} quedó en tu cartera.\nPara las fotos, mándamelas por aquí con el código *${p.codigo}* en el mensaje, o súbelas en Asset desde la ficha.`);
+    const dueno = !pr ? '' : pr.ok ? `\nPropietario: *${pr.nombre}*${pr.rut ? ' (' + pr.rut + ')' : ''} quedó registrado y vinculado.` : `\n⚠️ No pude registrar al propietario${pr.nombre ? ' ' + pr.nombre : ''}: ${pr.motivo}. La propiedad quedó creada sin propietario; dime el dato corregido y lo agrego.`;
+    return enviar(`Listo: *${p.codigo}* · ${p.titulo} quedó en tu cartera.${dueno}\nPara las fotos, mándamelas por aquí con el código *${p.codigo}* en el mensaje, o súbelas en Asset desde la ficha.`);
   }
 
   // ---------- un mensaje del celular vinculado ----------

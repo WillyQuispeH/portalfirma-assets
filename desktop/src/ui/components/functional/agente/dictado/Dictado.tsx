@@ -76,7 +76,7 @@ function Ficha({ r, transcripcion, alCorregir }: { r: any; transcripcion: string
       tipo: t.tipo || null, venta: ck.venta, arriendo: ck.arriendo, amoblado: ck.amoblado,
       precioVenta: t.precioVenta.trim() ? { valor: t.precioVenta.trim(), moneda: t.precioVentaM } : null,
       precioArriendo: t.precioArriendo.trim() ? { valor: t.precioArriendo.trim(), moneda: t.precioArriendoM } : null,
-      caracteristicas: t.caracteristicas.split(',').map((x) => x.trim()).filter(Boolean), piso: c.piso, antiguedad: c.antiguedad, orientacion: c.orientacion, ficha: c.ficha,
+      caracteristicas: t.caracteristicas.split(',').map((x) => x.trim()).filter(Boolean), piso: c.piso, antiguedad: c.antiguedad, orientacion: c.orientacion, ficha: c.ficha, propietario: c.propietario ?? null,
       ...(dir.current?.valor() || {}),
     };
     o.direccion = dirRef.current?.value.trim() || null;
@@ -115,7 +115,10 @@ function Ficha({ r, transcripcion, alCorregir }: { r: any; transcripcion: string
     setCreando(true);
     let p: any; try { p = await api('dictCrear', leer()); } catch (er) { setCreando(false); return toast((er as Error).message, 5000); }
     const cola = f.length ? ` · faltó: ${f.map((x) => x.t.toLowerCase()).join(', ')}` : '';
-    terminar(<><b>{p.codigo}</b> · {p.titulo} creada dictando{cola}</>, `${p.codigo} · ${p.titulo} creada dictando`);
+    const pr = p.propietarioRegistro as { ok: boolean; nombre?: string; motivo?: string } | null;
+    const dueno = !pr ? '' : pr.ok ? ` · propietario registrado: ${pr.nombre}` : ` · ⚠️ no se pudo registrar al propietario (${pr.motivo})`;
+    if (pr && !pr.ok) toast(`La propiedad quedó creada, pero no pude registrar al propietario${pr.nombre ? ' ' + pr.nombre : ''}: ${pr.motivo}. Agrégalo desde la ficha.`, 9000);
+    terminar(<><b>{p.codigo}</b> · {p.titulo} creada dictando{cola}{dueno}</>, `${p.codigo} · ${p.titulo} creada dictando${dueno}`);
     try { await cartera(); } catch { /* se verá al refrescar */ }
     W.AssetRefrescar?.();
     Ag().contexto({ tipo: 'propiedad', id: p.id });

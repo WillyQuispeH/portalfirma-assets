@@ -921,8 +921,8 @@ handle('est:confirmar', async (id, per, texto, modo) => {
   const r = est.confirmada(id, per, texto); if (process.env.PF_MOCK === '1') (global.__abiertos ||= []).push(r.whatsapp); else shell.openExternal(r.whatsapp); return { ...r, automatico: false };
 });
 const pubs = require('./publicaciones').crear({ ml, ai: require('./ai'), cambiarPropiedad });
-const dictado = require('./dictado').crear({ ai: require('./ai'), estilo: () => inmo.config().estiloDescripcion || '' });
-const assetTools = require('./asset-tools').crear({ inmo, negocios, agenda, ml, pf, cambiarPropiedad, docs, pubs, est, docgen, dictado, formatos, firmas, acceso: { verNegocio: (n) => permisos.verNegocio(n) } });
+const dictado = require('./dictado').crear({ ai: require('./ai'), estilo: () => inmo.config().estiloDescripcion || '', validarRut: (r) => inmo.validRut(r) });
+const assetTools = require('./asset-tools').crear({ inmo, negocios, agenda, ml, pf, cambiarPropiedad, docs, pubs, est, docgen, dictado, formatos, firmas, acceso: { verNegocio: (n) => permisos.verNegocio(n) }, leads: () => leads });
 // 0.16.1 · WhatsApp a clientes desde el Agente (y desde el equipo por WhatsApp): ahora o programado (recordatorios)
 const cleanTel = (t) => String(t || '').replace(/\D/g, '');
 function destinoWa(a) {
@@ -1298,7 +1298,7 @@ handle('dict:mic', async () => { if (process.platform !== 'darwin') return true;
 handle('dict:transcribir', (o) => dictado.transcribir({ bytes: o?.bytes, mime: o?.mime }));
 handle('dict:extraer', (o) => dictado.extraer(o || {}));
 handle('dict:faltan', (o) => dictado.faltan(o || {}));
-handle('dict:crear', async (o) => { const p = await inmo.guardarPropiedad(dictado.aFicha(o || {})); inmo.registrar(p.id, 'Propiedad creada dictando'); inmo.guardar(); return p; });
+handle('dict:crear', async (o) => { const p = await inmo.guardarPropiedad(dictado.aFicha(o || {})); inmo.registrar(p.id, 'Propiedad creada dictando'); const propietarioRegistro = await dictado.registrarPropietario(inmo, p.id, (o || {}).propietario); inmo.guardar(); return { ...p, propietarioRegistro }; });
 handle('dg:buscar', (o) => docgen.buscar(o || {}));
 handle('dg:preparar', (o) => docgen.preparar(o || {}));
 handle('dg:redactar', (o) => docgen.redactar(o || {}));

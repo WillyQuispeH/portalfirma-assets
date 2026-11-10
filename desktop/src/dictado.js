@@ -7,6 +7,12 @@ const FC = require('./ficha-campos');
 const num = (v) => { if (v == null || v === '') return null; const n = Number(String(v).replace(/\./g, '').replace(',', '.').replace(/[^\d.-]/g, '')); return Number.isFinite(n) ? n : null; };
 const precio = (p) => { if (!p || typeof p !== 'object') return null; const v = num(p.valor); if (v == null || v <= 0) return null; const m = ['UF', 'CLP', 'USD'].includes(String(p.moneda).toUpperCase()) ? String(p.moneda).toUpperCase() : v < 50000 ? 'UF' : 'CLP'; return { valor: v, moneda: m }; };
 
+const propietarioDe = (x) => {
+  if (!x || typeof x !== 'object') return null;
+  const o = { nombre: String(x.nombre || '').trim().slice(0, 120), rut: String(x.rut || '').trim().slice(0, 20), email: String(x.email || '').trim().slice(0, 120), telefono: String(x.telefono || '').trim().slice(0, 40) };
+  return o.nombre || o.rut || o.email || o.telefono ? o : null;
+};
+
 // Estilo base de la descripción del aviso (punto de partida; se puede ajustar por empresa con config.estiloDescripcion)
 const ESTILO = `redacción profesional de corredora de propiedades, en tercera persona, tono sobrio y cálido, español neutro de Chile.
 2 o 3 párrafos breves: (1) qué es y dónde está en términos generales (tipo, comuna o sector, superficie); (2) distribución y terminaciones (dormitorios, baños, cocina, pisos, orientación, luz); (3) equipamiento, espacios comunes y entorno, solo si se mencionaron.
@@ -22,7 +28,9 @@ Devuelve SOLO un JSON con esta forma (usa null si no lo dijo; no inventes nada):
  "piso": número o null, "antiguedad": años o null, "orientacion": string o null, "caracteristicas": ["frases cortas: piscina, piso flotante, cocina amplia…"],
  "ficha": {solo los datos de la LISTA DE FICHA que se mencionaron, con su id: número, true/false o el texto de la opción más parecida; lo que tiene la propiedad (piscina, quincho, porcelanato, conserje…) va como true en su id; si dice que NO tiene algo, false},
  "titulo": "título del aviso (máx. 60 caracteres), ej.: Departamento 3D2B en Lo Barnechea", "descripcion": "descripción profesional para el aviso (ver ESTILO)",
+ "propietario": {"nombre": string o null, "rut": string o null, "email": string o null, "telefono": string o null} o null,
  "dudas": ["contradicciones o datos poco claros, en una frase cada una"]}
+PROPIETARIO: si el corredor dicta los datos del dueño, propietario o vendedor (nombre, RUT, teléfono, correo), ponlos en «propietario» TAL CUAL los dijo (el RUT sin corregirlo ni completarlo); si no los dijo, null.
 Reglas: «lucas» o «mil» = miles de pesos (850 lucas = 850000 CLP). Montos chicos con UF son UF. Si el corredor se corrige («cuatro dormitorios… no, tres»), usa lo último y anótalo en dudas.
 «Arriendo»/«se arrienda» → arriendo true; «venta»/«se vende» → venta true. Números dichos en palabras pásalos a cifras.
 ESTILO de la descripción: \${ESTILO}
@@ -39,7 +47,7 @@ function limpiarDescripcion(t) {
   const ps = String(t || '').split(/\n+/).map((p) => p.split(/(?<=[.!?])\s+/).map(frase).filter(Boolean).join(' ').trim()).filter(Boolean);
   return ps.join('\n\n').replace(/\bdepto\.?\b/gi, 'departamento').replace(/!+/g, '.').trim();
 }
-function crear({ ai, estilo = () => '' }) {
+function crear({ ai, estilo = () => '', validarRut = () => true }) {
   // qué falta para que la ficha quede lista para publicar
   function faltan(o) {
     // 0.16.14 · lo CLAVE de los bloques «esencial» y «portales» según el tipo (ej. el N° de depto en un departamento)
@@ -69,6 +77,7 @@ function crear({ ai, estilo = () => '' }) {
     o.amoblado = j.amoblado === true ? true : j.amoblado === false ? false : null;
     o.caracteristicas = [...new Set((Array.isArray(j.caracteristicas) ? j.caracteristicas : []).map((x) => String(x).trim()).filter(Boolean))].slice(0, 15);
     o.titulo = String(j.titulo || '').trim().replace(/\bdepto\.?\b/gi, 'Departamento').slice(0, 60); o.descripcion = limpiarDescripcion(j.descripcion).slice(0, 3000);
+    o.propietario = propietarioDe(j.propietario);
     o.dudas = (Array.isArray(j.dudas) ? j.dudas : []).map((x) => String(x).trim()).filter(Boolean).slice(0, 6);
     o.ficha = FC.limpiarFicha(j.ficha && typeof j.ficha === 'object' ? j.ficha : {});
     if (o.piso != null && o.ficha.pisoUnidad == null) o.ficha.pisoUnidad = o.piso;
@@ -121,7 +130,25 @@ ${FC.guiaIA(p)}`;
       descripcion: o.descripcion || '', etiquetas: o.caracteristicas || [], ficha: o.ficha || {}, notasInternas: ['Creada dictando en Asset.', extra.length ? 'Además: ' + extra.join(', ') + '.' : ''].filter(Boolean).join(' '),
       ...(o.lat != null ? { lat: o.lat, lng: o.lng, placeId: o.placeId } : {}) };
   }
-  return { extraer, transcribir, faltan, normalizar, aFicha, limpiarDescripcion, completar };
+  // avisos ANTES de crear: lo dictado que no se va a poder guardar tal cual (p. ej. un RUT con el dígito verificador malo)
+  function avisos(o) {
+    const pr = o && o.propietario; const l = [];
+    if (pr && pr.rut && !validarRut(pr.rut)) l.push(`El RUT del propietario (${pr.rut}) no es válido: el dígito verificador no calza.`);
+    if (pr && !pr.nombre) l.push('Falta el nombre del propietario.');
+    return l;
+  }
+  // guarda al propietario dictado en el CRM y lo vincula a la propiedad. Nunca lanza: devuelve qué pasó
+  // ({ ok, nombre, rut } o { ok: false, nombre, motivo }) o null si no se dictó propietario
+  async function registrarPropietario(inmo, propId, pr) {
+    pr = propietarioDe(pr); if (!pr) return null;
+    if (!pr.nombre) return { ok: false, nombre: '', motivo: 'falta el nombre del propietario' };
+    try {
+      const c = await inmo.guardarPersona({ nombre: pr.nombre, rut: pr.rut, email: pr.email, telefono: pr.telefono, roles: ['propietario'] });
+      await inmo.vincular(propId, c.id, 'propietario');
+      return { ok: true, nombre: c.nombre, rut: c.rut || '' };
+    } catch (e) { return { ok: false, nombre: pr.nombre, motivo: String(e.message || e).replace(/\.$/, '') }; }
+  }
+  return { extraer, transcribir, faltan, normalizar, aFicha, limpiarDescripcion, completar, avisos, registrarPropietario };
 }
 
 module.exports = { crear, limpiarDescripcion, ESTILO };

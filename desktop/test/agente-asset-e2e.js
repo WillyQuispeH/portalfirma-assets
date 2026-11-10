@@ -19,7 +19,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     await w.click('#agBtn'); await w.waitForSelector('#agDrawer:not(.hidden)');
     ok(/Agente Asset/.test(await txt('#agDrawer')) && !(await w.$('.ag-sug')), 'el Agente Asset abre despejado (sin sugerencias de ejemplo)');
     await w.click('#agMore'); await w.click('#agTools'); await w.waitForSelector('.ag-tl > div'); const nt = (await w.$$('.ag-tl > div')).length; await w.click('#agOk');
-    ok(nt >= 13 + 32, `dispone de las herramientas de Asset (32) y las 13 del MCP (${nt})`);
+    ok(nt >= 13 + 34, `dispone de las herramientas de Asset (34) y las 13 del MCP (${nt})`);
 
     let n = await decir('Sube una propiedad nueva: departamento en Ñuñoa, Irarrázaval 2500 depto 804, arriendo $650.000, 2D 1B, 55 m²'); let r = await respuesta(n);
     await w.waitForSelector('.ga-dc .dc-g'); ok(await w.inputValue('.ga-dc [data-k="comuna"]') === 'Ñuñoa' && await w.inputValue('.ga-dc [data-k="precioArriendo"]') === '650000' && await w.inputValue('.ga-dc [data-k="dormitorios"]') === '2', 'al describir una propiedad, el agente llena la ficha para revisar (no la crea solo)');

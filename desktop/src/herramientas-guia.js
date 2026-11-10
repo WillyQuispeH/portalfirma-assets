@@ -25,7 +25,7 @@ const GUIA = {
   asset_anotar: { dominio: 'PROPIEDADES', cuando: 'el usuario CUENTA algo que pasó con una propiedad o cliente: llamó, visitó, ofertó, mandó documentos', no: 'agendar algo a futuro (asset_crear_evento) ni dejar una nota interna sin hecho (asset_nota)', canal: 'chat-y-whatsapp' },
   asset_nota: { dominio: 'PERSONAS', cuando: 'piden dejar una nota interna en una persona o un negocio («anota que prefiere que lo llamen en la tarde»)', no: 'contar algo que pasó con una propiedad (asset_anotar)', canal: 'chat-y-whatsapp' },
   // ---------------- personas ----------------
-  asset_crear_persona: { dominio: 'PERSONAS', cuando: 'hay que agregar una persona nueva al CRM (necesita nombre y RUT)', no: 'buscar a alguien que puede existir (asset_buscar_personas primero)', canal: 'chat-y-whatsapp' },
+  asset_crear_persona: { dominio: 'PERSONAS', cuando: 'hay que agregar una persona nueva al CRM (necesita el nombre; el RUT es opcional)', no: 'un interesado que llegó por un portal, Instagram o un referido (asset_crear_lead) ni buscar a alguien que puede existir (asset_buscar_personas primero)', canal: 'chat-y-whatsapp' },
   asset_vincular_persona: { dominio: 'PERSONAS', cuando: 'una persona del CRM pasa a ser propietario, arrendatario, comprador, codeudor o interesado de una propiedad', canal: 'chat-y-whatsapp' },
   // ---------------- negocios ----------------
   asset_crear_negocio: { dominio: 'NEGOCIOS', cuando: 'empieza un negocio de venta o arriendo entre una propiedad y un cliente', canal: 'chat-y-whatsapp' },
@@ -38,6 +38,8 @@ const GUIA = {
   asset_crear_evento: { dominio: 'AGENDA', cuando: 'piden agendar o coordinar una visita, reunión, firma, llamada o tarea (solo calendario, sin documentos)', no: 'la ORDEN de visita, que es un documento a firmar (asset_orden_visita)', canal: 'chat-y-whatsapp' },
   asset_actualizar_evento: { dominio: 'AGENDA', cuando: 'reprograman, cancelan o marcan como hecho un evento', canal: 'chat-y-whatsapp' },
   // ---------------- documentos y firma ----------------
+  asset_crear_lead: { dominio: 'LEADS', cuando: 'piden registrar o anotar un lead o interesado nuevo (llegó por Instagram, un portal, un referido o el teléfono), aunque no tenga RUT; no le escribe al cliente', no: 'alguien que ya es cliente u operación del CRM (asset_crear_persona) o un lead que ya existe (asset_interesados)', canal: 'chat-y-whatsapp' },
+  asset_revisar_orden_visita: { dominio: 'DOCUMENTOS', cuando: 'piden PREPARAR, dejar lista o revisar la orden de visita ANTES de enviarla (no envía, no cobra, no agenda)', no: 'piden enviarla o mandarla a firmar (asset_orden_visita)', canal: 'chat-y-whatsapp' },
   asset_orden_visita: { dominio: 'DOCUMENTOS', cuando: 'piden explícitamente la ORDEN DE VISITA (el documento que firma el visitante; cobra)', no: 'solo agendar la visita (asset_crear_evento)', canal: 'chat-y-whatsapp' },
   asset_preparar_formato: { dominio: 'DOCUMENTOS', cuando: 'piden el MANDATO (de venta o de arriendo) de una propiedad y la cuenta tiene formatos propios: revisa qué ya está y qué falta', no: 'otros documentos (asset_buscar_documento) ni la orden de visita (asset_orden_visita)', canal: 'chat-y-whatsapp' },
   asset_enviar_formato: { dominio: 'DOCUMENTOS', cuando: 'el mandato ya está completo (asset_preparar_formato sin faltantes) y el usuario quiere enviarlo a firmar', canal: 'chat-y-whatsapp' },
@@ -81,7 +83,8 @@ const RUTEO = `Cómo elegir la herramienta (en caso de duda, esta tabla manda):
 - Describe una propiedad para subirla o captarla («capté un depto…», «sube esta propiedad…», un texto largo con dormitorios, metros, precio) → asset_dictar_propiedad. NUNCA asset_crear_propiedad directo.
 - Cambia datos de una propiedad que ya existe → asset_actualizar_propiedad. Cambia si está disponible/reservada/vendida/arrendada → asset_cambiar_estado.
 - Cuenta algo que YA pasó (llamó, visitó, ofertó) → asset_anotar. Nota interna sobre una persona o negocio → asset_nota.
-- Agendar/coordinar una visita → asset_crear_evento. La ORDEN de visita (documento) → asset_orden_visita. Nunca ambos si no lo piden.
+- Agendar/coordinar una visita → asset_crear_evento. La ORDEN de visita (documento): «prepárala / déjala lista / para revisarla» → asset_revisar_orden_visita (no envía); «envíala / mándala a firmar» → asset_orden_visita (envía y cobra). Nunca ambos si no lo piden.
+- Registrar un lead o interesado nuevo (Instagram, portal, referido), aunque no tenga RUT → asset_crear_lead. El RUT nunca es obligatorio para un lead.
 - Cualquier otro documento por su nombre → asset_buscar_documento (y el usuario elige con los botones).
 - Pregunta cómo va una propiedad → asset_estado_propiedad. Qué tengo hoy → asset_resumen. Quién falta por firmar → asset_seguimiento_firma.
 - Fotos desde Google Drive → asset_fotos_drive.
