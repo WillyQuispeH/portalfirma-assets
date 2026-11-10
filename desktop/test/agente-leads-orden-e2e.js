@@ -45,6 +45,15 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     r = await call('asset_orden_visita', { propiedad: 'CV-9002', visitante: 'Juan Pérez', fecha: man });
     ok(r.ok && r.operacion && await app.evaluate(() => (global.__pfMock._ordenes || []).length) === antes + 1 && (await pf('agendaListar', {})).length === ev0 + 1, 'después, pedir enviarla la envía a firmar y agenda la visita');
 
+    // ---- agendar: si el día de la semana no coincide con la fecha («jueves 13» cuando el 13 es viernes), no agenda
+    const nombreDia = (f) => new Date(`${f}T12:00:00Z`).toLocaleDateString('es-CL', { weekday: 'long', timeZone: 'UTC' });
+    const real = nombreDia(man); const otro = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'].find((d) => d !== real);
+    const evAntes = (await pf('agendaListar', {})).length;
+    const m = await error('asset_crear_evento', { tipo: 'visita', fecha: man, dia_semana: otro, titulo: 'Visita', propiedad: 'CV-9002' });
+    ok(m && new RegExp(`es ${real}, no ${otro}`).test(m) && /NO agendes todavía/.test(m) && (await pf('agendaListar', {})).length === evAntes, `«${otro} ${man.slice(8)}» cuando es ${real}: no agenda y pide aclarar (${(m || '').slice(0, 60)}…)`);
+    r = await call('asset_crear_evento', { tipo: 'visita', fecha: man, dia_semana: real.toUpperCase(), titulo: 'Visita de prueba', propiedad: 'CV-9002' });
+    ok(r.ok && (await pf('agendaListar', {})).length === evAntes + 1, `si el día coincide (${real}), agenda normal`);
+
     // ---- propiedad dictada con propietario (RUT inválido y válido)
     const base = { tipo: 'departamento', venta: true, precioVenta: { valor: 6900, moneda: 'UF' }, direccion: 'Av. Irarrázaval 3450', unidad: '804', comuna: 'Ñuñoa', dormitorios: 3, banos: 2, titulo: 'Departamento 3D2B en Ñuñoa' };
     let p = await pf('dictCrear', { ...base, propietario: { nombre: 'María José Contreras Vidal', rut: '15.432.876-5', telefono: '+56 9 6543 2187', email: 'mj@correo.cl' } });

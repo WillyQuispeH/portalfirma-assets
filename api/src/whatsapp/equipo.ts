@@ -20,7 +20,7 @@ import { normalizar } from '../comun/texto';
 import { IaService, type HerramientaIa, type TurnoIa } from './ia';
 import { EnviadosService } from './enviados';
 import type { Conversacion, MensajeWa, Wechatia } from './wechatia';
-import { contexto, firma, hoy, norm, sumarDias } from './comun';
+import { contexto, diaSemana, firma, hoy, norm, sumarDias } from './comun';
 
 type TPersona = 'pedro' | 'juanita' | 'diego' | 'fernanda';
 const PERSONAS: Record<TPersona, { nombre: string; area: string; foco: string }> = {
@@ -77,8 +77,9 @@ const HERRAMIENTAS: HerramientaIa[] = [
   },
   {
     name: 'buscar_personas',
-    description: 'Busca personas del CRM por nombre, RUT, correo o teléfono.',
-    input_schema: { type: 'object', properties: { texto: { type: 'string' } }, required: ['texto'] },
+    description:
+      'Busca personas del CRM por nombre, RUT, correo o teléfono; vienen las más recientes primero y con su fecha de registro (sin texto, devuelve las últimas registradas: sirve para «el último interesado»).',
+    input_schema: { type: 'object', properties: { texto: { type: 'string' } }, required: [] },
   },
   {
     name: 'negocios',
@@ -112,13 +113,14 @@ const HERRAMIENTAS: HerramientaIa[] = [
   {
     name: 'agendar',
     description:
-      'Agenda un evento en la agenda del corredor: visita, reunión, llamada o tarea. Si es una visita, da el código de la propiedad. Confirma con el corredor el día y la hora antes de agendar.',
+      'Agenda un evento en la agenda del corredor: visita, reunión, llamada o tarea. Si es una visita, da el código de la propiedad. Confirma con el corredor el día y la hora antes de agendar. Si dijo el día de la semana («el jueves 13»), pásalo en dia_semana: se verifica que coincida con la fecha.',
     input_schema: {
       type: 'object',
       properties: {
         tipo: { type: 'string', enum: ['visita', 'reunion', 'llamada', 'tarea'] },
         titulo: { type: 'string' },
         fecha: { type: 'string', description: 'AAAA-MM-DD' },
+        dia_semana: { type: 'string', description: 'el día de la semana que dijo el corredor (lunes…domingo), si lo dijo' },
         hora: { type: 'string', description: 'HH:MM' },
         codigo_propiedad: { type: 'string' },
         lugar: { type: 'string' },
@@ -313,8 +315,11 @@ export class EquipoService {
     const txt = (k: string) => String(a[k] ?? '').trim();
     switch (nombre) {
       case 'resumen': {
-        const [props, negs, leads, evs, firmas] = await Promise.all([
+        const [props, sinFotos, negs, leads, evs, firmas] = await Promise.all([
           this.db.propiedad.count({ where: { corredoraId: c.corredoraId, eliminadoEn: null, archivada: false } }),
+          this.db.propiedad.count({
+            where: { corredoraId: c.corredoraId, eliminadoEn: null, archivada: false, fotos: { none: {} } },
+          }),
           this.db.negocio.groupBy({
             by: ['etapa'],
             where: { corredoraId: c.corredoraId, eliminadoEn: null, estado: 'abierto', ...this.mio(c) },
@@ -337,6 +342,8 @@ export class EquipoService {
         ]);
         return {
           propiedades: props,
+          propiedadesConFotos: props - sinFotos,
+          propiedadesSinFotos: sinFotos,
           negociosAbiertosPorEtapa: Object.fromEntries(negs.map((x) => [x.etapa, x._count._all])),
           leadsPorEstado: Object.fromEntries(leads.map((x) => [x.estado, x._count._all])),
           agendaDeHoy: evs,
@@ -422,11 +429,13 @@ export class EquipoService {
       case 'buscar_personas': {
         const l = await this.db.persona.findMany({
           where: { corredoraId: c.corredoraId, eliminadoEn: null, busqueda: { contains: normalizar(txt('texto')) } },
+          orderBy: { creadoEn: 'desc' },
           take: 8,
         });
         return l.map((x) => ({
           nombre: x.nombre,
           roles: x.roles,
+          registradoEl: fecha(x.creadoEn),
           ...(c.admin ? { telefono: x.telefono, email: x.email, rut: x.rutFormato || x.rut } : {}),
         }));
       }
@@ -537,6 +546,21 @@ export class EquipoService {
         const h = txt('hora');
         if (!/^\d{4}-\d{2}-\d{2}$/.test(f)) return { error: 'La fecha va como AAAA-MM-DD.' };
         if (h && !/^\d{2}:\d{2}$/.test(h)) return { error: 'La hora va como HH:MM.' };
+        // «el jueves 13» cuando el 13 es viernes: no se agenda hasta que el corredor aclare cuál quiso
+        const dia = txt('dia_semana');
+        if (dia && norm(dia) !== norm(diaSemana(f))) {
+          let otra = f;
+          for (let i = 0; i < 8; i++) {
+            const x = sumarDias(hoy(), i);
+            if (norm(diaSemana(x)) === norm(dia)) {
+              otra = x;
+              break;
+            }
+          }
+          return {
+            error: `El ${f} es ${diaSemana(f)}, no ${dia}. NO agendes todavía: pregúntale al corredor si quiso el ${diaSemana(f)} ${f} o el ${dia} ${otra}.`,
+          };
+        }
         const p = txt('codigo_propiedad') ? await this.propiedad(c, txt('codigo_propiedad')) : null;
         if (txt('codigo_propiedad') && !p) return { error: 'No encontré esa propiedad.' };
         const id = 'v' + Date.now().toString(36) + randomBytes(2).toString('hex');
