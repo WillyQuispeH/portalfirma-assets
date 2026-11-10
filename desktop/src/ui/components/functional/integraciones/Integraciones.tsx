@@ -18,6 +18,7 @@ import { useCuenta } from '../../../store/hooks/useCuenta.hook';
 import { useAcceso } from '../../../store/hooks/useAcceso.hook';
 import { integracionesService as svc } from '../../../store/services/integraciones.service';
 import { refrescarCuenta } from '../cuenta/controlador';
+import { abrirConfiguracion } from './controlador';
 import { abrirUrl, pedirInicioSesion, toast } from '../../../utils/app';
 import { fechaHora } from '../../../utils/formato';
 import type { ICanal } from '../../../store/interfaces/integraciones.interface';
@@ -90,7 +91,7 @@ export function IntegracionesContenido() {
             estado={pfConectado ? 'conectado' : 'sin-conectar'}>
             {!pfConectado && (
               <Boton tamano="sm" icono="link" disabled={!admin} title={admin ? undefined : 'La conecta el administrador de la corredora'}
-                onClick={() => pedirInicioSesion(() => { refrescarCuenta(); toast('Portalfirma conectado.'); }, 'Conecta la cuenta de Portalfirma de tu corredora.')}>
+                onClick={() => pedirInicioSesion(() => { abrirConfiguracion('integraciones'); refrescarCuenta(); toast('Portalfirma conectado.'); }, 'Conecta la cuenta de Portalfirma de tu corredora.')}>
                 Conectar
               </Boton>
             )}
