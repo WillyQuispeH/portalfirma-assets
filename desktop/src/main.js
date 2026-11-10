@@ -13,6 +13,22 @@ const WA_LOCAL = process.env.PF_MOCK === '1';
 const MAX_BYTES = 20 * 1024 * 1024; // límite del conector (~20 MB)
 const APP_NAME = 'PortalFirma Asset';
 app.setName(APP_NAME);
+// yarn dev (PF_DEV=1) guarda sus datos en otra carpeta que el Asset instalado: antes compartían portalfirma.json y,
+// con cada uno contra su servidor (API local / producción), uno leía la sesión del otro → «Tu sesión venció».
+// La primera vez se copia lo de la carpeta común (sin cachés). Las pruebas que pasan --user-data-dir no se tocan.
+if (process.env.PF_DEV === '1' && !app.commandLine.hasSwitch('user-data-dir')) {
+  const comun = app.getPath('userData');
+  const dev = path.join(path.dirname(comun), APP_NAME + ' (desarrollo)');
+  if (!fs.existsSync(dev) && fs.existsSync(comun)) {
+    const CACHES = /^(Cache|Code Cache|GPUCache|DawnGraphiteCache|DawnWebGPUCache|Shared Dictionary|Network|tmp|Crashpad|blob_storage)$/;
+    try {
+      fs.cpSync(comun, dev, { recursive: true, filter: (src) => !CACHES.test(path.relative(comun, src).split(path.sep)[0]) });
+      // la sesión copiada es la de producción: la de desarrollo se pide de nuevo (contra la API local)
+      const f = path.join(dev, 'portalfirma.json'); const d = JSON.parse(fs.readFileSync(f, 'utf8')); delete d.assetSesion; fs.writeFileSync(f, JSON.stringify(d, null, 2), { mode: 0o600 });
+    } catch (e) { console.warn('[datos dev]', e.message); }
+  }
+  app.setPath('userData', dev);
+}
 // fotos guardadas en este computador (las que vienen de Google Drive): pffoto://f/<propiedad>/<archivo>
 protocol.registerSchemesAsPrivileged([{ scheme: 'pffoto', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } }]);
 const fotosDir = () => { const d = path.join(process.env.PF_INMO_DIR || path.join(app.getPath('userData'), 'inmo'), 'fotos'); fs.mkdirSync(d, { recursive: true }); return d; };
