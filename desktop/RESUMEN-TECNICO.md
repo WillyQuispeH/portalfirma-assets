@@ -307,6 +307,11 @@ Agenda muestra los eventos agrupados por día, con filtros de rango y tipo, que 
 
 Finanzas muestra las comisiones de los negocios (`negListar`): las ganadas y perdidas del período, las que están en curso, el detalle por corredor (solo el administrador) y los negocios que aún no tienen comisión. El proceso principal ya filtra por perfil, así que el corredor ve solo sus negocios. La facturación (boletas y facturas) queda para la etapa 4. Bajo 1600 px de ancho, `styles.css` oculta las pestañas Arriendos y Finanzas.
 
+**0.18.1 (2026-11-10):**
+- Sin sesión de Asset la app ya no lee ni envía WhatsApp por su cuenta (`WA_LOCAL` en `main.js`, solo con `PF_MOCK`): antes volvía al modo antiguo y respondía en paralelo con el servidor, sin clave de IA («Falta la clave de API del asistente»).
+- Al conectar wechatia (`pv:claveWa`) se espera a que el servidor tenga la clave y se relee la conexión: la pantalla muestra «conectado» de inmediato.
+- Servidor: el equipo del ejecutivo reconoce el nombre del personaje en cualquier parte del mensaje («mis documentos Juanita»). La API corre en Docker (`docker-compose.yml`, `api/Dockerfile`; desplegar con `bash api/scripts/desplegar.sh`).
+
 **0.18.0 (2026-11-09):**
 - Con el kit: Mis operaciones, el inicio de Gestión documental (con color por función, sin barra del Agente), la vista lista de Hoy (con «Vista oficina» para volver) y La oficina (escena a pantalla completa, equipo arriba). Leads aprovecha el alto de la ventana: los filtros de la lista llevan su número (sin tarjetas arriba).
 - Cabeceras: como mucho 2 botones a la vista y el resto en «⋯» (CabeceraPagina lo hace solo con `Boton`). El título de la cabecera usa el color del tema (en oscuro era negro).
