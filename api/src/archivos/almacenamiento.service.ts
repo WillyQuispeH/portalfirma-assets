@@ -69,6 +69,14 @@ export class AlmacenamientoService {
     );
   }
 
+  /** Sube desde el servidor (p. ej. una foto que llegó por WhatsApp); la app sube directo con urlSubida. */
+  async subir(clave: string, cuerpo: Buffer, tipo: string) {
+    await this.s3.send(
+      new PutObjectCommand({ Bucket: this.bucket, Key: clave, Body: cuerpo, ContentType: tipo, ContentLength: cuerpo.length }),
+    );
+    return this.urlPublica(clave);
+  }
+
   /** URL firmada para bajar un documento con su nombre original. */
   urlDescarga(clave: string, nombre: string) {
     const ascii = nombre.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '');

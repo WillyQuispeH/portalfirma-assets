@@ -15,7 +15,7 @@ import { ESTADO, ROL } from '../cartera/catalogos';
 import { ListaActividad, copiarCorreo, num, precio, whatsapp } from './comun';
 import { VincularPersona } from './Modales';
 import { useFicha, type TFichaTab } from '../../../store/hooks/useFicha.hook';
-import { abrirPersona, avisar, bloqueCaptacion, fichaCompleta, fotosDesdeDrive, toast } from '../../../utils/app';
+import { abrirPersona, avisar, bloqueCaptacion, fichaCompleta, fotosDesdeArchivos, fotosDesdeDrive, toast } from '../../../utils/app';
 import { abrirModal } from '../../../utils/modal';
 import type { IPropiedad, TPropiedadEstado } from '../../../store/interfaces/propiedad.interface';
 import type { TPersonaRol } from '../../../store/interfaces/persona.interface';
@@ -53,8 +53,9 @@ function Galeria({ p }: { p: IPropiedad }) {
           </div>
         )}
       </> : <div className="im-gmain vacia">{sinFoto}<span className="im-gnote">Sin fotos todavía</span></div>}
-      <span className="tw:absolute tw:right-2.5 tw:top-2.5">
-        <Boton id="fDrive" variante="secundario" tamano="sm" icono="drive" onClick={() => fotosDesdeDrive(p.id)}>Fotos desde Drive</Boton>
+      <span className="tw:absolute tw:right-2.5 tw:top-2.5 tw:flex tw:gap-2">
+        <Boton id="fSubir" variante="secundario" tamano="sm" icono="upload" onClick={() => fotosDesdeArchivos(p.id)}>Subir fotos</Boton>
+        <Boton id="fDrive" variante="secundario" tamano="sm" icono="drive" onClick={() => fotosDesdeDrive(p.id)}>Desde Drive</Boton>
       </span>
     </div>
   );

@@ -211,6 +211,7 @@ export async function accion(a: any = {}) {
     if (t === 'estadoProp') return W.Gestion.estado(a.propId, { usuario: 'Ver estado de la propiedad' });
     if (t === 'confirmar') return W.Gestion.confirmar(a.eventoId, a.personaId || null);
     if (t === 'fotosDrive') return W.Fotos.drive(a.propId);
+    if (t === 'fotosArchivos') return W.Fotos.archivos(a.propId);
     if (t === 'ficha') { acoplar(); return W.Inmo.abrirFicha(a.propId); }
     if (t === 'docNuevo') return W.Gestion.docNuevo({ propId: a.propId || null, titulo: a.titulo || '', tipoDoc: a.tipoDoc || null, personaId: a.personaId || null });
     if (t === 'plantilla') return a.propId ? W.Gestion.usarPlantilla(a.propId, a.plantillaId, a.nombre) : W.Gestion.iniciar({ destino: 'documento' });

@@ -41,6 +41,8 @@ function wechatiaFalso() {
     let b = ''; rq.on('data', (x) => (b += x)); rq.on('end', () => {
       const u = new URL(rq.url, 'http://x'); const p = u.pathname; const body = b ? JSON.parse(b) : null;
       const out = (code, j) => { rs.writeHead(code, { 'content-type': 'application/json' }); rs.end(JSON.stringify(j)); };
+      // las fotos que mandan por WhatsApp quedan en una URL pública (sin clave)
+      if (p.startsWith('/media/')) { rs.writeHead(200, { 'content-type': 'image/jpeg' }); return rs.end(Buffer.from([0xff, 0xd8, 0xff, 0xe0, ...Buffer.from('foto de prueba ' + p), 0xff, 0xd9])); }
       if (rq.headers.authorization !== 'Bearer ' + TOKEN) return out(401, { message: 'no' });
       if (p === '/conversations/search') {
         const cid = u.searchParams.get('contactId');
@@ -167,6 +169,20 @@ function iaFalsa() {
     r = await req('GET', '/whatsapp/ejecutivo/entrantes', null, t1);
     ok(r.j.items.length === 1 && /contrato/.test(r.j.items[0].body) && !r.j.items.some((x) => /cómo va la cartera/.test(x.body)), 'su Asset, al abrirse, toma solo lo pendiente (lo ya respondido no)');
     ok((await req('GET', '/whatsapp/ejecutivo/entrantes', null, t1)).j.items.length === 0, 'y no se entrega dos veces');
+    // fotos de una propiedad por WhatsApp: las atiende el servidor (con su Asset abierto o cerrado)
+    const fotosDe = () => db.propiedadFoto.count({ where: { propiedadId: prop.id } });
+    escribe(cel, 'Fotos de la PF-9001', { attachments: [`${base}/media/f1.jpg`] });
+    ok(await hasta(() => salidas(cel).some((t) => /^\*Pedro\* · Captación\nListo: agregué la foto a la \*PF-9001\*/.test(t))) && (await fotosDe()) === 1, 'una foto con el código en el texto queda en la galería de esa propiedad');
+    escribe(cel, '', { attachments: [`${base}/media/f2.jpg`] }); escribe(cel, '', { attachments: [`${base}/media/f3.jpg`] });
+    ok(await hasta(() => salidas(cel).some((t) => /Recibí 2 fotos\. ¿A qué propiedad las agrego\?[\s\S]*\*PF-9001\*/.test(t))), 'fotos sin código: pregunta a qué propiedad y sugiere la última que tocó');
+    escribe(cel, 'sí');
+    ok(await hasta(async () => (await fotosDe()) === 3) && salidas(cel).some((t) => /agregué 2 fotos a la \*PF-9001\* · .* \(ahora tiene 3\)/.test(t)), 'al responder «sí» las agrega a la sugerida');
+    escribe(cel, '', { attachments: [`${base}/media/f4.jpg`] });
+    await hasta(() => salidas(cel).some((t) => /Recibí una foto/.test(t)));
+    escribe(cel, 'no');
+    ok(await hasta(() => salidas(cel).some((t) => /Ok, no agrego la foto/.test(t))) && (await fotosDe()) === 3, 'con «no» la descarta');
+    ok((await req('GET', '/whatsapp/ejecutivo/entrantes', null, t1)).j.items.length === 0, 'las fotos y sus respuestas no pasan a la cola de su Asset');
+    ok((await db.propiedad.findUnique({ where: { id: prop.id } })).version > 1, 'la propiedad sube de versión (la app trae las fotos al sincronizar)');
     escribe(cel, 'Pedro, ¿y los leads?');
     ok(await hasta(async () => (await req('GET', '/whatsapp/ejecutivo/entrantes', null, t1)).j.items.some((x) => /y los leads/.test(x.body)), 15), 'con su Asset abierto, lo atiende su Asset (no el servidor)');
     r = await req('POST', '/whatsapp/ejecutivo/responder', { texto: '*Pedro* · Captación\nTienes 1 propiedad.' }, t1);

@@ -91,7 +91,7 @@ declare global {
 declare global {
   interface Window {
     FichaBloques: { abrir: (propId: string, o?: { bloque?: string; despues?: () => void }) => void }; // src/renderer/ficha-bloques.js
-    Fotos: { drive: (propId: string) => Promise<unknown> }; // src/renderer/dictado.js
+    Fotos: { drive: (propId: string) => Promise<unknown>; archivos: (propId: string) => Promise<unknown> }; // src/renderer/dictado.js
     __ficha: { tab: (propId: string, tab: string) => void }; // lo instala components/functional/ficha/controlador.ts
   }
 }

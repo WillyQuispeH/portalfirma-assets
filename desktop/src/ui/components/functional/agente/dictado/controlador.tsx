@@ -1,4 +1,4 @@
-// Dictado (window.Dictado) y fotos desde Google Drive (window.Fotos). Las instala el controlador del Agente.
+// Dictado (window.Dictado) y fotos desde Google Drive o el computador (window.Fotos). Las instala el controlador del Agente.
 /* eslint-disable @typescript-eslint/no-explicit-any -- datos del proceso principal sin tipos */
 import { toast } from '../../../../utils/app';
 import { W, api, cartera, montar } from '../tarjetas/comun';
@@ -36,7 +36,19 @@ export async function fotosDrive(propId: string) {
   return d;
 }
 
+/** fotos de la propiedad desde este computador (JPG, PNG o WebP) */
+export async function fotosArchivos(propId: string) {
+  const r = await W.pf.fotosArchivos(propId);
+  if (!r.ok) return toast(r.error, 8000);
+  const d = r.data; if (d.cancelado) return;
+  toast(`${d.agregadas} ${d.agregadas === 1 ? 'foto cargada' : 'fotos cargadas'} (la propiedad tiene ${d.total}).${d.omitidas.length ? ` ${d.omitidas.length} sin cargar: ${d.omitidas.slice(0, 2).map((x: any) => `${x.name} (${x.motivo})`).join('; ')}.` : ''}`, 8000);
+  try { await cartera(); } catch { /* se verá al refrescar */ }
+  W.AssetRefrescar?.(); W.Lienzo?.refrescar?.();
+  if (document.querySelector('#view-cartera:not(.hidden) .im-ficha')) W.Inmo.abrirFicha(propId);
+  return d;
+}
+
 export function instalarDictado() {
   W.Dictado = { abrir, mostrar };
-  W.Fotos = { drive: fotosDrive };
+  W.Fotos = { drive: fotosDrive, archivos: fotosArchivos };
 }

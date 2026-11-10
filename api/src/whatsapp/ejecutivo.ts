@@ -24,6 +24,7 @@ import { WechatiaService, type Conversacion, type MensajeWa, type Wechatia } fro
 import { EnviadosService } from './enviados';
 import { firma, norm, telNorm } from './comun';
 import { EquipoService } from './equipo';
+import { FotosWaService } from './fotos-wa';
 
 /** sin señal de su Asset en este tiempo, está cerrado */
 const ABIERTO_MS = 60_000;
@@ -63,6 +64,7 @@ export class EjecutivoService {
     private readonly enviados: EnviadosService,
     private readonly avisos: AvisosService,
     private readonly equipo: EquipoService,
+    private readonly fotos: FotosWaService,
   ) {}
 
   private vista(v: WaVinculo | null) {
@@ -216,6 +218,9 @@ export class EjecutivoService {
   async recibir(wa: Wechatia, v: WaVinculo, cv: Conversacion, nuevos: MensajeWa[]) {
     if (cv.contactId && cv.contactId !== v.contactId)
       await this.db.waVinculo.update({ where: { usuarioId: v.usuarioId }, data: { contactId: cv.contactId } });
+    // las fotos de una propiedad las atiende siempre el servidor (con su Asset abierto o cerrado)
+    nuevos = await this.fotos.interceptar(wa, v, cv, nuevos);
+    if (!nuevos.length) return;
     const abierto = v.senalEn && Date.now() - v.senalEn.getTime() < ABIERTO_MS;
     // con su Asset cerrado, el equipo le responde desde el servidor
     if (!abierto) {

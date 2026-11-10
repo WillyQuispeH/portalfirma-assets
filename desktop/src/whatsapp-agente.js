@@ -81,7 +81,7 @@ function crear({ store, wa, crearAgente, locales, dictado, inmo, convs, leads = 
     if (f.length) return enviar(`Para crearla necesito al menos: ${f.map((x) => x.t.toLowerCase()).join(', ')}.`);
     const p = await inmo.guardarPropiedad(dictado.aFicha(c)); inmo.registrar(p.id, 'Propiedad creada dictando por WhatsApp'); inmo.guardar(); S.ficha = null;
     emitUI({ type: 'datos', que: 'propiedades' });
-    return enviar(`Listo: *${p.codigo}* · ${p.titulo} quedó en tu cartera.\nLas fotos se cargan desde la app (Fotos desde Drive).`);
+    return enviar(`Listo: *${p.codigo}* · ${p.titulo} quedó en tu cartera.\nPara las fotos, mándamelas por aquí con el código *${p.codigo}* en el mensaje, o súbelas en Asset desde la ficha.`);
   }
 
   // ---------- un mensaje del celular vinculado ----------

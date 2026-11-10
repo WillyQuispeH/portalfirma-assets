@@ -335,16 +335,29 @@ async function fotosDesdeDrive(propId) {
   if (!st.connected) { const e = new Error('Conecta el Google Drive de la empresa para elegir las fotos.'); e.code = 'NO_DRIVE'; throw e; }
   const calle = String(p.direccion || '').match(/^(.*?\d+)/)?.[1] || p.direccion || p.titulo || '';
   const picked = (await gdrive.pick(null, { multi: true, imagenes: true, query: calle.trim() })).filter((f) => !f.isFolder);
-  if (!picked.length) return { agregadas: 0, total: (p.fotos || []).length, omitidas: [], cancelado: true };
+  return cargarFotos(p, picked.map((f) => ({ ref: `d-${String(f.id).replace(/[^\w-]/g, '').slice(0, 40)}`, name: f.name, heic: /hei[cf]/i.test(f.mimeType || f.name), bytes: async () => (await gdrive.bytesDe(f.id)).bytes })), 'desde Google Drive');
+}
+// Fotos de una propiedad desde este computador: se eligen archivos (JPG, PNG, WebP; HEIC solo donde el sistema lo lee)
+async function fotosDesdeArchivos(propId) {
+  const p = inmo.obtener(propId);
+  const r = await dialog.showOpenDialog(win, { title: `Fotos de ${p.codigo || p.titulo || 'la propiedad'}`, properties: ['openFile', 'multiSelections'], filters: [{ name: 'Fotos', extensions: ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'] }] });
+  if (r.canceled || !r.filePaths.length) return { agregadas: 0, total: (p.fotos || []).length, omitidas: [], cancelado: true };
+  // ref: nombre del archivo + tamaño (evita cargar dos veces la misma foto)
+  return cargarFotos(p, r.filePaths.map((f) => ({ ref: `a-${path.basename(f, path.extname(f)).replace(/[^\w-]/g, '').slice(0, 30)}-${fs.statSync(f).size}`, name: path.basename(f), heic: /\.hei[cf]$/i.test(f), bytes: async () => fs.readFileSync(f) })), 'desde el computador');
+}
+/** pasa cada foto a JPG de hasta 2048 px y la sube (en PF_MOCK queda en este computador); `items`: { ref, name, heic, bytes() } */
+async function cargarFotos(p, items, origen) {
+  if (!items.length) return { agregadas: 0, total: (p.fotos || []).length, omitidas: [], cancelado: true };
+  const picked = items;
   const dir = path.join(fotosDir(), p.id); if (!inmo.API) fs.mkdirSync(dir, { recursive: true });
-  // repetidas: local «d-<id>.jpg»; en R2 «d-<id>_<uuid>.jpg»
+  // repetidas: local «<ref>.jpg»; en R2 «<ref>_<uuid>.jpg»
   const ya = new Set((p.fotos || []).map((u) => String(u).split('/').pop().replace(/_[0-9a-f-]{36}(?=\.\w+$)/, '')));
   const nuevas = []; const omitidas = []; const jpgs = [];
   for (const [i, f] of picked.slice(0, 40).entries()) {
-    const nombre = `d-${String(f.id).replace(/[^\w-]/g, '').slice(0, 40)}.jpg`; if (ya.has(nombre)) { omitidas.push({ name: f.name, motivo: 'ya estaba cargada' }); continue; }
+    const nombre = `${f.ref}.jpg`; if (ya.has(nombre)) { omitidas.push({ name: f.name, motivo: 'ya estaba cargada' }); continue; }
     try {
-      const { bytes } = await gdrive.bytesDe(f.id); let img = nativeImage.createFromBuffer(Buffer.from(bytes));
-      if (img.isEmpty()) { omitidas.push({ name: f.name, motivo: /hei[cf]/i.test(f.mimeType || f.name) ? 'formato HEIC no legible en este computador' : 'no es una imagen legible' }); continue; }
+      const bytes = await f.bytes(); let img = nativeImage.createFromBuffer(Buffer.from(bytes));
+      if (img.isEmpty()) { omitidas.push({ name: f.name, motivo: f.heic ? 'formato HEIC no legible en este computador' : 'no es una imagen legible' }); continue; }
       const { width } = img.getSize(); if (width > 2048) img = img.resize({ width: 2048, quality: 'best' });
       if (inmo.API) jpgs.push({ buf: img.toJPEG(86), tipo: 'image/jpeg', ref: nombre.replace(/\.jpg$/, '') });
       else { fs.writeFileSync(path.join(dir, nombre), img.toJPEG(86)); nuevas.push(`pffoto://f/${encodeURIComponent(p.id)}/${nombre}`); }
@@ -353,7 +366,7 @@ async function fotosDesdeDrive(propId) {
   }
   if (picked.length > 40) omitidas.push({ name: `${picked.length - 40} fotos más`, motivo: 'máximo 40 por vez' });
   if (jpgs.length) { toUI('agent:event', { type: 'progreso', que: 'fotos', hechas: picked.length, total: picked.length, texto: 'Subiendo las fotos…' }); nuevas.push(...(await inmo.subirFotos(p.id, jpgs))); }
-  if (nuevas.length) inmo.parchear(p.id, (pp) => { pp.fotos = [...(pp.fotos || []), ...nuevas].slice(0, 60); }, `${nuevas.length} ${nuevas.length === 1 ? 'foto cargada' : 'fotos cargadas'} desde Google Drive`);
+  if (nuevas.length) inmo.parchear(p.id, (pp) => { pp.fotos = [...(pp.fotos || []), ...nuevas].slice(0, 60); }, `${nuevas.length} ${nuevas.length === 1 ? 'foto cargada' : 'fotos cargadas'} ${origen}`);
   return { agregadas: nuevas.length, total: (inmo.obtener(p.id).fotos || []).length, omitidas };
 }
 handle('gdrive:status', () => gdrive.status());
@@ -1121,6 +1134,7 @@ handle('doc:plantillas', (o) => docs.plantillas(o || {}));
 // documentos a medida: buscar plantilla → si no hay, crear con Asset → PDF → firmar
 // dictar una propiedad: audio → texto → ficha → (el broker confirma) → propiedad
 handle('fotos:drive', (propId) => fotosDesdeDrive(propId));
+handle('fotos:archivos', (propId) => fotosDesdeArchivos(propId));
 // ---- Agente por WhatsApp: el ejecutivo le escribe desde su celular vinculado al número de la empresa (wechatia) ----
 // ---- Leads (0.14): conversaciones de WhatsApp con clientes (chat exportado) → ficha del lead con su búsqueda ----
 const leadsDir = () => path.join(process.env.PF_INMO_DIR || path.join(app.getPath('userData'), 'inmo'), 'leads');

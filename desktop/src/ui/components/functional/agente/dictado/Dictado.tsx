@@ -119,7 +119,7 @@ function Ficha({ r, transcripcion, alCorregir }: { r: any; transcripcion: string
     try { await cartera(); } catch { /* se verá al refrescar */ }
     W.AssetRefrescar?.();
     Ag().contexto({ tipo: 'propiedad', id: p.id });
-    Ag().sugerencias([{ label: 'Cargar fotos desde Drive', accion: { tipo: 'fotosDrive', propId: p.id } }, { label: 'Ver la ficha', accion: { tipo: 'ficha', propId: p.id } }, { label: 'Gestionar la propiedad', accion: { tipo: 'estadoProp', propId: p.id } }, { label: 'Publicar en portales', accion: { tipo: 'publicar', propId: p.id } }]);
+    Ag().sugerencias([{ label: 'Subir fotos', accion: { tipo: 'fotosArchivos', propId: p.id } }, { label: 'Fotos desde Drive', accion: { tipo: 'fotosDrive', propId: p.id } }, { label: 'Ver la ficha', accion: { tipo: 'ficha', propId: p.id } }, { label: 'Gestionar la propiedad', accion: { tipo: 'estadoProp', propId: p.id } }, { label: 'Publicar en portales', accion: { tipo: 'publicar', propId: p.id } }]);
     Ag().festejo?.();
   };
 

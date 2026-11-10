@@ -203,6 +203,7 @@ export const crearPersona = (opt: { rol?: string; pre?: object; despues: (c: { i
 export const publicarEnPortalInmobiliario = (p: object, op: string) => window.Inmo.publicarPI(p, op);
 export const fichaCompleta = (propId: string, despues: () => void) => window.FichaBloques.abrir(propId, { despues });
 export const fotosDesdeDrive = (propId: string) => window.Fotos.drive(propId);
+export const fotosDesdeArchivos = (propId: string) => window.Fotos.archivos(propId);
 // la captación de la propiedad (src/renderer/etapas.js) dibuja en su propio contenedor
 export const bloqueCaptacion = (host: HTMLElement, propId: string, alCambiar: () => void) => window.Etapas.bloque(host, { propId, alCambiar, compacto: true });
 export const nuevoNegocioDe = (pre: { tipo: string; propId: string; clienteId?: string }) => window.Negocios?.nuevo(pre);
