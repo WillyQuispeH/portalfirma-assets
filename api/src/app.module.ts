@@ -38,6 +38,7 @@ import { EnviadosController, EnviadosService } from './whatsapp/enviados';
 import { EjecutivoController, EjecutivoService } from './whatsapp/ejecutivo';
 import { EquipoService } from './whatsapp/equipo';
 import { FotosWaService } from './whatsapp/fotos-wa';
+import { OrdenVisitaService } from './whatsapp/orden-visita';
 import { LeadsWaService } from './whatsapp/leads-wa';
 import { ClientesService } from './whatsapp/clientes';
 import { PostventaWaService } from './whatsapp/postventa';
@@ -104,6 +105,7 @@ import { LectorController, LectorService } from './whatsapp/lector';
     AvisosService,
     EquipoService,
     FotosWaService,
+    OrdenVisitaService,
     TranscripcionService,
     FirmasRondaService,
     IaService,

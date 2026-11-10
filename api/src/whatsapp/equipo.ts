@@ -16,6 +16,7 @@ import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { ActividadService } from '../comun/actividad.service';
 import { TranscripcionService } from '../ia/transcripcion';
+import { OrdenVisitaService } from './orden-visita';
 import { normalizar } from '../comun/texto';
 import { IaService, type HerramientaIa, type TurnoIa } from './ia';
 import { EnviadosService } from './enviados';
@@ -47,6 +48,8 @@ interface Ctx {
   usuarioId: string;
   nombre: string;
   admin: boolean;
+  /** lo que escribió (o dijo) el corredor en este turno */
+  texto: string;
 }
 
 const HERRAMIENTAS: HerramientaIa[] = [
@@ -130,6 +133,26 @@ const HERRAMIENTAS: HerramientaIa[] = [
     },
   },
   {
+    name: 'orden_visita',
+    description:
+      'Prepara y envía a firmar la ORDEN DE VISITA de una propiedad (documento que firma el visitante; cobra del saldo de Portalfirma). SIEMPRE en dos pasos: 1) llámala SIN confirmado: arma el documento y devuelve los datos que llevaría, sin enviar ni cobrar; muéstraselos al corredor. 2) Solo cuando el corredor responda que sí, llámala de nuevo con confirmado: true y EXACTAMENTE los mismos datos. El servidor rechaza el envío si no hubo ese paso previo o si el corredor no confirmó. Si el visitante no está en el CRM necesita nombre completo y RUT; siempre necesita su correo.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        codigo_propiedad: { type: 'string', description: 'por ejemplo PF-1001' },
+        visitante: { type: 'string', description: 'nombre completo, RUT o id de una persona del CRM' },
+        rut: { type: 'string', description: 'RUT del visitante si no está en el CRM' },
+        email: { type: 'string', description: 'correo del visitante (recibe el enlace para firmar)' },
+        telefono: { type: 'string' },
+        fecha: { type: 'string', description: 'fecha de la visita AAAA-MM-DD' },
+        hora: { type: 'string', description: 'HH:MM' },
+        operacion: { type: 'string', enum: ['venta', 'arriendo'] },
+        confirmado: { type: 'boolean', description: 'true solo después de que el corredor dijo que sí' },
+      },
+      required: ['codigo_propiedad', 'visitante'],
+    },
+  },
+  {
     name: 'firmas',
     description:
       'Los documentos enviados a firmar: quién falta por firmar y cuáles están listos. Por defecto, los que están en curso.',
@@ -165,6 +188,7 @@ export class EquipoService {
     private readonly enviados: EnviadosService,
     private readonly actividad: ActividadService,
     private readonly transcripcion: TranscripcionService,
+    private readonly ordenVisita: OrdenVisitaService,
   ) {}
 
   /** transcribe los audios de los mensajes; lo que no se pueda transcribir queda para su Asset (cola) como antes */
@@ -234,7 +258,7 @@ export class EquipoService {
 
     const u = await this.db.usuario.findUnique({ where: { id: v.usuarioId } });
     if (!u) return false;
-    const c: Ctx = { corredoraId: v.corredoraId, usuarioId: u.id, nombre: u.nombre, admin: u.rol === 'ADMIN' };
+    const c: Ctx = { corredoraId: v.corredoraId, usuarioId: u.id, nombre: u.nombre, admin: u.rol === 'ADMIN', texto };
     const nota = avisosAudio.length
       ? `\n\n[Aviso de la transcripción del audio: ${avisosAudio.join(' ')} No guardes ese dato sin que lo confirme.]`
       : '';
@@ -243,7 +267,7 @@ export class EquipoService {
     const sistema = [
       `Eres ${p.nombre}, del área de ${p.area} del equipo de PortalFirma Asset (CRM inmobiliario chileno). Trabajas para ${u.nombre}, corredor${c.admin ? ' y administrador' : ''} de la corredora, y le respondes por WhatsApp. Tu foco: ${p.foco}, pero ayudas con lo que te pida usando las herramientas.`,
       contexto(),
-      'Su Asset está cerrado en el computador: tú respondes desde el servidor. Puedes consultar la cartera, personas, negocios, leads, la agenda y las firmas, agendar eventos y dejar notas. Lo que necesita Asset abierto (generar documentos, enviar a firmar, publicar en portales, Drive, crear o editar fichas, escribirle a clientes) déjalo con dejar_para_asset y dile que se hará al abrir Asset.',
+      'Su Asset está cerrado en el computador: tú respondes desde el servidor. Puedes consultar la cartera, personas, negocios, leads, la agenda y las firmas, agendar eventos y dejar notas. La ORDEN DE VISITA sí la haces tú, aun con Asset cerrado, con orden_visita: primero sin confirmado para mostrarle los datos y, solo cuando el corredor responda que sí, con confirmado: true (cobra y envía un enlace a una persona: nunca la envíes sin su sí). Lo demás que necesita Asset abierto (otros documentos como mandatos o contratos, publicar en portales, Drive, crear o editar fichas, escribirle a clientes) déjalo con dejar_para_asset y dile que se hará al abrir Asset.',
       'Fotos de una propiedad: el corredor puede mandarlas a este mismo chat con el código en el mensaje (por ejemplo «PF-1001») y se agregan solas a la ficha, aun con Asset cerrado. Nunca digas que no puedes recibir fotos.',
       'Responde corto y claro, como en WhatsApp: frases breves, listas con «•», *negrita* con asteriscos simples, sin títulos ni tablas. Usa siempre las herramientas antes de afirmar datos; nunca inventes. Fechas como «lunes 10/11». Trátalo de tú.',
     ].join('\n\n');
@@ -636,6 +660,11 @@ export class EquipoService {
         });
         return { ok: true };
       }
+      case 'orden_visita':
+        return this.ordenVisita.ejecutar(
+          { corredoraId: c.corredoraId, usuarioId: c.usuarioId, texto: c.texto },
+          { ...a, confirmado: a.confirmado === true },
+        );
       case 'dejar_para_asset':
         await this.encolar(v, [{ id: 'eq' + Date.now().toString(36), texto: txt('pedido') }]);
         return { ok: true, nota: 'Queda en la cola: su Asset lo hará apenas se abra.' };

@@ -4,10 +4,23 @@
 // («base» y «iaBase»): fuera de producción el lector solo lee corredoras así, nunca las reales.
 // Crea una corredora de prueba con su administrador y un corredor, y al final la borra con todo lo suyo.
 // Uso: node test/asistentes-wa-e2e.js [url]     (tarda ~1,5 min)
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
 const http = require('http');
 const argon2 = require('argon2');
+const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js');
+const { StreamableHTTPServerTransport } = require('@modelcontextprotocol/sdk/server/streamableHttp.js');
+const { z } = require('zod');
 const { PrismaClient } = require('@prisma/client');
 
+const env = Object.fromEntries(fs.readFileSync(path.join(__dirname, '..', '.env'), 'utf8').split(/\r?\n/).map((l) => /^([A-Z0-9_]+)=(.*)$/.exec(l)).filter(Boolean).map((m) => [m[1], m[2].trim().replace(/^"(.*)"$/, '$1')]));
+// cifrado igual al de la API (src/conexiones/cifrado.ts)
+function cifrar(texto) {
+  const llave = Buffer.from(env.CONEXIONES_CLAVE, 'base64'); const iv = crypto.randomBytes(12);
+  const c = crypto.createCipheriv('aes-256-gcm', llave, iv); const d = Buffer.concat([c.update(texto, 'utf8'), c.final()]);
+  return ['v1', iv.toString('base64url'), c.getAuthTag().toString('base64url'), d.toString('base64url')].join('.');
+}
 const B = (process.argv[2] || 'http://localhost:3000') + '/v1';
 const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  ✔ ' + m); };
 const req = async (metodo, ruta, cuerpo, token) => {
@@ -86,10 +99,20 @@ function respuestaIa(b) {
     if (r.agendada) return texto(`Listo, quedó tu visita a ${r.agendada.direccion} el ${r.agendada.fecha} a las ${r.agendada.hora}.${r.pedir ? ' ' + r.pedir : ''}`);
     if (r.instruccion) return texto('Perfecto, le paso tu disponibilidad a tu corredor y te confirma.');
     if (r.propiedades) { const p = r.propiedades[0]; return texto(p ? `La propiedad de ${p.direccion} tiene gastos comunes de $${Number(p.gastosComunes || 0).toLocaleString('es-CL')}.` : 'No tengo propiedades tuyas registradas.'); }
+    if (r.necesitaConfirmacion) return texto(`Datos de la orden: ${r.visitante}, ${r.rut}, ${r.correo}, ${r.fecha}. ¿La envío?`);
+    if (r.enviada === true) return texto(`Orden enviada, operación ${r.operacion}.`);
     if (r.guardado) return texto('Gracias, lo anoté.');
     return texto('Uy: ' + (r.error || 'listo'));
   }
   // el equipo del ejecutivo en el servidor (Asset cerrado): consulta el resumen; un contrato lo deja para Asset
+  const ORDEN = { codigo_propiedad: 'PF-9002', visitante: 'Ana Visitante', rut: '11.111.111-1', email: 'ana.visitante@prueba.cl', fecha: '2037-12-01', hora: '11:00' };
+  if ((b.tools || []).some((t) => t.name === 'orden_visita')) {
+    if (/prepárame la orden de visita/i.test(contenido)) return herramienta('orden_visita', ORDEN);
+    if (/envía ya la orden/i.test(contenido)) return herramienta('orden_visita', { ...ORDEN, visitante: 'Beto Visitante', rut: '22.222.222-2', email: 'beto@prueba.cl', confirmado: true });
+    if (/espera, cámbiala/i.test(contenido)) return herramienta('orden_visita', { ...ORDEN, confirmado: true }); // el modelo se equivoca y confirma solo
+    if (/^sí, pero/i.test(contenido)) return herramienta('orden_visita', { codigo_propiedad: 'PF-9002', visitante: 'Ana Visitante', confirmado: true }); // un «sí» con un cambio no es un sí
+    if (/^s[ií]$/i.test(contenido.trim())) return herramienta('orden_visita', { codigo_propiedad: 'PF-9002', visitante: 'Ana Visitante', confirmado: true }); // el modelo ya no recuerda los demás argumentos
+  }
   if ((b.tools || []).some((t) => t.name === 'resumen'))
     return /contrato/i.test(contenido) ? herramienta('dejar_para_asset', { pedido: contenido.slice(-200) }) : herramienta('resumen', {});
   const sofia = (b.tools || []).some((t) => t.name.startsWith('lead_'));
@@ -110,6 +133,31 @@ function transcripcionFalsa() {
   });
   return new Promise((ok) => s.listen(0, '127.0.0.1', () => ok(s)));
 }
+// Portalfirma falso: la plantilla «Orden de visita» de la Notaría virtual. Registra lo que se manda a firmar.
+const PFTOKEN = 'tok-pf-' + SUF; const ENVIOS = []; const OPERACION = 800000000 + Math.floor(Math.random() * 90000000);
+const FORMULARIO = { groups: [
+  { type: 'signer', variables: [{ id: 'v-nom', name: 'nombre_visitante_signer', label: 'Nombre del visitante', required: true }, { id: 'v-rut', name: 'rut_visitante_signer', label: 'RUT del visitante', required: true }, { id: 'v-mail', name: 'correo_visitante_signer', label: 'Correo del visitante', required: true }] },
+  { type: 'nosigner', variables: [{ id: 'v-fecha', name: 'fecha_visita', label: 'Fecha de la visita', required: true }, { id: 'v-dir', name: 'direccion', label: 'Dirección de la propiedad', required: true }, { id: 'v-foto', name: 'foto', label: 'Foto de la propiedad', kind: 'image', required: true }, { id: 'v-cor', name: 'corredor_nombre', label: 'Nombre del corredor', required: true }] },
+] };
+function portalfirmaFalso() {
+  const s = http.createServer(async (rq, rs) => {
+    if (rq.headers.authorization !== 'Bearer ' + PFTOKEN) { rs.writeHead(401).end(); return; }
+    let b = ''; for await (const c of rq) b += c;
+    const srv = new McpServer({ name: 'pf-falso', version: '1.0.0' });
+    srv.tool('template_manage_tools', { action: z.string(), query: z.string().optional(), top_k: z.number().optional(), template_version_id: z.string().optional(), property_id: z.string().optional(), values: z.record(z.string(), z.string()).optional() }, async (a) => {
+      const t = (x) => ({ content: [{ type: 'text', text: typeof x === 'string' ? x : JSON.stringify(x) }] });
+      if (a.action === 'search') return t([{ template_version_id: 'tv-orden', name: 'Orden de visita - prueba' }]);
+      if (a.action === 'get_forms') return t(FORMULARIO);
+      if (a.action === 'send_sign') { ENVIOS.push({ values: a.values, plantilla: a.template_version_id }); return t({ operation: OPERACION, message: 'Enviado a firmar' }); }
+      return { content: [{ type: 'text', text: 'Error: acción desconocida' }], isError: true };
+    });
+    const tr = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
+    rs.on('close', () => { tr.close(); srv.close(); });
+    await srv.connect(tr);
+    await tr.handleRequest(rq, rs, b ? JSON.parse(b) : undefined);
+  });
+  return new Promise((r) => s.listen(0, '127.0.0.1', () => r(s)));
+}
 function iaFalsa() {
   const s = http.createServer((rq, rs) => {
     let b = ''; rq.on('data', (x) => (b += x)); rq.on('end', () => {
@@ -124,7 +172,7 @@ function iaFalsa() {
 
 (async () => {
   const db = new PrismaClient();
-  const srv = await wechatiaFalso(); const ia = await iaFalsa(); const trf = await transcripcionFalsa();
+  const srv = await wechatiaFalso(); const ia = await iaFalsa(); const trf = await transcripcionFalsa(); const pfs = await portalfirmaFalso();
   const base = `http://127.0.0.1:${srv.address().port}`; const iaBase = `http://127.0.0.1:${ia.address().port}`; const transcribirBase = `http://127.0.0.1:${trf.address().port}`;
   let co = null; const usuarios = [];
   try {
@@ -150,6 +198,8 @@ function iaFalsa() {
     ok(r.s === 200 && r.j.conectado, 'el administrador conecta el WhatsApp de la empresa (wechatia de prueba)');
     const cx = await db.conexion.findFirst({ where: { corredoraId: co.id, proveedor: 'wechatia' } });
     await db.conexion.update({ where: { id: cx.id }, data: { datos: { ...cx.datos, iaBase, transcribirBase } } });
+    await db.conexion.create({ data: { corredoraId: co.id, usuarioId: null, dueno: 'corredora', proveedor: 'portalfirma', tipo: 'oauth', estado: 'activa', accesoCif: cifrar(PFTOKEN), datos: { mcpUrl: `http://127.0.0.1:${pfs.address().port}/mcp` } } });
+    const prop2 = await db.propiedad.create({ data: { corredoraId: co.id, codigo: 'PF-9002', titulo: 'Casa La Reina', tipo: 'casa', venta: true, precioVenta: 9500, monedaVenta: 'UF', direccion: 'Larraín 6200', comuna: 'La Reina', dormitorios: 4, banos: 3, captadorId: c1.id, fotos: { create: [{ url: 'https://example.com/casa.jpg', orden: 0, destacada: true }] } } });
     r = await req('GET', '/whatsapp/asistentes', null, t1);
     ok(r.j.conectado && r.j.ia && r.j.clientesActivo && r.j.enServidor, 'estado: conectado, con IA y la atención de clientes encendida');
 
@@ -170,6 +220,34 @@ function iaFalsa() {
     ok(r.s === 200 && (await db.aviso.findFirst({ where: { usuarioId: c1.id, tipo: 'wa_pedir_vinculo' } })), 'el administrador le pide que vincule: le llega un aviso con los pasos');
     escribe(cel, 'Pedro, ¿cómo va la cartera?');
     ok(await hasta(() => salidas(cel).some((t) => /^\*Pedro\* · Captación\nTienes \d+ propiedad/.test(t))), 'con su Asset cerrado, Pedro le responde desde el servidor (con los datos de la base)');
+    // la ORDEN DE VISITA con su Asset cerrado: la prepara y la envía el servidor, solo con la confirmación del corredor
+    let antesOv = salidas(cel).length; const enviosAntes = ENVIOS.length;
+    escribe(cel, 'Juanita, envía ya la orden de visita de Beto a la PF-9002');
+    ok(await hasta(() => salidas(cel).slice(antesOv).some((t) => /^\*Juanita\* · Documentos\nUy: Primero hay que preparar la orden/.test(t))) && ENVIOS.length === enviosAntes, 'si el modelo intenta enviarla sin prepararla antes, el servidor lo rechaza y no se envía nada');
+    antesOv = salidas(cel).length;
+    escribe(cel, 'Juanita, prepárame la orden de visita de Ana Visitante para la PF-9002');
+    ok(await hasta(() => salidas(cel).slice(antesOv).some((t) => /Datos de la orden: Ana Visitante, 11\.111\.111-1, ana\.visitante@prueba\.cl, 2037-12-01\. ¿La envío\?/.test(t))), 'prepararla muestra los datos del documento (visitante, RUT, correo, fecha) y pregunta si la envía');
+    ok(ENVIOS.length === enviosAntes && !(await db.firma.count({ where: { corredoraId: co.id } })) && !(await db.persona.count({ where: { corredoraId: co.id, rut: '111111111' } })), 'preparar no envía, no cobra, no registra la firma ni crea a la persona');
+    antesOv = salidas(cel).length;
+    escribe(cel, 'espera, cámbiala para el jueves');
+    ok(await hasta(() => salidas(cel).slice(antesOv).some((t) => /Uy: El corredor todavía no confirmó/.test(t))) && ENVIOS.length === enviosAntes, 'si el modelo confirma por su cuenta (sin que el corredor diga que sí), el servidor lo rechaza y no se envía');
+    antesOv = salidas(cel).length;
+    escribe(cel, 'sí, pero a las 12');
+    ok(await hasta(() => salidas(cel).slice(antesOv).some((t) => /Uy: El corredor todavía no confirmó/.test(t))) && ENVIOS.length === enviosAntes, 'un «sí, pero a las 12» pide un cambio: no cuenta como confirmación y no se envía');
+    antesOv = salidas(cel).length;
+    escribe(cel, 'sí');
+    ok(await hasta(() => salidas(cel).slice(antesOv).some((t) => new RegExp(`Orden enviada, operación ${OPERACION}\\.`).test(t))), 'con el sí del corredor, la envía a firmar (operación ' + OPERACION + ')');
+    ok(ENVIOS.length === enviosAntes + 1 && ENVIOS.at(-1).values['v-rut'] === '11.111.111-1' && ENVIOS.at(-1).values['v-mail'] === 'ana.visitante@prueba.cl' && ENVIOS.at(-1).values['v-fecha'] === '2037-12-01' && /Larraín 6200/.test(ENVIOS.at(-1).values['v-dir']) && ENVIOS.at(-1).values['v-foto'] === 'https://example.com/casa.jpg' && /Corredor B/.test(ENVIOS.at(-1).values['v-cor']), 'el documento salió con los datos de la ficha (dirección, foto), del visitante y del corredor');
+    const fOv = await db.firma.findFirst({ where: { corredoraId: co.id, operacion: OPERACION } });
+    ok(fOv && fOv.documento === 'Orden de visita' && fOv.estado === 'en_firma' && fOv.enviadoPorId === c1.id && fOv.propiedadIds.includes(prop2.id) && fOv.firmantes[0].rut === '11.111.111-1', 'la firma queda registrada (en firma, de quien la envió, ligada a la propiedad)');
+    const pAna = await db.persona.findFirst({ where: { corredoraId: co.id, rut: '111111111' }, include: { vinculos: true } });
+    ok(pAna && pAna.nombre === 'Ana Visitante' && pAna.email === 'ana.visitante@prueba.cl' && pAna.vinculos.some((x) => x.propiedadId === prop2.id && x.rol === 'interesado'), 'el visitante quedó en el CRM y vinculado como interesado');
+    const evOv = await db.evento.findFirst({ where: { corredoraId: co.id, propiedadId: prop2.id, tipo: 'visita' } });
+    ok(evOv && evOv.hora === '11:00' && evOv.fecha.toISOString().startsWith('2037-12-01') && evOv.datos.orden.operacion === OPERACION, 'la visita quedó en la agenda con su orden');
+    antesOv = salidas(cel).length;
+    escribe(cel, 'sí');
+    await esperar(6000);
+    ok(ENVIOS.length === enviosAntes + 1, 'un segundo «sí» no la envía otra vez');
     // audios (notas de voz) con su Asset cerrado: el servidor los transcribe, dice qué entendió y responde el equipo
     T.actual = { primera: 'Pedro, ¿cómo va la cartera PF1001?' };
     let antesAu = salidas(cel).length;
@@ -233,7 +311,7 @@ function iaFalsa() {
     escribe(cj, `Me sirve el ${f} a las ${hh} en ${prop.codigo}`);
     const h2 = await hasta(() => salidas(cj).find((t) => /quedó tu visita/.test(t)));
     ok(h2 && /Irarrázaval 2450/.test(h2) && /RUT/.test(h2), 'Sofía agenda la visita, la confirma con la dirección y le pide RUT y correo');
-    const ev = await db.evento.findFirst({ where: { corredoraId: co.id, tipo: 'visita' } });
+    const ev = await db.evento.findFirst({ where: { corredoraId: co.id, tipo: 'visita', propiedadId: prop.id } });
     ok(ev && ev.hora === hh && ev.fecha.toISOString().slice(0, 10) === f && ev.corredorId === c1.id && ev.propiedadId === prop.id && ev.datos.ext.id === lead.id, 'la visita queda en la agenda del corredor a cargo, ligada al lead');
     const l2 = await db.lead.findUnique({ where: { id: lead.id } });
     ok(l2.estado === 'visita' && l2.version > lead.version && /Visita/.test(l2.datos.proximaAccion.texto), 'el lead pasa a «visita» con su próxima acción (con versión nueva para que la app lo traiga)');
@@ -345,10 +423,10 @@ function iaFalsa() {
     // ---- desvincular
     ok((await req('POST', '/whatsapp/ejecutivo/desvincular', null, t1)).j.ok && !(await req('GET', '/whatsapp/ejecutivo', null, t1)).j.activo, 'el corredor desvincula su celular');
   } finally {
-    srv.close(); ia.close(); trf.close();
+    srv.close(); ia.close(); trf.close(); pfs.close();
     if (co) {
       const w = { where: { corredoraId: co.id } };
-      for (const m of ['waEntrante', 'waVinculo', 'waHilo', 'waEnviado', 'waConversacion', 'waAjustes', 'iaConsumo', 'waProgramado', 'aviso', 'conexion', 'registro', 'actividad', 'evento', 'leadMensaje', 'lead']) await db[m].deleteMany(w).catch((e) => console.warn(m, e.message));
+      for (const m of ['waEntrante', 'waVinculo', 'waHilo', 'waEnviado', 'waConversacion', 'waAjustes', 'iaConsumo', 'waProgramado', 'aviso', 'conexion', 'registro', 'actividad', 'evento', 'firma', 'leadMensaje', 'lead']) await db[m].deleteMany(w).catch((e) => console.warn(m, e.message));
       await db.propiedadPersona.deleteMany({ where: { propiedad: { corredoraId: co.id } } });
       await db.propiedad.deleteMany(w); await db.persona.deleteMany(w); await db.contador.deleteMany(w);
       await db.sesion.deleteMany({ where: { usuarioId: { in: usuarios } } });
