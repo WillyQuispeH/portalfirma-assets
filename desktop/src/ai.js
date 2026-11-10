@@ -132,7 +132,8 @@ function wallet() {
 }
 const saveWallet = (w) => { w.log = (w.log || []).slice(-200); store.set('aiTokens', w); };
 function walletStatus() { const w = wallet(); return { balance: w.balance, askLeft: w.askLeft || 0, costs: COSTS, askPerToken: ASK_PER_TOKEN, pack: PACK, log: (w.log || []).slice(-30).reverse() }; }
-const costOf = (action, w) => (action === 'ask' ? ((w.askLeft || 0) > 0 ? 0 : COSTS.ask) : COSTS[action] ?? 1);
+// con la IA del servidor de Asset no se cobra la billetera local (era de la etapa de prueba, 5 tokens de bienvenida)
+const costOf = (action, w) => enServidor() ? 0 : (action === 'ask' ? ((w.askLeft || 0) > 0 ? 0 : COSTS.ask) : COSTS[action] ?? 1);
 function redeem(code) {
   const c = String(code || '').trim().toLowerCase().replace(/[-\s]+$/, '');
   if (!TEST_CODES.includes(c)) throw new Error('El código no es válido. Revísalo o pide uno nuevo a soporte por WhatsApp.');
@@ -265,8 +266,8 @@ async function agentModel() {
   return (agentModelCache = cand[0] || list.find((x) => /mini/.test(x)) || c.model || 'gpt-4o-mini');
 }
 // Cobro: 1 token cada 3 mensajes del usuario al agente (se verifica antes y se descuenta al terminar bien)
-function agentCheck() { const w = wallet(); const c = (w.agentLeft || 0) > 0 ? 0 : COSTS.agent; if (w.balance < c) { const e = new Error(`No te quedan tokens del asistente (el agente usa 1 token cada 3 mensajes; tienes ${w.balance}).`); e.code = 'NO_TOKENS'; e.data = walletStatus(); throw e; } }
-function agentCharge() { const w = wallet(); if ((w.agentLeft || 0) > 0) w.agentLeft -= 1; else { w.balance = Math.max(0, w.balance - COSTS.agent); w.agentLeft = 2; w.log.push({ t: Date.now(), d: -COSTS.agent, what: LABEL.agent }); } saveWallet(w); return walletStatus(); }
+function agentCheck() { if (enServidor()) return; const w = wallet(); const c = (w.agentLeft || 0) > 0 ? 0 : COSTS.agent; if (w.balance < c) { const e = new Error(`No te quedan tokens del asistente (el agente usa 1 token cada 3 mensajes; tienes ${w.balance}).`); e.code = 'NO_TOKENS'; e.data = walletStatus(); throw e; } }
+function agentCharge() { if (enServidor()) return walletStatus(); const w = wallet(); if ((w.agentLeft || 0) > 0) w.agentLeft -= 1; else { w.balance = Math.max(0, w.balance - COSTS.agent); w.agentLeft = 2; w.log.push({ t: Date.now(), d: -COSTS.agent, what: LABEL.agent }); } saveWallet(w); return walletStatus(); }
 async function toolChat({ system, messages, tools }) {
   if (MOCK) return mockAgent(messages);
   const { c, k } = key(); const model = await agentModel();
