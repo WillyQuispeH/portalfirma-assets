@@ -18,6 +18,7 @@ import { PersonasService } from '../personas/personas.service';
 import { limpiarRut, rutValido } from '../comun/texto';
 import type { UsuarioToken } from '../auth/usuario-actual';
 import { IaService, type HerramientaIa, type TurnoIa } from './ia';
+import { TranscripcionService } from '../ia/transcripcion';
 import { EnviadosService } from './enviados';
 import { EjecutivoService } from './ejecutivo';
 import { LeadsWaService, type DatosLead, type MensajeLead } from './leads-wa';
@@ -223,7 +224,29 @@ export class ClientesService {
     private readonly leads: LeadsWaService,
     private readonly actividad: ActividadService,
     private readonly personas: PersonasService,
+    private readonly transcripcion: TranscripcionService,
   ) {}
+
+  /**
+   * Las notas de voz del cliente se transcriben (antes solo decían «Recibí tu archivo»): el texto queda como lo que escribió,
+   * con «🎙️» adelante para que el corredor sepa que lo dijo en un audio. Si no se puede, el mensaje queda como estaba.
+   */
+  private async escuchar(corredoraId: string, ms: MensajeWa[]): Promise<MensajeWa[]> {
+    const AUDIO = /\.(ogg|oga|opus|mp3|m4a|amr|aac|wav|webm)(\?|$)|audio/i;
+    return Promise.all(
+      ms.map(async (m) => {
+        const url = m.adjuntos.find((u) => AUDIO.test(u));
+        if (!url || m.texto.trim()) return m;
+        try {
+          const r = await this.transcripcion.transcribirUrl(corredoraId, url);
+          return r.texto ? { ...m, texto: `🎙️ ${r.texto}`, adjuntos: m.adjuntos.filter((u) => u !== url) } : m;
+        } catch (e) {
+          this.log.warn(`audio del cliente sin transcribir: ${(e as Error).message}`);
+          return m;
+        }
+      }),
+    );
+  }
 
   // ------------------------------------------------------------------ quién escribe
 
@@ -840,6 +863,7 @@ ${
 }
 - Firma: el enlace para firmar le llega por correo desde Portalfirma (y a veces por este WhatsApp). Si lo pide y hay ultimoEnlaceDeFirma, compártelo. Puedes revisar si ya firmó con cliente_estado_firma. Si tiene un problema o dudas del contrato, usa cliente_recado.
 - Precio, negociación, dudas legales o cualquier otro tema: cliente_recado y dile que ${corredor} lo contactará.
+- NUNCA digas que le pasaste, avisaste, pediste o anotaste algo a ${corredor} si no llamaste a cliente_recado en ESTE mismo turno: primero llama la herramienta y recién después responde. Decirlo sin hacerlo es mentirle al cliente.
 - Si te preguntan si eres una persona, di con naturalidad que eres el asistente virtual de ${corredor}.`;
   }
 
@@ -925,6 +949,7 @@ ${
     nuevos: MensajeWa[],
     recientes: MensajeWa[],
   ) {
+    nuevos = await this.escuchar(corredoraId, nuevos);
     const t = telNorm(cv.telefono)!;
     const c: Ctx = { wa, corredoraId, cli, recados: [] };
     const yo = ATENCION[cli.quien];
@@ -1060,7 +1085,20 @@ ${
     } catch (e) {
       this.log.warn(`IA (${cli.quien}): ${(e as Error).message}`);
     }
+    // «Le pasé tu mensaje a …» solo es cierto si de verdad se le pasó. El modelo a veces lo dice sin llamar a cliente_recado
+    // (pasó con una oferta de precio, y lo repitió en varios mensajes) y el mensaje de respaldo también lo afirma: si se
+    // dijo y no hubo recado en este turno, se deja ahora, con lo que escribió el cliente.
+    const AFIRMA_RECADO = /\b(le\s+(pas[eé]|dej[eé]|envi[eé]|avis[eé]|ped[ií]|mand[eé]|anot[eé]|coment[eé]|transmit[ií]|escrib[ií])|ya\s+le\s+(pas|avis|envi|dej)|qued[oó]\s+(anotad|registrad|avisad))/i;
+    const faltaRecado = !c.recados.length && (!final || AFIRMA_RECADO.test(final));
     if (!final) final = `Gracias por escribir. Le paso tu mensaje a ${corredor} y te contacta.`;
+    if (faltaRecado) {
+      try {
+        await this.ejecutar(c, 'cliente_recado', { tipo: 'otro', detalle: `El cliente escribió: «${texto.slice(0, 300)}»` });
+        this.log.warn(`${cli.quien}: dijo que avisó al corredor sin llamar a cliente_recado; se dejó el recado`);
+      } catch (e) {
+        this.log.warn(`recado automático: ${(e as Error).message}`);
+      }
+    }
     final = final.slice(0, 3000);
     await this.enviarYAnotar(c, cv, final);
     const conversado = [

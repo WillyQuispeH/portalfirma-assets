@@ -119,6 +119,7 @@ function respuestaIa(b) {
   const ag = contenido.match(/(\d{4}-\d{2}-\d{2}) a las (\d{2}:\d{2})/);
   if (sofia && ag) return herramienta('lead_agendar_visita', { propiedad: (contenido.match(/PF-\d+/) || [''])[0], fecha: ag[1], hora: ag[2] });
   if (sofia && /visita|agendar/i.test(contenido)) return herramienta('lead_horarios', {});
+  if (!sofia && /oferta/i.test(contenido)) return texto('Le pasé tu oferta a Corredor B, él te contacta.'); // lo dice sin llamar a cliente_recado
   if (!sofia && /visita|agend/i.test(contenido)) return herramienta('cliente_recado', { tipo: 'agendar_visita', detalle: contenido.slice(-200), disponibilidad: 'el sábado en la mañana' });
   return herramienta('cliente_info', {});
 }
@@ -358,6 +359,17 @@ function iaFalsa() {
     ok(await hasta(() => salidas(cel).some((t) => /^\*Tomás\* · Atención de clientes\n💬 Carla Ruiz escribió/.test(t))), 'y avisa al captador de su propiedad, firmado por Tomás');
     escribe(cc, 'Quiero agendar una visita');
     ok(await hasta(() => salidas(cel).some((t) => /📩 \*Recado de Carla Ruiz\*/.test(t))), 'para una visita, Tomás toma el recado y se lo pasa al corredor');
+    // el asistente dice «le pasé tu oferta al corredor» sin llamar a cliente_recado: el servidor deja el recado de verdad
+    const antesRec = salidas(cel).length;
+    escribe(cc, 'Mi oferta por el departamento es 90.000 mensuales');
+    ok(await hasta(() => salidas(cc).some((t) => /Le pasé tu oferta a Corredor B/.test(t))), 'Tomás responde que le pasó la oferta al corredor');
+    ok(await hasta(() => salidas(cel).slice(antesRec).some((t) => /📩 \*Recado de Carla Ruiz\*[\s\S]*El cliente escribió: «Mi oferta por el departamento es 90\.000 mensuales»/.test(t))), 'y como no llamó a la herramienta, el servidor deja el recado con lo que escribió la cliente (lo dicho es cierto)');
+    // la nota de voz de una cliente se transcribe (antes: «Recibí tu archivo»)
+    T.actual = { primera: 'Hola, ¿me pueden confirmar la visita para el sábado?' };
+    const antesAud = salidas(cc).length; const recAntes = salidas(cel).length;
+    escribe(cc, '', { attachments: [`${base}/audio/cliente.ogg`] });
+    ok(await hasta(() => salidas(cel).slice(recAntes).some((t) => /📩 \*Recado de Carla Ruiz\*[\s\S]*sábado/.test(t))), 'la nota de voz de una cliente se transcribe y el asistente la atiende como si la hubiera escrito');
+    ok(!salidas(cc).slice(antesAud).some((t) => /Recibí tu archivo/.test(t)), 'ya no responde «Recibí tu archivo» a un audio');
     ok((await req('PUT', '/whatsapp/asistentes', { clientesActivo: false }, t1)).s === 403, 'un corredor no apaga la atención de clientes');
     r = await req('PUT', '/whatsapp/asistentes', { clientesActivo: false }, tA);
     ok(r.s === 200 && r.j.clientesActivo === false, 'el administrador la apaga');
