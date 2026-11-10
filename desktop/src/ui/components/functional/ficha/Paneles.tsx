@@ -1,6 +1,5 @@
 // Pestañas «Negocios», «Firmas y documentos», «Portales» e «Historial» de la ficha.
-// Con el kit: Card, Boton, Tabs, Badge, ItemLista, Input y LineaTiempo; la tabla de negocios sigue con sus
-// clases im-n* de styles.css.
+// Con el kit: Card, Boton, Tabs, Badge, Avatar, ItemLista, Input y LineaTiempo.
 // Los id y data-* (#fFirmasBox, #fDocs, #fPI, [data-doc], [data-st], data-neg, data-nf, data-pi, data-lead,
 // [data-pv], [data-nuevo]…) los usan las pruebas y Aprende.
 import { useState, type FormEvent } from 'react';
@@ -9,6 +8,7 @@ import Boton from '../../ui/Boton';
 import Card from '../../ui/Card';
 import Tabs, { type TTabOpcion } from '../../ui/Tabs';
 import Badge from '../../ui/Badge';
+import Avatar from '../../ui/Avatar';
 import ItemLista from '../../ui/ItemLista';
 import Input from '../../ui/Input';
 import EstadoVacio from '../../ui/EstadoVacio';
@@ -28,21 +28,35 @@ import type { TFiltroNegocios } from '../../../store/hooks/useFicha.hook';
 import type { TTono } from '../../ui/tonos';
 
 const OPS: TOperacion[] = ['venta', 'arriendo'];
-// dos columnas en pantallas anchas (como el resumen)
-const COLUMNAS = 'tw:grid tw:gap-4 tw:lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)] tw:items-start';
+// dos columnas en pantallas anchas, con las mismas proporciones que el resumen
+const COLUMNAS = 'tw:grid tw:gap-4 tw:lg:grid-cols-[minmax(0,1.6fr)_minmax(320px,1fr)] tw:items-start';
 
 // ---------- Negocios: una fila por negocio (cliente, operación, etapa con su avance y la próxima acción) ----------
+const FILA_NEGOCIO = 'tw:grid tw:grid-cols-[minmax(160px,1.2fr)_minmax(170px,1.2fr)_minmax(160px,1.4fr)_18px] tw:items-center tw:gap-4';
+
 function FilaNegocio({ n }: { n: INegocio }) {
   const total = n.total || 0; const pct = total ? Math.round((((n.orden ?? 0) + 1) / total) * 100) : 0; const pa = n.proximaAccion;
   const abierto = n.estado === 'abierto';
   return (
-    <button className="im-nrow" data-neg={n.id} onClick={() => abrirNegocio(n.id)}>
-      <span className="im-nc"><b>{n.cliente?.nombre || 'Sin cliente'}</b><small>{n.tipo === 'venta' ? 'Venta' : 'Arriendo'}</small></span>
-      <span className="im-ne">{abierto
-        ? <><b>{n.etapaInfo?.t || ''}</b><span className="im-nbar"><i style={{ width: `${pct}%` }} /></span><small>Etapa {(n.orden ?? 0) + 1} de {total}</small></>
-        : <b className={n.estado === 'ganado' ? 'ok' : 'bad'}>{n.estado === 'ganado' ? 'Cerrado con éxito' : 'Perdido'}</b>}</span>
-      <span className="im-na">{abierto && <>{pa?.texto || n.siguiente || '—'}{pa?.fecha && <small>{fecha(pa.fecha)}</small>}</>}</span>
-      <Icono nombre="chevR" tam={16} />
+    <button type="button" data-neg={n.id} onClick={() => abrirNegocio(n.id)} className={cx(FILA_NEGOCIO,
+      'tw:w-full tw:m-0 tw:px-3 tw:py-3 tw:text-left tw:font-[inherit] tw:text-text tw:bg-transparent tw:cursor-pointer tw:rounded-xl',
+      'tw:border-0 tw:border-t tw:border-solid tw:border-edge tw:hover:bg-hover tw:focus-visible:outline-2 tw:focus-visible:outline-lav-edge')}>
+      <span className="tw:flex tw:min-w-0 tw:items-center tw:gap-2.5">
+        <Avatar nombre={n.cliente?.nombre || '?'} tamano="sm" />
+        <span className="tw:flex tw:min-w-0 tw:flex-col">
+          <b className="tw:truncate tw:text-[13.5px] tw:font-semibold">{n.cliente?.nombre || 'Sin cliente'}</b>
+          <small className="tw:text-xs tw:text-muted">{n.tipo === 'venta' ? 'Venta' : 'Arriendo'}</small>
+        </span>
+      </span>
+      <span className="tw:flex tw:min-w-0 tw:flex-col tw:items-start tw:gap-1">{abierto
+        ? <>
+          <b className="tw:text-[13.5px] tw:font-semibold">{n.etapaInfo?.t || ''}</b>
+          <span className="tw:block tw:h-1.5 tw:w-full tw:max-w-[180px] tw:overflow-hidden tw:rounded-full tw:bg-sunken"><i className="tw:block tw:h-full tw:rounded-full tw:bg-lav-edge" style={{ width: `${pct}%` }} /></span>
+          <small className="tw:text-xs tw:text-muted">Etapa {(n.orden ?? 0) + 1} de {total}</small>
+        </>
+        : <Badge tono={n.estado === 'ganado' ? 'verde' : 'rojo'} punto>{n.estado === 'ganado' ? 'Cerrado con éxito' : 'Perdido'}</Badge>}</span>
+      <span className="tw:flex tw:min-w-0 tw:flex-col tw:text-[13px]">{abierto && <>{pa?.texto || n.siguiente || '—'}{pa?.fecha && <small className="tw:text-xs tw:text-muted">{fecha(pa.fecha)}</small>}</>}</span>
+      <span className="tw:text-muted"><Icono nombre="chevR" tam={16} /></span>
     </button>
   );
 }
@@ -55,17 +69,19 @@ export function Negocios({ p }: { p: IPropiedad }) {
   const cuenta = (k: TFiltroNegocios) => l.filter((n) => (k === 'abiertos' ? n.estado === 'abierto' : n.estado !== 'abierto')).length;
   const FILTROS: TTabOpcion<TFiltroNegocios>[] = [['abiertos', 'Abiertos', cuenta('abiertos')], ['cerrados', 'Cerrados', cuenta('cerrados')], ['todos', 'Todos']];
   return (
-    <div className="tw:max-w-[920px]">
-      <Card titulo="Negocios" accion={ops.length > 0 && (
+    <div>
+      <Card titulo="Negocios" subtitulo="Ventas y arriendos de esta propiedad, con la etapa en que va cada uno" accion={ops.length > 0 && (
         <span className="tw:flex tw:gap-2">
-          {ops.map((o) => <Boton key={o} variante="secundario" tamano="sm" icono="plus" data-negnew={o} onClick={() => nuevoNegocioDe({ tipo: o, propId: p.id })}>{o === 'venta' ? 'Venta' : 'Arriendo'}</Boton>)}
+          {ops.map((o) => <Boton key={o} variante="secundario" tamano="sm" icono="plus" data-negnew={o} onClick={() => nuevoNegocioDe({ tipo: o, propId: p.id })}>{o === 'venta' ? 'Negocio de venta' : 'Negocio de arriendo'}</Boton>)}
         </span>
       )}>
         {l.length ? <>
           <Tabs dato="nf" etiqueta="Filtrar negocios" className="tw:mb-3" opciones={FILTROS} valor={f} alCambiar={fichaSetFiltroNegocios} />
-          <div className="im-ntab">
-            <div className="im-nhead"><span>Cliente</span><span>Etapa</span><span>Próxima acción</span><span /></div>
-            {ver.length ? ver.map((n) => <FilaNegocio key={n.id} n={n} />) : <EstadoVacio compacto texto="No hay negocios con ese filtro." className="tw:px-2.5 tw:py-2.5" />}
+          <div className="tw:-mx-3 tw:flex tw:flex-col tw:overflow-x-auto">
+            <div className={cx(FILA_NEGOCIO, 'tw:px-3 tw:pb-2 tw:text-[11.5px] tw:font-semibold tw:uppercase tw:tracking-wider tw:text-muted')}>
+              <span>Cliente</span><span>Etapa</span><span>Próxima acción</span><span />
+            </div>
+            {ver.length ? ver.map((n) => <FilaNegocio key={n.id} n={n} />) : <EstadoVacio compacto texto="No hay negocios con ese filtro." className="tw:px-3 tw:py-2.5" />}
           </div>
         </> : <EstadoVacio compacto texto="Sin negocios. Créalo cuando aparezca un interesado: cada etapa te dirá qué falta y qué firmar." />}
       </Card>
@@ -207,7 +223,7 @@ export function Portales({ p }: { p: IPropiedad }) {
             <Card titulo={<span className="im-pih"><span className="im-pilogo">PI</span>Portal Inmobiliario</span>}
               accion={portal?.conectada
                 ? <small className="tw:text-[13px] tw:text-muted">{portal.cuenta?.nickname || ''}</small>
-                : <Boton variante="fantasma" tamano="sm" data-pi="config" onClick={abrirPortales}>Conectar cuenta</Boton>}>
+                : <Boton variante="secundario" tamano="sm" icono="link" data-pi="config" onClick={abrirPortales}>Conectar cuenta</Boton>}>
               {ops.map((op) => <FilaAviso key={op} p={p} op={op} />)}
             </Card>
           </div>
@@ -228,14 +244,20 @@ export function Historial() {
     setTexto('');
   };
   return (
-    <div className="tw:max-w-[920px]">
-      <Card titulo="Historial">
-        <form id="fNota" onSubmit={guardar} className="tw:flex tw:gap-2 tw:mb-4">
-          <Input id="fNotaT" placeholder="Agregar una nota (visita, llamada, acuerdo…)" aria-label="Nota" clasesCampo="tw:flex-1" value={texto} onChange={(e) => setTexto(e.target.value)} />
-          <Boton type="submit" variante="secundario">Guardar</Boton>
-        </form>
-        <ListaActividad items={actividad} />
-      </Card>
+    <div className={COLUMNAS}>
+      <div className="tw:min-w-0">
+        <Card titulo="Historial" subtitulo="Firmas, cambios de etapa, avisos y notas de esta propiedad">
+          <ListaActividad items={actividad} />
+        </Card>
+      </div>
+      <div className="tw:min-w-0">
+        <Card titulo="Agregar una nota" subtitulo="Una visita, una llamada o un acuerdo: queda en el historial">
+          <form id="fNota" onSubmit={guardar} className="tw:flex tw:flex-col tw:gap-3">
+            <Input id="fNotaT" placeholder="Ej.: visita con la familia Soto, les gustó el patio" aria-label="Nota" value={texto} onChange={(e) => setTexto(e.target.value)} />
+            <Boton type="submit" icono="plus" bloque>Guardar nota</Boton>
+          </form>
+        </Card>
+      </div>
     </div>
   );
 }

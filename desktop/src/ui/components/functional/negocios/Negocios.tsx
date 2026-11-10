@@ -1,7 +1,8 @@
 // Negocios: el tablero por etapas (Ventas / Arriendos), con resumen, búsqueda y «Cerrados».
 // Arrastrar una tarjeta a otra columna mueve el negocio de etapa.
 // Hecha con el kit: Layout (cabecera y barra), Boton, Tabs, Buscador, Kpi, Card y EstadoVacio; las columnas y tarjetas del
-// tablero siguen con sus clases ng-* de styles.css.
+// tablero siguen con sus clases ng-* de styles.css, con el color de su etapa en --c (colores.ts).
+// .ng-tablero hace que el tablero ocupe el alto de la ventana; cada columna se desplaza por su cuenta.
 //
 // La ficha del negocio y «Nuevo negocio» siguen en src/renderer/negocios.js; se llaman por utils/app.ts.
 // Los id ngNew, ngTipo (data-t), ngVer (data-v), ngQ y las clases ng-kpis, ng-board, ng-col[data-e], ng-card y
@@ -19,6 +20,7 @@ import EstadoVacio from '../../ui/EstadoVacio';
 import Icono from '../../ui/Icono';
 import Kpi from '../../ui/Kpi';
 import NegocioCard from './NegocioCard';
+import { colorEtapa, conColor } from './colores';
 import { sumar } from '../finanzas/resumen';
 import type { TNegocioTipo } from '../../../store/interfaces/negocio.interface';
 
@@ -63,6 +65,8 @@ export default function Negocios({ tipo: tipoInicial }: INegociosProps) {
 
   return (
     <Layout
+      className="ng-tablero"
+      contenidoClassName="tw:flex-1"
       titulo="Negocios"
       ilustracion={{ imagen: 'img/formas/negocios.svg', tinte: '#3d9cf0' }}
       subtitulo="Cada etapa dice qué falta. Arrastra una tarjeta para moverla; cuando un documento queda firmado, el negocio avanza solo."
@@ -80,11 +84,11 @@ export default function Negocios({ tipo: tipoInicial }: INegociosProps) {
       {cargado && (
         <>
           <div className="ng-kpis">
-            <Kpi icono="briefcase" valor={abiertos.length} texto="negocios abiertos" />
-            <Kpi icono="sign" valor={esperandoFirmas} texto="esperando firmas" />
-            <Kpi icono="clock" valor={vencidas} texto="acciones vencidas" alerta={vencidas > 0} />
-            <Kpi icono="check" valor={ganadosMes} texto="cerrados este mes" />
-            <Kpi icono="coins" valor={montos(sumar(abiertos))} texto="comisión en curso" />
+            <Kpi icono="briefcase" tono="azul" valor={abiertos.length} texto="negocios abiertos" />
+            <Kpi icono="sign" tono="lavanda" valor={esperandoFirmas} texto="esperando firmas" />
+            <Kpi icono="clock" tono="durazno" valor={vencidas} texto="acciones vencidas" alerta={vencidas > 0} />
+            <Kpi icono="check" tono="verde" valor={ganadosMes} texto="cerrados este mes" />
+            <Kpi icono="coins" tono="amarillo" valor={montos(sumar(abiertos))} texto="comisión en curso" />
           </div>
 
           {f.ver === 'abiertos' ? (
@@ -92,18 +96,18 @@ export default function Negocios({ tipo: tipoInicial }: INegociosProps) {
               {(etapas[f.tipo] || []).map((e, i) => {
                 const enEtapa = lista.filter((n) => n.etapa === e.id);
                 return (
-                  <section key={e.id} className={`ng-col${sobre === e.id ? ' sobre' : ''}`} data-e={e.id}
+                  <section key={e.id} className={`ng-col${sobre === e.id ? ' sobre' : ''}`} data-e={e.id} style={conColor(colorEtapa(e, i))}
                     onDragOver={(ev) => { if ([...ev.dataTransfer.types].includes('text/negocio')) { ev.preventDefault(); setSobre(e.id); } }}
                     onDragLeave={() => setSobre((s) => (s === e.id ? null : s))}
                     onDrop={(ev) => soltar(ev, e.id)}>
-                    <header>
+                    <header title={e.d}>
                       <span className="ng-num">{i + 1}</span><b>{e.t}</b><i>{enEtapa.length}</i>
-                      {e.firma && <span className="ng-req" title={`Requiere firma: ${e.firma}`}><Icono nombre="sign" tam={12} /></span>}
+                      {e.firma && <span className="ng-req" title={`Requiere firma: ${e.firma}`}><Icono nombre="sign" tam={13} /></span>}
                     </header>
                     <div className="ng-drop">
                       {enEtapa.length
                         ? enEtapa.map((n) => <NegocioCard key={n.id} n={n} alAbrir={() => abrirNegocio(n.id)} />)
-                        : <EstadoVacio compacto className="tw:my-6 tw:mx-1.5 tw:text-center"
+                        : <EstadoVacio compacto className="ng-vacio"
                             texto={i === 0 ? 'Crea un negocio o arrastra uno aquí' : 'Sin negocios'} />}
                     </div>
                   </section>

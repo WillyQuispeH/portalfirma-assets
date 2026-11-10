@@ -32,6 +32,7 @@ import {
 } from '../../../utils/app';
 import { fechaHora } from '../../../utils/formato';
 import { cx } from '../../../utils/cx';
+import { SUAVE, type TTono } from '../../ui/tonos';
 import type { ReactNode } from 'react';
 import type { IPropiedad } from '../../../store/interfaces/propiedad.interface';
 
@@ -65,19 +66,22 @@ function Subtitulo({ p }: { p: IPropiedad }) {
 }
 
 // Franja de resumen: cada indicador lleva a su pestaña
-const INDICADOR = 'im-sc tw:flex tw:flex-col tw:items-start tw:gap-0.5 tw:min-w-0 tw:m-0 tw:px-4 tw:py-3 tw:text-left tw:font-[inherit] tw:cursor-pointer '
+const INDICADOR = 'im-sc tw:flex tw:items-center tw:gap-3 tw:min-w-0 tw:m-0 tw:px-4 tw:py-3 tw:text-left tw:font-[inherit] tw:cursor-pointer '
   + 'tw:rounded-2xl tw:border tw:border-solid tw:border-edge tw:border-b-[3px] tw:border-b-edge-b tw:bg-card tw:text-text tw:transition-colors tw:duration-100 '
   + 'tw:hover:bg-hover tw:focus-visible:outline-2 tw:focus-visible:outline-offset-2 tw:focus-visible:outline-lav-edge';
 
-function Indicador({ etiqueta, valor, detalle, tono, idValor, idDetalle, ...resto }: {
-  etiqueta: string; valor: ReactNode; detalle?: ReactNode; tono?: 'ok' | 'wait'; idValor?: string; idDetalle?: string;
+function Indicador({ etiqueta, valor, detalle, icono, color, tono, idValor, idDetalle, ...resto }: {
+  etiqueta: string; valor: ReactNode; detalle?: ReactNode; icono: string; color: TTono; tono?: 'ok' | 'wait'; idValor?: string; idDetalle?: string;
   id?: string; 'data-go': TFichaTab; onClick: () => void;
 }) {
   return (
     <button type="button" className={INDICADOR} {...resto}>
-      <small className="tw:text-xs tw:text-muted">{etiqueta}</small>
-      <b id={idValor} className={cx('tw:text-[15px] tw:font-bold', tono === 'ok' && 'tw:text-green-softink', tono === 'wait' && 'tw:text-yellow-softink')}>{valor}</b>
-      <em id={idDetalle} className="tw:max-w-full tw:truncate tw:not-italic tw:text-xs tw:text-muted">{detalle}</em>
+      <span className={cx('tw:grid tw:size-10 tw:flex-none tw:place-items-center tw:rounded-xl', SUAVE[color])}><Icono nombre={icono} tam={18} /></span>
+      <span className="tw:flex tw:min-w-0 tw:flex-col tw:items-start tw:gap-0.5">
+        <small className="tw:text-xs tw:text-muted">{etiqueta}</small>
+        <b id={idValor} className={cx('tw:text-[15px] tw:font-bold tw:leading-tight', tono === 'ok' && 'tw:text-green-softink', tono === 'wait' && 'tw:text-yellow-softink')}>{valor}</b>
+        <em id={idDetalle} className="tw:max-w-full tw:truncate tw:not-italic tw:text-xs tw:text-muted">{detalle}</em>
+      </span>
     </button>
   );
 }
@@ -90,21 +94,23 @@ function Franja({ p, irA }: { p: IPropiedad; irA: (t: TFichaTab) => void }) {
   const e = captacion?.etapas[0];
   const op = (o: 'venta' | 'arriendo') => (
     <Indicador data-go="resumen" onClick={() => irA('resumen')} etiqueta={o === 'venta' ? 'Venta' : 'Arriendo'}
+      icono={o === 'venta' ? 'coins' : 'key'} color={o === 'venta' ? 'azul' : 'durazno'}
       valor={precio(o === 'venta' ? p.precioVenta : p.precioArriendo) || 'Sin precio'}
       detalle={ESTADO[(o === 'venta' ? p.estadoVenta : p.estadoArriendo) || 'disponible']?.[0] || ''} />
   );
   return (
-    <div id="fStrip" className="tw:grid tw:grid-cols-[repeat(auto-fit,minmax(150px,1fr))] tw:gap-3">
+    <div id="fStrip" className="tw:grid tw:grid-cols-[repeat(auto-fit,minmax(190px,1fr))] tw:gap-3">
       {p.venta && op('venta')}
       {p.arriendo && op('arriendo')}
-      <Indicador id="fStripCaptB" data-go="resumen" onClick={() => irA('resumen')} etiqueta="Captación" tono={captacion && !captacion.actual ? 'ok' : undefined}
+      <Indicador id="fStripCaptB" data-go="resumen" onClick={() => irA('resumen')} etiqueta="Captación" icono="listCheck" color="lavanda"
+        tono={captacion && !captacion.actual ? 'ok' : undefined}
         idValor="fStripCapt" valor={e ? `${e.ok} de ${e.total}` : '…'}
         idDetalle="fStripCaptD" detalle={captacion ? (captacion.actual ? captacion.actual.t : 'Completa') : ''} />
-      <Indicador data-go="negocios" onClick={() => irA('negocios')} etiqueta="Negocios abiertos" valor={abiertos.length}
+      <Indicador data-go="negocios" onClick={() => irA('negocios')} etiqueta="Negocios abiertos" icono="briefcase" color="amarillo" valor={abiertos.length}
         detalle={abiertos.length ? [...new Set(abiertos.map((n) => n.etapaInfo?.t))].slice(0, 2).join(' · ') : 'Ninguno'} />
-      <Indicador data-go="firmas" onClick={() => irA('firmas')} etiqueta="En firma" valor={enFirma.length} tono={enFirma.length ? 'wait' : undefined}
+      <Indicador data-go="firmas" onClick={() => irA('firmas')} etiqueta="En firma" icono="sign" color="azul" valor={enFirma.length} tono={enFirma.length ? 'wait' : undefined}
         detalle={enFirma.length ? enFirma[0].plantilla : 'Nada pendiente'} />
-      <Indicador data-go="portales" onClick={() => irA('portales')} etiqueta="Portal Inmobiliario" tono={pub.length ? 'ok' : undefined}
+      <Indicador data-go="portales" onClick={() => irA('portales')} etiqueta="Portal Inmobiliario" icono="export" color="verde" tono={pub.length ? 'ok' : undefined}
         valor={pub.length ? 'Publicada' : 'No publicada'} detalle={pub.join(' y ')} />
     </div>
   );

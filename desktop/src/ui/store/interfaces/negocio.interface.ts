@@ -1,5 +1,6 @@
 // Modelos de negocios. Fuente de verdad: src/negocios.js (vista() y listar()).
 // Si cambian allá, se actualizan aquí.
+import type { IRegistroActividad } from './propiedad.interface';
 
 export type TMoneda = 'UF' | 'CLP' | 'USD';
 export type TNegocioTipo = 'venta' | 'arriendo';
@@ -59,6 +60,18 @@ export interface IFirmaEtapa {
   operacion?: string | number;
   firmados?: number;
   total?: number;
+  firmado?: string; // ISO
+  fuera?: boolean; // firmado fuera de Asset
+  revisado?: string; // ISO, última revisión del estado
+  error?: string;
+}
+
+// respuesta de negObtener: el negocio con sus tareas, los contactos, los propietarios y el historial
+export interface INegocioDetalle extends Omit<INegocio, 'prop' | 'cliente'> {
+  prop: (NonNullable<INegocio['prop']> & { propietarios?: { id: string; nombre: string; rut?: string }[] }) | null;
+  cliente: { id: string; nombre: string; rut?: string; telefono?: string; email?: string } | null;
+  tareas?: Record<string, boolean[]>; // por id de etapa
+  actividad?: IRegistroActividad[];
 }
 
 // respuesta de negMover y negFirmasRevisar

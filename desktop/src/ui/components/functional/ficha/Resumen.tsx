@@ -65,10 +65,10 @@ function Caracteristicas({ p }: { p: IPropiedad }) {
   const vacia = [p.supTotal, p.supUtil, p.dormitorios, p.banos, p.estacionamientos, p.bodegas, p.gastosComunes].every((x) => x == null || (x as unknown) === '') && !p.amoblado && !p.corredor;
   const { fichaRecargar } = useFicha();
   return (
-    <Card titulo="Características">
-      {vacia && (
-        <p className="tw:m-0 tw:text-[13px] tw:text-muted">Sin características todavía · <a href="#" id="fCarVacio" onClick={(e) => { e.preventDefault(); fichaCompleta(p.id, () => { fichaRecargar(); }); }}>Completar ficha</a></p>
-      )}
+    <Card titulo="Características" accion={vacia && (
+      <Boton id="fCarVacio" variante="secundario" tamano="sm" icono="listCheck" onClick={() => fichaCompleta(p.id, () => { fichaRecargar(); })}>Completar ficha</Boton>
+    )}>
+      {vacia && <EstadoVacio compacto texto="Sin características todavía." />}
       <div data-caracteristicas>
         <ListaDatos datos={[
           ['Superficie total', p.supTotal != null ? num(p.supTotal) + ' m²' : ''],
@@ -137,20 +137,19 @@ function PersonasVinculadas({ p }: { p: IPropiedad }) {
 export default function Resumen({ p, irA, version }: { p: IPropiedad; irA: (t: TFichaTab) => void; version: number }) {
   const { actividad } = useFicha();
   return (
-    <div className="tw:flex tw:flex-col tw:gap-4">
-      <Captacion key={p.id} propId={p.id} version={version} />
-      <div className="tw:grid tw:gap-4 tw:lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)] tw:items-start">
-        <div className="tw:grid tw:gap-4 tw:min-w-0">
-          <Galeria p={p} />
-          <Caracteristicas p={p} />
-        </div>
-        <div className="tw:grid tw:gap-4 tw:min-w-0">
-          <Comercializacion p={p} />
-          <PersonasVinculadas p={p} />
-          <Card titulo="Lo último" accion={<Boton variante="fantasma" tamano="sm" data-go="historial" onClick={() => irA('historial')}>Ver todo</Boton>}>
-            <div className="tw:max-h-[360px] tw:overflow-auto"><ListaActividad items={actividad.slice(0, 5)} /></div>
-          </Card>
-        </div>
+    // izquierda, la propiedad (fotos, captación y características); derecha, lo comercial (precio, personas y movimientos)
+    <div className="tw:grid tw:gap-4 tw:lg:grid-cols-[minmax(0,1.6fr)_minmax(320px,1fr)] tw:items-start">
+      <div className="tw:flex tw:min-w-0 tw:flex-col tw:gap-4">
+        <Galeria p={p} />
+        <Captacion key={p.id} propId={p.id} version={version} />
+        <Caracteristicas p={p} />
+      </div>
+      <div className="tw:flex tw:min-w-0 tw:flex-col tw:gap-4">
+        <Comercializacion p={p} />
+        <PersonasVinculadas p={p} />
+        <Card titulo="Lo último" accion={<Boton variante="secundario" tamano="sm" iconoDerecha="chevR" data-go="historial" onClick={() => irA('historial')}>Ver todo</Boton>}>
+          <div className="tw:max-h-[360px] tw:overflow-auto"><ListaActividad items={actividad.slice(0, 5)} /></div>
+        </Card>
       </div>
     </div>
   );

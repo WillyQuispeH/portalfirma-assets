@@ -98,6 +98,46 @@ export interface IPortales {
   feeds: Record<string, number>; // avisos en el feed de cada portal (los que no van por API)
 }
 
+// ---------- el flujo «Publicar»: calidad del aviso, portales y publicar (pubCalidad, pubRedactar, pubTextos, pubPublicar) ----------
+export type TPasoPublicar = 1 | 2 | 3;
+export type TTipoAviso = 'silver' | 'gold' | 'gold_premium'; // aviso de Portal Inmobiliario
+export type TPaquetes = Partial<Record<TTipoAviso, number>>; // publicaciones disponibles en el paquete de la cuenta (mlPaquetes)
+
+export interface ICalidadItem {
+  id: string;
+  t: string;
+  ok: boolean;
+  parcial?: boolean;
+  falta: string;
+  arreglo: 'ficha' | 'fotos' | 'ia' | 'contacto';
+}
+
+export interface ICalidadAviso {
+  op: TPubOperacion;
+  puntaje: number; // 0 a 100
+  nivel: string; // Excelente, Bueno, Mejorable, Incompleto
+  items: ICalidadItem[];
+  bloquea: string[]; // lo que impide publicar
+  titulo: string; // título para los portales (o el de la ficha)
+  descripcion: string;
+  fotos: number;
+}
+
+export interface IRedaccionAviso {
+  titulo: string;
+  descripcion: string;
+  destacados: string[];
+}
+
+export interface IResultadoPortalPublicar {
+  portal: string;
+  ok: boolean;
+  estado?: string;
+  espera?: boolean; // queda en espera de la integración
+  url?: string | null;
+  error?: string;
+}
+
 export interface IResultadoSincronizar {
   chilepropiedades?: { leads?: number };
   pi?: { leads?: number };

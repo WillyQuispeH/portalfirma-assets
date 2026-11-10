@@ -159,9 +159,12 @@ html[data-theme="dark"] {
   --ui-red-edge-grad: linear-gradient(90deg, #e68d82 0%, #c7574b 100%);
   --ui-card-grad: linear-gradient(180deg, var(--card) 0%, var(--ui-sunken) 100%);
   --ui-card-edge-grad: linear-gradient(90deg, var(--ui-edge-b) 0%, color-mix(in srgb, var(--text) 38%, transparent) 100%);
+  /* el del texto del logo: azul marino → azul → violeta */
+  --ui-logo-grad: linear-gradient(90deg, #14259a 0%, #2a3fd6 55%, #9b30e6 100%);
 }
 
 html[data-theme="dark"] {
+  --ui-logo-grad: linear-gradient(90deg, #8eb0ff 0%, #7d8cff 55%, #c48bff 100%);
   --ui-brand-edge-grad: linear-gradient(90deg, #1f64a8 0%, #222d9e 55%, #42189a 100%);
   --ui-green-grad: linear-gradient(135deg, #b5e2b0 0%, #8fcf88 100%);
   --ui-green-edge-grad: linear-gradient(90deg, #5aa557 0%, #3a8536 100%);
@@ -299,7 +302,7 @@ html[data-theme="dark"] {
 }
 
 
-/* título de CabeceraPagina: el degradado del botón principal (--grad) y una escala que armoniza con los botones del kit
+/* título de CabeceraPagina: el degradado del texto del logo (--ui-logo-grad) y una escala que armoniza con los botones del kit
    (botón: 40px de alto, 14px y grosor 600 → título: 22px y 700, subtítulo: 14px). Le gana a «.im-wrap h1» y «h1» de
    styles.css por cargarse después con la misma especificidad. fit-content: el degradado recorre el texto, no la fila. */
 [data-cabecera] h1 {
@@ -311,8 +314,7 @@ html[data-theme="dark"] {
   font-weight: 700;
   line-height: 1.2;
   letter-spacing: -.012em;
-  /* el color del texto del tema (claro u oscuro); antes era «black» fijo y en modo oscuro no se leía */
-  background: var(--text);
+  background: var(--ui-logo-grad);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;

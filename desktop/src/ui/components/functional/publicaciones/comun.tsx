@@ -25,10 +25,11 @@ export function Estado({ s }: { s?: string }) {
   return <i className={`im-st ${c}`}>{t}</i>;
 }
 
-// anillo de calidad del aviso (0 a 100), con el color según el puntaje
-export function Anillo({ n }: { n: number }) {
-  const c = n >= 85 ? '#16a34a' : n >= 65 ? '#4f6ef0' : n >= 40 ? '#d97706' : '#dc2626';
-  return <span className="pb-ring" style={{ '--p': n, '--c': c } as CSSProperties}><b>{n}</b></span>;
+// anillo de calidad del aviso (0 a 100), con el color según el puntaje; «grande» lleva «de 100» y,
+// mientras se recalcula (n = null), «…»
+export function Anillo({ n, grande = false }: { n: number | null; grande?: boolean }) {
+  const v = n ?? 0; const c = v >= 85 ? '#16a34a' : v >= 65 ? '#4f6ef0' : v >= 40 ? '#d97706' : '#dc2626';
+  return <span className={grande ? 'pb-ring big' : 'pb-ring'} style={{ '--p': v, '--c': c } as CSSProperties}><b>{n ?? '…'}</b>{grande && <small>de 100</small>}</span>;
 }
 
 // foto de la propiedad; si no hay o no carga, el ícono

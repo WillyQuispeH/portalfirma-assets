@@ -2,7 +2,7 @@
 // reservados al captador), las notas sobre el propietario y los documentos que firma.
 // Con el kit: Card, Boton, Select, Textarea, ListaDatos, ItemLista y Badge.
 // Las pruebas usan #fDueno, #fCaptador, #fEquipo, .im-dueno, .im-lock, [data-dnota], [data-dguardar] y [data-ddocs].
-import { useEffect, useState, type MouseEvent } from 'react';
+import { useEffect, useState } from 'react';
 import Icono from '../../ui/Icono';
 import Boton from '../../ui/Boton';
 import Card from '../../ui/Card';
@@ -73,48 +73,53 @@ function TarjetaDueno({ c }: { c: IPersona }) {
 export default function Propietario({ p }: { p: IPropiedad }) {
   const { personas, fichaSetCaptador } = useFicha();
   const { perfil } = usePerfil();
-  if (!perfil) return <div id="fDueno" className="tw:max-w-[920px]"><EstadoVacio compacto texto="Cargando…" /></div>;
+  if (!perfil) return <div id="fDueno"><EstadoVacio compacto texto="Cargando…" /></div>;
 
   const capt = p.captador;
   const duenos = (p.vinculos || []).filter((v) => v.rol === 'propietario').map((v) => personas.find((c) => c.id === v.personaId)).filter(Boolean) as IPersona[];
   const f = p.ficha || {};
-  const verUsuarios = (e: MouseEvent) => { e.preventDefault(); abrirUsuarios(); };
   const asignar = async (corredorId: string) => avisar(await fichaSetCaptador(corredorId || null));
 
-  return (
-    <div id="fDueno" className="tw:max-w-[920px] tw:flex tw:flex-col tw:gap-4">
-      <Card titulo="Quién captó esta propiedad">
-        <div className="tw:flex tw:flex-col tw:gap-3 tw:text-sm">
-          <p className="tw:m-0 tw:text-[13px] tw:text-muted">Entraste como <b>{perfil.nombre}</b> ({perfil.esAdmin ? 'administrador' : 'corredor'}) · <a href="#" id="fEquipo" onClick={verUsuarios}>usuarios</a></p>
-          {perfil.esAdmin ? <>
-            <Select id="fCaptador" etiqueta="Captada por" clasesCampo="tw:max-w-[320px]" value={capt?.id || ''} onChange={(e) => asignar(e.target.value)}>
-              <option value="">— sin captador —</option>
-              {perfil.corredores.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-            </Select>
-            {perfil.corredores.length < 2 && <p className="tw:m-0 tw:text-[13px] tw:text-muted">Agrega a los corredores en Usuarios (menú de tu cuenta) para asignar quién captó cada propiedad.</p>}
-          </> : <p className="tw:m-0">Captada por <b>{capt?.nombre || 'nadie todavía'}</b>{capt?.id === perfil.corredorId ? ' (tú)' : ''}.</p>}
-          <p className="tw:m-0 tw:text-[13px] tw:text-muted">Toda la cartera la ven todos los corredores; los datos del propietario solo quien captó la propiedad y el administrador.</p>
-        </div>
-      </Card>
+  const quienCapto = (
+    <Card titulo="Quién captó esta propiedad" accion={<Boton id="fEquipo" variante="fantasma" tamano="sm" icono="users" onClick={() => abrirUsuarios()}>Usuarios</Boton>}>
+      <div className="tw:flex tw:flex-col tw:gap-3 tw:text-sm">
+        <p className="tw:m-0 tw:text-[13px] tw:text-muted">Entraste como <b>{perfil.nombre}</b> ({perfil.esAdmin ? 'administrador' : 'corredor'})</p>
+        {perfil.esAdmin ? <>
+          <Select id="fCaptador" etiqueta="Captada por" value={capt?.id || ''} onChange={(e) => asignar(e.target.value)}>
+            <option value="">— sin captador —</option>
+            {perfil.corredores.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+          </Select>
+          {perfil.corredores.length < 2 && <p className="tw:m-0 tw:text-[13px] tw:text-muted">Agrega a los corredores en Usuarios (menú de tu cuenta) para asignar quién captó cada propiedad.</p>}
+        </> : <p className="tw:m-0">Captada por <b>{capt?.nombre || 'nadie todavía'}</b>{capt?.id === perfil.corredorId ? ' (tú)' : ''}.</p>}
+        <p className="tw:m-0 tw:text-[13px] tw:text-muted">Toda la cartera la ven todos los corredores; los datos del propietario solo quien captó la propiedad y el administrador.</p>
+      </div>
+    </Card>
+  );
 
-      {p.duenoVisible === false ? (
-        <Card>
-          <div className="im-lock">
-            <Icono nombre="lock" tam={22} />
-            <div><b>Datos del propietario reservados</b>
-              <p className="tw:text-[13px] tw:text-muted">Los ve {capt ? `${capt.nombre}, que captó esta propiedad,` : 'el administrador (aún no tiene captador asignado)'} y el administrador. Puedes ofrecer la propiedad, agendar visitas y abrir negocios con tus clientes; para el mandato o el contrato pídeselo a {capt ? capt.nombre.split(' ')[0] : 'el administrador'}.</p>
-            </div>
-          </div>
-        </Card>
-      ) : duenos.length ? duenos.map((c) => <TarjetaDueno key={c.id} c={c} />) : (
-        <Card titulo="Propietario">
-          {f.propietarioNombre ? <>
-            <p className="tw:mt-0 tw:mb-1 tw:text-sm"><b>{f.propietarioNombre}</b>{f.propietarioCelular ? ' · ' + f.propietarioCelular : ''}{f.propietarioEmail ? ' · ' + f.propietarioEmail : ''}</p>
-            <p className="tw:m-0 tw:text-[13px] tw:text-muted">Anotado en la ficha; queda en Personas cuando tenga RUT válido.</p>
-          </> : <p className="tw:m-0 tw:text-[13px] tw:text-muted">Todavía no hay propietario. Vincúlalo para poder enviar el mandato.</p>}
-          <div className="tw:mt-4"><Boton id="fDVinc" variante="secundario" tamano="sm" icono="plus" onClick={() => abrirModal(<VincularPersona p={p} />, { clave: 'modal-76' })}>Vincular propietario</Boton></div>
-        </Card>
-      )}
+  const dueno = p.duenoVisible === false ? (
+    <Card>
+      <div className="im-lock">
+        <Icono nombre="lock" tam={22} />
+        <div><b>Datos del propietario reservados</b>
+          <p className="tw:text-[13px] tw:text-muted">Los ve {capt ? `${capt.nombre}, que captó esta propiedad,` : 'el administrador (aún no tiene captador asignado)'} y el administrador. Puedes ofrecer la propiedad, agendar visitas y abrir negocios con tus clientes; para el mandato o el contrato pídeselo a {capt ? capt.nombre.split(' ')[0] : 'el administrador'}.</p>
+        </div>
+      </div>
+    </Card>
+  ) : duenos.length ? duenos.map((c) => <TarjetaDueno key={c.id} c={c} />) : (
+    <Card titulo="Propietario">
+      {f.propietarioNombre ? <>
+        <p className="tw:mt-0 tw:mb-1 tw:text-sm"><b>{f.propietarioNombre}</b>{f.propietarioCelular ? ' · ' + f.propietarioCelular : ''}{f.propietarioEmail ? ' · ' + f.propietarioEmail : ''}</p>
+        <p className="tw:m-0 tw:text-[13px] tw:text-muted">Anotado en la ficha; queda en Personas cuando tenga RUT válido.</p>
+      </> : <p className="tw:m-0 tw:text-[13px] tw:text-muted">Todavía no hay propietario. Vincúlalo para poder enviar el mandato.</p>}
+      <div className="tw:mt-4"><Boton id="fDVinc" variante="secundario" tamano="sm" icono="plus" onClick={() => abrirModal(<VincularPersona p={p} />, { clave: 'modal-76' })}>Vincular propietario</Boton></div>
+    </Card>
+  );
+
+  // izquierda el dueño (datos, notas y documentos); derecha quién la captó
+  return (
+    <div id="fDueno" className="tw:grid tw:gap-4 tw:lg:grid-cols-[minmax(0,1.6fr)_minmax(320px,1fr)] tw:items-start">
+      <div className="tw:flex tw:min-w-0 tw:flex-col tw:gap-4">{dueno}</div>
+      <div className="tw:min-w-0">{quienCapto}</div>
     </div>
   );
 }

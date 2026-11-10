@@ -2,6 +2,7 @@
 import type { TPropiedadEstado, TPropiedadTipo } from '../../../store/interfaces/propiedad.interface';
 import type { TPersonaRol } from '../../../store/interfaces/persona.interface';
 import type { TFiltroEspecial } from '../../../store/hooks/useCartera.hook';
+import type { TTono } from '../../ui/tonos';
 
 export const TIPO: Record<TPropiedadTipo, string> = {
   casa: 'Casa', departamento: 'Departamento', oficina: 'Oficina', sitio: 'Sitio', local_comercial: 'Local comercial',
@@ -14,6 +15,8 @@ export const ESTADO: Record<TPropiedadEstado, [string, string]> = {
   disponible: ['Disponible', 'ok'], reservada: ['Reservada', 'res'], vendida: ['Vendida', 'end'],
   arrendada: ['Arrendada', 'end'], no_disponible: ['No disponible', 'off'],
 };
+// la clase de ESTADO → tono del kit (Badge)
+export const TONO_ESTADO: Record<string, TTono> = { ok: 'verde', res: 'amarillo', end: 'lavanda', off: 'gris' };
 
 export const ESPECIAL: Record<Exclude<TFiltroEspecial, ''>, string> = {
   enCaptacion: 'Captación incompleta', sinProp: 'Sin propietario', sinFotos: 'Sin fotos',

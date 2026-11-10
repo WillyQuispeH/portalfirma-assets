@@ -1,5 +1,5 @@
 // Barra del modo «Asignar captador»: cuántas hay elegidas, elegir todas o ninguna, a quién y asignar.
-// Hecha con el kit (Boton y Select); la barra fija (.im-bulk) sigue en styles.css.
+// Hecha con el kit (Boton y Select), fija arriba mientras se eligen las propiedades.
 // Los id imBulk* y la clase im-bulk los usa test/acceso-e2e.js.
 import { useState } from 'react';
 import Boton from '../../ui/Boton';
@@ -21,8 +21,9 @@ export default function BarraCaptador({ elegidas, enLista, corredores, alElegirT
   const nombre = corredores.find((c) => c.id === corredor)?.nombre || '— quitar captador —';
 
   return (
-    <div className="im-bulk">
-      <b id="imBulkN">{elegidas} seleccionada{elegidas === 1 ? '' : 's'}</b>
+    <div className={'im-bulk tw:sticky tw:top-[calc(56px+var(--cab-visible,0px)+8px)] tw:z-[3] tw:flex tw:flex-wrap tw:items-center tw:gap-2.5 tw:px-4 tw:py-2.5 '
+      + 'tw:rounded-2xl tw:border tw:border-solid tw:border-lav-edge/50 tw:border-b-[3px] tw:border-b-lav-edge tw:bg-lav-soft tw:text-text tw:shadow-[0_10px_24px_-14px_rgb(20_35_90/0.35)]'}>
+      <b id="imBulkN" className="tw:text-lav-softink">{elegidas} seleccionada{elegidas === 1 ? '' : 's'}</b>
       <Boton id="imBulkAll" variante="fantasma" tamano="sm" onClick={alElegirTodas}>Seleccionar las {enLista} de la lista</Boton>
       <Boton id="imBulkNone" variante="fantasma" tamano="sm" onClick={alElegirNinguna}>Ninguna</Boton>
       <span className="tw:flex-1" />

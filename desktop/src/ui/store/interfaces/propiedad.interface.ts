@@ -42,7 +42,8 @@ export interface IPropiedad {
   captadorId?: string | null;
   captador: { id: string; nombre: string } | null;
   duenoVisible?: boolean;
-  portales?: { pi?: Partial<Record<TOperacion, IAvisoPortal>> };
+  portales?: { pi?: Partial<Record<TOperacion, IAvisoPortal>>; [portal: string]: Partial<Record<TOperacion, IAvisoPortal>> | undefined };
+  tituloPortal?: string; // título para los portales (máximo 60)
   leads?: ILeadPortal[];
   // lo que muestra la ficha
   bodegas?: number | null;

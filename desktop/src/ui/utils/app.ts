@@ -81,12 +81,16 @@ export const leadsImportar = (ruta: string, canal?: string) => window.Leads.impo
 // ruta en disco de un archivo elegido con <input type="file"> (preload: webUtils.getPathForFile)
 export const rutaDe = (archivo: File) => (window.pf.pathForFile as unknown as (f: File) => string)(archivo);
 
-// Publicaciones (src/renderer/publicaciones.js): el flujo «Publicar» y sus formularios
+// Publicaciones (src/renderer/publicaciones.js): abrir la pestaña, el flujo «Publicar» y los formularios
+export const abrirPublicaciones = (tab?: string) => window.Publicaciones.abrir(tab);
 export const elegirParaPublicar = () => window.Publicaciones.elegir();
 export const publicarPropiedad = (propId: string, op?: string, paso?: 1 | 2) => window.Publicaciones.publicar(propId, op, paso);
 export const ajustarPrecioAviso = (propId: string, op: string) => window.Publicaciones.ajustarPrecio(propId, op);
 export const agregarInteresado = () => window.Publicaciones.agregarInteresado();
-export const editarContactoAvisos = (contacto: object) => window.Publicaciones.contacto(contacto);
+// sin «despues», al guardar vuelve a la pestaña Portales
+export const editarContactoAvisos = (contacto: object, despues?: () => void) => window.Publicaciones.contacto(contacto, despues);
+// la animación de celebración del Agente (components/functional/agente/controlador.tsx)
+export const festejar = () => (window.Agente as { festejo?: () => void } | undefined)?.festejo?.();
 // «Agendar visita» con un interesado: el formulario de la agenda, con la persona del CRM si ya existe
 export const agendarVisitaInteresado = (interesado: object, despues: () => void) => window.Publicaciones.agendarVisita(interesado, despues);
 export const conectarPortalInmobiliario = () => window.Inmo.portales();
@@ -196,8 +200,8 @@ export const abrirCartera = () => window.Inmo.cartera();
 export const abrirPersonas = () => window.Inmo.personas();
 // IM.data del código antiguo (lo leen la agenda, los negocios, el Agente…) al día después de un cambio
 export const refrescarCarteraLegado = () => (window.Inmo?.cargar ? window.Inmo.cargar().catch(() => {}) : Promise.resolve());
-// al guardar, inmo.js vuelve a abrir la ficha o la persona (y React las recarga)
-export const editarPropiedad = (p: object) => window.Inmo.formProp(p);
+// al guardar, inmo.js vuelve a abrir la ficha o la persona (y React las recarga), o llama a «despues»
+export const editarPropiedad = (p: object, despues?: () => void) => window.Inmo.formProp(p, despues ? { despues } : undefined);
 export const editarPersona = (c: object) => window.Inmo.formPersona(c);
 export const crearPersona = (opt: { rol?: string; pre?: object; despues: (c: { id: string }) => void }) => window.Inmo.formPersona(null, opt);
 export const publicarEnPortalInmobiliario = (p: object, op: string) => window.Inmo.publicarPI(p, op);

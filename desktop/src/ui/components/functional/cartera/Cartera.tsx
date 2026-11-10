@@ -1,6 +1,5 @@
 // Cartera: las propiedades en tarjetas, con búsqueda, filtros y el modo «Asignar captador».
-// Hecha con el kit: Layout (cabecera y barra de filtros), Boton, Buscador, Tabs, Select, Badge, Card y EstadoVacio;
-// las tarjetas (PropiedadCard) siguen con sus clases im-* de styles.css.
+// Hecha con el kit: Layout (cabecera y barra de filtros), Boton, Buscador, Tabs, Select, Badge, Card y EstadoVacio.
 //
 // La ficha de la propiedad, «Nueva propiedad», «Importar», «Portales» y «Dictar» siguen en
 // src/renderer/inmo.js; se llaman por utils/app.ts. Los id im*, data-op, data-clr y las clases im-grid,
@@ -136,7 +135,7 @@ export default function Cartera({ filtros: filtrosIniciales }: ICarteraProps) {
       {error && <p role="alert" className="tw:m-0 tw:text-red-softink">No se pudo leer la cartera: {error}</p>}
 
       {cargado && (lista.length ? (
-        <div className="im-grid">
+        <div className="im-grid tw:grid tw:grid-cols-[repeat(auto-fill,minmax(268px,1fr))] tw:gap-4">
           {lista.map((p) => (
             <PropiedadCard key={p.id} p={p} captacion={captaciones[p.id]} verCaptador={hayCorredores}
               modoSeleccion={!!seleccion} seleccionada={!!seleccion?.includes(p.id)}

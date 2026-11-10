@@ -16,7 +16,7 @@ declare global {
     Agente: { open: () => void | Promise<void>; enviar?: (texto: string) => void; vista?: () => void; close?: () => void }; // la instala components/functional/agente/controlador.tsx
     Inmo: { // src/renderer/inmo.js
       inicio: () => void; abrirFicha: (id: string) => void; abrirPersona: (id: string) => void;
-      formProp: (p?: object) => void; formPersona: (c?: object | null, opt?: { rol?: string; pre?: object; despues?: (c: { id: string }) => void }) => void;
+      formProp: (p?: object, o?: { despues?: () => void }) => void; formPersona: (c?: object | null, opt?: { rol?: string; pre?: object; despues?: (c: { id: string }) => void }) => void;
       importar: () => void; portales: () => void; cartera: () => void; personas: () => void;
       publicarPI: (p: object, op: string) => void; cargar: () => Promise<void>;
     };
@@ -51,9 +51,10 @@ declare global {
     Etapas: { accion: (paso: object, alTerminar?: () => void) => void; luz: (raiz: HTMLElement) => void; bloque: (host: HTMLElement, o: { propId?: string; negocioId?: string; alCambiar?: () => void; compacto?: boolean }) => void }; // src/renderer/etapas.js
     Hoy: { abrir: () => void; nuevo: () => void }; // src/renderer/etapas.js
     Publicaciones: { // src/renderer/publicaciones.js
+      abrir: (tab?: string, filtro?: string) => void;
       elegir: () => void; publicar: (propId: string, op?: string, paso?: number) => void;
       ajustarPrecio: (propId: string, op: string) => void; agregarInteresado: () => void;
-      contacto: (c: object) => void; agendarVisita: (interesado: object, despues: () => void) => void;
+      contacto: (c: object, despues?: () => void) => void; agendarVisita: (interesado: object, despues: () => void) => void;
     };
     OF_GEO?: Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any -- src/renderer/oficina-geo.js
     OfLienzo?: { montar: (escena: HTMLElement, o: { luz: string; sel: string | null }) => void }; // src/renderer/oficina-lienzo.js

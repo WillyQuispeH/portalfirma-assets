@@ -8,7 +8,7 @@
 //  - leads.js → React: el evento «pf:leads» (al guardar, asignar, importar…) pide recargar la lista.
 // Los id ldQ, ldChips (con data-f en cada filtro), ldItems, ldOrigen, ldBroker, ldFile, ldFileIg, ldCorBtn,
 // ldCuentas, ldImp2, ldIg2 y la clase .ld-vacio los usan las pruebas y leads.js.
-import { useEffect, useLayoutEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { useLead } from '../../../store/hooks/useLead.hook';
 import { leadsComoExportar, leadsComoInstagram, leadsCuentas, leadsImportar, mostrarLead, rutaDe } from '../../../utils/app';
 import { cx } from '../../../utils/cx';
@@ -18,9 +18,15 @@ import Boton from '../../ui/Boton';
 import Buscador from '../../ui/Buscador';
 import Select from '../../ui/Select';
 import Icono from '../../ui/Icono';
+import EstadoVacio from '../../ui/EstadoVacio';
 import LeadItem from './LeadItem';
 import { FILTROS } from './formato';
 import type { TLeadFiltro } from '../../../store/interfaces/lead.interface';
+
+const PASOS: [string, ReactNode][] = [
+  ['iPhone', <>Abre el chat › toca el nombre arriba › <b>Exportar chat</b> › <b>Sin archivos</b> o <b>Incluir archivos</b>.</>],
+  ['Android', <>Abre el chat › ⋮ › <b>Más</b> › <b>Exportar chat</b> › <b>Sin archivos</b> o <b>Incluir archivos</b>.</>],
+];
 
 interface ILeadsProps {
   sel?: string | null; // al abrir un lead desde otra pantalla o después de importar
@@ -153,7 +159,7 @@ export default function Leads({ sel: selInicial, filtro: filtroInicial }: ILeads
           <div id="ldItems" className="ld-items">
             {hayLeads && (datos!.leads.length
               ? datos!.leads.map((l) => <LeadItem key={l.id} l={l} elegido={l.id === sel} verCorredor={!!datos!.corredores.length} alElegir={() => leadSeleccionar(l.id)} />)
-              : <p className="muted small ld-nada">No hay leads con este filtro.</p>)}
+              : <EstadoVacio compacto texto="No hay leads con este filtro." className="tw:p-4" />)}
           </div>
         </div>
 
@@ -166,16 +172,18 @@ export default function Leads({ sel: selInicial, filtro: filtroInicial }: ILeads
         ) : cargado && (
           <>
             <div className={cx('ld-chat', columna)} key="vacio">
-              {/* los botones van fuera de .ld-vacio: su regla «.ld-vacio svg» pintaría de verde los íconos del kit */}
-              <div className="tw:flex tw:flex-col tw:items-center tw:m-auto tw:pb-7">
-                <div className="ld-vacio tw:pb-3">
-                  <Icono nombre="whatsapp" tam={36} />
-                  <h2>Guarda aquí tus conversaciones con clientes</h2>
-                  <p className="muted">Exporta un chat de WhatsApp o el historial de Instagram y arrástralo a esta ventana. Asset lo ordena, entiende qué busca el cliente y te dice qué sigue.</p>
-                  <div className="ld-pasos">
-                    <div><b>iPhone</b><span>Abre el chat › toca el nombre arriba › <i>Exportar chat</i> › <i>Sin archivos</i> o <i>Incluir archivos</i>.</span></div>
-                    <div><b>Android</b><span>Abre el chat › ⋮ › <i>Más</i> › <i>Exportar chat</i> › <i>Sin archivos</i> o <i>Incluir archivos</i>.</span></div>
-                  </div>
+              <div className="ld-vacio tw:m-auto tw:flex tw:max-w-[520px] tw:flex-col tw:items-center tw:gap-2 tw:p-7 tw:text-center">
+                <span className="tw:grid tw:size-14 tw:place-items-center tw:rounded-2xl tw:border tw:border-solid tw:border-green-edge/40 tw:border-b-[3px] tw:border-b-green-edge tw:bg-green-soft tw:text-green-softink">
+                  <Icono nombre="whatsapp" tam={28} />
+                </span>
+                <h2 className="tw:mt-2 tw:mb-0 tw:text-lg tw:font-bold tw:text-text">Guarda aquí tus conversaciones con clientes</h2>
+                <p className="tw:m-0 tw:text-sm tw:leading-relaxed tw:text-muted">Exporta un chat de WhatsApp o el historial de Instagram y arrástralo a esta ventana. Asset lo ordena, entiende qué busca el cliente y te dice qué sigue.</p>
+                <div className="tw:my-2 tw:grid tw:w-full tw:gap-2 tw:text-left">
+                  {PASOS.map(([so, texto]) => (
+                    <div key={so} className="tw:flex tw:gap-3 tw:rounded-xl tw:border tw:border-solid tw:border-edge tw:border-b-2 tw:border-b-edge-b tw:bg-sunken tw:px-3 tw:py-2.5 tw:text-[13px] tw:leading-relaxed">
+                      <b className="tw:w-16 tw:flex-none">{so}</b><span>{texto}</span>
+                    </div>
+                  ))}
                 </div>
                 <div className="tw:flex tw:flex-wrap tw:justify-center tw:gap-2">
                   <Boton id="ldImp2" icono="upload" onClick={() => archivo.current?.click()}>Importar chat</Boton>

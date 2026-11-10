@@ -1,5 +1,8 @@
 // Textos de la bandeja de Leads (mismas reglas que src/renderer/leads.js).
 import type { ILead, ILeadBusqueda } from '../../../store/interfaces/lead.interface';
+import type { TTono } from '../../ui/tonos';
+
+export const TONO_ESTADO: Record<string, TTono> = { nuevo: 'azul', contactado: 'amarillo', visita: 'lavanda', negociando: 'durazno', ganado: 'verde', perdido: 'rojo' };
 
 export const FILTROS: [string, string][] = [['abiertos', 'Abiertos'], ['nuevo', 'Nuevos'], ['seguimiento', 'Por seguir'], ['visita', 'Con visita'], ['ganado', 'Ganados'], ['perdido', 'Perdidos'], ['todos', 'Todos']];
 const TIPOS: Record<string, string> = { departamento: 'Departamento', casa: 'Casa', oficina: 'Oficina', local_comercial: 'Local', parcela: 'Parcela', terreno_construccion: 'Terreno', bodega: 'Bodega', estacionamiento: 'Estacionamiento' };
