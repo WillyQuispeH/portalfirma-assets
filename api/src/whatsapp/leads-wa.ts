@@ -71,6 +71,20 @@ export class LeadsWaService {
     return null;
   }
 
+  /**
+   * «Contactado»: el administrador (o el corredor a cargo) respondió por WhatsApp o tomó la conversación. Solo si el lead
+   * seguía en «Nuevo»: no retrocede ni pisa un estado más avanzado.
+   */
+  contactado(l: Lead, motivo: string) {
+    return this.cambiar(l.id, (d, act) => {
+      if (act.estado !== 'nuevo') return null;
+      const ahora = new Date().toISOString();
+      d.historial = [...(((d as { historial?: unknown[] }).historial as unknown[]) ?? []), { fecha: ahora, texto: motivo, tipo: 'estado' }].slice(-200) as never;
+      d.actualizado = ahora;
+      return { datos: d, cols: { estado: 'contactado' } };
+    });
+  }
+
   /** agrega mensajes a la conversación del lead (los repetidos no se duplican) y deja su resumen al día */
   async anotar(l: Lead, mensajes: MensajeLead[], o: { atiende?: boolean } = {}) {
     if (!mensajes.length) return { agregados: 0 };

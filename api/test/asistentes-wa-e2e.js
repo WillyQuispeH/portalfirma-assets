@@ -393,6 +393,13 @@ function iaFalsa() {
     ok(await hasta(() => salidas(cn).length > 0), 'a un número que nadie conoce le responde Sofía');
     const ln = await db.lead.findFirst({ where: { corredoraId: co.id, telefonoNorm: '966662222' } });
     ok(ln && ln.datos.chatCon === 'Pedro Nuevo' && /WhatsApp/.test(ln.datos.historial[0].texto), 'y queda como lead nuevo, con origen WhatsApp');
+    // reglas de los leads: a cargo del administrador, con su persona en el CRM, y «Contactado» cuando el corredor responde
+    ok(ln.corredorId === adm.id && ln.estado === 'nuevo', 'el lead nuevo queda a cargo del administrador y en «Nuevo»');
+    const pn = await db.persona.findUnique({ where: { id: ln.personaId } });
+    ok(pn && pn.nombre === 'Pedro Nuevo' && pn.roles.includes('interesado') && /966662222$/.test(String(pn.telefono).replace(/\D/g, '')), 'y se crea su persona en el CRM (interesado, con su celular)');
+    aMano(cn, 'Hola Pedro, soy el corredor: te llamo hoy');
+    escribe(cn, 'Perfecto, gracias');
+    ok(await hasta(async () => (await db.lead.findUnique({ where: { id: ln.id } })).estado === 'contactado', 25), 'cuando el corredor le escribe a mano, el lead pasa a «Contactado»');
     ok((await req('PUT', '/whatsapp/asistentes', { leadsActivo: false }, t1)).s === 403, 'un corredor no apaga a Sofía');
     r = await req('PUT', '/whatsapp/asistentes', { leadsActivo: false }, tA);
     ok(r.s === 200 && r.j.leadsActivo === false && r.j.clientesActivo === true, 'el administrador apaga a Sofía (Tomás sigue encendido)');

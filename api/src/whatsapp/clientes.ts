@@ -606,6 +606,19 @@ export class ClientesService {
       if (r) c.cli.lead = r;
       if (cambio.nombre) c.cli.nombre = cambio.nombre;
       if (cambio.rut) c.cli.rut = cambio.rut;
+      // y en su persona del CRM (nombre completo, RUT, correo); si el RUT ya es de otra persona, se deja solo en el lead
+      const personaId = r?.personaId ?? l.personaId;
+      if (personaId && (cambio.nombre || cambio.rut || cambio.email)) {
+        const quien = (await this.ejecutivo.responsables(c.corredoraId, l.corredorId))[0];
+        if (quien)
+          await this.personas
+            .actualizar({ sub: quien, corredoraId: c.corredoraId, rol: 'ADMIN', sid: '' }, personaId, {
+              ...(cambio.nombre ? { nombre: String(cambio.nombre) } : {}),
+              ...(cambio.rut ? { rut: String(cambio.rut) } : {}),
+              ...(cambio.email ? { email: String(cambio.email) } : {}),
+            })
+            .catch((e: Error) => this.log.warn(`persona del lead: ${e.message}`));
+      }
       return { ok: true, guardado: [...Object.keys(cambio), ...(Object.keys(b).length ? ['busqueda'] : [])] };
     }
     if (nombre === 'lead_buscar_propiedades') {
@@ -934,11 +947,33 @@ ${
         AND right(regexp_replace(telefono, '\\D', '', 'g'), 9) = ${t} LIMIT 1`;
     if (persona.length) return null;
     const nombre = (cv.nombre || '').trim();
+    // un lead nuevo queda a cargo del administrador (el primero activo) y con su persona en el CRM (rol interesado, sin RUT:
+    // lo que Sofía vaya sabiendo después se le agrega); antes quedaba sin corredor y sin persona
+    const corredorId = (await this.ejecutivo.responsables(corredoraId, null))[0] ?? null;
+    let personaId: string | null = null;
+    if (corredorId) {
+      try {
+        const p = await this.personas.crear(
+          { sub: corredorId, corredoraId, rol: 'ADMIN', sid: '' },
+          {
+            nombre: nombre || cv.telefono || 'Interesado por WhatsApp',
+            telefono: cv.telefono ?? undefined,
+            ...(cv.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cv.email) ? { email: cv.email } : {}),
+            roles: ['interesado'],
+          },
+        );
+        personaId = (p as { id: string }).id;
+      } catch (e) {
+        this.log.warn(`persona del lead nuevo: ${(e as Error).message}`);
+      }
+    }
     await this.leads.crear(corredoraId, {
       nombre,
       telefono: cv.telefono ?? '',
       email: cv.email || '',
       origen: 'whatsapp',
+      corredorId,
+      personaId,
       canal: { canal: 'whatsapp', conv: cv.id, contactId: cv.contactId ?? '' },
       datos: { chatCon: nombre || cv.telefono || '' },
     });
@@ -953,6 +988,7 @@ ${
     const manuales = t
       ? this.manuales(recientes, await this.enviados.propios(corredoraId, t, new Date(Date.now() - 2 * 864e5)))
       : [];
+    if (manuales.length) await this.leads.contactado(cli.lead, 'El corredor respondió por WhatsApp').catch(() => null);
     const ms: MensajeLead[] = [
       ...manuales.map((m) => ({
         k: 'wc' + m.id,
@@ -987,6 +1023,7 @@ ${
     let h = await this.db.waHilo.findUnique({ where: { corredoraId_telefonoNorm: { corredoraId, telefonoNorm: t } } });
     const propios = await this.enviados.propios(corredoraId, t, new Date(Date.now() - 2 * 864e5));
     const manuales = this.manuales(recientes, propios);
+    if (manuales.length && cli.lead) await this.leads.contactado(cli.lead, 'El corredor respondió por WhatsApp').catch(() => null);
     const cambios: Prisma.WaHiloUpdateInput = {};
     let pausaHasta = h?.pausaHasta ?? null;
     if (manuales.length) {
