@@ -72,7 +72,7 @@ const HERRAMIENTAS: HerramientaIa[] = [
   {
     name: 'ver_propiedad',
     description:
-      'La ficha de una propiedad por su código (CV-9001) o id: datos, precios, estado, negocios, próximas visitas y (si corresponde) sus propietarios.',
+      'La ficha de una propiedad por su código (CV-9001) o id: datos, precios, estado, negocios, próximas visitas, cuántas fotos tiene y (si corresponde) las personas ligadas con su rol (propietario, interesado, comprador…).',
     input_schema: { type: 'object', properties: { codigo: { type: 'string' } }, required: ['codigo'] },
   },
   {
@@ -367,7 +367,7 @@ export class EquipoService {
       case 'ver_propiedad': {
         const p = await this.propiedad(c, txt('codigo'));
         if (!p) return { error: 'No encontré esa propiedad: búscala con buscar_propiedades.' };
-        const [negs, evs, vinc] = await Promise.all([
+        const [negs, evs, vinc, fotos] = await Promise.all([
           this.db.negocio.findMany({
             where: { corredoraId: c.corredoraId, propiedadId: p.id, eliminadoEn: null, estado: 'abierto' },
           }),
@@ -384,6 +384,7 @@ export class EquipoService {
           c.admin || p.captadorId === c.usuarioId
             ? this.db.propiedadPersona.findMany({ where: { propiedadId: p.id }, include: { persona: true } })
             : Promise.resolve([]),
+          this.db.propiedadFoto.count({ where: { propiedadId: p.id } }),
         ]);
         return {
           codigo: p.codigo,
@@ -408,8 +409,11 @@ export class EquipoService {
             tipo: e.tipo,
             titulo: (e.datos as { titulo?: string })?.titulo,
           })),
-          propietarios: vinc.length
-            ? vinc.map((x) => ({ nombre: x.persona.nombre, telefono: x.persona.telefono, email: x.persona.email }))
+          fotos,
+          // cada persona ligada a la propiedad con SU rol (propietario, interesado, comprador…): sin el rol, una
+          // persona con dos roles parecía «dos propietarios»
+          personas: vinc.length
+            ? vinc.map((x) => ({ rol: x.rol, nombre: x.persona.nombre, telefono: x.persona.telefono, email: x.persona.email }))
             : c.admin || p.captadorId === c.usuarioId
               ? []
               : 'reservado (no la captaste)',
