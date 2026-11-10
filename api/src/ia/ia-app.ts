@@ -7,13 +7,12 @@
 //                             corto      → IA_MODELO_CORTO (Haiku), esfuerzo bajo (retocar un WhatsApp).
 //                           Devuelve el mensaje tal cual (content, stop_reason, usage, model).
 //  · GET  /v1/ia/estado     si hay IA, qué modelos usa cada tarea y si el dictado puede transcribir.
-//  · POST /v1/ia/transcribir  { audio (base64), mime }: audio → texto para el dictado. Claude no transcribe audio,
-//                           así que esto usa la transcripción de OpenAI (OPENAI_CLAVE); sin ella responde 503.
+//  · POST /v1/ia/transcribir  { audio (base64), mime }: audio → { texto, crudo, avisos } (TranscripcionService). Claude no
+//                           transcribe audio: usa la transcripción de OpenAI (OPENAI_CLAVE); sin ella responde 503.
 // Cada llamada queda en ia_consumo con uso «app:<tarea>» (IaService), para cobrarla a la corredora.
 /* eslint-disable @typescript-eslint/no-unsafe-assignment -- los mensajes y herramientas llegan en el formato de la API
    de Anthropic y se pasan tal cual al SDK, que los valida */
 import {
-  BadRequestException,
   Body,
   Controller,
   Get,
@@ -27,6 +26,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { ZodPipe } from '../comun/zod.pipe';
 import { UsuarioActual, type UsuarioToken } from '../auth/usuario-actual';
 import { IaService, SinIaError } from '../whatsapp/ia';
+import { TranscripcionService } from './transcripcion';
 import type { Env } from '../config/env';
 
 type Tarea = 'agente' | 'documento' | 'corto';
@@ -55,20 +55,19 @@ const transcribirEsquema = z.object({
 @Controller('ia')
 export class IaAppController {
   private readonly modelos: Record<Tarea, string>;
-  private readonly openai?: string;
 
   constructor(
     private readonly ia: IaService,
+    private readonly transcripcion: TranscripcionService,
     config: ConfigService<Env, true>,
   ) {
     const app = config.get('IA_MODELO_APP', { infer: true });
     this.modelos = { agente: app, documento: app, corto: config.get('IA_MODELO_CORTO', { infer: true }) };
-    this.openai = config.get('OPENAI_CLAVE', { infer: true });
   }
 
   @Get('estado')
   async estado(@UsuarioActual() u: UsuarioToken) {
-    return { disponible: await this.ia.disponible(u.corredoraId), modelos: this.modelos, transcribir: !!this.openai };
+    return { disponible: await this.ia.disponible(u.corredoraId), modelos: this.modelos, transcribir: await this.transcripcion.disponible(u.corredoraId) };
   }
 
   @Post('mensajes')
@@ -106,38 +105,11 @@ export class IaAppController {
   }
 
   @Post('transcribir')
-  async transcribir(@Body(new ZodPipe(transcribirEsquema)) b: z.infer<typeof transcribirEsquema>) {
-    if (!this.openai)
-      throw new ServiceUnavailableException({
-        message: 'El dictado por voz no está disponible: escribe o pega la descripción.',
-        codigo: 'SIN_TRANSCRIPCION',
-      });
-    const mime = b.mime.split(';')[0];
-    const ext = /mp4|m4a/.test(mime) ? 'm4a' : /ogg/.test(mime) ? 'ogg' : /wav/.test(mime) ? 'wav' : 'webm';
-    const ir = async (modelo: string) => {
-      const fd = new FormData();
-      fd.append('file', new Blob([Buffer.from(b.audio, 'base64')], { type: mime }), 'dictado.' + ext);
-      fd.append('model', modelo);
-      fd.append('language', 'es');
-      fd.append(
-        'prompt',
-        'Corredor de propiedades en Chile dictando una propiedad: dormitorios, baños, metros cuadrados, UF, lucas, gastos comunes, comuna, depto.',
-      );
-      const r = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${this.openai}` },
-        body: fd,
-        signal: AbortSignal.timeout(180_000),
-      });
-      const j = (await r.json().catch(() => ({}))) as { text?: string; error?: { message?: string } };
-      if (!r.ok) throw Object.assign(new Error(j.error?.message || `HTTP ${r.status}`), { status: r.status });
-      return String(j.text || '').trim();
-    };
-    try {
-      return { texto: await ir('gpt-4o-mini-transcribe') };
-    } catch (e) {
-      if ((e as { status?: number }).status === 404) return { texto: await ir('whisper-1') };
-      throw new BadRequestException(`No se pudo transcribir el audio: ${(e as Error).message}`);
-    }
+  async transcribir(
+    @UsuarioActual() u: UsuarioToken,
+    @Body(new ZodPipe(transcribirEsquema)) b: z.infer<typeof transcribirEsquema>,
+  ) {
+    // { texto (ya normalizado), crudo, avisos }: ver transcripcion.ts
+    return this.transcripcion.transcribir(u.corredoraId, Buffer.from(b.audio, 'base64'), b.mime);
   }
 }

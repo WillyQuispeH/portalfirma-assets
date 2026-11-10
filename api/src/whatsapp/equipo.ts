@@ -15,6 +15,7 @@ import { Prisma, type WaVinculo } from '@prisma/client';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { ActividadService } from '../comun/actividad.service';
+import { TranscripcionService } from '../ia/transcripcion';
 import { normalizar } from '../comun/texto';
 import { IaService, type HerramientaIa, type TurnoIa } from './ia';
 import { EnviadosService } from './enviados';
@@ -36,6 +37,8 @@ const PERSONAS: Record<TPersona, { nombre: string; area: string; foco: string }>
     foco: 'los leads: quién escribió, qué busca, en qué quedó y qué sigue',
   },
 };
+const ES_AUDIO = /\.(ogg|oga|opus|mp3|m4a|amr|aac|wav|webm)(\?|$)|audio/i;
+
 /** turnos que se guardan por personaje */
 const MAX_TURNOS = 16;
 
@@ -159,7 +162,25 @@ export class EquipoService {
     private readonly ia: IaService,
     private readonly enviados: EnviadosService,
     private readonly actividad: ActividadService,
+    private readonly transcripcion: TranscripcionService,
   ) {}
+
+  /** transcribe los audios de los mensajes; lo que no se pueda transcribir queda para su Asset (cola) como antes */
+  private async escuchar(corredoraId: string, nuevos: MensajeWa[]) {
+    const textos: string[] = [];
+    const avisos: string[] = [];
+    for (const m of nuevos)
+      for (const url of m.adjuntos.filter((u) => ES_AUDIO.test(u))) {
+        try {
+          const r = await this.transcripcion.transcribirUrl(corredoraId, url);
+          if (r.texto) textos.push(r.texto);
+          avisos.push(...r.avisos);
+        } catch (e) {
+          this.log.warn(`audio sin transcribir: ${(e as Error).message}`);
+        }
+      }
+    return { textos, avisos: [...new Set(avisos)] };
+  }
 
   /** a quién le habla: el personaje que nombra («Juanita, …», «mis documentos Juanita»; si nombra varios, el primero),
    *  o el de la última vez (Pedro si es la primera) */
@@ -176,11 +197,14 @@ export class EquipoService {
 
   /** atiende lo que escribió el ejecutivo con su Asset cerrado; devuelve false si no pudo (la IA no está) */
   async atender(wa: Wechatia, v: WaVinculo, cv: Conversacion, nuevos: MensajeWa[]) {
-    const texto = nuevos
+    const escrito = nuevos
       .map((m) => m.texto.trim())
       .filter(Boolean)
       .join('\n');
     const conAdjuntos = nuevos.some((m) => m.adjuntos.length);
+    // los audios (notas de voz) se transcriben aquí, aun con su Asset cerrado; el resto de los archivos los ve su Asset
+    const { textos: dichos, avisos: avisosAudio } = await this.escuchar(v.corredoraId, nuevos);
+    const texto = [escrito, ...dichos].filter(Boolean).join('\n');
     const datos = (v.datos ?? {}) as { persona?: string; hilos?: Record<string, TurnoIa[]>; nombre?: string };
     const persona = this.personaDe(texto, datos.persona);
     const p = PERSONAS[persona];
@@ -189,6 +213,12 @@ export class EquipoService {
       const r = await wa.enviarAContacto(cv.contactId, `${firma(persona)}\n${t}`.slice(0, 3500));
       await this.enviados.registrar(v.corredoraId, cv.telefono, { messageId: r.messageId, texto: t, enHilo: false });
     };
+    // lo que se entendió del audio, para que lo corrija si el micrófono o el ruido jugaron una mala pasada
+    if (dichos.length && cv.contactId) {
+      const eco = `🎙️ Entendí: «${dichos.join(' ').slice(0, 1200)}»${avisosAudio.map((x) => `\n⚠️ ${x}`).join('')}`;
+      const r = await wa.enviarAContacto(cv.contactId, eco);
+      await this.enviados.registrar(v.corredoraId, cv.telefono, { messageId: r.messageId, texto: eco, enHilo: false });
+    }
     // audios y archivos: los atiende su Asset al abrirse (el servidor solo lee texto)
     if (!texto && conAdjuntos) {
       await this.encolar(v, nuevos);
@@ -203,7 +233,10 @@ export class EquipoService {
     const u = await this.db.usuario.findUnique({ where: { id: v.usuarioId } });
     if (!u) return false;
     const c: Ctx = { corredoraId: v.corredoraId, usuarioId: u.id, nombre: u.nombre, admin: u.rol === 'ADMIN' };
-    const hilo = [...(datos.hilos?.[persona] ?? []), { role: 'user' as const, content: texto }].slice(-MAX_TURNOS);
+    const nota = avisosAudio.length
+      ? `\n\n[Aviso de la transcripción del audio: ${avisosAudio.join(' ')} No guardes ese dato sin que lo confirme.]`
+      : '';
+    const hilo = [...(datos.hilos?.[persona] ?? []), { role: 'user' as const, content: texto + nota }].slice(-MAX_TURNOS);
     while (hilo.length && hilo[0].role !== 'user') hilo.shift();
     const sistema = [
       `Eres ${p.nombre}, del área de ${p.area} del equipo de PortalFirma Asset (CRM inmobiliario chileno). Trabajas para ${u.nombre}, corredor${c.admin ? ' y administrador' : ''} de la corredora, y le respondes por WhatsApp. Tu foco: ${p.foco}, pero ayudas con lo que te pida usando las herramientas.`,

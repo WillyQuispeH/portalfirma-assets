@@ -42,6 +42,7 @@ function wechatiaFalso() {
       const u = new URL(rq.url, 'http://x'); const p = u.pathname; const body = b ? JSON.parse(b) : null;
       const out = (code, j) => { rs.writeHead(code, { 'content-type': 'application/json' }); rs.end(JSON.stringify(j)); };
       // las fotos que mandan por WhatsApp quedan en una URL pública (sin clave)
+      if (p.startsWith('/audio/')) { rs.writeHead(200, { 'content-type': 'audio/ogg' }); return rs.end(Buffer.alloc(3000, 7)); }
       if (p.startsWith('/media/')) { rs.writeHead(200, { 'content-type': 'image/jpeg' }); return rs.end(Buffer.from([0xff, 0xd8, 0xff, 0xe0, ...Buffer.from('foto de prueba ' + p), 0xff, 0xd9])); }
       if (rq.headers.authorization !== 'Bearer ' + TOKEN) return out(401, { message: 'no' });
       if (p === '/conversations/search') {
@@ -98,6 +99,17 @@ function respuestaIa(b) {
   if (!sofia && /visita|agend/i.test(contenido)) return herramienta('cliente_recado', { tipo: 'agendar_visita', detalle: contenido.slice(-200), disponibilidad: 'el sábado en la mañana' });
   return herramienta('cliente_info', {});
 }
+// la transcripción falsa (API de audio de OpenAI): responde según el escenario; con «con letras» en el prompt es la segunda pasada
+const T = { actual: { primera: '' }, llamadas: [] };
+function transcripcionFalsa() {
+  const s = http.createServer((rq, rs) => {
+    const ch = []; rq.on('data', (x) => ch.push(x)); rq.on('end', () => {
+      const letras = /con letras/.test(Buffer.concat(ch).toString('latin1')); T.llamadas.push({ letras });
+      rs.writeHead(200, { 'content-type': 'application/json' }); rs.end(JSON.stringify({ text: letras && T.actual.segunda != null ? T.actual.segunda : T.actual.primera }));
+    });
+  });
+  return new Promise((ok) => s.listen(0, '127.0.0.1', () => ok(s)));
+}
 function iaFalsa() {
   const s = http.createServer((rq, rs) => {
     let b = ''; rq.on('data', (x) => (b += x)); rq.on('end', () => {
@@ -112,8 +124,8 @@ function iaFalsa() {
 
 (async () => {
   const db = new PrismaClient();
-  const srv = await wechatiaFalso(); const ia = await iaFalsa();
-  const base = `http://127.0.0.1:${srv.address().port}`; const iaBase = `http://127.0.0.1:${ia.address().port}`;
+  const srv = await wechatiaFalso(); const ia = await iaFalsa(); const trf = await transcripcionFalsa();
+  const base = `http://127.0.0.1:${srv.address().port}`; const iaBase = `http://127.0.0.1:${ia.address().port}`; const transcribirBase = `http://127.0.0.1:${trf.address().port}`;
   let co = null; const usuarios = [];
   try {
     const hash = await argon2.hash('clave-e2e-123', { type: argon2.argon2id });
@@ -137,7 +149,7 @@ function iaFalsa() {
     let r = await req('PUT', '/whatsapp/conexion', { token: TOKEN, locationId: 'loc-1', base }, tA);
     ok(r.s === 200 && r.j.conectado, 'el administrador conecta el WhatsApp de la empresa (wechatia de prueba)');
     const cx = await db.conexion.findFirst({ where: { corredoraId: co.id, proveedor: 'wechatia' } });
-    await db.conexion.update({ where: { id: cx.id }, data: { datos: { ...cx.datos, iaBase } } });
+    await db.conexion.update({ where: { id: cx.id }, data: { datos: { ...cx.datos, iaBase, transcribirBase } } });
     r = await req('GET', '/whatsapp/asistentes', null, t1);
     ok(r.j.conectado && r.j.ia && r.j.clientesActivo && r.j.enServidor, 'estado: conectado, con IA y la atención de clientes encendida');
 
@@ -158,6 +170,26 @@ function iaFalsa() {
     ok(r.s === 200 && (await db.aviso.findFirst({ where: { usuarioId: c1.id, tipo: 'wa_pedir_vinculo' } })), 'el administrador le pide que vincule: le llega un aviso con los pasos');
     escribe(cel, 'Pedro, ¿cómo va la cartera?');
     ok(await hasta(() => salidas(cel).some((t) => /^\*Pedro\* · Captación\nTienes \d+ propiedad/.test(t))), 'con su Asset cerrado, Pedro le responde desde el servidor (con los datos de la base)');
+    // audios (notas de voz) con su Asset cerrado: el servidor los transcribe, dice qué entendió y responde el equipo
+    T.actual = { primera: 'Pedro, ¿cómo va la cartera PF1001?' };
+    let antesAu = salidas(cel).length;
+    escribe(cel, '', { attachments: [`${base}/audio/a1.ogg`] });
+    ok(await hasta(() => salidas(cel).slice(antesAu).some((t) => t === '🎙️ Entendí: «Pedro, ¿cómo va la cartera PF-1001?»')), 'un audio se transcribe (con el código normalizado) y se le dice qué se entendió: ' + (salidas(cel).slice(antesAu)[0] || ''));
+    ok(await hasta(() => salidas(cel).slice(antesAu).some((t) => /^\*Pedro\* · Captación\nTienes \d+ propiedad/.test(t))), 'y Pedro responde al audio aunque su Asset esté cerrado');
+    ok(T.llamadas.length === 1 && !T.llamadas[0].letras, 'sin avisos, una sola llamada a la transcripción');
+    T.actual = { primera: 'Pedro, el RUT del dueño es 15.432.876-5', segunda: 'Pedro, el RUT del dueño es quince millones cuatrocientos treinta y dos mil ochocientos setenta y seis guion nueve' };
+    antesAu = salidas(cel).length; T.llamadas.length = 0;
+    escribe(cel, '', { attachments: [`${base}/audio/a2.ogg`] });
+    ok(await hasta(() => salidas(cel).slice(antesAu).some((t) => /^🎙️ Entendí: «Pedro, el RUT del dueño es 15\.432\.876-9»$/.test(t))), 'si un RUT no cuadra, repite con los números en letras y lo corrige (15.432.876-9, sin avisos)');
+    ok(T.llamadas.length === 2 && T.llamadas[1].letras, 'la segunda pasada pide los números con letras');
+    T.actual = { primera: 'Pedro, su teléfono es 9654322187', segunda: 'Pedro, su teléfono es 9654322187' };
+    antesAu = salidas(cel).length; const iaAntes = IA.llamadas.length;
+    escribe(cel, '', { attachments: [`${base}/audio/a3.ogg`] });
+    ok(await hasta(() => salidas(cel).slice(antesAu).some((t) => /^🎙️ Entendí: «Pedro, su teléfono es 9654322187»\n⚠️ El teléfono «9654322187» no tiene el largo de un celular chileno/.test(t))), 'si el dato sigue sin cuadrar, lo dice con ⚠️ para confirmarlo');
+    ok(await hasta(() => IA.llamadas.slice(iaAntes).some((b) => /Aviso de la transcripción del audio/.test(JSON.stringify(b.messages)) && /No guardes ese dato/.test(JSON.stringify(b.messages)))), 'y el asistente recibe el aviso para pedir la confirmación');
+    T.actual = { primera: 'La PF1001 y la pf 1002' };
+    r = await req('POST', '/ia/transcribir', { audio: Buffer.alloc(3000, 3).toString('base64'), mime: 'audio/ogg' }, t1);
+    ok(r.s === 201 && r.j.texto === 'La PF-1001 y la PF-1002' && Array.isArray(r.j.avisos) && !r.j.avisos.length, 'el dictado de la app usa la misma transcripción: códigos normalizados (PF-1001)');
     let antesEq = salidas(cel).length;
     escribe(cel, 'mis documentos Juanita');
     ok(await hasta(() => salidas(cel).slice(antesEq).some((t) => /^\*Juanita\* · Documentos\n/.test(t))), 'el nombre del personaje al final del mensaje («mis documentos Juanita») también lo elige');
@@ -313,7 +345,7 @@ function iaFalsa() {
     // ---- desvincular
     ok((await req('POST', '/whatsapp/ejecutivo/desvincular', null, t1)).j.ok && !(await req('GET', '/whatsapp/ejecutivo', null, t1)).j.activo, 'el corredor desvincula su celular');
   } finally {
-    srv.close(); ia.close();
+    srv.close(); ia.close(); trf.close();
     if (co) {
       const w = { where: { corredoraId: co.id } };
       for (const m of ['waEntrante', 'waVinculo', 'waHilo', 'waEnviado', 'waConversacion', 'waAjustes', 'iaConsumo', 'waProgramado', 'aviso', 'conexion', 'registro', 'actividad', 'evento', 'leadMensaje', 'lead']) await db[m].deleteMany(w).catch((e) => console.warn(m, e.message));

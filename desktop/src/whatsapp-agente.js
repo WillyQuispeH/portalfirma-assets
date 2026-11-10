@@ -96,7 +96,7 @@ function crear({ store, wa, crearAgente, locales, dictado, inmo, convs, leads = 
       const r = mock && /^mock:/.test(aud) ? { ok: true, arrayBuffer: async () => new Uint8Array(4000).buffer, headers: { get: () => 'audio/ogg' } } : await fetchFn(aud);
       if (!r.ok) throw new Error('no se pudo descargar el audio');
       const bytes = new Uint8Array(await r.arrayBuffer()); const mime = r.headers.get('content-type') || 'audio/ogg';
-      const tr = await ai.transcribir({ bytes, mime }); registrar('user', `(audio) ${tr.texto}`); return { texto: tr.texto, audio: true };
+      const tr = await ai.transcribir({ bytes, mime }); registrar('user', `(audio) ${tr.texto}`); return { texto: tr.texto, audio: true, avisos: tr.avisos || [] };
     } catch (e) { await enviar('No pude escuchar el audio (' + e.message + '). ¿Me lo escribes?'); return null; }
   }
   // ---------- chat exportado de WhatsApp → lead (0.14) ----------
@@ -147,8 +147,10 @@ function crear({ store, wa, crearAgente, locales, dictado, inmo, convs, leads = 
     const doc = (m.attachments || []).find((u) => ES_CHAT.test(u) || (mock && /^mock:chat/.test(u))) || (m.attachments || []).find((u) => !MEDIA.test(u) && !/audio|image|video/i.test(u) && !(mock && /^mock:/.test(u)));
     if (doc) return chatExportado(doc, m);
     if (!(m.attachments || []).length && /^\s*(chat de whatsapp|whatsapp chat)[^\n]*\.(zip|txt)\s*$/i.test(String(m.body || ''))) { registrar('user', m.body); return enviar('Me llegó solo el nombre del archivo, no el archivo. Prueba exportando el chat con *Sin archivos* (queda un .txt) y envíamelo de nuevo. Si lo exportaste con fotos y audios (.zip), mejor arrástralo a Asset › Leads en el computador.'); }
-    let tx = await texto(m); if (tx == null) return; let audio = false; if (typeof tx === 'object') { audio = true; tx = tx.texto; }
+    let tx = await texto(m); if (tx == null) return; let audio = false; let avisosAudio = []; if (typeof tx === 'object') { audio = true; avisosAudio = tx.avisos || []; tx = tx.texto; }
     if (!tx) return; if (!audio) registrar('user', tx);
+    // lo que se entendió del audio (para que lo corrija si el ruido jugó una mala pasada) y los datos que no cuadraron
+    if (audio) { await enviar(`🎙️ Entendí: «${tx.slice(0, 1200)}»${avisosAudio.map((a) => `\n⚠️ ${a}`).join('')}`, { sinFirma: true }); if (avisosAudio.length) tx += `\n\n[Aviso de la transcripción del audio: ${avisosAudio.join(' ')} No guardes ese dato sin que lo confirme.]`; }
     const n = norm(tx);
     const cambia = P.detectar(tx) || P.ES_MENU.test(n);
     if (!cambia) {

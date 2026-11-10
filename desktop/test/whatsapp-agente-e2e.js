@@ -49,6 +49,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     e0 = (await enviados()).length; await escribe('Pedro'); await esperaEnvio(/^k9\|\*Pedro\* · Captación\nHola, soy \*Pedro\*/, e0); ok(true, 'escribir «Pedro» activa a Pedro, que se presenta');
     e0 = (await enviados()).length; await escribe('', ['mock://nota-de-voz.ogg']);
     const res = await esperaEnvio(/^k9\|\*Pedro\* · Captación\n\*Departamento[\s\S]*Responde \*CREAR\*/, e0);
+    ok((await enviados()).slice(e0).some((x) => /^k9\|🎙️ Entendí: «Estoy captando un departamento/.test(x)), 'antes de responder, dice qué entendió del audio (🎙️ Entendí: «…»)');
     ok(/Avenida del Tranque 1234/.test(res) && /3D · 2B/.test(res) && /Arriendo \$850\.000/.test(res), 'la nota de voz se transcribe y el agente devuelve el resumen de la propiedad dictada');
     e0 = (await enviados()).length; await escribe('Juanita'); const vuelta = await esperaEnvio(/^k9\|\*Juanita\* · Documentos/, e0);
     ok(/Sigo con lo que est/.test(vuelta), 'al volver a Juanita, retoma su conversación (no se mezcla con la de Pedro)');
