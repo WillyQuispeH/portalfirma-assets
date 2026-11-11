@@ -40,11 +40,14 @@ import { EquipoService } from './whatsapp/equipo';
 import { FotosWaService } from './whatsapp/fotos-wa';
 import { OrdenVisitaService } from './whatsapp/orden-visita';
 import { LeadsWaService } from './whatsapp/leads-wa';
+import { AvisoLeadController, AvisoLeadService } from './whatsapp/aviso-lead';
 import { ClientesService } from './whatsapp/clientes';
 import { PostventaWaService } from './whatsapp/postventa';
 import { ObservadorController, ObservadorService } from './whatsapp/observador';
 import { EvaluacionController, EvaluacionService } from './whatsapp/evaluacion';
+import { ActaVisitaController, ActaVisitaService } from './whatsapp/acta-visita';
 import { LectorController, LectorService } from './whatsapp/lector';
+import { PuenteService } from './whatsapp/puente';
 
 @Module({
   imports: [
@@ -64,6 +67,7 @@ import { LectorController, LectorService } from './whatsapp/lector';
     NegociosController,
     EventosController,
     LeadsController,
+    AvisoLeadController,
     FirmasController,
     RegistrosController,
     ContadoresController,
@@ -83,6 +87,7 @@ import { LectorController, LectorService } from './whatsapp/lector';
     ObservadorController,
     LectorController,
     EvaluacionController,
+    ActaVisitaController,
   ],
   // el límite de intentos va antes que la sesión: un login fallido también cuenta
   providers: [
@@ -114,11 +119,14 @@ import { LectorController, LectorService } from './whatsapp/lector';
     EnviadosService,
     EjecutivoService,
     LeadsWaService,
+    AvisoLeadService,
     ClientesService,
     PostventaWaService,
     ObservadorService,
     LectorService,
+    PuenteService,
     EvaluacionService,
+    ActaVisitaService,
   ],
 })
 export class AppModule {}

@@ -457,6 +457,32 @@ function iaFalsa() {
     await req('POST', '/whatsapp/programados', { id: `wp${SUF}`, telefono: '+56 9 8765 4321', nombre: 'Juan Pérez', texto: 'Juan, nos vemos mañana.', cuando: new Date(Date.now() - 1000).toISOString() }, t1);
     ok(await hasta(() => salidas(cel).some((t) => /Le envié a Juan Pérez el WhatsApp programado/.test(t)), 60), 'el resultado de un programado se le avisa al ejecutivo por su celular, desde el servidor');
 
+    // ---- 8a. aviso al corredor cuando le asignan un lead (texto si escribió hace poco; plantilla si no; botón «Mensaje»)
+    const c2 = await nu('c', null, { wechatiaId: 'wu-2' });
+    W.contactos['k-c2'] = '+56 9 3333 4444';
+    await db.waVinculo.create({ data: { usuarioId: c2.id, corredoraId: co.id, telefono: '+56 9 3333 4444', telefonoNorm: '933334444', contactId: 'k-c2', activo: true, vinculadoEn: new Date() } });
+    const leadId = `ld${SUF}`;
+    const asignar = async (corredorId) => { const g = await req('GET', `/leads/${leadId}`, null, tA); return req('PUT', `/leads/${leadId}`, { ...g.j, corredorId }, tA); };
+    const antesPl = (W.plantillas || []).length;
+    r = await asignar(c2.id);
+    ok(r.s === 200 && r.j.corredorId === c2.id, 'el administrador le asigna el lead a otro corredor');
+    const pl = await hasta(() => (W.plantillas || []).length > antesPl && W.plantillas.at(-1).etiqueta === 'nuevo_lead_asignado' && W.plantillas.at(-1), 30);
+    ok(pl, 'como ese corredor no le ha escrito a la empresa en 24 h, el aviso sale por la plantilla «nuevo_lead_asignado»');
+    ok(pl.campos.asset_lead_nombre === 'Juan Pérez' && /8765 4321/.test(pl.campos.asset_lead_celular) && /PF-9001/.test(pl.campos.asset_propiedad) && pl.campos.asset_nombre === 'Corredor' && pl.campos.asset_lead_canal && pl.campos.asset_lead_enlace.startsWith(leadId + '.'), 'con los datos del interesado, la propiedad y el enlace del botón ' + JSON.stringify(pl.campos));
+    ok(await hasta(() => db.aviso.findFirst({ where: { corredoraId: co.id, usuarioId: c2.id, tipo: 'lead' } })), 'y también queda en sus avisos de la app');
+    ok(await hasta(async () => (await db.lead.findUnique({ where: { id: leadId } })).datos.avisoAsignado?.corredorId === c2.id), 'el lead recuerda a quién se avisó');
+    const n1 = (W.plantillas || []).length; await asignar(c2.id); await esperar(3000);
+    ok((W.plantillas || []).length === n1, 'si se vuelve a guardar con el mismo corredor, no se repite el aviso');
+    const rd = await fetch(`${B}/whatsapp/lead/${pl.campos.asset_lead_enlace}`, { redirect: 'manual' });
+    ok(rd.status === 302 && rd.headers.get('location') === 'https://wa.me/56987654321', 'el botón «Mensaje» abre el WhatsApp del interesado: ' + rd.headers.get('location'));
+    ok((await fetch(`${B}/whatsapp/lead/${pl.campos.asset_lead_enlace.slice(0, -2)}xx`, { redirect: 'manual' })).status === 404, 'un enlace alterado no sirve');
+    const antesTx = salidas(cel).length;
+    await asignar(c1.id);
+    ok(await hasta(() => salidas(cel).slice(antesTx).some((t) => /Nuevo lead asignado/.test(t) && /Juan Pérez/.test(t) && /wa\.me\/56987654321|whatsapp\/lead\//.test(t))), 'a un corredor que le escribió hace poco le llega como texto, con el enlace para escribirle al interesado');
+    r = await req('GET', `/leads/${leadId}`, null, tA);
+    ok(r.s === 200, 'el lead sigue entero');
+    await db.usuario.update({ where: { id: c2.id }, data: { activo: false } });
+
     // ---- 8b. evaluación del arrendatario y sus avales: plantilla por WhatsApp, documentos leídos y puntaje
     const arr = await db.persona.create({ data: { corredoraId: co.id, nombre: 'María Postulante', telefono: '+56 9 6111 1111', rut: '12345678K' } });
     const av1 = await db.persona.create({ data: { corredoraId: co.id, nombre: 'Pedro Aval', telefono: '+56 9 6222 2222' } });
@@ -466,8 +492,9 @@ function iaFalsa() {
     ok(r.s === 400 && /no tiene celular/.test(r.j.message || ''), 'no se puede pedir documentación a un aval sin celular');
     r = await req('POST', `/evaluaciones/${ng.id}/solicitar`, { avales: [av1.id] }, tA);
     ok(r.s === 200 && r.j.personas.length === 2 && r.j.personas[0].rol === 'arrendatario' && r.j.personas[1].rol === 'aval' && r.j.estado === 'solicitada', 'solicitar: queda el arrendatario y su aval esperando documentos');
-    ok((W.plantillas || []).length === 2 && W.plantillas.every((x) => x.etiqueta === 'solicitar_documentacion_'), 'a cada uno le sale la plantilla (con su etiqueta) ' + JSON.stringify(W.plantillas));
-    ok(W.plantillas[0].campos.asset_nombre === 'María' && /Irarrázaval/.test(W.plantillas[0].campos.asset_propiedad) && /^Corredor A/.test(W.plantillas[0].campos.asset_remitente) && /aval de María Postulante/.test(W.plantillas[1].campos.asset_propiedad), 'con su nombre, quien escribe y la propiedad (al aval se le dice de quién es aval)');
+    const plEv = (W.plantillas || []).filter((x) => x.etiqueta === 'asset_solicitar_documentos'); // (la del aviso de lead asignado es otra)
+    ok(plEv.length === 2, 'a cada uno le sale la plantilla (con su etiqueta) ' + JSON.stringify(W.plantillas));
+    ok(plEv[0].campos.asset_nombre === 'María' && /Irarrázaval/.test(plEv[0].campos.asset_propiedad) && /^Corredor A/.test(plEv[0].campos.asset_remitente) && /aval de María Postulante/.test(plEv[1].campos.asset_propiedad), 'con su nombre, quien escribe y la propiedad (al aval se le dice de quién es aval)');
     r = await req('POST', `/evaluaciones/${ng.id}/solicitar`, { avales: [av1.id] }, tA);
     ok(r.s === 400 && /Ya se les pidió/.test(r.j.message || ''), 'no se les vuelve a escribir a quienes ya se les pidió');
     const docs = (n, rut, extra = {}) => [

@@ -49,6 +49,7 @@ model Corredora {
   waConversaciones WaConversacion[]
   waHilos          WaHilo[]
   waEnviados       WaEnviado[]
+  waPuentes        WaPuente[]
   waVinculos       WaVinculo[]
   waEntrantes      WaEntrante[]
   iaConsumo        IaConsumo[]
@@ -961,4 +962,21 @@ model IaConsumo {
 
   @@index([corredoraId, creadoEn])
   @@map("ia_consumo")
+}
+
+/// Puente corredor ↔ interesado: el mensaje del interesado que se reenvió al celular del corredor (message_id) y a qué
+/// lead corresponde; si el corredor responde citándolo, la respuesta va a ese lead. Se borran a los 30 días.
+model WaPuente {
+  id          BigInt   @id @default(autoincrement())
+  corredoraId String   @map("corredora_id") @db.Uuid
+  usuarioId   String   @map("usuario_id") @db.Uuid
+  leadId      String   @map("lead_id")
+  messageId   String   @map("message_id")
+  creadoEn    DateTime @default(now()) @map("creado_en")
+
+  corredora Corredora @relation(fields: [corredoraId], references: [id], onDelete: Cascade)
+
+  @@index([corredoraId, messageId])
+  @@index([creadoEn])
+  @@map("wa_puente")
 }

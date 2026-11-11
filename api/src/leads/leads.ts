@@ -4,6 +4,7 @@
 // Un lead nuevo que repite una conversación de wechatia o un teléfono de otro lead vivo se rechaza con 409 DUPLICADO
 // (y el id del existente): así dos equipos que reciben al mismo cliente a la vez no lo duplican.
 // Reasignar y eliminar son del administrador (como en la app).
+import { AvisoLeadService } from '../whatsapp/aviso-lead';
 import {
   BadRequestException,
   Body,
@@ -173,6 +174,7 @@ export class LeadsService {
   constructor(
     private readonly db: PrismaService,
     private readonly r2: AlmacenamientoService,
+    private readonly avisoLead: AvisoLeadService,
   ) {}
 
   listar(u: UsuarioToken, f: ListarAsignados) {
@@ -236,19 +238,19 @@ export class LeadsService {
       const dup = await this.duplicado(u, id, cols.convIds, cols.telefonoNorm);
       if (dup) throw this.errorDuplicado(u, dup);
       try {
-        return leadApp(
-          await this.db.lead.create({
-            data: {
-              id,
-              corredoraId: u.corredoraId,
-              creadoPorId: u.sub,
-              ...(o.creado ? { creadoEn: new Date(o.creado) } : {}),
-              ...cols,
-              corredorId,
-              datos,
-            },
-          }),
-        );
+        const creado = await this.db.lead.create({
+          data: {
+            id,
+            corredoraId: u.corredoraId,
+            creadoPorId: u.sub,
+            ...(o.creado ? { creadoEn: new Date(o.creado) } : {}),
+            ...cols,
+            corredorId,
+            datos,
+          },
+        });
+        if (corredorId) void this.avisoLead.asignado(creado, corredorId, u.sub); // al corredor a cargo le llega por WhatsApp
+        return leadApp(creado);
       } catch (e) {
         if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002')
           throw new ConflictException({ message: 'Ese lead se acaba de crear en otro equipo.', code: 'VERSION' });
@@ -267,7 +269,10 @@ export class LeadsService {
       data: { ...nuevo, datos, version: { increment: 1 } },
     });
     if (!r.count) throw new ConflictException({ message: 'Otra persona cambió el lead recién.', code: 'VERSION' });
-    return leadApp((await this.db.lead.findUnique({ where: { id } }))!);
+    const actual = (await this.db.lead.findUnique({ where: { id } }))!;
+    // el administrador asignó (o cambió) el corredor: se le avisa por WhatsApp con los datos del interesado y la propiedad
+    if (corredorId && corredorId !== previa.corredorId) void this.avisoLead.asignado(actual, corredorId, u.sub);
+    return leadApp(actual);
   }
 
   async eliminar(u: UsuarioToken, id: string) {

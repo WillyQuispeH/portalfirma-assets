@@ -47,6 +47,22 @@ export const CANALES = [
 const PROVEEDOR = 'wechatia';
 const DUENO = 'corredora';
 
+/** el mensaje que se citó al responder, según los nombres que usa wechatia / WhatsApp (se prueban varios) */
+const citado = (m: Json): string | null => {
+  const v =
+    m.replyToMessageId ??
+    m.replyToId ??
+    m.quotedMessageId ??
+    m.meta?.replyToMessageId ??
+    m.meta?.quotedMessageId ??
+    m.meta?.replyTo?.id ??
+    m.meta?.context?.id ??
+    m.context?.id ??
+    m.context?.message_id ??
+    null;
+  return v ? String(v) : null;
+};
+
 export class WechatiaError extends Error {
   constructor(
     mensaje: string,
@@ -94,6 +110,8 @@ export interface MensajeWa {
   origen: string;
   tipo: string;
   asunto: string;
+  /** id del mensaje que se citó al responder (si wechatia lo informa) */
+  respondeA?: string | null;
 }
 
 const conexionEsquema = z.object({
@@ -190,6 +208,7 @@ export class Wechatia {
         origen: String(m.source || m.meta?.source || ''),
         tipo: String(m.messageType || m.type || ''),
         asunto: String(m.meta?.email?.subject || m.subject || ''),
+        respondeA: citado(m),
       }))
       .sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
   }

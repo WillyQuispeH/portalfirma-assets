@@ -18,6 +18,8 @@ async function bootstrap() {
   app.use('/v1/reglas-notariales', json({ limit: '4mb' }));
   // la IA de la app manda páginas de documentos como imágenes y el dictado manda audio
   app.use('/v1/ia', json({ limit: '30mb' }));
+  // el acta de visita recibe audios (hasta 25 MB) y fotos en base64
+  app.use('/v1/actas-visita', json({ limit: '36mb' }));
   app.use(json({ limit: '100kb' }));
   app.use(urlencoded({ extended: true, limit: '100kb' }));
   app.setGlobalPrefix('v1');

@@ -91,6 +91,11 @@ export class AlmacenamientoService {
     );
   }
 
+  /** URL firmada para VER el archivo en la app (foto o audio incrustado), sin forzar la descarga. */
+  urlVer(clave: string) {
+    return getSignedUrl(this.s3, new GetObjectCommand({ Bucket: this.bucket, Key: clave }), { expiresIn: DESCARGA_SEGUNDOS });
+  }
+
   /** Tamaño del archivo en R2, o null si no está. */
   async tamano(clave: string): Promise<number | null> {
     try {

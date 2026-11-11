@@ -26,6 +26,7 @@ import { ZodPipe } from '../comun/zod.pipe';
 import { UsuarioActual, type UsuarioToken } from '../auth/usuario-actual';
 import { IaService } from './ia';
 import { LeadsWaService, type MensajeLead } from './leads-wa';
+import { AvisoLeadService } from './aviso-lead';
 import { WechatiaService, type Conversacion, type Wechatia } from './wechatia';
 import { horaChile, hoy, telNorm } from './comun';
 
@@ -88,6 +89,7 @@ export class ObservadorService {
     private readonly ia: IaService,
     private readonly leads: LeadsWaService,
     private readonly wa: WechatiaService,
+    private readonly avisoLead: AvisoLeadService,
   ) {}
 
   private async ajustes(corredoraId: string) {
@@ -182,14 +184,21 @@ export class ObservadorService {
     if (!leadId || !cv.asignado || cv.asignado === previo) return;
     const co = await this.db.usuario.findFirst({ where: { corredoraId, wechatiaId: cv.asignado, activo: true } });
     if (!co) return;
+    let cambio = false;
     await this.leads.cambiar(leadId, (d, l) => {
       if (l.corredorId === co.id) return null;
+      cambio = true;
       d.historial = [
         ...(d.historial || []),
         { fecha: new Date().toISOString(), texto: `Asignado a ${co.nombre} (según wechatia)`, tipo: 'dueno' },
       ].slice(-200);
       return { datos: d, cols: { corredorId: co.id } as Prisma.LeadUpdateManyMutationInput };
     });
+    // el «propietario» de wechatia es el corredor a cargo: se le avisa por WhatsApp con los datos del lead
+    if (cambio) {
+      const lead = await this.db.lead.findUnique({ where: { id: leadId } });
+      if (lead) await this.avisoLead.asignado(lead, co.id, null);
+    }
   }
 
   /** el lead de una conversación de otro canal: el que ya la tiene, o por sus mensajes, contacto, teléfono o correo */

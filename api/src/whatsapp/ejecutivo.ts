@@ -25,6 +25,7 @@ import { EnviadosService } from './enviados';
 import { firma, norm, telNorm } from './comun';
 import { EquipoService } from './equipo';
 import { FotosWaService } from './fotos-wa';
+import { ActaVisitaService } from './acta-visita';
 
 /** sin señal de su Asset en este tiempo, está cerrado */
 const ABIERTO_MS = 60_000;
@@ -65,6 +66,7 @@ export class EjecutivoService {
     private readonly avisos: AvisosService,
     private readonly equipo: EquipoService,
     private readonly fotos: FotosWaService,
+    private readonly actas: ActaVisitaService,
   ) {}
 
   private vista(v: WaVinculo | null) {
@@ -218,6 +220,9 @@ export class EjecutivoService {
   async recibir(wa: Wechatia, v: WaVinculo, cv: Conversacion, nuevos: MensajeWa[]) {
     if (cv.contactId && cv.contactId !== v.contactId)
       await this.db.waVinculo.update({ where: { usuarioId: v.usuarioId }, data: { contactId: cv.contactId } });
+    // el acta de visita abierta recibe sus audios y fotos (y «listo» la cierra)
+    nuevos = await this.actas.interceptar(wa, v, cv, nuevos);
+    if (!nuevos.length) return;
     // las fotos de una propiedad las atiende siempre el servidor (con su Asset abierto o cerrado)
     nuevos = await this.fotos.interceptar(wa, v, cv, nuevos);
     if (!nuevos.length) return;
@@ -263,6 +268,7 @@ export class EjecutivoService {
     como: string | null = null,
     wa?: Wechatia | null,
     respaldo = true,
+    alEnviar?: (messageId: string | null) => Promise<void>,
   ) {
     const v = await this.db.waVinculo.findUnique({ where: { usuarioId } });
     const t = como ? `${firma(como)}\n${texto}` : texto;
@@ -272,6 +278,7 @@ export class EjecutivoService {
         if (cli) {
           const r = await cli.enviarAContacto(v.contactId, t.slice(0, 3500));
           await this.enviados.registrar(corredoraId, v.telefono, { messageId: r.messageId, texto: t, enHilo: false });
+          await alEnviar?.(r.messageId).catch(() => null);
           return true;
         }
       } catch (e) {

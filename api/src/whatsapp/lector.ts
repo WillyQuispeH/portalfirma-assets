@@ -1,12 +1,13 @@
 // El lector de WhatsApp del servidor: por cada corredora con wechatia conectado, lee las conversaciones que cambiaron
 // y reparte los mensajes nuevos de cada una a UN solo asistente, en este orden:
 //   1. el código de vinculación («ASSET 1234») → liga ese celular a la cuenta que lo pidió;
-//   2. el celular de un ejecutivo → a la cola de su Asset (ejecutivo.ts);
+//   2. el celular de un ejecutivo → si va para un interesado («Para Juan: …» o citando un reenvío) sale hacia él
+//      (puente.ts); lo demás, a la cola de su Asset (ejecutivo.ts);
 //   3. un reclamo de postventa en curso → postventa;
-//   4. un lead → Sofía (si está encendida; si no, el mensaje solo se anota en el lead);
+//   4. un lead → se anota y se reenvía al celular de su corredor (puente.ts; si está apagado, solo se anota);
 //   5. un propietario o un mensaje de postventa → postventa (si la respuesta automática está encendida);
 //   6. una persona del CRM → Tomás (si la atención de clientes está encendida);
-//   7. un número que nadie conoce → se crea su lead y lo atiende Sofía (si está apagada, solo queda en Leads).
+//   7. un número que nadie conoce → se crea su lead (primer aviso fijo y reenvío al corredor, como el 4).
 // Instagram, Facebook y correo los lee el observador (solo lectura), cada 2 minutos.
 // Un solo lector a la vez por corredora (turno en wa_ajustes, aunque corran dos API): nunca se responde dos veces.
 // Ritmo: cada LECTOR_CADA_SEG (4 s) si alguien conversa con un asistente en los últimos 10 min o hay un código de
@@ -41,6 +42,7 @@ import { ClientesService } from './clientes';
 import { PostventaWaService } from './postventa';
 import { ObservadorService, canalDe } from './observador';
 import { IaService } from './ia';
+import { PuenteService } from './puente';
 import { EvaluacionService } from './evaluacion';
 import { telNorm } from './comun';
 import { NUMERO_EMPRESA } from './ejecutivo';
@@ -78,6 +80,7 @@ export class LectorService implements OnModuleInit, OnModuleDestroy {
     private readonly observador: ObservadorService,
     private readonly ia: IaService,
     private readonly evaluacion: EvaluacionService,
+    private readonly puente: PuenteService,
     config: ConfigService<Env, true>,
   ) {
     this.cadaMs = config.get('LECTOR_CADA_SEG', { infer: true }) * 1000;
@@ -235,9 +238,10 @@ export class LectorService implements OnModuleInit, OnModuleDestroy {
         }
       }
     }
-    // 2. el celular de un ejecutivo
+    // 2. el celular de un ejecutivo (lo que va para un interesado sale hacia él; lo demás es del Agente)
     if (vinc) {
-      await this.ejecutivo.recibir(wa, vinc, cv, nuevos);
+      nuevos = await this.puente.saliente(wa, vinc, cv, nuevos);
+      if (nuevos.length) await this.ejecutivo.recibir(wa, vinc, cv, nuevos);
       await this.rapido(corredoraId);
       return;
     }
@@ -253,10 +257,9 @@ export class LectorService implements OnModuleInit, OnModuleDestroy {
       await this.rapido(corredoraId);
       return;
     }
-    // 4. un lead: Sofía (apagada: solo se anota la conversación en el lead, y responde el corredor)
+    // 4. un lead: ya no conversa un asistente; se anota y se reenvía al corredor (apagado: solo se anota)
     if (cli?.quien === 'sofia') {
-      if (o.leadsActivo) await this.atender(wa, corredoraId, cv, cli, nuevos, recientes);
-      else if (cli.lead) await this.clientes.soloAnotar(corredoraId, cli, nuevos, recientes);
+      await this.lead(wa, corredoraId, cv, cli, nuevos, recientes, o.leadsActivo);
       return;
     }
     // 5. postventa (propietario o mensaje de postventa)
@@ -273,8 +276,36 @@ export class LectorService implements OnModuleInit, OnModuleDestroy {
     if (t && !vinc) {
       const nuevo = await this.clientes.leadNuevo(corredoraId, cv);
       if (!nuevo) return;
-      if (o.leadsActivo) await this.atender(wa, corredoraId, cv, nuevo, nuevos, recientes);
-      else await this.clientes.soloAnotar(corredoraId, nuevo, nuevos, recientes);
+      await this.lead(wa, corredoraId, cv, nuevo, nuevos, recientes, o.leadsActivo);
+    }
+  }
+
+  /** un lead escribe: se anota y (con el puente encendido) se reenvía a su corredor, que le responde desde su celular */
+  private async lead(
+    wa: Wechatia,
+    corredoraId: string,
+    cv: Conversacion,
+    cli: NonNullable<Awaited<ReturnType<ClientesService['quien']>>>,
+    nuevos: Parameters<ClientesService['manejar']>[4],
+    recientes: Parameters<ClientesService['manejar']>[5],
+    activo: boolean,
+  ) {
+    const anotar = () => this.clientes.soloAnotar(corredoraId, cli, nuevos, recientes);
+    if (!activo) return anotar();
+    await this.rapido(corredoraId);
+    try {
+      await this.puente.entrante(wa, corredoraId, cv, cli, nuevos, anotar);
+    } catch (e) {
+      await this.ejecutivo
+        .avisarResponsables(
+          corredoraId,
+          cli.corredorId,
+          `No pude pasarte el mensaje de ${cli.nombre} por WhatsApp: ${(e as Error).message.slice(0, 160)}`,
+          null,
+          wa,
+        )
+        .catch(() => null);
+      throw e;
     }
   }
 
