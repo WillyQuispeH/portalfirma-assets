@@ -226,8 +226,13 @@ function Observador({ alCargarObs, fechaCorta, alConfigurar, alRevisar }: Pick<I
   const cambiarIa = (v: boolean) => { setIa(v); if (o?.activo) cfg({}, canales, v); };
   const activar = () => { if (!aut) { setError('Confirma la autorización de la corredora.'); return; } cfg({ activo: true, autorizado: true }).then((ok) => ok && toast('Leads en vivo activado: Asset revisa wechatia cada 2 minutos.', 5000)); };
   const revisar = async () => { setRevisando(true); try { setO(await alRevisar()); } catch (e) { setError(mensajeDe(e)); } finally { setRevisando(false); } };
+  // al conectar wechatia el observador queda activo solo: la tarjeta únicamente aparece si está apagado o con error
+  if (!o) return null; // mientras carga no se muestra la tarjeta (casi siempre queda activo y no hace falta)
+  if (o.activo && !o.error) return <p className={NOTA} id="ldObs">
+    Instagram, Facebook y correo llegan solos desde wechatia{o.leads ? ` · ${o.leads} lead${o.leads === 1 ? '' : 's'} en seguimiento` : ''} · última revisión {hace(o.ultima)}.
+  </p>;
   return <div>
-    <Cuenta id="ldObs" className={o ? 'tw:rounded-b-none' : undefined} icono="sparkle" clase="vivo" titulo="En vivo desde wechatia · Instagram, Facebook y correo" texto="Cada 2 minutos Asset lee los mensajes nuevos de las cuentas conectadas en wechatia y los anota en Leads. Solo lee: nunca responde por esos canales.">
+    <Cuenta id="ldObs"className={o ? 'tw:rounded-b-none' : undefined} icono="sparkle" clase="vivo" titulo="En vivo desde wechatia · Instagram, Facebook y correo" texto="Cada 2 minutos Asset lee los mensajes nuevos de las cuentas conectadas en wechatia y los anota en Leads. Solo lee: nunca responde por esos canales.">
       <span className={cx('ld-pronto', o?.activo && 'on')}>{!o ? '…' : o.activo ? 'Activo' : 'Apagado'}</span>
     </Cuenta>
     {o && <div className="ld-obs">

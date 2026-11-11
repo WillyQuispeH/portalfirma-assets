@@ -434,6 +434,8 @@ function iaFalsa() {
 
     // ---- 7. observador
     ok((await req('PUT', '/whatsapp/observador', { activo: true }, t1)).s === 403, 'un corredor no activa el observador');
+    ok((await req('GET', '/whatsapp/observador', null, tA)).j.activo === true, 'al conectar wechatia el observador queda activo solo');
+    await req('PUT', '/whatsapp/observador', { activo: false }, tA); // el administrador lo apaga: volver a activarlo sí pide autorización
     ok((await req('PUT', '/whatsapp/observador', { activo: true }, tA)).j.code === 'AUT', 'activarlo pide la autorización de la corredora');
     const ci = conv({ nombre: 'Lucía IG', tipo: 'TYPE_INSTAGRAM', usuario: 'lucia.ig', asignado: 'wu-1' });
     escribe(ci, 'Hola, busco depto 2D en Ñuñoa hasta 500 lucas');

@@ -57,7 +57,7 @@ const ORIGEN_TXT: Record<string, string> = {
   whatsapp: 'WhatsApp',
 };
 export const CFG_OBS = {
-  activo: false,
+  activo: true, // conectar wechatia ya autoriza la lectura; el administrador puede apagarlo
   canales: { instagram: true, facebook: true, email: true },
   ia: true,
   diasInicio: 30,

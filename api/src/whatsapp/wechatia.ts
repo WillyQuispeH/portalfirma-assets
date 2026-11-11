@@ -23,6 +23,7 @@ import {
   Put,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { PrismaService } from '../prisma/prisma.service';
 import { ZodPipe } from '../comun/zod.pipe';
@@ -454,7 +455,40 @@ export class WechatiaService {
       create: { corredoraId: u.corredoraId, usuarioId: null, proveedor: PROVEEDOR, dueno: DUENO, ...datos },
       update: datos,
     });
+    await this.activarObservador(u);
     return this.estado(u);
+  }
+
+  /**
+   * Conectar wechatia ya autoriza leer sus conversaciones de Instagram, Facebook y correo: el observador queda activo
+   * y en la próxima ronda trae todos los chats a Leads. Solo la primera vez (si el administrador lo apagó, no se toca).
+   */
+  private async activarObservador(u: UsuarioToken) {
+    const aj = await this.db.waAjustes.findUnique({ where: { corredoraId: u.corredoraId } });
+    const o = (aj?.observador ?? {}) as Record<string, unknown>;
+    if (o.activo !== undefined) return;
+    const quien = await this.db.usuario.findUnique({ where: { id: u.sub }, select: { nombre: true } });
+    await this.db.registro.create({
+      data: {
+        corredoraId: u.corredoraId,
+        coleccion: 'consentimientos',
+        id: 'c' + Date.now().toString(36),
+        creadoPorId: u.sub,
+        datos: {
+          canal: 'wechatia',
+          cuenta: 'Instagram, Facebook Messenger, Correo',
+          autorizadoPor: quien?.nombre ?? '',
+          fecha: new Date().toISOString(),
+          conversaciones: 0,
+        },
+      },
+    });
+    const nuevo = { ...o, activo: true, diasInicio: 365 } as Prisma.InputJsonObject;
+    await this.db.waAjustes.upsert({
+      where: { corredoraId: u.corredoraId },
+      create: { corredoraId: u.corredoraId, observador: nuevo },
+      update: { observador: nuevo, observadorEn: null },
+    });
   }
 
   /** los canales de la subcuenta: en uso (con la fecha del último mensaje) o no, y dónde conectarlos */
