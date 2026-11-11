@@ -119,7 +119,10 @@ export interface Analisis {
   porPersona: { personaId: string; rol: string; nombre: string; porcentaje: number; nivel: string }[];
 }
 
-const solicitarEsquema = z.object({ avales: z.array(z.uuid()).max(6).default([]) });
+const solicitarEsquema = z.object({
+  avales: z.array(z.uuid()).max(10).default([]),
+  titular: z.boolean().default(true),
+});
 const decidirEsquema = z.object({
   decision: z.enum(['aprobada', 'rechazada']),
   nota: z.string().trim().max(1000).default(''),
@@ -442,12 +445,13 @@ export class EvaluacionService {
    * Pide los documentos al arrendatario (la persona del negocio) y a cada aval (`avales`: personas del CRM). Se puede
    * volver a llamar para sumar avales: a quien ya se le pidió no se le vuelve a escribir.
    */
-  async solicitar(u: UsuarioToken, negocioId: string, avales: string[]) {
+  async solicitar(u: UsuarioToken, negocioId: string, avales: string[], conTitular = true) {
     const n = await buscarVisible(this.db.negocio, u, negocioId, 'El negocio');
     if (n.tipo !== 'arriendo')
       throw new BadRequestException('La evaluación de documentos es de los negocios de arriendo.');
     if (!n.clienteId) throw new BadRequestException('El negocio no tiene arrendatario. Agrégalo y vuelve a intentar.');
-    const ids = [n.clienteId, ...avales.filter((x) => x !== n.clienteId)];
+    const ids = [...(conTitular ? [n.clienteId] : []), ...avales.filter((x) => x !== n.clienteId)];
+    if (!ids.length) throw new BadRequestException('Elige a quién pedirle la documentación.');
     const personas = await this.db.persona.findMany({
       where: { id: { in: ids }, corredoraId: u.corredoraId, eliminadoEn: null },
     });
@@ -459,7 +463,9 @@ export class EvaluacionService {
       ? [prop.titulo, prop.direccion, prop.comuna].filter(Boolean).join(', ') || prop.codigo
       : 'la propiedad';
     const remitente = [yo?.nombre, corredora?.nombre].filter(Boolean).join(', de ');
-    const titular = personas.find((x) => x.id === n.clienteId);
+    const titular =
+      personas.find((x) => x.id === n.clienteId) ??
+      (await this.db.persona.findFirst({ where: { id: n.clienteId, corredoraId: u.corredoraId } }));
     if (!titular) throw new BadRequestException('El arrendatario del negocio ya no existe.');
 
     const lista: PersonaEval[] = [...(previa?.personas ?? [])];
@@ -809,10 +815,15 @@ export class EvaluacionService {
     });
     const tit = ev.personas.findIndex((p) => p.rol === 'arrendatario');
     const avales = puntajes.filter((_, i) => i !== tit);
-    const base = puntajes[Math.max(tit, 0)]?.porcentaje ?? 0;
-    const porcentaje = avales.length
-      ? Math.round(base * 0.6 + (avales.reduce((s, x) => s + x.porcentaje, 0) / avales.length) * 0.4)
-      : base;
+    const promedio = (l: { porcentaje: number }[]) =>
+      l.length ? l.reduce((s, x) => s + x.porcentaje, 0) / l.length : 0;
+    // sin arrendatario entre los consultados todavía, el global es el promedio de los avales
+    const porcentaje =
+      tit < 0
+        ? Math.round(promedio(avales))
+        : avales.length
+          ? Math.round(puntajes[tit].porcentaje * 0.6 + promedio(avales) * 0.4)
+          : puntajes[tit].porcentaje;
     const nivel: Analisis['nivel'] = porcentaje >= 75 ? 'alto' : porcentaje >= 50 ? 'medio' : 'bajo';
     let resumen = '';
     if (redactar && ev.personas.some((p) => p.archivos.length)) {
@@ -881,7 +892,7 @@ export class EvaluacionController {
     @Param('negocioId') id: string,
     @Body(new ZodPipe(solicitarEsquema)) b: z.infer<typeof solicitarEsquema>,
   ) {
-    return this.s.solicitar(u, id.slice(0, 80), b.avales);
+    return this.s.solicitar(u, id.slice(0, 80), b.avales, b.titular);
   }
 
   @Post(':negocioId/recalcular')

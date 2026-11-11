@@ -74,7 +74,7 @@ async function accion(x, alTerminar) {
   if (id === 'visita') { ventana('Agendar visita', [x.codigo, x.titulo].filter(Boolean).join(' · '), alTerminar); const neg = x.negocioId ? (await api('negObtener', x.negocioId).catch(() => null)) : null; return window.Gestion.agendar({ tipo: 'visita', propId: x.propId, personaId: neg?.clienteId || undefined }); }
   if (id === 'fotos' && x.propId) return window.Fotos.drive(x.propId);
   if (id === 'publicada' && x.propId) return window.Publicaciones.publicar(x.propId);
-  if (t === 'evaluar' && x.negocioId) return window.Evaluacion.abrir(x.negocioId, alTerminar); // solicitar los documentos por WhatsApp y revisar el análisis
+  if (t === 'evaluar' && x.negocioId) return menuPaso(x, alTerminar); // modal-13: solicitar los documentos por WhatsApp, ver lo adjuntado y decidir
   if (t === 'negocio') return window.Negocios.nuevo({ propId: x.propId });
   if (t === 'firma' && document.querySelector('#ngEnv')) return document.querySelector('#ngEnv').click(); // dentro del negocio: el envío de su documento
   if (t === 'cerrar' && document.querySelector('#ngWin')) return document.querySelector('#ngWin').click();
@@ -90,9 +90,9 @@ function reprogramar(x, alTerminar) {
 // menú de estados de un paso: logrado, no logrado, esperando a…, automático
 function menuPaso(x, alTerminar) {
   const fin = async (estado, extra) => { await marcar(x, estado, extra); closeModal(); toast('Paso actualizado.'); alTerminar?.(); };
-  window.Ventanas.abrir('inmo.menuPaso', { titulo: x.t, descripcion: x.d, manual: !!x.manual,
+  window.Ventanas.abrir('inmo.menuPaso', { titulo: x.t, descripcion: x.d, manual: !!x.manual, evaluacionNegocioId: x.tipo === 'evaluar' ? x.negocioId : undefined,
     alElegir: (e) => (e === 'ok' ? fin('ok') : fin(null)),
-    alGuardar: (modo, texto, vence) => (modo === 'fail' ? fin('fail', { d: texto }) : fin('pend', { quien: texto || 'otra persona', vence })) }, { clave: 'modal-13' });
+    alGuardar: (modo, texto, vence) => (modo === 'fail' ? fin('fail', { d: texto }) : fin('pend', { quien: texto || 'otra persona', vence })) }, { clave: 'modal-13', ancho: x.tipo === 'evaluar' });
 }
 
 // ---------- pantalla «Hoy» ----------

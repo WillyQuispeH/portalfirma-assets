@@ -7,6 +7,7 @@ import Input from '../../../ui/Input';
 import { VentanaCabecera, VentanaCuerpo, VentanaPie } from '../../../ui/Ventana';
 import { FORM } from '../../gestion/editor-pdf/Modales';
 import { cerrarModal } from '../../../../utils/modal';
+import PanelEvaluacion from '../../evaluacion/EvaluacionArriendo';
 
 export function Reprogramar({ titulo, hoy, alGuardar }: { titulo: string; hoy: string; alGuardar: (v: { vence: string; d: string }) => void }) {
   const [vence, setVence] = useState(hoy); const [d, setD] = useState('');
@@ -24,8 +25,10 @@ export function Reprogramar({ titulo, hoy, alGuardar }: { titulo: string; hoy: s
 }
 
 type TModo = 'fail' | 'otro';
-export function MenuPaso({ titulo, descripcion, manual, alElegir, alGuardar }: {
+export function MenuPaso({ titulo, descripcion, manual, evaluacionNegocioId, alElegir, alGuardar }: {
   titulo: string; descripcion?: string; manual?: boolean;
+  /** el paso «Evaluación del arrendatario» de un arriendo: la ventana trae también la solicitud de documentos y el análisis */
+  evaluacionNegocioId?: string;
   /** «Logrado» o «Volver a lo automático»: se marca de inmediato */
   alElegir: (e: 'ok' | 'auto') => void;
   /** «No logrado» (motivo) o «Esperando a alguien» (a quién y plazo) */
@@ -36,6 +39,8 @@ export function MenuPaso({ titulo, descripcion, manual, alElegir, alGuardar }: {
   return <>
     <VentanaCabecera icono="listCheck" titulo={titulo} descripcion={descripcion || 'Elige cómo está este paso.'} />
     <VentanaCuerpo className={FORM}>
+      {evaluacionNegocioId && <PanelEvaluacion negocioId={evaluacionNegocioId} />}
+      {evaluacionNegocioId && <h3 className="tw:m-0 tw:mt-1 tw:text-sm tw:font-bold">Estado del paso</h3>}
       <div className="et-mopts tw:flex tw:flex-wrap tw:gap-2">
         <Boton variante="secundario" icono="check" data-e="ok" onClick={() => alElegir('ok')}>Logrado</Boton>
         <Boton variante={modo === 'fail' ? 'principal' : 'secundario'} icono="alert" data-e="fail" onClick={() => elegir('fail')}>No logrado</Boton>

@@ -7,7 +7,7 @@ const base = (id) => `/evaluaciones/${encodeURIComponent(String(id || ''))}`;
 const api = async (m, r, c) => { try { return await asset().llamar(m, r, c); } catch (e) { throw err(e.message); } };
 module.exports = {
   ver: (negocioId) => api('GET', base(negocioId)),
-  solicitar: ({ negocioId, avales = [] }) => api('POST', base(negocioId) + '/solicitar', { avales }),
+  solicitar: ({ negocioId, avales = [], titular = true }) => api('POST', base(negocioId) + '/solicitar', { avales, titular }),
   recalcular: (negocioId) => api('POST', base(negocioId) + '/recalcular', {}),
   decidir: ({ negocioId, decision, nota = '' }) => api('POST', base(negocioId) + '/decidir', { decision, nota }),
   archivo: ({ negocioId, personaId, n }) => api('GET', `${base(negocioId)}/archivo/${encodeURIComponent(personaId)}/${Number(n) || 0}`),

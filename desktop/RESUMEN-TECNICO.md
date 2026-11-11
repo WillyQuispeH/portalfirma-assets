@@ -309,6 +309,9 @@ Agenda muestra los eventos agrupados por día, con filtros de rango y tipo, que 
 
 Finanzas muestra las comisiones de los negocios (`negListar`): las ganadas y perdidas del período, las que están en curso, el detalle por corredor (solo el administrador) y los negocios que aún no tienen comisión. El proceso principal ya filtra por perfil, así que el corredor ve solo sus negocios. La facturación (boletas y facturas) queda para la etapa 4. Bajo 1600 px de ancho, `styles.css` oculta las pestañas Arriendos y Finanzas.
 
+**0.18.5 (2026-11-11):**
+- La evaluación del arrendatario vive en el modal-13 del paso (ya no hay modal-125): elegir a quién pedirle los documentos (arrendatario y/o avales), registrar un aval con nombre, RUT y celular (queda en Personas como codeudor), ver lo adjuntado de cada uno con su resumen, el porcentaje global y decidir. `solicitar` del servidor acepta `titular: false` (solo avales).
+
 **0.18.4 (2026-11-11):**
 - Evaluación del arrendatario y de N avales por WhatsApp (paso «Evaluación del arrendatario» de un arriendo, `modal-125`): «Solicitar documentación» manda la plantilla `solicitar_documentacion_` (campos `asset_nombre`, `asset_remitente`, `asset_propiedad`); el servidor (`api/src/whatsapp/evaluacion.ts`) recibe los archivos, los lee con IA, arma un puntaje de 100 por persona (60 % arrendatario y 40 % avales) y avisa al corredor, que decide aprobar o rechazar. Se guarda en la colección `evaluaciones`.
 - La etapa después de la carta oferta se llama «Postarriendo» en los arriendos (antes siempre «Postventa»).

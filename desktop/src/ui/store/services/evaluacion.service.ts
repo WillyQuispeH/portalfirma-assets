@@ -4,7 +4,7 @@ import type { IEvaluacion, TEvaluacionRespuesta } from '../interfaces/evaluacion
 
 export const evaluacionService = {
   ver: (negocioId: string) => api<TEvaluacionRespuesta>('evVer', negocioId),
-  solicitar: (negocioId: string, avales: string[]) => api<IEvaluacion>('evSolicitar', { negocioId, avales }),
+  solicitar: (negocioId: string, avales: string[], titular = true) => api<IEvaluacion>('evSolicitar', { negocioId, avales, titular }),
   recalcular: (negocioId: string) => api<IEvaluacion>('evRecalcular', negocioId),
   decidir: (negocioId: string, decision: 'aprobada' | 'rechazada', nota: string) => api<IEvaluacion>('evDecidir', { negocioId, decision, nota }),
   archivo: (negocioId: string, personaId: string, n: number) => api<{ url: string; nombre: string }>('evArchivo', { negocioId, personaId, n }),
