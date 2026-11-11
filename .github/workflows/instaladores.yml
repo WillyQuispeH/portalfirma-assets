@@ -17,6 +17,11 @@ on:
   push:
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      solo_mac:
+        description: 'Armar solo el instalador de Mac (si Windows ya se publicó)'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -31,6 +36,7 @@ defaults:
 
 jobs:
   windows:
+    if: ${{ !inputs.solo_mac }}
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
@@ -71,6 +77,7 @@ jobs:
             desktop/dist/latest.yml
 
   mac:
+    if: ${{ !cancelled() && (needs.windows.result == 'success' || needs.windows.result == 'skipped') }}
     needs: windows # después de Windows: así los dos suben a la misma versión sin pisarse al crearla
     runs-on: macos-latest # la versión vigente de macOS en GitHub (las versiones viejas se retiran)
     steps:
@@ -104,7 +111,14 @@ jobs:
           else
             # sin certificado: sale sin firmar (en Mac se instala a mano; la app avisa cuando hay versión nueva)
             export CSC_IDENTITY_AUTO_DISCOVERY=false
-            yarn $CMD
+            # hdiutil a veces no alcanza a desmontar el volumen del DMG en el equipo de GitHub: se reintenta
+            for i in 1 2 3; do
+              yarn $CMD && break
+              [ "$i" = 3 ] && exit 1
+              echo "Falló el intento $i; se desmontan los volúmenes y se repite"
+              for v in /Volumes/PortalFirma*; do [ -d "$v" ] && hdiutil detach -force "$v" || true; done
+              sleep 10
+            done
           fi
       - uses: actions/upload-artifact@v4
         with:
