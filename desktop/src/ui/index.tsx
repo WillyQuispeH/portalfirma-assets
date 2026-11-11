@@ -26,6 +26,7 @@ import { instalarAcceso } from './components/functional/acceso/controlador';
 import { instalarFormPersona } from './components/functional/personas/controlador';
 import { instalarWhatsApp } from './components/functional/whatsapp/controlador';
 import { instalarUsuarios } from './components/functional/usuarios/controlador';
+import { instalarEvaluacion } from './components/functional/evaluacion/controlador';
 import { instalarAyuda } from './components/functional/ayuda/controlador';
 import { instalarAprende } from './components/functional/aprende/controlador';
 import { instalarVentanas } from './components/functional/ventanas/registro';
@@ -84,6 +85,7 @@ instalarCuenta();
 instalarFormPersona();
 instalarWhatsApp();
 instalarUsuarios();
+instalarEvaluacion();
 // La Ayuda (botón «?», guías, recorridos guiados) y «Aprende a usarla»: window.Ayuda y window.Aprende
 instalarAyuda();
 instalarAprende();

@@ -74,6 +74,7 @@ async function accion(x, alTerminar) {
   if (id === 'visita') { ventana('Agendar visita', [x.codigo, x.titulo].filter(Boolean).join(' · '), alTerminar); const neg = x.negocioId ? (await api('negObtener', x.negocioId).catch(() => null)) : null; return window.Gestion.agendar({ tipo: 'visita', propId: x.propId, personaId: neg?.clienteId || undefined }); }
   if (id === 'fotos' && x.propId) return window.Fotos.drive(x.propId);
   if (id === 'publicada' && x.propId) return window.Publicaciones.publicar(x.propId);
+  if (t === 'evaluar' && x.negocioId) return window.Evaluacion.abrir(x.negocioId, alTerminar); // solicitar los documentos por WhatsApp y revisar el análisis
   if (t === 'negocio') return window.Negocios.nuevo({ propId: x.propId });
   if (t === 'firma' && document.querySelector('#ngEnv')) return document.querySelector('#ngEnv').click(); // dentro del negocio: el envío de su documento
   if (t === 'cerrar' && document.querySelector('#ngWin')) return document.querySelector('#ngWin').click();

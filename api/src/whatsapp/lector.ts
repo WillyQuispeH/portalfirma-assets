@@ -41,6 +41,7 @@ import { ClientesService } from './clientes';
 import { PostventaWaService } from './postventa';
 import { ObservadorService, canalDe } from './observador';
 import { IaService } from './ia';
+import { EvaluacionService } from './evaluacion';
 import { telNorm } from './comun';
 import { NUMERO_EMPRESA } from './ejecutivo';
 
@@ -76,6 +77,7 @@ export class LectorService implements OnModuleInit, OnModuleDestroy {
     private readonly postventa: PostventaWaService,
     private readonly observador: ObservadorService,
     private readonly ia: IaService,
+    private readonly evaluacion: EvaluacionService,
     config: ConfigService<Env, true>,
   ) {
     this.cadaMs = config.get('LECTOR_CADA_SEG', { infer: true }) * 1000;
@@ -208,7 +210,7 @@ export class LectorService implements OnModuleInit, OnModuleDestroy {
     const ix = previa?.ultimoMsgId ? todos.findIndex((m) => m.id === previa.ultimoMsgId) : -1;
     // lo llegado desde la última lectura (entrantes y salientes: un saliente que no mandó Asset lo escribió el corredor)
     const recientes = ix >= 0 ? todos.slice(ix + 1) : todos.filter((m) => new Date(m.fecha) >= desde);
-    const nuevos = recientes.filter((m) => m.direccion === 'entrante');
+    let nuevos = recientes.filter((m) => m.direccion === 'entrante');
     const datos = {
       marca: cv.marca,
       ultimoMsgId: todos.at(-1)?.id ?? previa?.ultimoMsgId ?? null,
@@ -236,6 +238,12 @@ export class LectorService implements OnModuleInit, OnModuleDestroy {
     // 2. el celular de un ejecutivo
     if (vinc) {
       await this.ejecutivo.recibir(wa, vinc, cv, nuevos);
+      await this.rapido(corredoraId);
+      return;
+    }
+    // 2b. documentos de una evaluación de arriendo (del arrendatario o de un aval): se leen antes que cualquier asistente
+    nuevos = await this.evaluacion.interceptar(wa, corredoraId, cv, nuevos);
+    if (!nuevos.length) {
       await this.rapido(corredoraId);
       return;
     }

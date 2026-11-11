@@ -73,6 +73,11 @@ function wechatiaFalso() {
         return out(200, { messageId: id });
       }
       if (/^\/conversations\/messages\/m\d+$/.test(p)) return out(200, { message: { status: 'delivered' } });
+      if (/^\/locations\/[^/]+\/customFields$/.test(p)) return out(200, { customFields: [] });
+      const mct = p.match(/^\/contacts\/([^/]+)(\/tags)?$/);
+      if (mct && mct[1] !== 'search' && rq.method === 'PUT') { (W.plantillas ||= []).push({ contactId: mct[1], campos: Object.fromEntries((body.customFields || []).map((f) => [f.key || f.id, f.field_value])) }); return out(200, { contact: { id: mct[1] } }); }
+      if (mct && mct[2] && rq.method === 'POST') { const x = (W.plantillas ||= []).findLast((q) => q.contactId === mct[1] && !q.etiqueta); if (x) x.etiqueta = body.tags[0]; return out(200, { tags: body.tags }); }
+      if (mct && mct[2] && rq.method === 'DELETE') return out(200, { tags: [] });
       if (p === '/contacts/search/duplicate') { const n = dig(u.searchParams.get('number')); const id = Object.keys(W.contactos).find((k) => dig(W.contactos[k]) === n); return out(200, { contact: id ? { id } : null }); }
       if (p === '/contacts/' && rq.method === 'POST') { const id = nuevoId('k'); W.contactos[id] = body.phone; return out(200, { contact: { id } }); }
       out(404, { message: 'ruta falsa: ' + p });
@@ -82,10 +87,13 @@ function wechatiaFalso() {
 }
 
 // ---------------------------------------------------------------- IA falsa (API de mensajes de Anthropic)
-const IA = { llamadas: [] };
+const IA = { llamadas: [], docs: [] };
 const texto = (t) => ({ content: [{ type: 'text', text: t }], stop_reason: 'end_turn' });
 const herramienta = (name, input) => ({ content: [{ type: 'tool_use', id: 'tu' + Date.now() + Math.random(), name, input }], stop_reason: 'tool_use' });
 function respuestaIa(b) {
+  const sis = typeof b.system === 'string' ? b.system : '';
+  if (/analista que revisa los documentos/.test(sis)) return texto(JSON.stringify(IA.docs.shift() || { clase: 'otro', legible: false, resumen: '', alertas: [] }));
+  if (/analista de una corredora de propiedades/.test(sis)) return texto(JSON.stringify({ resumen: 'Resumen de prueba para el corredor.' }));
   const ult = b.messages.at(-1);
   const contenido = typeof ult.content === 'string' ? ult.content : ult.content.map((x) => x.text || '').join('\n');
   if (/EXTRAER_LEAD/.test(contenido))
@@ -447,6 +455,57 @@ function iaFalsa() {
     await req('POST', '/whatsapp/programados', { id: `wp${SUF}`, telefono: '+56 9 8765 4321', nombre: 'Juan Pérez', texto: 'Juan, nos vemos mañana.', cuando: new Date(Date.now() - 1000).toISOString() }, t1);
     ok(await hasta(() => salidas(cel).some((t) => /Le envié a Juan Pérez el WhatsApp programado/.test(t)), 60), 'el resultado de un programado se le avisa al ejecutivo por su celular, desde el servidor');
 
+    // ---- 8b. evaluación del arrendatario y sus avales: plantilla por WhatsApp, documentos leídos y puntaje
+    const arr = await db.persona.create({ data: { corredoraId: co.id, nombre: 'María Postulante', telefono: '+56 9 6111 1111', rut: '12345678K' } });
+    const av1 = await db.persona.create({ data: { corredoraId: co.id, nombre: 'Pedro Aval', telefono: '+56 9 6222 2222' } });
+    const sinTel = await db.persona.create({ data: { corredoraId: co.id, nombre: 'Sin Celular' } });
+    const ng = await db.negocio.create({ data: { id: `ng${SUF}`, corredoraId: co.id, tipo: 'arriendo', etapa: 'evaluacion', propiedadId: prop.id, clienteId: arr.id, corredorId: c1.id, datos: {} } });
+    r = await req('POST', `/evaluaciones/${ng.id}/solicitar`, { avales: [sinTel.id] }, tA);
+    ok(r.s === 400 && /no tiene celular/.test(r.j.message || ''), 'no se puede pedir documentación a un aval sin celular');
+    r = await req('POST', `/evaluaciones/${ng.id}/solicitar`, { avales: [av1.id] }, tA);
+    ok(r.s === 200 && r.j.personas.length === 2 && r.j.personas[0].rol === 'arrendatario' && r.j.personas[1].rol === 'aval' && r.j.estado === 'solicitada', 'solicitar: queda el arrendatario y su aval esperando documentos');
+    ok((W.plantillas || []).length === 2 && W.plantillas.every((x) => x.etiqueta === 'asset-solicitar-documentacion'), 'a cada uno le sale la plantilla (con su etiqueta)');
+    ok(W.plantillas[0].campos.asset_nombre === 'María' && /Irarrázaval/.test(W.plantillas[0].campos.asset_propiedad) && /^Corredor A/.test(W.plantillas[0].campos.asset_remitente) && /aval de María Postulante/.test(W.plantillas[1].campos.asset_propiedad), 'con su nombre, quien escribe y la propiedad (al aval se le dice de quién es aval)');
+    r = await req('POST', `/evaluaciones/${ng.id}/solicitar`, { avales: [av1.id] }, tA);
+    ok(r.s === 400 && /Ya se les pidió/.test(r.j.message || ''), 'no se les vuelve a escribir a quienes ya se les pidió');
+    const docs = (n, rut, extra = {}) => [
+      { clase: 'contrato_trabajo', legible: true, resumen: 'Contrato indefinido en ACME', persona: { nombre: n, rut }, datos: { empleador: 'ACME', tipoContrato: 'indefinido', fechaInicio: '2023-03-01' }, alertas: [] },
+      { clase: 'cedula_frente', legible: true, resumen: 'Cédula frente', persona: { nombre: n, rut }, datos: { vigencia: '2033-01-01' }, alertas: [] },
+      { clase: 'cedula_reverso', legible: true, resumen: 'Cédula reverso', persona: { nombre: n, rut }, datos: {}, alertas: [] },
+      ...['2026-08', '2026-09', '2026-10'].map((pe) => ({ clase: 'liquidacion', legible: true, resumen: `Liquidación ${pe}`, persona: { nombre: n, rut }, datos: { periodo: pe, liquido: extra.liquido || 2100000, empleador: 'ACME' }, alertas: [] })),
+      { clase: 'afp', legible: true, resumen: 'AFP al día', persona: { nombre: n, rut }, datos: { mesesCotizados: 6, alDia: true }, alertas: [] },
+      { clase: 'dicom', legible: true, resumen: extra.deudas ? 'Registra 2 morosidades' : 'Sin morosidades', persona: { nombre: n, rut }, datos: extra.deudas ? { sinDeudas: false, cantidadDeudas: 2, montoMoroso: 900000 } : { sinDeudas: true }, alertas: [] },
+    ];
+    const cMaria = conv({ telefono: '+56 9 6111 1111', nombre: 'María Postulante' });
+    IA.docs = [{ clase: 'otro', legible: false, resumen: '', alertas: [] }, { clase: 'otro', legible: true, resumen: 'Una selfie', alertas: [] }, docs('María Postulante', '12.345.678-K')[0]];
+    escribe(cMaria, '', { attachments: [`${base}/media/e1.jpg`, `${base}/media/e2.jpg`, `${base}/media/e3.jpg`] });
+    ok(await hasta(() => salidas(cMaria).some((t) => /Tomás/.test(t) && /Recibí tu documento: contrato de trabajo/.test(t) && /no se lee bien/.test(t) && /No logré reconocer un archivo/.test(t) && /Me falta: Cédula/.test(t))), 'el arrendatario manda 3 archivos: Tomás confirma el que entendió, pide de nuevo el borroso y avisa lo que no reconoce y lo que falta');
+    escribe(cMaria, 'Hola, ¿cuándo me responden?');
+    ok(await hasta(() => salidas(cMaria).length >= 2), 'un mensaje de solo texto no se pierde: lo atiende Tomás');
+    IA.docs = docs('María Postulante', '12.345.678-K').slice(1);
+    escribe(cMaria, '', { attachments: IA.docs.map((_, i) => `${base}/media/f${i}.jpg`) });
+    ok(await hasta(() => salidas(cMaria).some((t) => /ya tengo toda tu documentación/.test(t))), 'al completar, le avisa que ya tiene toda su documentación');
+    r = (await hasta(async () => { const q = await req('GET', `/evaluaciones/${ng.id}`, null, tA); return q.j.analisis && q.j.personas[0].completa ? q : null; })) || (await req('GET', `/evaluaciones/${ng.id}`, null, tA));
+    ok(r.j.personas[0].completa && !r.j.personas[1].completa && r.j.estado === 'solicitada' && r.j.personas[0].faltan.length === 0 && r.j.personas[1].faltan.length === 5, 'el arrendatario quedó completo; el aval, con los 5 documentos por entregar ' + JSON.stringify({ e: r.j.estado, p: r.j.personas.map((x) => ({ c: x.completa, f: x.faltan, a: x.archivos.map((y) => y.clase + (y.legible ? '' : '!')) })) }));
+    ok(r.j.personas[0].documentos.every((d) => d.ok) && r.j.personas[0].analisis.porcentaje === 100, 'con renta de 3,2 veces el arriendo (2.100.000 frente a 650.000) y todo en regla suma 100 %');
+    const cPedro = conv({ telefono: '+56 9 6222 2222', nombre: 'Pedro Aval' });
+    IA.docs = docs('Pedro Aval', '9.999.999-9', { liquido: 900000, deudas: true });
+    escribe(cPedro, '', { attachments: IA.docs.map((_, i) => `${base}/media/g${i}.jpg`) });
+    ok(await hasta(() => salidas(cPedro).some((t) => /ya tengo toda tu documentación/.test(t))), 'el aval manda lo suyo y también queda completo');
+    r = (await hasta(async () => { const q = await req('GET', `/evaluaciones/${ng.id}`, null, tA); return q.j.estado === 'completa' && q.j.analisis ? q : null; })) || (await req('GET', `/evaluaciones/${ng.id}`, null, tA));
+    const ap = r.j.personas[1].analisis;
+    ok(r.j.estado === 'completa' && ap.porcentaje < 60 && ap.criterios.find((x) => x.id === 'dicom').puntos === 0, `con todos completos pasa a «completa»; el aval con Dicom en rojo y poca renta saca ${ap.porcentaje} %`);
+    ok(r.j.analisis.porcentaje === Math.round(r.j.personas[0].analisis.porcentaje * 0.6 + ap.porcentaje * 0.4) && r.j.analisis.resumen === 'Resumen de prueba para el corredor.', `el global considera al aval: 60 % de ${r.j.personas[0].analisis.porcentaje} + 40 % de ${ap.porcentaje} = ${r.j.analisis.porcentaje} %`);
+    ok(await hasta(() => salidas(cel).some((t) => /Llegó toda la documentación del arriendo/.test(t) && /María Postulante/.test(t) && /Pedro Aval · aval/.test(t))), 'al llegar todo, se le avisa al corredor por WhatsApp (y le recuerda que decide él)');
+    r = await req('GET', `/evaluaciones/${ng.id}/archivo/${arr.id}/1`, null, tA);
+    ok(r.s === 200 && /^https?:\/\//.test(r.j.url || ''), 'se puede abrir cada archivo recibido con un enlace firmado');
+    r = await req('POST', `/evaluaciones/${ng.id}/decidir`, { decision: 'aprobada', nota: 'Buen aval' }, t1);
+    ok(r.s === 200 && r.j.estado === 'revisada' && r.j.decision.estado === 'aprobada' && r.j.decision.por === 'Corredor B' && r.j.decision.nota === 'Buen aval', 'el corredor decide: aprobada, con su nombre y su nota');
+    ok((await db.actividad.count({ where: { corredoraId: co.id, entidadId: ng.id, texto: { contains: 'Evaluación del arrendatario aprobada' } } })) === 1, 'la decisión queda en la actividad del negocio');
+    escribe(cMaria, '', { attachments: [`${base}/media/h1.jpg`] });
+    await esperar(4000);
+    ok(!(await db.registro.findFirst({ where: { corredoraId: co.id, coleccion: 'evaluaciones', id: ng.id } })).datos.personas[0].archivos.some((a) => a.n > 10), 'cerrada la evaluación, un archivo nuevo ya no se agrega');
+
     // ---- 9. consumo de IA y un solo lector
     const n = await db.iaConsumo.count({ where: { corredoraId: co.id } });
     ok(n >= 6 && IA.llamadas.every((x) => x.model && x.fallbacks === 'default'), `cada llamada a la IA queda anotada (${n}) y pide respaldo ante rechazos`);
@@ -461,7 +520,7 @@ function iaFalsa() {
     srv.close(); ia.close(); trf.close(); pfs.close();
     if (co) {
       const w = { where: { corredoraId: co.id } };
-      for (const m of ['waEntrante', 'waVinculo', 'waHilo', 'waEnviado', 'waConversacion', 'waAjustes', 'iaConsumo', 'waProgramado', 'aviso', 'conexion', 'registro', 'actividad', 'evento', 'firma', 'leadMensaje', 'lead']) await db[m].deleteMany(w).catch((e) => console.warn(m, e.message));
+      for (const m of ['waEntrante', 'waVinculo', 'waHilo', 'waEnviado', 'waConversacion', 'waAjustes', 'iaConsumo', 'waProgramado', 'aviso', 'conexion', 'registro', 'actividad', 'evento', 'firma', 'leadMensaje', 'lead', 'negocio']) await db[m].deleteMany(w).catch((e) => console.warn(m, e.message));
       await db.propiedadPersona.deleteMany({ where: { propiedad: { corredoraId: co.id } } });
       await db.propiedad.deleteMany(w); await db.persona.deleteMany(w); await db.contador.deleteMany(w);
       await db.sesion.deleteMany({ where: { usuarioId: { in: usuarios } } });

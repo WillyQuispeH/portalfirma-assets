@@ -190,6 +190,27 @@ export class IaService {
     return j as Record<string, unknown>;
   }
 
+  /** Lee un documento o foto (bloques de imagen/PDF + instrucción) y devuelve un objeto JSON (evaluación del arrendatario). */
+  async leerDocumento(o: {
+    corredoraId: string;
+    uso: string;
+    sistema: string;
+    contenido: Anthropic.Beta.BetaContentBlockParam[];
+  }): Promise<Record<string, unknown>> {
+    const r = await this.llamar(o.corredoraId, o.uso, {
+      max_tokens: 3000,
+      system: o.sistema + '\nResponde SOLO con un objeto JSON válido, sin texto antes ni después.',
+      output_config: { effort: 'low' },
+      messages: [{ role: 'user', content: o.contenido }],
+    });
+    const t = this.texto(r)
+      .replace(/^```(json)?|```$/g, '')
+      .trim();
+    const j = JSON.parse(t.slice(t.indexOf('{'), t.lastIndexOf('}') + 1)) as unknown;
+    if (!j || typeof j !== 'object') throw new Error('La IA no devolvió un objeto.');
+    return j as Record<string, unknown>;
+  }
+
   /** Un texto corto (reescribir un mensaje), con tiempo máximo: si tarda, lanza y se usa el texto original. */
   async redactar(o: { corredoraId: string; uso: string; sistema: string; usuario: string; ms?: number }) {
     let reloj: NodeJS.Timeout | undefined;

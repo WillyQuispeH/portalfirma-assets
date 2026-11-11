@@ -52,6 +52,7 @@ export const COLECCIONES: Record<string, IColeccion> = {
   plazos: { max: 256 * KB, porUsuario: true, archivos: true },
   expedientes: { max: 512 * KB, porUsuario: true, archivos: true },
   // la corredora
+  evaluaciones: { max: 512 * KB }, // documentos de un arriendo (arrendatario y avales), con su análisis; lo escribe el servidor
   corredora_config: { max: 128 * KB },
   consentimientos: { max: 16 * KB }, // quién autorizó importar mensajes de una cuenta (registro legal)
   flujos: { max: 64 * KB }, // recetas de flujos documentales (modelo + cómo llenarlo desde una nómina + firmantes)

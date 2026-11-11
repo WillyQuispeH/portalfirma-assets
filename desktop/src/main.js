@@ -1322,6 +1322,13 @@ handle('asset:ejecutar', (name, args) => agente.ejecutarLocal(name, args || {}))
 const etapas = require('./etapas').crear({ agenda, formatos });
 handle('et:pasos', (o) => { const n = o?.negocioId ? inmo.negocios().find((x) => x.id === o.negocioId) : null; const p = o?.propId ? inmo.todas().find((x) => x.id === o.propId) : null; if (!n && !p) throw new Error('No encontré el negocio.'); return etapas.pasos({ n, p: n ? null : p, ambito: o?.ambito || (n ? 'negocio' : 'captacion') }); });
 handle('et:marcar', (o) => etapas.marcar(o || {}));
+// Evaluación del arrendatario y avales por WhatsApp (servidor): solicitar documentos, ver el análisis, decidir
+const evaluacion = require('./evaluacion');
+handle('ev:ver', (id) => evaluacion.ver(id));
+handle('ev:solicitar', (o) => evaluacion.solicitar(o || {}));
+handle('ev:recalcular', (id) => evaluacion.recalcular(id));
+handle('ev:decidir', async (o) => { const r = await evaluacion.decidir(o || {}); if (o?.decision === 'aprobada') { try { etapas.marcar({ negocioId: o.negocioId, paso: 'evaluacion', estado: 'ok', d: 'Aprobada por el corredor' }); } catch {} } return r; });
+handle('ev:archivo', (o) => evaluacion.archivo(o || {}));
 // 0.16.11 · Cartera: el avance de captación de cada propiedad (lo logrado y lo que falta)
 handle('et:captaciones', () => Object.fromEntries(inmo.todas().filter((p) => !p.archivada).map((p) => { const r = etapas.pasos({ p, ambito: 'captacion' }); const e = r.etapas[0];
   return [p.id, { ok: e.ok, total: e.total, completa: !r.actual, falta: e.pasos.filter((x) => x.e !== 'ok').map((x) => x.t), actual: r.actual ? { t: r.actual.t, e: r.actual.e } : null }]; })));

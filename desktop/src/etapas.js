@@ -40,7 +40,7 @@ const POST = {
   ],
   arriendo: [
     { id: 'garantia', t: 'Garantía o reserva pagada', a: 'Marcar como logrado', tipo: 'ok', tarea: ['reserva', 0] },
-    { id: 'evaluacion', t: 'Evaluación del arrendatario', a: 'Marcar como logrado', tipo: 'ok', tareas: ['evaluacion', [0, 1, 2]] },
+    { id: 'evaluacion', t: 'Evaluación del arrendatario', a: 'Solicitar documentación', tipo: 'evaluar', tareas: ['evaluacion', [0, 1, 2]] },
     { id: 'documentos', t: 'Revisión de documentos', a: 'Marcar como logrado', tipo: 'ok' },
     { id: 'contrato', t: 'Contrato de arriendo firmado', a: 'Enviar contrato a firmar', tipo: 'firma', etapa: 'contrato' },
     { id: 'entrega', t: 'Entrega con acta', a: 'Enviar acta a firmar', tipo: 'firma', etapa: 'entrega' },

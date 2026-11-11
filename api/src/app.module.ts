@@ -43,6 +43,7 @@ import { LeadsWaService } from './whatsapp/leads-wa';
 import { ClientesService } from './whatsapp/clientes';
 import { PostventaWaService } from './whatsapp/postventa';
 import { ObservadorController, ObservadorService } from './whatsapp/observador';
+import { EvaluacionController, EvaluacionService } from './whatsapp/evaluacion';
 import { LectorController, LectorService } from './whatsapp/lector';
 
 @Module({
@@ -81,6 +82,7 @@ import { LectorController, LectorService } from './whatsapp/lector';
     EjecutivoController,
     ObservadorController,
     LectorController,
+    EvaluacionController,
   ],
   // el límite de intentos va antes que la sesión: un login fallido también cuenta
   providers: [
@@ -116,6 +118,7 @@ import { LectorController, LectorService } from './whatsapp/lector';
     PostventaWaService,
     ObservadorService,
     LectorService,
+    EvaluacionService,
   ],
 })
 export class AppModule {}

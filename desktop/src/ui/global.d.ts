@@ -23,6 +23,7 @@ declare global {
     Dictado: { abrir: () => void; mostrar: (r: object, texto?: string) => void }; // la instala components/functional/agente/dictado/controlador.tsx
     AgenteModales: { adjuntar: () => void; herramientas: () => void; actividad: () => void; claveIA: () => void; renombrar: (c: object) => void; borrar: (c: object) => void }; // la instala components/functional/agente/modales.ts
     WhatsAppAgente?: { abrir: () => void; refrescar: () => void }; // la instala components/functional/whatsapp/controlador.tsx
+    Evaluacion?: { abrir: (negocioId: string, alTerminar?: () => void) => void }; // la instala components/functional/evaluacion/controlador.tsx
     Usuarios?: { abrir: () => void }; // la instala components/functional/usuarios/controlador.tsx
     Gestion: { estado: (propId: string, o?: object) => void; documento: (propId: string) => void; firmas: (propId: string) => void; operaciones: (n: number) => void }; // la instala components/functional/agente/tarjetas/gestion.tsx
     Plazos: { open: () => void; afterAdd?: (r: unknown) => void }; // src/renderer/plazos.js
