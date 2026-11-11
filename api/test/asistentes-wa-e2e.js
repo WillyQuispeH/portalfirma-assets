@@ -464,7 +464,7 @@ function iaFalsa() {
     ok(r.s === 400 && /no tiene celular/.test(r.j.message || ''), 'no se puede pedir documentación a un aval sin celular');
     r = await req('POST', `/evaluaciones/${ng.id}/solicitar`, { avales: [av1.id] }, tA);
     ok(r.s === 200 && r.j.personas.length === 2 && r.j.personas[0].rol === 'arrendatario' && r.j.personas[1].rol === 'aval' && r.j.estado === 'solicitada', 'solicitar: queda el arrendatario y su aval esperando documentos');
-    ok((W.plantillas || []).length === 2 && W.plantillas.every((x) => x.etiqueta === 'asset-solicitar-documentacion'), 'a cada uno le sale la plantilla (con su etiqueta)');
+    ok((W.plantillas || []).length === 2 && W.plantillas.every((x) => x.etiqueta === 'solicitar_documentacion_'), 'a cada uno le sale la plantilla (con su etiqueta) ' + JSON.stringify(W.plantillas));
     ok(W.plantillas[0].campos.asset_nombre === 'María' && /Irarrázaval/.test(W.plantillas[0].campos.asset_propiedad) && /^Corredor A/.test(W.plantillas[0].campos.asset_remitente) && /aval de María Postulante/.test(W.plantillas[1].campos.asset_propiedad), 'con su nombre, quien escribe y la propiedad (al aval se le dice de quién es aval)');
     r = await req('POST', `/evaluaciones/${ng.id}/solicitar`, { avales: [av1.id] }, tA);
     ok(r.s === 400 && /Ya se les pidió/.test(r.j.message || ''), 'no se les vuelve a escribir a quienes ya se les pidió');
@@ -485,7 +485,7 @@ function iaFalsa() {
     IA.docs = docs('María Postulante', '12.345.678-K').slice(1);
     escribe(cMaria, '', { attachments: IA.docs.map((_, i) => `${base}/media/f${i}.jpg`) });
     ok(await hasta(() => salidas(cMaria).some((t) => /ya tengo toda tu documentación/.test(t))), 'al completar, le avisa que ya tiene toda su documentación');
-    r = (await hasta(async () => { const q = await req('GET', `/evaluaciones/${ng.id}`, null, tA); return q.j.analisis && q.j.personas[0].completa ? q : null; })) || (await req('GET', `/evaluaciones/${ng.id}`, null, tA));
+    r = (await hasta(async () => { const q = await req('GET', `/evaluaciones/${ng.id}`, null, tA); return q.j.analisis && q.j.personas[0].completa && q.j.personas[0].analisis && q.j.personas[0].analisis.faltan.length === 0 ? q : null; })) || (await req('GET', `/evaluaciones/${ng.id}`, null, tA));
     ok(r.j.personas[0].completa && !r.j.personas[1].completa && r.j.estado === 'solicitada' && r.j.personas[0].faltan.length === 0 && r.j.personas[1].faltan.length === 5, 'el arrendatario quedó completo; el aval, con los 5 documentos por entregar ' + JSON.stringify({ e: r.j.estado, p: r.j.personas.map((x) => ({ c: x.completa, f: x.faltan, a: x.archivos.map((y) => y.clase + (y.legible ? '' : '!')) })) }));
     ok(r.j.personas[0].documentos.every((d) => d.ok) && r.j.personas[0].analisis.porcentaje === 100, 'con renta de 3,2 veces el arriendo (2.100.000 frente a 650.000) y todo en regla suma 100 %');
     const cPedro = conv({ telefono: '+56 9 6222 2222', nombre: 'Pedro Aval' });

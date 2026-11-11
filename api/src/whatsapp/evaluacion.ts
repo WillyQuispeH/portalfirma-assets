@@ -39,7 +39,7 @@ import type { Conversacion, MensajeWa, Wechatia } from './wechatia';
 import { firma, telNorm } from './comun';
 
 const COLECCION = 'evaluaciones';
-export const ETIQUETA_PLANTILLA = 'asset-solicitar-documentacion';
+export const ETIQUETA_PLANTILLA = 'solicitar_documentacion_';
 const ARCHIVO_MAX = 20 * 1024 * 1024;
 const MAX_ARCHIVOS = 25;
 const ES_AUDIO = /\.(ogg|oga|opus|mp3|m4a|amr|aac|wav|webm)(\?|$)|audio/i;
@@ -488,7 +488,7 @@ export class EvaluacionService {
         campos: {
           nombre: p.nombre.split(/\s+/)[0],
           remitente,
-          propiedad: rol === 'aval' ? `${propiedad}, donde figuras como aval de ${titular.nombre}` : propiedad,
+          propiedad: rol === 'aval' ? `${propiedad}, como aval de ${titular.nombre}` : propiedad,
         },
       });
       lista.push({

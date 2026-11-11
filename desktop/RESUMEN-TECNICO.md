@@ -309,6 +309,10 @@ Agenda muestra los eventos agrupados por día, con filtros de rango y tipo, que 
 
 Finanzas muestra las comisiones de los negocios (`negListar`): las ganadas y perdidas del período, las que están en curso, el detalle por corredor (solo el administrador) y los negocios que aún no tienen comisión. El proceso principal ya filtra por perfil, así que el corredor ve solo sus negocios. La facturación (boletas y facturas) queda para la etapa 4. Bajo 1600 px de ancho, `styles.css` oculta las pestañas Arriendos y Finanzas.
 
+**0.18.4 (2026-11-11):**
+- Evaluación del arrendatario y de N avales por WhatsApp (paso «Evaluación del arrendatario» de un arriendo, `modal-125`): «Solicitar documentación» manda la plantilla `solicitar_documentacion_` (campos `asset_nombre`, `asset_remitente`, `asset_propiedad`); el servidor (`api/src/whatsapp/evaluacion.ts`) recibe los archivos, los lee con IA, arma un puntaje de 100 por persona (60 % arrendatario y 40 % avales) y avisa al corredor, que decide aprobar o rechazar. Se guarda en la colección `evaluaciones`.
+- La etapa después de la carta oferta se llama «Postarriendo» en los arriendos (antes siempre «Postventa»).
+
 **0.18.3 (2026-11-10):**
 - Equipo por WhatsApp: «Subir fotos» en la ficha, lead sin RUT (`asset_crear_lead`), `asset_revisar_orden_visita`, propietario dictado, verificación del día de la semana y transcripción afinada.
 - Leads: pasan de «Nuevo» a «Contactado» cuando el corredor toma la conversación o responde (`leads.js: contactado`); no retroceden. El servidor deja los leads nuevos a cargo del administrador y con su persona en el CRM.
