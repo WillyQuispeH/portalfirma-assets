@@ -2,7 +2,7 @@
 //   ok (logrado) · pend (pendiente: te toca, o «esperando a» otro) · fail (no logrado: vencido o caído) · todo (por hacer).
 //  1. Captación (de la propiedad): datos, mandato firmado, fotos, publicada.
 //  2. Comercialización (del negocio): interesado, visita, orden de visita, negociación, carta oferta firmada.
-//  3. Postventa (lo que viene después de la carta oferta; así lo llama The Living): venta o arriendo.
+//  3. Postventa (lo que viene después de la carta oferta; así lo llama The Living): venta; en un arriendo se llama Postarriendo.
 // Los estados se deducen de lo que ya registra Asset (firmas, tareas, agenda, fotos, portales). El ejecutivo puede
 // además marcar a mano un paso como logrado, no logrado o «esperando a…»; eso queda en n.pasos (o p.pasos).
 const inmo = require('./inmo');
@@ -109,7 +109,7 @@ function crear({ agenda = null, formatos = null } = {}) {
     const manual = { ...(p?.pasos || {}), ...(n?.pasos || {}) };
     let actual = null;
     const defs = ambito === 'captacion' ? [[CAPT, 0]] : [[COM, 1], [POST[tipo] || POST.venta, 2]];
-    const etapas = defs.map(([lista, k]) => ({ id: ['captacion', 'comercializacion', 'postventa'][k], nombre: NOMBRES[k], pasos: lista.map((def) => {
+    const etapas = defs.map(([lista, k]) => ({ id: ['captacion', 'comercializacion', 'postventa'][k], nombre: k === 2 && tipo === 'arriendo' ? 'Postarriendo' : NOMBRES[k], pasos: lista.map((def) => {
       const a = auto(def, p, n); const m = manual[def.id];
       let x = { id: def.id, t: def.t, e: 'todo', f: null, d: '', q: 'tu', quien: '', vence: null, accion: def.a, tipo: def.tipo, etapaFirma: def.etapa || null, pedir: def.pedir ? def.pedir(ctx) : null, manual: !!m };
       if (a?.e === 'ok') Object.assign(x, a, { e: 'ok' });

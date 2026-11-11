@@ -51,7 +51,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     // el negocio: 3 etapas, siguiente paso, marcar logrado
     await w.click(`#view-inicio .hoy-neg:has-text("${pA.titulo.slice(0, 20).replace(/"/g, '')}")`); await w.waitForSelector('#ngEt .et-cards');
     const e = await txt('#ngEt');
-    ok(!/Captación/.test(e) && /Comercialización/.test(e) && /Postventa/.test(e), '0.16.11 · el negocio muestra comercialización y postventa (la captación quedó en Cartera)');
+    ok(!/Captación/.test(e) && /Comercialización/.test(e) && /Post(venta|arriendo)/.test(e), '0.16.11 · el negocio muestra comercialización y postventa (postarriendo si es arriendo) (la captación quedó en Cartera)');
     ok(/Siguiente paso · te toca/.test(e) && /Visita agendada/.test(e), 'y un solo siguiente paso destacado (visita)');
     ok(await w.evaluate(() => document.querySelector('#ngEt .luz.on #etAcc') != null), 'la luz guía está en el botón del siguiente paso');
     await w.click('#etOk'); await w.waitForFunction(() => /Orden de visita firmada/.test(document.querySelector('#ngEt .et-next')?.textContent || ''), null, { timeout: 8000 });
