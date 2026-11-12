@@ -56,6 +56,11 @@ const esquema = z.object({
    * sale desde ese número. Vacío = todos los números y el que elija wechatia (como antes).
    */
   WA_NUMERO: z.string().trim().optional(),
+  /**
+   * se agrega a la etiqueta que dispara cada flujo de plantilla en wechatia (p. ej. «-dev»): los flujos de desarrollo
+   * («… (desarrollo)») envían la plantilla desde el número de desarrollo. Vacío en producción.
+   */
+  WA_ETIQUETA_SUFIJO: z.string().trim().optional(),
   /** clave de la API de Anthropic (Claude) para los asistentes del servidor; sin ella, responden sin IA */
   IA_CLAVE: z.string().optional(),
   IA_MODELO: z.string().default('claude-opus-5-5'),

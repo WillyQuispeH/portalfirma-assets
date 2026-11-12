@@ -80,6 +80,8 @@ export interface CredWechatia {
   base?: string;
   /** el número de WhatsApp de la empresa de este ambiente (WA_NUMERO): solo se leen sus mensajes y se envía desde él */
   numero?: string;
+  /** WA_ETIQUETA_SUFIJO: las plantillas disparan el flujo de este ambiente (etiqueta + sufijo) */
+  sufijoEtiqueta?: string;
 }
 
 /** los últimos 9 dígitos (+56 9 4497 5958 → 944975958) */
@@ -389,6 +391,7 @@ export class Wechatia {
     etiqueta: string;
     campos: Record<string, string | null | undefined>;
   }) {
+    const etiqueta = o.etiqueta + (this.c.sufijoEtiqueta || '');
     const contactId = await this.contacto(o.telefono, o.nombre);
     if (!this.campos) {
       try {
@@ -418,12 +421,12 @@ export class Wechatia {
     // si la etiqueta quedó puesta de un envío anterior, se quita primero para que el flujo vuelva a dispararse
     await this.api('DELETE', `/contacts/${contactId}/tags`, {
       version: '2021-07-28',
-      body: { tags: [o.etiqueta] },
+      body: { tags: [etiqueta] },
     }).catch(() => null);
     await this.api('POST', `/contacts/${contactId}/tags`, {
       version: '2021-07-28',
       permiso: PERM,
-      body: { tags: [o.etiqueta] },
+      body: { tags: [etiqueta] },
     });
     return { contactId };
   }
@@ -439,8 +442,10 @@ export class WechatiaService {
   ) {
     this.produccion = config.get('NODE_ENV', { infer: true }) === 'production';
     this.numero = config.get('WA_NUMERO', { infer: true }) || '';
+    this.sufijo = config.get('WA_ETIQUETA_SUFIJO', { infer: true }) || '';
   }
   private readonly numero: string;
+  private readonly sufijo: string;
 
   private donde = (corredoraId: string) => ({
     corredoraId_proveedor_dueno: { corredoraId, proveedor: PROVEEDOR, dueno: DUENO },
@@ -457,6 +462,7 @@ export class WechatiaService {
       locationId: d.locationId,
       ...(d.base && !this.produccion ? { base: d.base } : {}),
       ...(this.numero ? { numero: this.numero } : {}),
+      ...(this.sufijo ? { sufijoEtiqueta: this.sufijo } : {}),
     };
   }
 
