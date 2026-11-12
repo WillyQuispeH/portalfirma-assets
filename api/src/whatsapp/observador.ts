@@ -27,6 +27,7 @@ import { UsuarioActual, type UsuarioToken } from '../auth/usuario-actual';
 import { IaService } from './ia';
 import { LeadsWaService, type MensajeLead } from './leads-wa';
 import { AvisoLeadService } from './aviso-lead';
+import { PuenteService } from './puente';
 import { WechatiaService, type Conversacion, type Wechatia } from './wechatia';
 import { horaChile, hoy, telNorm } from './comun';
 
@@ -90,6 +91,7 @@ export class ObservadorService {
     private readonly leads: LeadsWaService,
     private readonly wa: WechatiaService,
     private readonly avisoLead: AvisoLeadService,
+    private readonly puente: PuenteService,
   ) {}
 
   private async ajustes(corredoraId: string) {
@@ -261,7 +263,7 @@ export class ObservadorService {
 
   /** la ronda del observador sobre las conversaciones ya leídas por el lector */
   async ronda(wa: Wechatia, corredoraId: string, convs: Conversacion[], forzar = false) {
-    const { cfg } = await this.ajustes(corredoraId);
+    const { a: ajustesWa, cfg } = await this.ajustes(corredoraId);
     const resumen = { revisadas: 0, nuevos: 0, mensajes: 0, analizados: 0 };
     let error: string | null = null;
     if (!cfg.activo && !forzar) return { activo: false, ...resumen };
@@ -373,6 +375,15 @@ export class ObservadorService {
           update: { canal, marca: cv.marca, leadId: l.id, dueno: cv.asignado },
         });
         await this.dueno(corredoraId, cv, l.id, previa?.dueno ?? null);
+        // Instagram y Facebook: lo que el interesado acaba de escribir le llega al corredor a cargo por su WhatsApp (el puente);
+        // lo antiguo que se trae al activar no se reenvía
+        if ((canal === 'instagram' || canal === 'facebook') && r.claves.length && (ajustesWa?.leadsActivo ?? true)) {
+          const frescos = ms
+            .filter((m) => m.direccion === 'entrante' && r.claves.includes('wc' + m.id) && Date.now() - new Date(m.fecha).getTime() < 30 * 60_000)
+            .map((m) => m.texto.trim() || (m.adjuntos.length ? '📎 Envió un archivo (míralo en la conversación de wechatia)' : ''));
+          if (frescos.length)
+            await this.puente.entranteCanal(wa, corredoraId, l.id, canal, frescos).catch((e) => this.log.warn(`puente ${canal}: ${(e as Error).message}`));
+        }
         if (nuevo) resumen.nuevos++;
         resumen.mensajes += r.agregados;
         if (r.delCliente && !paraIA.includes(l.id)) paraIA.push(l.id);

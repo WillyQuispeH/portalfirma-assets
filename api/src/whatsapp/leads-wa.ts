@@ -87,7 +87,7 @@ export class LeadsWaService {
 
   /** agrega mensajes a la conversación del lead (los repetidos no se duplican) y deja su resumen al día */
   async anotar(l: Lead, mensajes: MensajeLead[], o: { atiende?: boolean } = {}) {
-    if (!mensajes.length) return { agregados: 0 };
+    if (!mensajes.length) return { agregados: 0, delCliente: false, claves: [] as string[] };
     const ya = new Set(
       (
         await this.db.leadMensaje.findMany({
@@ -97,7 +97,7 @@ export class LeadsWaService {
       ).map((m) => m.k),
     );
     const nuevos = mensajes.filter((m) => !ya.has(m.k));
-    if (!nuevos.length) return { agregados: 0 };
+    if (!nuevos.length) return { agregados: 0, delCliente: false, claves: [] as string[] };
     await this.db.leadMensaje.createMany({
       skipDuplicates: true,
       data: nuevos.map((m) => ({
@@ -130,7 +130,11 @@ export class LeadsWaService {
       d.actualizado = new Date().toISOString();
       return { datos: d, cols: masNuevo ? { ultimoEn: u.fecha } : {} };
     });
-    return { agregados: nuevos.length, delCliente: delCliente > 0 };
+    return {
+      agregados: nuevos.length,
+      delCliente: delCliente > 0,
+      claves: nuevos.filter((m) => m.de === 'cliente').map((m) => m.k),
+    };
   }
 
   /** un lead nuevo (desde una conversación de WhatsApp o de otro canal) */

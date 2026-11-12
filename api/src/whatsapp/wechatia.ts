@@ -214,9 +214,10 @@ export class Wechatia {
   }
 
   /** un texto a un contacto que ya conversa (dentro de las 24 h): lo usan los asistentes al responder */
-  async enviarAContacto(contactId: string, texto: string) {
+  async enviarAContacto(contactId: string, texto: string, canal: 'whatsapp' | 'instagram' | 'facebook' = 'whatsapp') {
+    const type = canal === 'instagram' ? 'IG' : canal === 'facebook' ? 'FB' : 'WhatsApp';
     const env = await this.api('POST', '/conversations/messages', {
-      body: { type: 'WhatsApp', contactId, message: texto },
+      body: { type, contactId, message: texto },
       permiso:
         'La clave de wechatia no tiene permiso para enviar mensajes. Agrega «Editar mensajes de conversaciones» a la integración privada.',
     });

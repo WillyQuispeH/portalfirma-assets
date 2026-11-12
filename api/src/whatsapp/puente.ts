@@ -75,8 +75,25 @@ export class PuenteService {
       : null;
     await this.primerAviso(wa, corredoraId, cv, cli, corredor?.nombre ?? null);
     const nombre = nombreDe(act) || cli.nombre;
+    await this.reenviar(wa, corredoraId, act, nombre, `(${telDe(act) || cli.telefono})`, texto);
+  }
+
+  /** el interesado escribió por Instagram o Facebook (lo lee el observador): se reenvía igual al celular del corredor a cargo */
+  async entranteCanal(wa: Wechatia, corredoraId: string, leadId: string, canal: 'instagram' | 'facebook', textos: string[]) {
+    const act = await this.db.lead.findFirst({ where: { id: leadId, corredoraId, eliminadoEn: null } });
+    const texto = textos.map((t) => t.trim()).filter(Boolean).join('\n');
+    if (!act || !texto) return;
+    const usuario = String(
+      ((((act.datos ?? {}) as Record<string, any>).canales ?? []) as { canal: string; usuario?: string }[]).find((c) => c.canal === canal)?.usuario ?? '',
+    );
+    const via = canal === 'instagram' ? `Instagram${usuario ? ' @' + usuario : ''}` : 'Facebook Messenger';
+    await this.reenviar(wa, corredoraId, act, nombreDe(act), `(${via})`, texto);
+  }
+
+  /** manda el mensaje del interesado al corredor a cargo (o a los administradores) y deja el vínculo para responderlo */
+  private async reenviar(wa: Wechatia, corredoraId: string, act: Lead, nombre: string, via: string, texto: string) {
     const cuerpo =
-      `💬 *${nombre}* (${telDe(act) || cli.telefono}) escribió:\n«${texto.slice(0, 1200)}»\n\n` +
+      `💬 *${nombre}* ${via} escribió:\n«${texto.slice(0, 1200)}»\n\n` +
       `↩ Para responderle: cita este mensaje, o escribe «Para ${nombre.split(/\s+/)[0]}: …».`;
     // al corredor a cargo y, si no recibe por WhatsApp (sin celular vinculado o fuera de las 24 h), a los administradores
     const admins = await this.ejecutivo.responsables(corredoraId, null);
@@ -236,7 +253,10 @@ export class PuenteService {
     const texto = `*${corredor}* (corredor):\n${cuerpo}`.slice(0, 3800);
     const tel = telNorm(d.telefono);
     if (!tel) {
-      await this.decir(wa, v, cv, `${d.nombre} no tiene celular guardado: no puedo escribirle por WhatsApp.`);
+      // sin celular: se le responde por el canal en que escribió (Instagram o Facebook), por el mismo contacto de wechatia
+      const via = this.canalDe(d.lead);
+      if (via) return this.enviarPorCanal(wa, v, cv, d, via, cuerpo, texto, corredor, m);
+      await this.decir(wa, v, cv, `${d.nombre} no tiene celular guardado ni escribió por Instagram o Facebook: no puedo escribirle.`);
       return;
     }
     try {
@@ -275,6 +295,50 @@ export class PuenteService {
         fuera
           ? `No pude enviarle a ${d.nombre}: no ha escrito en las últimas 24 h y WhatsApp solo deja mandar una plantilla aprobada. Escríbele desde Asset o por otro medio.`
           : `No pude enviarle a ${d.nombre}: ${(e as Error).message.slice(0, 200)}`,
+      );
+    }
+  }
+
+  /** el canal de mensajería directa (Instagram o Facebook) por el que el lead escribió, con su contacto de wechatia */
+  private canalDe(l: Lead): { canal: 'instagram' | 'facebook'; contactId: string } | null {
+    const cs = (((l.datos ?? {}) as Record<string, any>).canales ?? []) as { canal?: string; contactId?: string }[];
+    const c = [...cs].reverse().find((x) => (x.canal === 'instagram' || x.canal === 'facebook') && x.contactId);
+    return c ? { canal: c.canal as 'instagram' | 'facebook', contactId: String(c.contactId) } : null;
+  }
+
+  private async enviarPorCanal(
+    wa: Wechatia,
+    v: WaVinculo,
+    cv: Conversacion,
+    d: Candidato,
+    via: { canal: 'instagram' | 'facebook'; contactId: string },
+    cuerpo: string,
+    texto: string,
+    corredor: string,
+    m: MensajeWa,
+  ) {
+    const nombreCanal = via.canal === 'instagram' ? 'Instagram' : 'Facebook';
+    try {
+      const r = await wa.enviarAContacto(via.contactId, texto, via.canal);
+      await this.leads.anotar(d.lead, [
+        {
+          k: r.messageId ? 'wc' + r.messageId : 'as' + Date.now().toString(36),
+          fecha: horaChile(),
+          de: 'broker',
+          autor: corredor,
+          texto: cuerpo,
+          datos: { canal: via.canal },
+        },
+      ]);
+      await this.leads.contactado(d.lead, `${corredor} respondió por ${nombreCanal}`).catch(() => null);
+      const extra = m.adjuntos.length ? ' (los archivos no se reenvían: solo el texto)' : '';
+      await this.decir(wa, v, cv, `✅ Enviado a ${d.nombre} por ${nombreCanal}${extra}.`);
+    } catch (e) {
+      await this.decir(
+        wa,
+        v,
+        cv,
+        `No pude enviarle a ${d.nombre} por ${nombreCanal}: ${(e as Error).message.slice(0, 200)}. ${nombreCanal} solo deja responder a quien escribió hace poco.`,
       );
     }
   }

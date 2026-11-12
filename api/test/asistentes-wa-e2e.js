@@ -507,6 +507,26 @@ function iaFalsa() {
     r = await req('POST', '/whatsapp/enviar', { telefono: '+56 9 8765 4321', texto: 'Soy el corredor anterior' }, t1);
     ok(r.s === 403 && r.j?.code === 'OTRO_CORREDOR', 'y el corredor anterior ya no');
     await asignar(c1.id);
+
+    // ---- 8a2. Instagram → corredor por WhatsApp → respuesta por Instagram (el interesado no tiene celular)
+    r = await req('PUT', '/whatsapp/observador', { activo: true, autorizado: true }, tA);
+    ok(r.s === 200 && r.j.activo, 'el observador queda activo');
+    const cig = conv({ nombre: 'Lucía Insta', tipo: 'TYPE_INSTAGRAM', usuario: 'lucia.insta', asignado: 'wu-1' });
+    escribe(cig, 'Hola, busco depto 2D en Ñuñoa hasta 500 lucas');
+    ok(
+      await hasta(() => salidas(cel).some((t) => /Lucía Insta/.test(t) && /Instagram @lucia\.insta/.test(t) && /busco depto 2D/.test(t) && /Para Lucía:/.test(t)), 180),
+      'lo que escribe el interesado por Instagram le llega al celular de su corredor, con cómo responderle',
+    );
+    const leadIg = await db.lead.findFirst({ where: { corredoraId: co.id, origen: 'instagram', convIds: { has: cig.id } } });
+    ok(leadIg && leadIg.corredorId === c1.id, 'el lead de Instagram quedó a cargo del corredor 1');
+    escribe(cel, 'Para Lucía: claro, te muestro el depto el sábado a las 11');
+    ok(
+      await hasta(() => W.enviados.some((e) => e.type === 'IG' && e.contactId === cig.contactId && /te muestro el depto el sábado/.test(e.message))),
+      'la respuesta del corredor sale al interesado por Instagram (tipo IG), no por WhatsApp',
+    );
+    ok(await hasta(() => salidas(cel).some((t) => /Enviado a Lucía Insta por Instagram/.test(t))), 'y se le confirma al corredor');
+    ok(!W.enviados.some((e) => e.type === 'WhatsApp' && e.contactId === cig.contactId), 'nada salió por WhatsApp a ese interesado');
+    ok(await hasta(async () => (await db.leadMensaje.count({ where: { leadId: leadIg.id, de: 'broker' } })) >= 1), 'la respuesta queda en la conversación del lead');
     r = await req('GET', `/leads/${leadId}`, null, tA);
     ok(r.s === 200, 'el lead sigue entero');
     await db.usuario.update({ where: { id: c2.id }, data: { activo: false } });
