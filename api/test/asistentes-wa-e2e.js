@@ -533,6 +533,11 @@ function iaFalsa() {
     ok(await hasta(() => salidas(cel).some((t) => /Enviado a Lucía Insta por Instagram/.test(t))), 'y se le confirma al corredor');
     ok(!W.enviados.some((e) => e.type === 'WhatsApp' && e.contactId === cig.contactId), 'nada salió por WhatsApp a ese interesado');
     ok(await hasta(async () => (await db.leadMensaje.count({ where: { leadId: leadIg.id, de: 'broker' } })) >= 1), 'la respuesta queda en la conversación del lead');
+    // wechatia junta los canales en un contacto: el lead de Instagram ahora también tiene celular, y se le sigue respondiendo por Instagram
+    await db.lead.update({ where: { id: leadIg.id }, data: { telefonoNorm: '955500002', datos: { ...leadIg.datos, telefono: '+56 9 5550 0002' } } });
+    escribe(cel, 'Para @lucia.insta: segundo mensaje, ya con celular guardado');
+    ok(await hasta(() => W.enviados.some((e) => e.type === 'IG' && /segundo mensaje, ya con celular/.test(e.message))), 'con celular guardado, responde por Instagram si por ahí escribió por última vez');
+    ok(!W.enviados.some((e) => /segundo mensaje, ya con celular/.test(e.message) && e.type === 'WhatsApp'), 'y no por WhatsApp');
     r = await req('GET', `/leads/${leadId}`, null, tA);
     ok(r.s === 200, 'el lead sigue entero');
     await db.usuario.update({ where: { id: c2.id }, data: { activo: false } });

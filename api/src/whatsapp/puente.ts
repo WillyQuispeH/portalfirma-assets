@@ -265,10 +265,19 @@ export class PuenteService {
     const corredor = usuario?.nombre || 'Tu corredor';
     const texto = `*${corredor}* (corredor):\n${cuerpo}`.slice(0, 3800);
     const tel = telNorm(d.telefono);
+    // se le responde por el canal en que escribió por última vez: Instagram o Facebook (por el mismo contacto de wechatia),
+    // aunque tenga celular guardado (wechatia junta sus canales en un solo contacto)
+    const via = this.canalDe(d.lead);
+    if (via) {
+      const ult = await this.db.leadMensaje.findFirst({
+        where: { leadId: d.lead.id, de: 'cliente' },
+        orderBy: { fecha: 'desc' },
+        select: { datos: true },
+      });
+      const ultimoCanal = String(((ult?.datos ?? {}) as Record<string, unknown>).canal ?? '');
+      if (!tel || ultimoCanal === via.canal) return this.enviarPorCanal(wa, v, cv, d, via, cuerpo, texto, corredor, m);
+    }
     if (!tel) {
-      // sin celular: se le responde por el canal en que escribió (Instagram o Facebook), por el mismo contacto de wechatia
-      const via = this.canalDe(d.lead);
-      if (via) return this.enviarPorCanal(wa, v, cv, d, via, cuerpo, texto, corredor, m);
       await this.decir(wa, v, cv, `${d.nombre} no tiene celular guardado ni escribió por Instagram o Facebook: no puedo escribirle.`);
       return;
     }
@@ -301,6 +310,8 @@ export class PuenteService {
       await this.decir(wa, v, cv, `✅ Enviado a ${d.nombre}${extra}.`);
     } catch (e) {
       const fuera = e instanceof WechatiaError && e.codigo === 'FUERA_24H';
+      // fuera de las 24 h de WhatsApp pero con Instagram o Facebook: se intenta por ahí
+      if (fuera && via) return this.enviarPorCanal(wa, v, cv, d, via, cuerpo, texto, corredor, m);
       await this.decir(
         wa,
         v,
