@@ -538,6 +538,22 @@ function iaFalsa() {
     escribe(cel, 'Para @lucia.insta: segundo mensaje, ya con celular guardado');
     ok(await hasta(() => W.enviados.some((e) => e.type === 'IG' && /segundo mensaje, ya con celular/.test(e.message))), 'con celular guardado, responde por Instagram si por ahí escribió por última vez');
     ok(!W.enviados.some((e) => /segundo mensaje, ya con celular/.test(e.message) && e.type === 'WhatsApp'), 'y no por WhatsApp');
+
+    // ---- 8a3. fuera de las 24 h: plantilla de primer contacto y el mensaje del corredor sale cuando el interesado responde
+    const antesPl2 = (W.plantillas || []).length;
+    escribe(cel, 'Para Juan Pérez: ¿le acomoda ver el depto el sábado?');
+    ok(await hasta(() => salidas(cel).some((t) => /Juan Pérez no ha escrito en las últimas 24 h: le mandé la plantilla de primer contacto/.test(t))), 'fuera de las 24 h se le avisa al corredor que se mandó la plantilla');
+    const pc = (W.plantillas || []).slice(antesPl2).find((x) => x.etiqueta === 'asset-primer-contacto');
+    ok(pc && pc.campos.asset_nombre === 'Juan' && /Corredor/.test(pc.campos.asset_remitente) && pc.campos.asset_motivo, 'a Juan le sale la plantilla «asset-primer-contacto» con su nombre, el corredor y el motivo ' + JSON.stringify(pc));
+    ok(!W.enviados.some((e) => /le acomoda ver el depto/.test(e.message)), 'y el mensaje del corredor todavía no sale');
+    ok((await db.lead.findUnique({ where: { id: leadId } })).datos.pendiente?.texto === '¿le acomoda ver el depto el sábado?', 'queda pendiente en el lead');
+    const cjuan = conv({ telefono: '+56 9 8765 4321', nombre: 'Juan Pérez' });
+    escribe(cjuan, 'Hola, sí, dime');
+    ok(await hasta(() => salidas(cjuan).some((t) => /Corredor.*\(corredor\):\n¿le acomoda ver el depto el sábado\?/s.test(t)), 120), 'cuando Juan responde, sale solo el mensaje pendiente del corredor');
+    ok(await hasta(async () => !(await db.lead.findUnique({ where: { id: leadId } })).datos.pendiente), 'el pendiente se retira');
+    ok(await hasta(() => salidas(cel).some((t) => /Juan Pérez respondió y ya le llegó tu mensaje pendiente/.test(t))), 'y se le avisa al corredor');
+    await esperar(6000);
+    ok(salidas(cjuan).filter((t) => /le acomoda ver el depto/.test(t)).length === 1, 'se entrega una sola vez');
     r = await req('GET', `/leads/${leadId}`, null, tA);
     ok(r.s === 200, 'el lead sigue entero');
     await db.usuario.update({ where: { id: c2.id }, data: { activo: false } });

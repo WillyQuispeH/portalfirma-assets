@@ -21,6 +21,9 @@ import { LeadsWaService, type MensajeLead } from './leads-wa';
 import { horaChile, norm, telNorm } from './comun';
 import { WechatiaError, type Conversacion, type MensajeWa, type Wechatia } from './wechatia';
 
+/** etiqueta que dispara el flujo «Asset · Primer contacto (plantilla)» de wechatia (plantilla aprobada asset_primer_contacto) */
+const ETIQUETA_PRIMER_CONTACTO = 'asset-primer-contacto';
+
 /** «Para Juan Pérez: texto» (también «Para: Juan, texto» no: el destinatario va antes de los dos puntos) */
 const PREFIJO = /^\s*para\s+([^:\n]{2,60}?)\s*:\s*([\s\S]+)$/i;
 
@@ -79,6 +82,8 @@ export class PuenteService {
     const corredor = act.corredorId
       ? await this.db.usuario.findUnique({ where: { id: act.corredorId }, select: { nombre: true } })
       : null;
+    // si el corredor había dejado un mensaje pendiente (fuera de las 24 h), ahora que respondió sale solo
+    await this.entregarPendiente(wa, corredoraId, act, cv);
     await this.primerAviso(wa, corredoraId, cv, cli, corredor?.nombre ?? null);
     const nombre = nombreDe(act) || cli.nombre;
     await this.reenviar(wa, corredoraId, act, nombre, `(${telDe(act) || cli.telefono})`, texto);
@@ -268,6 +273,7 @@ export class PuenteService {
     // se le responde por el canal en que escribió por última vez: Instagram o Facebook (por el mismo contacto de wechatia),
     // aunque tenga celular guardado (wechatia junta sus canales en un solo contacto)
     const via = this.canalDe(d.lead);
+    let canalProbado = false;
     if (via) {
       const ult = await this.db.leadMensaje.findFirst({
         where: { leadId: d.lead.id, de: 'cliente' },
@@ -275,7 +281,12 @@ export class PuenteService {
         select: { datos: true },
       });
       const ultimoCanal = String(((ult?.datos ?? {}) as Record<string, unknown>).canal ?? '');
-      if (!tel || ultimoCanal === via.canal) return this.enviarPorCanal(wa, v, cv, d, via, cuerpo, texto, corredor, m);
+      if (!tel || ultimoCanal === via.canal) {
+        canalProbado = true;
+        // con celular, si Instagram/Facebook falla se sigue con WhatsApp; sin celular, el error se le dice al corredor
+        if (await this.enviarPorCanal(wa, v, cv, d, via, cuerpo, texto, corredor, m, !!tel)) return;
+        if (!tel) return;
+      }
     }
     if (!tel) {
       await this.decir(wa, v, cv, `${d.nombre} no tiene celular guardado ni escribió por Instagram o Facebook: no puedo escribirle.`);
@@ -310,16 +321,73 @@ export class PuenteService {
       await this.decir(wa, v, cv, `✅ Enviado a ${d.nombre}${extra}.`);
     } catch (e) {
       const fuera = e instanceof WechatiaError && e.codigo === 'FUERA_24H';
-      // fuera de las 24 h de WhatsApp pero con Instagram o Facebook: se intenta por ahí
-      if (fuera && via) return this.enviarPorCanal(wa, v, cv, d, via, cuerpo, texto, corredor, m);
+      if (fuera) {
+        // fuera de las 24 h de WhatsApp: primero por Instagram/Facebook si no se había probado; si no, la plantilla de primer contacto
+        if (via && !canalProbado && (await this.enviarPorCanal(wa, v, cv, d, via, cuerpo, texto, corredor, m, true))) return;
+        return this.plantillaYPendiente(wa, v, cv, d, cuerpo, corredor);
+      }
+      await this.decir(wa, v, cv, `No pude enviarle a ${d.nombre}: ${(e as Error).message.slice(0, 200)}`);
+    }
+  }
+
+  /**
+   * Fuera de las 24 h: se le manda la plantilla aprobada «primer contacto» (abre la ventana) y el mensaje del corredor queda
+   * pendiente en el lead; sale solo cuando el interesado responde (`entrante`).
+   */
+  private async plantillaYPendiente(wa: Wechatia, v: WaVinculo, cv: Conversacion, d: Candidato, cuerpo: string, corredor: string) {
+    try {
+      await wa.enviarPlantilla({
+        telefono: d.telefono,
+        nombre: d.nombre,
+        etiqueta: ETIQUETA_PRIMER_CONTACTO,
+        campos: { nombre: d.nombre.split(/\s+/)[0], remitente: corredor, motivo: 'tu consulta' },
+      });
+      await this.enviados.registrar(v.corredoraId, d.telefono, { plantilla: true });
+      await this.leads.cambiar(d.lead.id, (dd) => {
+        dd.pendiente = { usuarioId: v.usuarioId, corredor, texto: cuerpo.slice(0, 3500), en: new Date().toISOString() };
+        dd.historial = [
+          ...(dd.historial || []),
+          { fecha: new Date().toISOString(), texto: `${corredor} le mandó la plantilla de primer contacto; su mensaje saldrá cuando responda`, tipo: 'canal' },
+        ].slice(-200);
+        return { datos: dd, cols: {} };
+      });
       await this.decir(
         wa,
         v,
         cv,
-        fuera
-          ? `No pude enviarle a ${d.nombre}: no ha escrito en las últimas 24 h y WhatsApp solo deja mandar una plantilla aprobada. Escríbele desde Asset o por otro medio.`
-          : `No pude enviarle a ${d.nombre}: ${(e as Error).message.slice(0, 200)}`,
+        `📨 ${d.nombre} no ha escrito en las últimas 24 h: le mandé la plantilla de primer contacto. Tu mensaje saldrá solo cuando responda.`,
       );
+    } catch (e) {
+      await this.decir(wa, v, cv, `No pude enviarle la plantilla a ${d.nombre}: ${(e as Error).message.slice(0, 200)}`);
+    }
+  }
+
+  /** el interesado respondió: sale el mensaje que el corredor dejó pendiente (si no pasaron más de 7 días) */
+  private async entregarPendiente(wa: Wechatia, corredoraId: string, lead: Lead, cv: Conversacion) {
+    const p = ((lead.datos ?? {}) as Record<string, any>).pendiente as
+      | { usuarioId: string; corredor: string; texto: string; en: string }
+      | undefined;
+    if (!p?.texto || !cv.contactId) return;
+    // se retira primero: si dos rondas coinciden, solo una lo manda
+    const retirado = await this.leads.cambiar(lead.id, (dd) => {
+      if (!(dd as Record<string, any>).pendiente) return null;
+      delete (dd as Record<string, any>).pendiente;
+      return { datos: dd, cols: {} };
+    });
+    if (!retirado) return;
+    if (Date.now() - new Date(p.en).getTime() > 7 * 864e5) return;
+    const texto = `*${p.corredor}* (corredor):\n${p.texto}`.slice(0, 3800);
+    try {
+      const r = await wa.enviarAContacto(cv.contactId, texto);
+      await this.enviados.registrar(corredoraId, telDe(lead), { messageId: r.messageId, texto, enHilo: false });
+      await this.leads.anotar(lead, [
+        { k: r.messageId ? 'wc' + r.messageId : 'as' + Date.now().toString(36), fecha: horaChile(), de: 'broker', autor: p.corredor, texto: p.texto },
+      ]);
+      await this.leads.contactado(lead, `${p.corredor} respondió por WhatsApp`).catch(() => null);
+      await this.ejecutivo.avisar(corredoraId, p.usuarioId, `✅ ${nombreDe(lead)} respondió y ya le llegó tu mensaje pendiente.`, null, wa, false);
+    } catch (e) {
+      this.log.warn(`mensaje pendiente de ${lead.id}: ${(e as Error).message}`);
+      await this.ejecutivo.avisar(corredoraId, p.usuarioId, `No pude entregarle tu mensaje pendiente a ${nombreDe(lead)}: ${(e as Error).message.slice(0, 160)}`, null, wa, true);
     }
   }
 
@@ -340,7 +408,8 @@ export class PuenteService {
     texto: string,
     corredor: string,
     m: MensajeWa,
-  ) {
+    silencioso = false,
+  ): Promise<boolean> {
     const nombreCanal = via.canal === 'instagram' ? 'Instagram' : 'Facebook';
     try {
       const r = await wa.enviarAContacto(via.contactId, texto, via.canal);
@@ -357,13 +426,19 @@ export class PuenteService {
       await this.leads.contactado(d.lead, `${corredor} respondió por ${nombreCanal}`).catch(() => null);
       const extra = m.adjuntos.length ? ' (los archivos no se reenvían: solo el texto)' : '';
       await this.decir(wa, v, cv, `✅ Enviado a ${d.nombre} por ${nombreCanal}${extra}.`);
+      return true;
     } catch (e) {
+      if (silencioso) {
+        this.log.warn(`respuesta por ${nombreCanal}: ${(e as Error).message}`);
+        return false;
+      }
       await this.decir(
         wa,
         v,
         cv,
         `No pude enviarle a ${d.nombre} por ${nombreCanal}: ${(e as Error).message.slice(0, 200)}. ${nombreCanal} solo deja responder a quien escribió hace poco.`,
       );
+      return false;
     }
   }
 
