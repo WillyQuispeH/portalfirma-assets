@@ -24,6 +24,9 @@ import { WechatiaError, type Conversacion, type MensajeWa, type Wechatia } from 
 /** etiqueta que dispara el flujo «Asset · Primer contacto (plantilla)» de wechatia (plantilla aprobada asset_primer_contacto) */
 const ETIQUETA_PRIMER_CONTACTO = 'asset-primer-contacto';
 
+/** «#12 texto» (también «#12: texto»): atajo con el número corto que trae el aviso */
+const ATAJO = /^\s*#(\d{1,6})\b\s*[:,.-]?\s*([\s\S]+)$/;
+
 /** el aviso que Asset le manda al corredor: «💬 *Nombre* (canal) escribió: …» */
 const AVISO = /💬\s*\*([^*\n]+)\*[^\n]*escribió/;
 
@@ -92,6 +95,23 @@ export class PuenteService {
     await this.reenviar(wa, corredoraId, act, nombre, `(${telDe(act) || cli.telefono})`, texto);
   }
 
+  /** el número corto del interesado en su corredora («#12»): se asigna la primera vez que se le avisa al corredor */
+  private async codigoCorto(act: Lead): Promise<number> {
+    const previo = Number(((act.datos ?? {}) as Record<string, any>).corto);
+    if (previo > 0) return previo;
+    const r = await this.db.$queryRaw<{ m: number | null }[]>`
+      SELECT max((datos->>'corto')::int) AS m FROM leads
+      WHERE corredora_id = ${act.corredoraId}::uuid AND datos->>'corto' ~ '^[0-9]+$'`;
+    const n = (r[0]?.m ?? 0) + 1;
+    await this.leads.cambiar(act.id, (dd) => {
+      if ((dd as Record<string, any>).corto) return null;
+      (dd as Record<string, any>).corto = n;
+      return { datos: dd, cols: {} };
+    });
+    const l = await this.db.lead.findUnique({ where: { id: act.id }, select: { datos: true } });
+    return Number(((l?.datos ?? {}) as Record<string, any>).corto) || n;
+  }
+
   /** el interesado escribió por Instagram o Facebook (lo lee el observador): se reenvía igual al celular del corredor a cargo */
   async entranteCanal(wa: Wechatia, corredoraId: string, leadId: string, canal: 'instagram' | 'facebook', textos: string[]) {
     const act = await this.db.lead.findFirst({ where: { id: leadId, corredoraId, eliminadoEn: null } });
@@ -106,9 +126,10 @@ export class PuenteService {
 
   /** manda el mensaje del interesado al corredor a cargo (o a los administradores) y deja el vínculo para responderlo */
   private async reenviar(wa: Wechatia, corredoraId: string, act: Lead, nombre: string, via: string, texto: string) {
+    const corto = await this.codigoCorto(act);
     const cuerpo =
       `💬 *${nombre}* ${via} escribió:\n«${texto.slice(0, 1200)}»\n\n` +
-      `↩ Para responderle: cita este mensaje, o escribe «Para ${usuarioDe(act) ? '@' + usuarioDe(act) : nombre}: …».`;
+      `↩ Para responderle escribe «#${corto} tu mensaje» o «Para ${usuarioDe(act) ? '@' + usuarioDe(act) : nombre}: …».`;
     // al corredor a cargo y, si no recibe por WhatsApp (sin celular vinculado o fuera de las 24 h), a los administradores
     const admins = await this.ejecutivo.responsables(corredoraId, null);
     const destinos = [...new Set([...(act.corredorId ? [act.corredorId] : []), ...admins])];
@@ -230,6 +251,26 @@ export class PuenteService {
         return true;
       }
     }
+    // a0) «#12 texto»: el número corto del aviso
+    if (!destino) {
+      const c = ATAJO.exec(texto);
+      if (c) {
+        const u = await this.db.usuario.findUnique({ where: { id: v.usuarioId }, select: { rol: true } });
+        const l = await this.db.lead.findFirst({
+          where: { corredoraId: v.corredoraId, eliminadoEn: null, datos: { path: ['corto'], equals: Number(c[1]) } },
+        });
+        if (!l) {
+          await this.decir(wa, v, cv, `No encontré al interesado #${c[1]}. Revisa el número del aviso o escribe «Para Nombre: …».`);
+          return true;
+        }
+        if (u?.rol !== 'ADMIN' && l.corredorId !== v.usuarioId) {
+          await this.decir(wa, v, cv, `El interesado #${c[1]} no está a tu cargo: solo su corredor o un administrador puede escribirle.`);
+          return true;
+        }
+        destino = { lead: l, nombre: nombreDe(l), telefono: telDe(l) };
+        cuerpo = c[2].trim();
+      }
+    }
     // a) «Para Juan: …»
     if (!destino) {
       const x = PREFIJO.exec(texto);
@@ -258,7 +299,7 @@ export class PuenteService {
   private async preguntarCual(wa: Wechatia, v: WaVinculo, cv: Conversacion, busca: Candidato[], consulta: string) {
     const lista = busca
       .slice(0, 6)
-      .map((c, i) => `${i + 1}) ${c.nombre} ${cola(c.telefono) || (usuarioDe(c.lead) ? '@' + usuarioDe(c.lead) : c.lead.origen ? '(' + c.lead.origen + ')' : '')}`.trim())
+      .map((c, i) => `${i + 1}) ${c.nombre} ${((c.lead.datos as Record<string, any>)?.corto ? '#' + (c.lead.datos as Record<string, any>).corto + ' ' : '')}${cola(c.telefono) || (usuarioDe(c.lead) ? '@' + usuarioDe(c.lead) : c.lead.origen ? '(' + c.lead.origen + ')' : '')}`.trim())
       .join('\n');
     await this.decir(
       wa,

@@ -552,6 +552,17 @@ function iaFalsa() {
     escribe(cc2, 'Para Lucía Insta: hola, soy otro corredor');
     ok(await hasta(() => salidas(cc2).some((t) => /no está entre tus interesados: lo atiende otro corredor/.test(t))), 'a un corredor que intenta escribirle a un interesado ajeno se le dice que lo atiende otro');
     ok(!W.enviados.some((e) => /soy otro corredor/.test(e.message)), 'y el mensaje no sale');
+    // atajo: el aviso trae un número corto («#12 tu mensaje»)
+    const aviso2 = [...cel.mensajes].reverse().find((x) => x.direction === 'outbound' && /Lucía Insta/.test(x.body) && /escribió/.test(x.body));
+    const corto = /#(\d+) tu mensaje/.exec(aviso2.body)?.[1];
+    ok(corto, 'el aviso trae el atajo con el número corto del interesado (#' + corto + ')');
+    escribe(cel, `#${corto} mensaje con el atajo`);
+    ok(await hasta(() => W.enviados.some((e) => e.type === 'IG' && /mensaje con el atajo/.test(e.message))), 'con «#' + corto + ' mensaje» le llega al interesado por Instagram');
+    escribe(cc2, `#${corto} soy otro corredor otra vez`);
+    ok(await hasta(() => salidas(cc2).some((t) => new RegExp(`#${corto} no está a tu cargo`).test(t))), 'otro corredor con ese número: no está a tu cargo');
+    ok(!W.enviados.some((e) => /soy otro corredor otra vez/.test(e.message)), 'y no sale');
+    escribe(cel, '#99999 hola');
+    ok(await hasta(() => salidas(cel).some((t) => /No encontré al interesado #99999/.test(t))), 'un número que no existe se avisa, sin pasar al Agente');
 
     // ---- 8a3. fuera de las 24 h: plantilla de primer contacto y el mensaje del corredor sale cuando el interesado responde
     const antesPl2 = (W.plantillas || []).length;
