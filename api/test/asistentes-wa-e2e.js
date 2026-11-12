@@ -69,7 +69,7 @@ function wechatiaFalso() {
         const id = nuevoId('m'); W.enviados.push({ ...body, id, t: Date.now() });
         let c = W.convs.find((x) => x.contactId === body.contactId);
         if (!c) { c = { id: nuevoId('cv'), contactId: body.contactId, phone: W.contactos[body.contactId], fullName: '', type: 'TYPE_WHATSAPP', lastMessageType: 'TYPE_WHATSAPP', lastMessageDate: Date.now(), mensajes: [] }; W.convs.push(c); }
-        c.mensajes.push({ id, direction: 'outbound', body: body.message, dateAdded: new Date().toISOString(), source: 'api', messageType: 'TYPE_WHATSAPP' }); c.lastMessageDate = Date.now() + W.n;
+        c.mensajes.push({ id, altId: 'wamid.' + id, direction: 'outbound', body: body.message, dateAdded: new Date().toISOString(), source: 'api', messageType: 'TYPE_WHATSAPP' }); c.lastMessageDate = Date.now() + W.n;
         return out(200, { messageId: id });
       }
       if (/^\/conversations\/messages\/m\d+$/.test(p)) return out(200, { message: { status: 'delivered' } });
@@ -538,6 +538,11 @@ function iaFalsa() {
     escribe(cel, 'Para @lucia.insta: segundo mensaje, ya con celular guardado');
     ok(await hasta(() => W.enviados.some((e) => e.type === 'IG' && /segundo mensaje, ya con celular/.test(e.message))), 'con celular guardado, responde por Instagram si por ahí escribió por última vez');
     ok(!W.enviados.some((e) => /segundo mensaje, ya con celular/.test(e.message) && e.type === 'WhatsApp'), 'y no por WhatsApp');
+    // citando el aviso: WhatsApp cita por su id (wamid), no por el de wechatia
+    const aviso = [...cel.mensajes].reverse().find((x) => x.direction === 'outbound' && /Lucía Insta/.test(x.body) && /escribió/.test(x.body));
+    ok(aviso && aviso.altId.startsWith('wamid.'), 'el aviso del lead tiene su id de WhatsApp');
+    escribe(cel, 'respuesta citando el aviso, sin escribir «Para»', { meta: { whatsapp: { parentMessageAltId: aviso.altId } } });
+    ok(await hasta(() => W.enviados.some((e) => e.type === 'IG' && /respuesta citando el aviso/.test(e.message))), 'al citar el aviso (con el wamid de WhatsApp) la respuesta le llega al interesado, no al Agente');
 
     // ---- 8a3. fuera de las 24 h: plantilla de primer contacto y el mensaje del corredor sale cuando el interesado responde
     const antesPl2 = (W.plantillas || []).length;

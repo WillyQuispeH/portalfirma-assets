@@ -56,6 +56,7 @@ const citado = (m: Json): string | null => {
     m.meta?.replyToMessageId ??
     m.meta?.quotedMessageId ??
     m.meta?.replyTo?.id ??
+    m.meta?.whatsapp?.parentMessageAltId ??
     m.meta?.context?.id ??
     m.context?.id ??
     m.context?.message_id ??
@@ -110,8 +111,10 @@ export interface MensajeWa {
   origen: string;
   tipo: string;
   asunto: string;
-  /** id del mensaje que se citó al responder (si wechatia lo informa) */
+  /** id del mensaje que se citó al responder (si wechatia lo informa): el de wechatia o el wamid de WhatsApp (`altId` de aquel mensaje) */
   respondeA?: string | null;
+  /** el id del mensaje en WhatsApp (wamid…): así lo citan al responder */
+  altId?: string | null;
 }
 
 const conexionEsquema = z.object({
@@ -209,6 +212,7 @@ export class Wechatia {
         tipo: String(m.messageType || m.type || ''),
         asunto: String(m.meta?.email?.subject || m.subject || ''),
         respondeA: citado(m),
+        altId: m.altId ? String(m.altId) : null,
       }))
       .sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
   }

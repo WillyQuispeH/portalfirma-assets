@@ -189,10 +189,19 @@ export class PuenteService {
     let cuerpo = texto;
     // b) respondiendo a un mensaje reenviado
     if (m.respondeA) {
-      const p = await this.db.waPuente.findFirst({
+      let p = await this.db.waPuente.findFirst({
         where: { corredoraId: v.corredoraId, messageId: m.respondeA },
         orderBy: { id: 'desc' },
       });
+      if (!p) {
+        // WhatsApp cita por su propio id (wamid…): se busca ese mensaje en la conversación para sacar el id de wechatia
+        const orig = (await wa.mensajes(cv.id, 100)).find((x) => x.altId === m.respondeA || x.id === m.respondeA);
+        if (orig)
+          p = await this.db.waPuente.findFirst({
+            where: { corredoraId: v.corredoraId, messageId: orig.id },
+            orderBy: { id: 'desc' },
+          });
+      }
       if (p) {
         const l = await this.db.lead.findFirst({ where: { id: p.leadId, corredoraId: v.corredoraId, eliminadoEn: null } });
         if (l) {
