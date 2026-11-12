@@ -24,6 +24,9 @@ import { WechatiaError, type Conversacion, type MensajeWa, type Wechatia } from 
 /** etiqueta que dispara el flujo «Asset · Primer contacto (plantilla)» de wechatia (plantilla aprobada asset_primer_contacto) */
 const ETIQUETA_PRIMER_CONTACTO = 'asset-primer-contacto';
 
+/** el aviso que Asset le manda al corredor: «💬 *Nombre* (canal) escribió: …» */
+const AVISO = /💬\s*\*([^*\n]+)\*[^\n]*escribió/;
+
 /** «Para Juan Pérez: texto» (también «Para: Juan, texto» no: el destinatario va antes de los dos puntos) */
 const PREFIJO = /^\s*para\s+([^:\n]{2,60}?)\s*:\s*([\s\S]+)$/i;
 
@@ -189,30 +192,42 @@ export class PuenteService {
     let cuerpo = texto;
     // b) respondiendo a un mensaje reenviado
     if (m.respondeA) {
+      // WhatsApp cita por su propio id (wamid…): se busca ese mensaje en la conversación (su `altId`) para sacar el id de wechatia
+      const orig = (await wa.mensajes(cv.id, 100)).find((x) => x.altId === m.respondeA || x.id === m.respondeA);
       let p = await this.db.waPuente.findFirst({
-        where: { corredoraId: v.corredoraId, messageId: m.respondeA },
+        where: { corredoraId: v.corredoraId, messageId: { in: [m.respondeA, ...(orig ? [orig.id] : [])] } },
         orderBy: { id: 'desc' },
       });
-      if (!p) {
-        // WhatsApp cita por su propio id (wamid…): se busca ese mensaje en la conversación para sacar el id de wechatia
-        const orig = (await wa.mensajes(cv.id, 100)).find((x) => x.altId === m.respondeA || x.id === m.respondeA);
-        if (orig)
-          p = await this.db.waPuente.findFirst({
-            where: { corredoraId: v.corredoraId, messageId: orig.id },
-            orderBy: { id: 'desc' },
-          });
-      }
-      if (p) {
-        const l = await this.db.lead.findFirst({ where: { id: p.leadId, corredoraId: v.corredoraId, eliminadoEn: null } });
-        if (l) {
-          // el lead pudo reasignarse desde que se reenvió el aviso: solo el dueño de hoy (o un administrador) puede responderle
-          const quien = await this.db.usuario.findUnique({ where: { id: v.usuarioId }, select: { rol: true } });
-          if (quien?.rol === 'ADMIN' || l.corredorId === v.usuarioId) destino = { lead: l, nombre: nombreDe(l), telefono: telDe(l) };
-          else {
-            await this.decir(wa, v, cv, `${nombreDe(l)} ya no está a tu cargo: no puedo enviarle ese mensaje.`);
-            return true;
-          }
+      const esAviso = !!orig && AVISO.test(orig.texto);
+      if (!p) this.log.warn(`cita sin vínculo: respondeA=${m.respondeA} mensaje=${orig?.id ?? 'no está en las últimas 100'} aviso=${esAviso}`);
+      let l: Lead | null = p
+        ? await this.db.lead.findFirst({ where: { id: p.leadId, corredoraId: v.corredoraId, eliminadoEn: null } })
+        : null;
+      if (!l && esAviso) {
+        // respaldo: el aviso dice a quién es («💬 *Nombre* (canal) escribió»)
+        const nombre = AVISO.exec(orig!.texto)![1];
+        const busca = await this.buscar(v, nombre);
+        if (busca.length === 1) l = busca[0].lead;
+        else if (busca.length > 1) {
+          await this.preguntarCual(wa, v, cv, busca, nombre);
+          return true;
+        } else {
+          await this.decir(wa, v, cv, `No encontré a «${nombre}» entre tus interesados (¿se reasignó o se eliminó?): no puedo enviarle ese mensaje.`);
+          return true;
         }
+      }
+      if (l) {
+        // el lead pudo reasignarse desde que se reenvió el aviso: solo el dueño de hoy (o un administrador) puede responderle
+        const quien = await this.db.usuario.findUnique({ where: { id: v.usuarioId }, select: { rol: true } });
+        if (quien?.rol === 'ADMIN' || l.corredorId === v.usuarioId) destino = { lead: l, nombre: nombreDe(l), telefono: telDe(l) };
+        else {
+          await this.decir(wa, v, cv, `${nombreDe(l)} ya no está a tu cargo: no puedo enviarle ese mensaje.`);
+          return true;
+        }
+      } else if (esAviso) {
+        // era la respuesta a un aviso de un interesado, pero no se pudo identificar: no se manda al Agente
+        await this.decir(wa, v, cv, 'No pude saber a quién le respondes. Escribe «Para Nombre: …» con el nombre del interesado.');
+        return true;
       }
     }
     // a) «Para Juan: …»
@@ -220,13 +235,16 @@ export class PuenteService {
       const x = PREFIJO.exec(texto);
       if (!x) return false;
       const busca = await this.buscar(v, x[1]);
-      if (!busca.length) return false; // no es de ningún lead suyo: puede ser una orden para el Agente
+      if (!busca.length) {
+        // si calza con un interesado de OTRO corredor se le dice (antes lo contestaba el Agente); si no, puede ser una orden para el Agente
+        if (await this.buscar(v, x[1], true).then((a) => a.length > 0)) {
+          await this.decir(wa, v, cv, `«${x[1].trim()}» no está entre tus interesados: lo atiende otro corredor, y solo él o un administrador puede escribirle.`);
+          return true;
+        }
+        return false;
+      }
       if (busca.length > 1) {
-        const lista = busca
-          .slice(0, 6)
-          .map((c, i) => `${i + 1}) ${c.nombre} ${cola(c.telefono) || (usuarioDe(c.lead) ? '@' + usuarioDe(c.lead) : c.lead.origen ? '(' + c.lead.origen + ')' : '')}`.trim())
-          .join('\n');
-        await this.decir(wa, v, cv, `Hay ${busca.length} interesados que calzan con «${x[1].trim()}»:\n${lista}\nRepite con el nombre y apellido, los últimos dígitos del celular o el @usuario: «Para ${cola(busca[0].telefono) || (usuarioDe(busca[0].lead) ? '@' + usuarioDe(busca[0].lead) : busca[0].nombre)}: …».`);
+        await this.preguntarCual(wa, v, cv, busca, x[1].trim());
         return true;
       }
       destino = busca[0];
@@ -236,14 +254,29 @@ export class PuenteService {
     return true;
   }
 
+  /** varios interesados calzan con lo escrito: se pregunta a cuál */
+  private async preguntarCual(wa: Wechatia, v: WaVinculo, cv: Conversacion, busca: Candidato[], consulta: string) {
+    const lista = busca
+      .slice(0, 6)
+      .map((c, i) => `${i + 1}) ${c.nombre} ${cola(c.telefono) || (usuarioDe(c.lead) ? '@' + usuarioDe(c.lead) : c.lead.origen ? '(' + c.lead.origen + ')' : '')}`.trim())
+      .join('\n');
+    await this.decir(
+      wa,
+      v,
+      cv,
+      `Hay ${busca.length} interesados que calzan con «${consulta}»:\n${lista}\nRepite con el nombre y apellido, los últimos dígitos del celular o el @usuario: «Para ${cola(busca[0].telefono) || (usuarioDe(busca[0].lead) ? '@' + usuarioDe(busca[0].lead) : busca[0].nombre)}: …».`,
+    );
+  }
+
   /** los leads a los que este usuario puede escribirles (los suyos; el administrador, todos) que calzan con lo escrito */
-  private async buscar(v: WaVinculo, consulta: string): Promise<Candidato[]> {
+  private async buscar(v: WaVinculo, consulta: string, ajenos = false): Promise<Candidato[]> {
     const u = await this.db.usuario.findUnique({ where: { id: v.usuarioId }, select: { rol: true } });
+    if (ajenos && u?.rol === 'ADMIN') return []; // el administrador ve todos
     const leads = await this.db.lead.findMany({
       where: {
         corredoraId: v.corredoraId,
         eliminadoEn: null,
-        ...(u?.rol === 'ADMIN' ? {} : { corredorId: v.usuarioId }),
+        ...(u?.rol === 'ADMIN' ? {} : ajenos ? { corredorId: { not: v.usuarioId } } : { corredorId: v.usuarioId }),
       },
       orderBy: { creadoEn: 'desc' },
       take: 3000,

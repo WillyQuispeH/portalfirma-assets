@@ -543,6 +543,15 @@ function iaFalsa() {
     ok(aviso && aviso.altId.startsWith('wamid.'), 'el aviso del lead tiene su id de WhatsApp');
     escribe(cel, 'respuesta citando el aviso, sin escribir «Para»', { meta: { whatsapp: { parentMessageAltId: aviso.altId } } });
     ok(await hasta(() => W.enviados.some((e) => e.type === 'IG' && /respuesta citando el aviso/.test(e.message))), 'al citar el aviso (con el wamid de WhatsApp) la respuesta le llega al interesado, no al Agente');
+    // si por lo que sea no quedó el vínculo del aviso, igual se identifica por el nombre que dice el aviso
+    await db.waPuente.deleteMany({ where: { leadId: leadIg.id } });
+    escribe(cel, 'segunda cita, ahora sin vínculo guardado', { meta: { whatsapp: { parentMessageAltId: aviso.altId } } });
+    ok(await hasta(() => W.enviados.some((e) => e.type === 'IG' && /segunda cita, ahora sin vínculo/.test(e.message))), 'citando un aviso sin vínculo guardado, lo identifica por el nombre del aviso');
+    // un corredor que no es el dueño intenta escribirle por WhatsApp: se le dice (no lo contesta el Agente)
+    const cc2 = conv({ telefono: '+56 9 3333 4444', nombre: 'Corredor C' });
+    escribe(cc2, 'Para Lucía Insta: hola, soy otro corredor');
+    ok(await hasta(() => salidas(cc2).some((t) => /no está entre tus interesados: lo atiende otro corredor/.test(t))), 'a un corredor que intenta escribirle a un interesado ajeno se le dice que lo atiende otro');
+    ok(!W.enviados.some((e) => /soy otro corredor/.test(e.message)), 'y el mensaje no sale');
 
     // ---- 8a3. fuera de las 24 h: plantilla de primer contacto y el mensaje del corredor sale cuando el interesado responde
     const antesPl2 = (W.plantillas || []).length;
