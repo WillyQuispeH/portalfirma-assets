@@ -89,7 +89,7 @@ Conjunto recomendado después de un cambio, y que pasa en la 0.16.28:
 - **Cartera y fichas:** `propiedades-e2e`, `etapas-e2e`, `negocios-e2e`, `gestion-e2e`, `formatos-e2e`, `acceso-e2e`, `cartera-e2e`, `ficha-propiedad-e2e`.
 - **Contra la API real:** `cartera-api-e2e` (ver la sección 5).
 - **Leads y canales:** `leads-e2e`, `gestor-leads-e2e`, `observador-e2e`, `instagram-e2e`.
-- **WhatsApp y postventa:** `clientes-wa-e2e`, `whatsapp-envio-e2e`, `whatsapp-agente-e2e`, `postventa-e2e`.
+- **WhatsApp y postventa:** `whatsapp-envio-e2e`, `whatsapp-agente-e2e`, `postventa-e2e`.
 - **Unitarias:** `leads-fusion-unit`, `canales-unit`.
 
 Hay pruebas antiguas que fallan desde antes de la 0.16:

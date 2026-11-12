@@ -78,7 +78,12 @@ export interface CredWechatia {
   locationId: string;
   /** solo fuera de producción: otra dirección para la API de wechatia (las pruebas levantan una falsa) */
   base?: string;
+  /** el número de WhatsApp de la empresa de este ambiente (WA_NUMERO): solo se leen sus mensajes y se envía desde él */
+  numero?: string;
 }
+
+/** los últimos 9 dígitos (+56 9 4497 5958 → 944975958) */
+const nueve = (t: unknown) => String(t ?? '').replace(/\D/g, '').slice(-9);
 
 interface Opciones {
   body?: unknown;
@@ -115,6 +120,9 @@ export interface MensajeWa {
   respondeA?: string | null;
   /** el id del mensaje en WhatsApp (wamid…): así lo citan al responder */
   altId?: string | null;
+  /** números de WhatsApp de quien envía y quien recibe (los demás canales no los traen) */
+  de?: string;
+  para?: string;
 }
 
 const conexionEsquema = z.object({
@@ -168,6 +176,20 @@ export class Wechatia {
     return j;
   }
 
+  /**
+   * ¿El mensaje es del número de este ambiente? Solo filtra los WhatsApp que traen sus números (de/para); los de otros
+   * canales (Instagram, correo…) y los que no los traen pasan siempre.
+   */
+  esDeEsteNumero(m: { tipo?: string; de?: string; para?: string; direccion?: string }) {
+    const n = nueve(this.c.numero);
+    if (!n || !/WHATSAPP/i.test(m.tipo || '') || (!m.de && !m.para)) return true;
+    return (m.direccion === 'entrante' ? nueve(m.para) : nueve(m.de)) === n;
+  }
+  /** el número desde el que sale un WhatsApp (si el ambiente tiene uno) */
+  private get desde() {
+    return this.c.numero ? { fromNumber: this.c.numero } : {};
+  }
+
   /** prueba la clave leyendo una conversación */
   probar = () => this.api('GET', `/conversations/search?locationId=${encodeURIComponent(this.c.locationId)}&limit=1`);
 
@@ -213,7 +235,10 @@ export class Wechatia {
         asunto: String(m.meta?.email?.subject || m.subject || ''),
         respondeA: citado(m),
         altId: m.altId ? String(m.altId) : null,
+        de: m.from ? String(m.from) : '',
+        para: m.to ? String(m.to) : '',
       }))
+      .filter((m) => this.esDeEsteNumero(m))
       .sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
   }
 
@@ -221,7 +246,7 @@ export class Wechatia {
   async enviarAContacto(contactId: string, texto: string, canal: 'whatsapp' | 'instagram' | 'facebook' = 'whatsapp') {
     const type = canal === 'instagram' ? 'IG' : canal === 'facebook' ? 'FB' : 'WhatsApp';
     const env = await this.api('POST', '/conversations/messages', {
-      body: { type, contactId, message: texto },
+      body: { type, contactId, message: texto, ...(type === 'WhatsApp' ? this.desde : {}) },
       permiso:
         'La clave de wechatia no tiene permiso para enviar mensajes. Agrega «Editar mensajes de conversaciones» a la integración privada.',
     });
@@ -276,7 +301,12 @@ export class Wechatia {
       if (!c) return false;
       const ms: Json[] = (await this.api('GET', `/conversations/${c.id}/messages?limit=30`)).messages?.messages || [];
       const lim = Date.now() - 24 * 36e5 + 5 * 6e4; // 5 min de margen
-      return ms.some((m) => m.direction === 'inbound' && new Date(m.dateAdded).getTime() > lim);
+      return ms.some(
+        (m) =>
+          m.direction === 'inbound' &&
+          new Date(m.dateAdded).getTime() > lim &&
+          this.esDeEsteNumero({ tipo: String(m.messageType || m.type || ''), de: m.from, para: m.to, direccion: 'entrante' }),
+      );
     } catch {
       return null;
     }
@@ -315,7 +345,7 @@ export class Wechatia {
         'FUERA_24H',
       );
     const env = await this.api('POST', '/conversations/messages', {
-      body: { type: 'WhatsApp', contactId, message: o.texto },
+      body: { type: 'WhatsApp', contactId, message: o.texto, ...this.desde },
       permiso:
         'La clave de wechatia no tiene permiso para enviar mensajes. Agrega «Editar mensajes de conversaciones» a la integración privada.',
     });
@@ -408,7 +438,9 @@ export class WechatiaService {
     config: ConfigService<Env, true>,
   ) {
     this.produccion = config.get('NODE_ENV', { infer: true }) === 'production';
+    this.numero = config.get('WA_NUMERO', { infer: true }) || '';
   }
+  private readonly numero: string;
 
   private donde = (corredoraId: string) => ({
     corredoraId_proveedor_dueno: { corredoraId, proveedor: PROVEEDOR, dueno: DUENO },
@@ -424,6 +456,7 @@ export class WechatiaService {
       token: this.cifrado.descifrar(c.accesoCif),
       locationId: d.locationId,
       ...(d.base && !this.produccion ? { base: d.base } : {}),
+      ...(this.numero ? { numero: this.numero } : {}),
     };
   }
 

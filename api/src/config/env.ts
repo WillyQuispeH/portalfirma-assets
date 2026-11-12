@@ -50,6 +50,12 @@ const esquema = z.object({
     .string()
     .default('0')
     .transform((v) => v === '1' || v === 'true'),
+  /**
+   * el número de WhatsApp de la empresa que atiende ESTE ambiente (+56 9 …): la subcuenta de wechatia tiene varios números
+   * (producción y desarrollo). Con él, el lector solo procesa los WhatsApp que llegan a ese número y todo lo que se envía
+   * sale desde ese número. Vacío = todos los números y el que elija wechatia (como antes).
+   */
+  WA_NUMERO: z.string().trim().optional(),
   /** clave de la API de Anthropic (Claude) para los asistentes del servidor; sin ella, responden sin IA */
   IA_CLAVE: z.string().optional(),
   IA_MODELO: z.string().default('claude-opus-5-5'),
