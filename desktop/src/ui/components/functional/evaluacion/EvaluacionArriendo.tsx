@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Boton from '../../ui/Boton';
 import Badge from '../../ui/Badge';
+import Checkbox from '../../ui/Checkbox';
 import Input from '../../ui/Input';
 import Textarea from '../../ui/Textarea';
 import EstadoVacio from '../../ui/EstadoVacio';
@@ -94,62 +95,64 @@ export default function PanelEvaluacion({ negocioId }: { negocioId: string }) {
 
   const pendientes = abierta?.personas.filter((p) => !p.completa) ?? [];
 
+  const guardarTelefono = async (persona: IPersona, telefono: string) => {
+    await personaService.guardar({ ...persona, telefono: telefono.trim() });
+    await cargarPersonas();
+  };
+  const alternarAval = (id: string, on: boolean) => setAvales((a) => (on ? [...a, id] : a.filter((x) => x !== id)));
+
+  const solicitarUi = !abierta?.decision && (
+    <section className={CAJA}>
+      <div>
+        <h3 className="tw:m-0 tw:text-sm tw:font-bold">{abierta ? 'Pedir documentación a otra persona' : 'Solicitar documentación por WhatsApp'}</h3>
+        <p className="tw:mt-1 tw:mb-0 tw:text-[13px] tw:text-muted">
+          Reciben el mensaje y mandan por el mismo chat: contrato de trabajo, cédula por ambos lados, últimas 3 liquidaciones, AFP de 6 meses y Dicom.
+        </p>
+      </div>
+      <div className="tw:flex tw:flex-col tw:gap-2">
+        {titularId && titular && (
+          <FilaDestino id="arrendatario" persona={titular} rol="Arrendatario" tono="azul" marcado={titularPedido || conTitular}
+            nota={titularPedido ? 'Ya se le pidió' : undefined} bloqueado={titularPedido} alMarcar={setConTitular} alGuardarTelefono={guardarTelefono} />
+        )}
+        {candidatos.map((c) => (
+          <FilaDestino key={c.id} id={c.id} persona={c} rol="Aval" tono="lavanda" marcado={avales.includes(c.id)}
+            alMarcar={(on) => alternarAval(c.id, on)} alGuardarTelefono={guardarTelefono} />
+        ))}
+        {!titularId && <p className="tw:m-0 tw:text-[13px] tw:text-muted">Este negocio no tiene arrendatario todavía.</p>}
+      </div>
+
+      {!verForm ? (
+        <div><Boton id="evAvalNuevo" variante="secundario" icono="plus" tamano="sm" onClick={() => setVerForm(true)}>Registrar un aval</Boton></div>
+      ) : (
+        <div id="evAvalForm" className="tw:rounded-lg tw:bg-lav-soft tw:p-2 tw:flex tw:flex-col tw:gap-2">
+          <div className="tw:flex tw:flex-wrap tw:gap-2">
+            <Input id="evAvalNombre" etiqueta="Nombre completo" clasesCampo="tw:flex-[2_1_200px]" value={nuevo.nombre} onChange={(e) => setNuevo({ ...nuevo, nombre: e.target.value })} />
+            <Input id="evAvalRut" etiqueta="RUT" clasesCampo="tw:flex-[1_1_130px]" placeholder="12.345.678-5" value={nuevo.rut} onChange={(e) => setNuevo({ ...nuevo, rut: e.target.value })} />
+            <Input id="evAvalTel" etiqueta="Celular" clasesCampo="tw:flex-[1_1_140px]" placeholder="+56 9 1234 5678" inputMode="tel" value={nuevo.telefono} onChange={(e) => setNuevo({ ...nuevo, telefono: e.target.value })} />
+          </div>
+          {errorAval && <p role="alert" id="evAvalError" className="tw:m-0 tw:text-[13px] tw:font-semibold tw:text-red-softink">{errorAval}</p>}
+          <div className="tw:flex tw:gap-2">
+            <Boton id="evAvalAgregar" tamano="sm" cargando={trabajando === 'aval'} disabled={!!trabajando} onClick={registrarAval}>Registrar y seleccionar</Boton>
+            <Boton variante="fantasma" tamano="sm" onClick={() => { setVerForm(false); setErrorAval(''); }}>Cancelar</Boton>
+          </div>
+          <p className="tw:m-0 tw:text-xs tw:text-muted">Queda guardado en Personas como aval; el resto de sus datos se completa después.</p>
+        </div>
+      )}
+
+      <div>
+        <Boton id="evSolicitar" icono="whatsapp" cargando={trabajando === 'solicitar'} disabled={!!trabajando || destinatarios === 0} onClick={solicitar}>
+          {destinatarios ? `Enviar solicitud por WhatsApp (${destinatarios} ${destinatarios === 1 ? 'persona' : 'personas'})` : 'Elige a quién enviarla'}
+        </Boton>
+      </div>
+    </section>
+  );
+
   return (
     <div id="evPanel" className="tw:flex tw:flex-col tw:gap-3">
       {error && <p role="alert" id="evError" className="tw:m-0 tw:text-[13px] tw:font-semibold tw:text-red-softink">{error}</p>}
       {ev === null && <EstadoVacio compacto texto="Cargando…" />}
 
-      {/* 1. a quién se le pide la documentación */}
-      {!abierta?.decision && (
-        <section className={CAJA}>
-          <h3 className="tw:m-0 tw:text-sm tw:font-bold">Solicitar documentación por WhatsApp</h3>
-          <p className="tw:m-0 tw:text-[13px] tw:text-muted">
-            Elige a quién se le pide (arrendatario y/o avales). Reciben el mensaje y mandan sus documentos por el mismo chat: contrato de trabajo, cédula por ambos lados, últimas 3 liquidaciones, AFP de 6 meses y Dicom.
-          </p>
-          <div className="tw:flex tw:flex-col tw:gap-1">
-            {titularId && (
-              <label className="tw:flex tw:items-center tw:gap-2 tw:text-sm" data-ev-dest="arrendatario">
-                <input type="checkbox" checked={titularPedido ? true : conTitular} disabled={titularPedido || !titular?.telefono} onChange={(e) => setConTitular(e.target.checked)} />
-                <b>{titular?.nombre ?? 'Arrendatario'}</b> <Badge tono="azul">Arrendatario</Badge>
-                <span className="tw:text-muted">{titularPedido ? 'ya se le pidió' : titular?.telefono || 'sin celular: agrégalo en su ficha'}</span>
-              </label>
-            )}
-            {candidatos.map((c) => (
-              <label key={c.id} className="tw:flex tw:items-center tw:gap-2 tw:text-sm tw:cursor-pointer" data-ev-dest={c.id}>
-                <input type="checkbox" checked={avales.includes(c.id)} disabled={!c.telefono}
-                  onChange={(e) => setAvales((a) => (e.target.checked ? [...a, c.id] : a.filter((x) => x !== c.id)))} />
-                <b>{c.nombre}</b> <Badge tono="lavanda">Aval</Badge>
-                <span className="tw:text-muted">{c.telefono || 'sin celular'}</span>
-              </label>
-            ))}
-            {!titularId && <p className="tw:m-0 tw:text-[13px] tw:text-muted">Este negocio no tiene arrendatario todavía.</p>}
-          </div>
-
-          {!verForm ? (
-            <div><Boton id="evAvalNuevo" variante="secundario" icono="plus" tamano="sm" onClick={() => setVerForm(true)}>Registrar un aval</Boton></div>
-          ) : (
-            <div id="evAvalForm" className="tw:rounded-lg tw:bg-lav-soft tw:p-2 tw:flex tw:flex-col tw:gap-2">
-              <div className="tw:flex tw:flex-wrap tw:gap-2">
-                <Input id="evAvalNombre" etiqueta="Nombre completo" clasesCampo="tw:flex-[2_1_200px]" value={nuevo.nombre} onChange={(e) => setNuevo({ ...nuevo, nombre: e.target.value })} />
-                <Input id="evAvalRut" etiqueta="RUT" clasesCampo="tw:flex-[1_1_130px]" placeholder="12.345.678-5" value={nuevo.rut} onChange={(e) => setNuevo({ ...nuevo, rut: e.target.value })} />
-                <Input id="evAvalTel" etiqueta="Celular" clasesCampo="tw:flex-[1_1_140px]" placeholder="+56 9 1234 5678" inputMode="tel" value={nuevo.telefono} onChange={(e) => setNuevo({ ...nuevo, telefono: e.target.value })} />
-              </div>
-              {errorAval && <p role="alert" id="evAvalError" className="tw:m-0 tw:text-[13px] tw:font-semibold tw:text-red-softink">{errorAval}</p>}
-              <div className="tw:flex tw:gap-2">
-                <Boton id="evAvalAgregar" tamano="sm" cargando={trabajando === 'aval'} disabled={!!trabajando} onClick={registrarAval}>Registrar y seleccionar</Boton>
-                <Boton variante="fantasma" tamano="sm" onClick={() => { setVerForm(false); setErrorAval(''); }}>Cancelar</Boton>
-              </div>
-              <p className="tw:m-0 tw:text-xs tw:text-muted">Queda guardado en Personas como aval; el resto de sus datos se completa después.</p>
-            </div>
-          )}
-
-          <div>
-            <Boton id="evSolicitar" icono="whatsapp" cargando={trabajando === 'solicitar'} disabled={!!trabajando || destinatarios === 0} onClick={solicitar}>
-              {destinatarios ? `Enviar solicitud por WhatsApp (${destinatarios} ${destinatarios === 1 ? 'persona' : 'personas'})` : 'Elige a quién enviarla'}
-            </Boton>
-          </div>
-        </section>
-      )}
+      {!abierta && solicitarUi}
 
       {/* 2. resumen y porcentaje */}
       {abierta?.analisis && (
@@ -192,6 +195,7 @@ export default function PanelEvaluacion({ negocioId }: { negocioId: string }) {
           <p className="tw:m-0 tw:text-xs tw:text-muted">Al aprobar, el paso «Evaluación del arrendatario» queda logrado.</p>
         </section>
       )}
+      {abierta && solicitarUi}
       {abierta?.decision?.nota && <p className="tw:m-0 tw:text-sm"><b>Nota:</b> {abierta.decision.nota}</p>}
     </div>
   );
@@ -239,5 +243,37 @@ function TarjetaPersona({ p, verArchivo }: { p: IEvalPersona; verArchivo: (perso
         </details>
       )}
     </section>
+  );
+}
+
+// Una persona a la que se le puede pedir la documentación: casilla + nombre + rol, y su celular editable.
+function FilaDestino({ id, persona, rol, tono, marcado, nota, bloqueado, alMarcar, alGuardarTelefono }: {
+  id: string; persona: IPersona; rol: string; tono: 'azul' | 'lavanda'; marcado: boolean; nota?: string; bloqueado?: boolean;
+  alMarcar: (on: boolean) => void; alGuardarTelefono: (p: IPersona, telefono: string) => Promise<void>;
+}) {
+  const [tel, setTel] = useState(persona.telefono ?? '');
+  const [guardando, setGuardando] = useState(false);
+  const [err, setErr] = useState('');
+  useEffect(() => { setTel(persona.telefono ?? ''); }, [persona.telefono]);
+  const cambio = tel.trim() !== (persona.telefono ?? '').trim();
+  const validoTel = tel.replace(/\D/g, '').length >= 8;
+  const guardar = async () => {
+    if (!validoTel) return setErr('Celular no válido.');
+    setGuardando(true); setErr('');
+    try { await alGuardarTelefono(persona, tel); } catch (e) { setErr(mensaje(e)); }
+    setGuardando(false);
+  };
+  return (
+    <div data-ev-dest={id} className="tw:rounded-lg tw:border tw:border-solid tw:border-edge tw:p-2.5 tw:flex tw:flex-wrap tw:items-center tw:gap-x-4 tw:gap-y-2">
+      <Checkbox className="tw:flex-[1_1_220px]" marcado={marcado} alCambiar={alMarcar} deshabilitado={bloqueado || !persona.telefono || cambio}
+        etiqueta={<span className="tw:flex tw:items-center tw:gap-2 tw:flex-wrap">{persona.nombre}<Badge tono={tono}>{rol}</Badge></span>}
+        descripcion={nota ?? (!persona.telefono ? 'Sin celular: escríbelo para poder enviarle el mensaje' : cambio ? 'Guarda el celular para poder elegirlo' : undefined)} />
+      <div className="tw:flex tw:items-end tw:gap-2 tw:flex-[1_1_240px]">
+        <Input aria-label={`Celular de ${persona.nombre}`} clasesCampo="tw:flex-1" icono="phone" placeholder="+56 9 1234 5678" inputMode="tel"
+          value={tel} error={err || null} onChange={(e) => { setTel(e.target.value); setErr(''); }}
+          onKeyDown={(e) => { if (e.key === 'Enter' && cambio) guardar(); }} />
+        {cambio && <Boton variante="secundario" tamano="sm" cargando={guardando} disabled={guardando} onClick={guardar}>Guardar</Boton>}
+      </div>
+    </div>
   );
 }

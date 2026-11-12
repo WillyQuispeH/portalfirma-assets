@@ -1329,6 +1329,18 @@ handle('ev:solicitar', (o) => evaluacion.solicitar(o || {}));
 handle('ev:recalcular', (id) => evaluacion.recalcular(id));
 handle('ev:decidir', async (o) => { const r = await evaluacion.decidir(o || {}); if (o?.decision === 'aprobada') { try { etapas.marcar({ negocioId: o.negocioId, paso: 'evaluacion', estado: 'ok', d: 'Aprobada por el corredor' }); } catch {} } return r; });
 handle('ev:archivo', (o) => evaluacion.archivo(o || {}));
+const actaVisita = require('./acta-visita');
+handle('acta:listar', (id) => actaVisita.listar(id));
+handle('acta:crear', (o) => actaVisita.crear(o || {}));
+handle('acta:audio', (o) => actaVisita.audio(o || {}));
+handle('acta:foto', (o) => actaVisita.foto(o || {}));
+handle('acta:notas', (o) => actaVisita.notas(o || {}));
+handle('acta:resumir', (id) => actaVisita.resumir(id));
+handle('acta:whatsapp', (id) => actaVisita.whatsapp(id));
+handle('acta:archivo', (o) => actaVisita.archivo(o || {}));
+handle('acta:eliminar', (id) => actaVisita.eliminar(id));
+// al cerrar el acta, el paso «Acta de visita» del negocio queda logrado
+handle('acta:cerrar', async (o) => { const r = await actaVisita.cerrar(o?.actaId); if (o?.negocioId) { try { etapas.marcar({ negocioId: o.negocioId, paso: 'acta', estado: 'ok', d: 'Acta de visita cerrada' }); } catch {} } return r; });
 // 0.16.11 · Cartera: el avance de captación de cada propiedad (lo logrado y lo que falta)
 handle('et:captaciones', () => Object.fromEntries(inmo.todas().filter((p) => !p.archivada).map((p) => { const r = etapas.pasos({ p, ambito: 'captacion' }); const e = r.etapas[0];
   return [p.id, { ok: e.ok, total: e.total, completa: !r.actual, falta: e.pasos.filter((x) => x.e !== 'ok').map((x) => x.t), actual: r.actual ? { t: r.actual.t, e: r.actual.e } : null }]; })));

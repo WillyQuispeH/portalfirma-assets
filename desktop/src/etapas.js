@@ -1,7 +1,7 @@
 // Etapas del negocio (0.15): cada operación se ve en 3 etapas con sus pasos, y cada paso en uno de cuatro estados:
 //   ok (logrado) · pend (pendiente: te toca, o «esperando a» otro) · fail (no logrado: vencido o caído) · todo (por hacer).
 //  1. Captación (de la propiedad): datos, mandato firmado, fotos, publicada.
-//  2. Comercialización (del negocio): interesado, visita, orden de visita, negociación, carta oferta firmada.
+//  2. Comercialización (del negocio): interesado, visita, orden de visita, acta de visita, negociación, carta oferta firmada.
 //  3. Postventa (lo que viene después de la carta oferta; así lo llama The Living): venta; en un arriendo se llama Postarriendo.
 // Los estados se deducen de lo que ya registra Asset (firmas, tareas, agenda, fotos, portales). El ejecutivo puede
 // además marcar a mano un paso como logrado, no logrado o «esperando a…»; eso queda en n.pasos (o p.pasos).
@@ -23,6 +23,7 @@ const COM = [
   { id: 'interesado', t: 'Interesado registrado', a: 'Crear el negocio', tipo: 'negocio' },
   { id: 'visita', t: 'Visita agendada', a: 'Agendar visita', tipo: 'agente', pedir: (c) => `Agenda una visita${c.cliente ? ' con ' + c.cliente : ''} en ${c.codigo}` },
   { id: 'orden', t: 'Orden de visita firmada', a: 'Enviar orden de visita', tipo: 'agente', pedir: (c) => `Hazme la orden de visita${c.cliente ? ' para ' + c.cliente : ''} en ${c.codigo}` },
+  { id: 'acta', t: 'Acta de visita', a: 'Hacer el acta de visita', tipo: 'acta' },
   { id: 'negociacion', t: 'Negociación', a: 'Marcar como logrado', tipo: 'ok' },
   { id: 'carta', t: 'Carta oferta firmada', a: 'Enviar carta oferta a firmar', tipo: 'firma', etapa: 'reserva' },
 ];

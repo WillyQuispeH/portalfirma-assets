@@ -19,7 +19,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     ok(await w.locator('[data-ev-dest="arrendatario"]').count() === 1 && /María Postulante/.test(await w.locator('[data-ev-dest="arrendatario"]').innerText()), 'ofrece al arrendatario del negocio, con su nombre y celular');
     ok(await w.locator('.et-mopts').count() === 1, 'y sigue el menú de estados del paso (logrado, no logrado, esperando…)');
     ok(await w.locator('#evSolicitar').isEnabled(), 'con el arrendatario marcado se puede enviar la solicitud');
-    await w.locator('[data-ev-dest="arrendatario"] input').uncheck();
+    await w.locator('[data-ev-dest="arrendatario"] input[type=checkbox]').uncheck();
     ok(await w.locator('#evSolicitar').isDisabled(), 'sin nadie marcado no se puede enviar');
     // registrar un aval
     await w.locator('#evAvalNuevo').click();
@@ -37,9 +37,9 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     await w.waitForSelector('#evAvalForm', { state: 'detached', timeout: 8000 });
     const per = (await pf('inmoListar')).personas.find((p) => p.nombre === 'Pedro Aval');
     ok(per && per.roles.includes('codeudor') && /11\.111\.111-1/.test(per.rut) && /6222/.test(per.telefono), 'el aval queda en Personas con rol codeudor, su RUT y su celular');
-    ok(await w.locator(`[data-ev-dest="${per.id}"] input`).isChecked(), 'y queda seleccionado');
+    ok(await w.locator(`[data-ev-dest="${per.id}"] input[type=checkbox]`).isChecked(), 'y queda seleccionado');
     ok(/Enviar solicitud por WhatsApp \(1 persona\)/.test(await w.locator('#evSolicitar').innerText()) && await w.locator('#evSolicitar').isEnabled(), 'el botón dice a cuántas personas se envía');
-    await w.locator('[data-ev-dest="arrendatario"] input').check();
+    await w.locator('[data-ev-dest="arrendatario"] input[type=checkbox]').check();
     ok(/\(2 personas\)/.test(await w.locator('#evSolicitar').innerText()), 'arrendatario y aval juntos: 2 personas');
     ok(!errs.length, 'sin errores en la ventana' + (errs.length ? ': ' + errs.join(' | ') : ''));
     console.log('evaluacion-modal-e2e: OK');

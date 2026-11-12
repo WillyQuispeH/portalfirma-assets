@@ -38,7 +38,7 @@ contextBridge.exposeInMainWorld('pf', {
   agendaBorrar: (id) => inv('agenda:borrar', id),
   assetPreparar: (name, args) => inv('asset:preparar', name, args),
   assetEjecutar: (name, args) => inv('asset:ejecutar', name, args),
-  etPasos: (o) => inv('et:pasos', o), etMarcar: (o) => inv('et:marcar', o), evVer: (id) => inv('ev:ver', id), evSolicitar: (o) => inv('ev:solicitar', o), evRecalcular: (id) => inv('ev:recalcular', id), evDecidir: (o) => inv('ev:decidir', o), evArchivo: (o) => inv('ev:archivo', o), etHoy: () => inv('et:hoy'), etCaptaciones: () => inv('et:captaciones'), ofDatos: () => inv('of:datos'),
+  etPasos: (o) => inv('et:pasos', o), etMarcar: (o) => inv('et:marcar', o), evVer: (id) => inv('ev:ver', id), evSolicitar: (o) => inv('ev:solicitar', o), evRecalcular: (id) => inv('ev:recalcular', id), evDecidir: (o) => inv('ev:decidir', o), evArchivo: (o) => inv('ev:archivo', o), actaListar: (id) => inv('acta:listar', id), actaCrear: (o) => inv('acta:crear', o), actaAudio: (o) => inv('acta:audio', o), actaFoto: (o) => inv('acta:foto', o), actaNotas: (o) => inv('acta:notas', o), actaResumir: (id) => inv('acta:resumir', id), actaCerrar: (o) => inv('acta:cerrar', o), actaWhatsapp: (id) => inv('acta:whatsapp', id), actaArchivo: (o) => inv('acta:archivo', o), actaEliminar: (id) => inv('acta:eliminar', id), etHoy: () => inv('et:hoy'), etCaptaciones: () => inv('et:captaciones'), ofDatos: () => inv('of:datos'),
   negListar: () => inv('neg:listar'),
   negObtener: (id) => inv('neg:obtener', id),
   negGuardar: (o) => inv('neg:guardar', o),

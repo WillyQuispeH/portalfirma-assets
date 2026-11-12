@@ -85,6 +85,7 @@ async function abrirNegocio(id) {
     verOperacion: async () => { const { show } = window; show('ops'); await window.Operaciones.open(); window.Operaciones.select(Number(f.operacion)); },
     quitarFirma: async () => { await api('negFirmaQuitar', id, n.etapa); recargar(); },
   };
+  NG.acc = acc; // etapas.js usa enviarFirma, revisarFirmas y ganar desde los pasos
   NG.vezFicha = (NG.vezFicha || 0) + 1;
   window.ReactUI.montar('FichaNegocio', $('#view-negocios'), { n, etapas: et, corredores: window.PERFIL?.esAdmin ? window.PERFIL.corredores || [] : null, vez: NG.vezFicha, acc });
 }

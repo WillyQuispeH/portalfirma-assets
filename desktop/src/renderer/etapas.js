@@ -57,7 +57,36 @@ async function documento(x, re, titulo, buscar) {
   }, 'Para enviar documentos a firmar, inicia sesión con tu cuenta de Portalfirma.');
 }
 
+// Lo que el modal-13 agrega en los pasos con firma: documentos ya generados y el botón para enviarlos a firmar
+function extraPaso(x, alTerminar) {
+  const t = x.tipo; const id = x.pasoId || x.id;
+  if (id === 'orden' && x.propId) {
+    const otro = () => documento(x, [/^orden de visita/i, /orden de visita/i], 'Orden de visita', 'Orden de visita');
+    const enviar = async () => { const e = await api('fmtEstado').catch(() => null);
+      if (!e?.paquete || !e.formatos.some((f) => f.id === 'orden_visita')) return otro();
+      const neg = x.negocioId ? await api('negObtener', x.negocioId).catch(() => null) : null; return window.Formatos.abrir(x.propId, { hito: 'orden', despues: alTerminar, personaId: neg?.clienteId || null, op: neg?.tipo || null }, otro); };
+    return docsDeFirma(x, /orden de visita/i, enviar);
+  }
+  if ((t === 'firma' || t === 'revisar') && x.etapaFirma && x.negocioId)
+  { // modal-13: documentos generados + enviar a firmar (o revisar las firmas)
+    const ng = accNegocio(x.negocioId);
+    return docsDeFirma(x, RE_DOC[id] || new RegExp((x.t || '').replace(/ firmad[oa]$/i, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'),
+      () => (ng ? (t === 'revisar' ? ng.revisarFirmas() : ng.enviarFirma()) : window.Negocios.abrirNegocio(x.negocioId)), t === 'revisar' ? 'Revisar firmas' : 'Enviar a firmar'); }
+  return {};
+}
 // ---------- acciones de un paso ----------
+// acciones del negocio abierto en pantalla (las deja negocios.js); si no es ese negocio, se abre
+const accNegocio = (negocioId) => { const NG = window.Negocios?._NG; return NG?.acc && NG.actual === negocioId ? NG.acc : null; };
+const RE_DOC = { orden: /orden de visita/i, carta: /carta oferta|oferta/i, promesa: /promesa/i, escritura: /escritura/i, contrato: /contrato de arriendo/i, entrega: /acta/i };
+// documentos ya generados de la propiedad que corresponden al paso (firmas y archivos) y cómo enviarlos a firmar
+function docsDeFirma(x, re, enviar, etiqueta) {
+  const p = propDe(x.propId); const L = [];
+  (p?.firmas || []).filter((f) => re.test(f.plantilla || f.titulo || '') && (!f.negocioId || !x.negocioId || f.negocioId === x.negocioId)).forEach((f) =>
+    L.push({ nombre: f.plantilla || f.titulo, estado: f.estado === 'firmado' ? 'Firmado' : f.operacion || f.estado === 'en_firma' ? 'En firma' : 'Generado', fecha: fdm((f.firmado || f.fecha || '').slice(0, 10)), operacion: f.operacion || null,
+      firmantes: (f.firmantes || []).map((m) => `${m.nombre || m.email || ''}${m.firmado || m.estado === 'firmado' ? ' ✓' : ''}`).filter(Boolean) }));
+  (p?.documentos || []).filter((d) => re.test(d.nombre || '')).forEach((d) => L.push({ nombre: d.nombre, estado: 'Generado', fecha: fdm((d.fecha || '').slice(0, 10)), operacion: null }));
+  return { documentos: L, alEnviar: enviar, etiquetaEnviar: etiqueta };
+}
 async function accion(x, alTerminar) {
   const t = x.tipo; const id = x.pasoId || x.id; x.alTerminar = alTerminar; engancharAgente();
   if (x.accion === 'Reprogramar' || x.accion === 'Reintentar') return reprogramar(x, alTerminar);
@@ -68,16 +97,14 @@ async function accion(x, alTerminar) {
   if (id === 'mandato' && x.propId) { const e = await api('fmtEstado').catch(() => null); const otro = () => documento(x, [/contrato de corretaje/i, /mandato/i, /^(?!.*visita).*corretaje/i], 'Mandato de corretaje', 'Contrato de corretaje');
     return e ? window.Formatos.abrir(x.propId, { hito: 'mandato', despues: alTerminar }, otro) : otro(); }
   if (id === 'mandato') return documento(x, [/contrato de corretaje/i, /mandato/i, /^(?!.*visita).*corretaje/i], 'Mandato de corretaje', 'Contrato de corretaje');
-  if (id === 'orden' && x.propId) { const otro = () => documento(x, [/^orden de visita/i, /orden de visita/i], 'Orden de visita', 'Orden de visita'); const e = await api('fmtEstado').catch(() => null);
-    if (!e?.paquete || !e.formatos.some((f) => f.id === 'orden_visita')) return otro();
-    const neg = x.negocioId ? await api('negObtener', x.negocioId).catch(() => null) : null; return window.Formatos.abrir(x.propId, { hito: 'orden', despues: alTerminar, personaId: neg?.clienteId || null, op: neg?.tipo || null }, otro); }
+  if ((id === 'orden' && x.propId) || ((t === 'firma' || (t === 'revisar' && x.etapaFirma)) && x.negocioId)) return menuPaso(x, alTerminar); // modal-13: documentos generados + enviar a firmar
   if (id === 'visita') { ventana('Agendar visita', [x.codigo, x.titulo].filter(Boolean).join(' · '), alTerminar); const neg = x.negocioId ? (await api('negObtener', x.negocioId).catch(() => null)) : null; return window.Gestion.agendar({ tipo: 'visita', propId: x.propId, personaId: neg?.clienteId || undefined }); }
   if (id === 'fotos' && x.propId) return window.Fotos.drive(x.propId);
   if (id === 'publicada' && x.propId) return window.Publicaciones.publicar(x.propId);
+  if (t === 'acta' && x.negocioId) return menuPaso(x, alTerminar); // modal-13: grabar la visita (o por WhatsApp), fotos y resumen
   if (t === 'evaluar' && x.negocioId) return menuPaso(x, alTerminar); // modal-13: solicitar los documentos por WhatsApp, ver lo adjuntado y decidir
   if (t === 'negocio') return window.Negocios.nuevo({ propId: x.propId });
-  if (t === 'firma' && document.querySelector('#ngEnv')) return document.querySelector('#ngEnv').click(); // dentro del negocio: el envío de su documento
-  if (t === 'cerrar' && document.querySelector('#ngWin')) return document.querySelector('#ngWin').click();
+  if (t === 'cerrar' && x.negocioId) { const ng = accNegocio(x.negocioId); return ng ? ng.ganar() : window.Negocios.abrirNegocio(x.negocioId); }
   if (['firma', 'cerrar', 'revisar', 'ver', 'ficha', 'agente'].includes(t)) return x.negocioId ? window.Negocios.abrirNegocio(x.negocioId) : x.propId && window.Inmo.abrirFicha(x.propId);
   if (t === 'ok') { await marcar(x, 'ok'); toast(`Logrado: ${x.paso || x.t}.`); return alTerminar?.(); }
 }
@@ -88,11 +115,13 @@ function reprogramar(x, alTerminar) {
     alGuardar: async ({ vence, d }) => { await marcar(x, 'pend', { vence, d }); closeModal(); toast('Vuelve a quedar pendiente.'); alTerminar?.(); } }, { clave: 'modal-12' });
 }
 // menú de estados de un paso: logrado, no logrado, esperando a…, automático
-function menuPaso(x, alTerminar) {
+function menuPaso(x, alTerminar, extra = extraPaso(x, alTerminar)) {
+  // los pasos sin envío a firmar: el botón con la acción del paso (agendar, completar la ficha…) dentro de la misma ventana
+  if (!extra.alEnviar && x.accion && !['ok', 'evaluar', 'acta'].includes(x.tipo)) extra = { ...extra, accionTxt: x.accion, alAccion: () => { closeModal(); accion(x, alTerminar); } };
   const fin = async (estado, extra) => { await marcar(x, estado, extra); closeModal(); toast('Paso actualizado.'); alTerminar?.(); };
-  window.Ventanas.abrir('inmo.menuPaso', { titulo: x.t, descripcion: x.d, manual: !!x.manual, evaluacionNegocioId: x.tipo === 'evaluar' ? x.negocioId : undefined,
+  window.Ventanas.abrir('inmo.menuPaso', { titulo: x.t, descripcion: x.d, manual: !!x.manual, evaluacionNegocioId: x.tipo === 'evaluar' ? x.negocioId : undefined, actaNegocioId: x.tipo === 'acta' ? x.negocioId : undefined, alActaCerrada: () => { closeModal(); alTerminar?.(); }, ...extra,
     alElegir: (e) => (e === 'ok' ? fin('ok') : fin(null)),
-    alGuardar: (modo, texto, vence) => (modo === 'fail' ? fin('fail', { d: texto }) : fin('pend', { quien: texto || 'otra persona', vence })) }, { clave: 'modal-13', ancho: x.tipo === 'evaluar' });
+    alGuardar: (modo, texto, vence) => (modo === 'fail' ? fin('fail', { d: texto }) : fin('pend', { quien: texto || 'otra persona', vence })) }, { clave: 'modal-13', ancho: x.tipo === 'evaluar' || x.tipo === 'acta' || !!extra.documentos });
 }
 
 // ---------- pantalla «Hoy» ----------
@@ -119,30 +148,23 @@ function nuevo() {
 // ---------- bloque de etapas dentro de un negocio ----------
 async function bloque(host, { negocioId, propId, alCambiar, compacto = false } = {}) {
   let r; try { r = await api('etPasos', { negocioId, propId }); } catch (e) { host.innerHTML = `<p class="error">${esc(e.message)}</p>`; return; }
+  if (negocioId && !propId) propId = (await api('negObtener', negocioId).catch(() => null))?.prop?.id || propId; // los pasos de un negocio necesitan su propiedad (orden de visita, documentos)
   if (!host.isConnected) return; // mientras tanto se cerró la ficha o el negocio (o React la volvió a dibujar)
   const a = r.actual; const abiertas = bloque._abiertas[negocioId || propId] ||= {};
   const recargar = () => (alCambiar ? alCambiar() : bloque(host, { negocioId, propId }));
-  const x0 = a ? { ...a, negocioId, propId, pasoId: a.id, paso: a.t } : null;
-  const cls = a ? claseDe(a) : 'ok';
-  const uno = r.etapas.length === 1; // la captación de una propiedad: una sola lista, sin tarjetas de etapa
+  const uno = r.etapas.length === 1; // la captación de una propiedad: una sola lista
   host.innerHTML = `<div class="et">
-    <div class="et-cards" ${uno ? 'hidden' : ''}>${r.etapas.map((e, i) => `<div class="gl-card et-c ${e.actual ? (e.fail ? 'act fail' : 'act') : ''}"><div class="et-ch"><span class="et-n ${e.completa ? 'ok' : e.actual ? (e.fail ? 'fail' : 'act') : ''}">${e.completa ? IC.ok : i + 1}</span><b>${esc(e.nombre)}</b></div>
-      <small>${e.completa ? `Completa · ${e.ok} de ${e.total}` : e.actual ? `En curso · ${e.ok} de ${e.total}` : `Por comenzar · ${e.total} pasos`}</small><span class="et-bar"><i class="${e.completa ? 'ok' : e.fail ? 'fail' : ''}" style="width:${Math.round((e.ok / e.total) * 100)}%"></i></span></div>`).join('')}</div>
-    ${a ? `<div class="gl-card et-next ${cls}"><small class="et-nl">${cls === 'fail' ? 'No logrado · decide qué hacer' : cls === 'otro' ? `Esperando a ${esc(a.quien)}` : 'Siguiente paso · te toca'}</small>
-      <h3>${esc(a.t)}</h3>${a.d ? `<p>${esc(a.d)}</p>` : ''}
-      <div class="et-nb"><span class="luz" data-def><button class="gl ${cls === 'fail' ? 'rojo' : cls === 'otro' ? '' : 'azul'}" id="etAcc">${esc(a.accion)}</button></span>${a.tipo !== 'ok' && cls !== 'fail' ? '<span class="luz"><button class="gl" id="etOk">Marcar como logrado</button></span>' : ''}<span class="luz"><button class="gl" id="etMas">Otro estado…</button></span>${a.vence ? `<span class="muted small">${esc(venceTxt(a.vence))}</span>` : ''}</div></div>`
+    ${a ? ''
       : compacto ? `<div class="gl-card et-next ok et-lista"><b>${IC.ok} ${uno ? 'Captación completa' : 'Todo logrado'}</b><small class="muted">Todos los pasos están logrados.</small></div>` : '<div class="gl-card et-next ok"><h3>Operación cerrada</h3><p>Todos los pasos están logrados.</p></div>'}
     ${r.etapas.map((e, i) => { const ab = abiertas[i] !== undefined ? abiertas[i] : (compacto ? false : e.actual); return `<section class="gl-card et-e"><button class="et-eh" data-tog="${i}" aria-expanded="${ab}"><span class="et-chev ${ab ? 'abierto' : ''}">›</span><b>${uno ? `Pasos de ${esc(e.nombre.toLowerCase())}` : `Etapa ${i + 1} · ${esc(e.nombre)}`}</b><span class="spacer"></span><i class="et-badge ${e.completa ? 'ok' : e.fail ? 'fail' : e.actual ? 'act' : ''}">${e.fail ? `No logrado · ${e.ok} de ${e.total}` : `${e.ok} de ${e.total} logrados`}</i></button>
-      ${ab ? `<div class="et-ps">${e.pasos.map((x, j) => { const c = claseDe(x); const esA = a && a.ei === i && a.pi === j; return `<div class="et-p ${esA ? 'act' : ''}"><span class="et-pi ${c}">${IC[c]}</span><div class="et-pt"><b>${esc(x.t)}</b><small>${esc(c === 'ok' ? `Logrado${x.f ? ' · ' + fdm(x.f.slice(0, 10)) : ''}${x.d ? ' · ' + x.d : ''}` : c === 'fail' ? `No logrado · ${x.d || ''}` : c === 'otro' ? `Esperando a ${x.quien}${x.d ? ' · ' + x.d : ''}` : c === 'pend' ? `Pendiente${x.vence ? ' · ' + venceTxt(x.vence) : ''}${x.d ? ' · ' + x.d : ''}` : 'Por hacer')}</small></div>
-        <i class="et-tag ${c}">${{ ok: 'Logrado', fail: 'No logrado', otro: 'Esperando', pend: 'Te toca', todo: '' }[c]}</i><button class="ghost small et-pm" data-pm="${i}.${j}" aria-label="Cambiar el estado de ${esc(x.t)}">···</button></div>`; }).join('')}</div>` : ''}</section>`; }).join('')}
+      ${ab ? `<div class="et-ps">${e.pasos.map((x, j) => { const c = claseDe(x); const esA = a && a.ei === i && a.pi === j; return `<div class="et-p ${esA ? 'act' : ''}"><span class="et-pi ${c}">${IC[c]}</span><div class="et-pt"><button class="et-go" data-go="${i}.${j}">${esc(x.t)}</button><small>${esc(c === 'ok' ? `Logrado${x.f ? ' · ' + fdm(x.f.slice(0, 10)) : ''}${x.d ? ' · ' + x.d : ''}` : c === 'fail' ? `No logrado · ${x.d || ''}` : c === 'otro' ? `Esperando a ${x.quien}${x.d ? ' · ' + x.d : ''}` : c === 'pend' ? `Pendiente${x.vence ? ' · ' + venceTxt(x.vence) : ''}${x.d ? ' · ' + x.d : ''}` : 'Por hacer')}</small></div>
+        ${c === 'ok' ? '<i class="et-tag ok">Logrado</i>' : `<button class="gl azul small et-lg" data-lg="${i}.${j}">Logrado</button>`}<button class="ghost small et-pm" data-pm="${i}.${j}" aria-label="Más opciones de ${esc(x.t)}">⋮</button></div>`; }).join('')}</div>` : ''}</section>`; }).join('')}
   </div>`;
   host.querySelectorAll('[data-tog]').forEach((b) => (b.onclick = () => { const i = Number(b.dataset.tog); const e = r.etapas[i]; abiertas[i] = !(abiertas[i] !== undefined ? abiertas[i] : (compacto ? false : e.actual)); bloque(host, { negocioId, propId, alCambiar, compacto }); }));
-  host.querySelectorAll('[data-pm]').forEach((b) => (b.onclick = () => { const [i, j] = b.dataset.pm.split('.').map(Number); menuPaso({ ...r.etapas[i].pasos[j], negocioId, propId }, recargar); }));
-  if (x0) {
-    $('#etAcc').onclick = () => accion(x0, recargar);
-    $('#etOk')?.addEventListener('click', async () => { await marcar(x0, 'ok'); toast(`Logrado: ${a.t}.`); recargar(); });
-    $('#etMas').onclick = () => menuPaso({ ...a, negocioId, propId }, recargar);
-  }
+  host.querySelectorAll('[data-pm]').forEach((b) => (b.onclick = () => { const [i, j] = b.dataset.pm.split('.').map(Number); menuPaso(paso(`${i}.${j}`), recargar); }));
+  const paso = (k) => { const [i, j] = k.split('.').map(Number); const y = r.etapas[i].pasos[j]; return { ...y, negocioId, propId, pasoId: y.id, paso: y.t }; };
+  host.querySelectorAll('[data-go]').forEach((b) => (b.onclick = () => menuPaso(paso(b.dataset.go), recargar)));
+  host.querySelectorAll('[data-lg]').forEach((b) => (b.onclick = async () => { const y = paso(b.dataset.lg); await marcar(y, 'ok'); toast(`Logrado: ${y.t}.`); recargar(); }));
   luz(host);
 }
 bloque._abiertas = {};

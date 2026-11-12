@@ -4,9 +4,8 @@
 // Lo monta Negocios.abrirNegocio(id) (src/renderer/negocios.js) en #view-negocios, el mismo contenedor del
 // tablero, con el negocio ya leído (negObtener) y sus acciones: las llamadas a la API y las ventanas siguen allá.
 // Los pasos (comercialización y postventa) los dibuja src/renderer/etapas.js (Etapas.bloque) en #ngEt, que React deja vacío.
-// Las pruebas y Aprende usan .ng-ficha, .im-ft, #ngBack, #ngReab, #ngDel, #ngEt, .ng-steps [data-mv], .ng-etapa,
-// .ng-tasks [data-task], .ng-fb (.ok, .wait, .need) con #ngEnv, #ngVin, #ngRev, #ngOp y #ngFq, .ng-acts con
-// #ngLost, #ngNext y #ngWin, #ngPa (#ngPaT, #ngPaF), #ngNota (#ngNotaT), #ngProp (.ng-prop), #ngCorSel y #ngCond.
+// Las pruebas y Aprende usan .ng-ficha, .im-ft, #ngBack, #ngReab, #ngDel, #ngLost (cabecera), #ngEt, .ng-steps [data-mv],
+// .ng-etapa (ya no existe), #ngPa (#ngPaT, #ngPaF), #ngNota (#ngNotaT), #ngProp (.ng-prop), #ngCorSel y #ngCond.
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import Layout from '../../ui/Layout';
 import Boton from '../../ui/Boton';
@@ -23,13 +22,12 @@ import { abrirFicha, avisarAyuda } from '../../../utils/app';
 import { fecha } from '../../../utils/formato';
 import { cx } from '../../../utils/cx';
 import { SUAVE, type TTono } from '../../ui/tonos';
-import type { IEtapa, IFirmaEtapa, IMonto, INegocioDetalle } from '../../../store/interfaces/negocio.interface';
+import type { IEtapa, IMonto, INegocioDetalle } from '../../../store/interfaces/negocio.interface';
 
 const TIPO = { venta: 'Venta', arriendo: 'Arriendo' } as const;
 const CLIENTE = { venta: 'Comprador', arriendo: 'Arrendatario' } as const;
 const COLUMNAS = 'tw:grid tw:gap-4 tw:lg:grid-cols-[minmax(0,1.6fr)_minmax(320px,1fr)] tw:items-start';
 
-const dias = (n = 0) => (n <= 0 ? 'Hoy' : n === 1 ? 'Hace 1 día' : `Hace ${n} días`);
 // las fechas sin hora ('2026-11-14') se leen a mediodía, para que no cambien de día con la zona horaria
 const dia = (f?: string | null) => (f ? fecha(f.length === 10 ? f + 'T12:00' : f) : '');
 const valorTxt = (v: IMonto | null, tipo: keyof typeof TIPO) => (v ? precio(v) + (tipo === 'arriendo' ? '/mes' : '') : '');
@@ -136,73 +134,6 @@ function Pasos({ vez, pasos }: { vez: number; pasos: (el: HTMLElement) => void }
     pasos(el);
   }, [vez]); // eslint-disable-line react-hooks/exhaustive-deps -- «pasos» cambia en cada recarga junto con vez
   return <div id="ngEt" className="ng-et" ref={caja} />;
-}
-
-// ---------- etapa actual: tareas, firma de la etapa y cómo avanzar ----------
-const CAJA_FIRMA: Record<'ok' | 'wait' | 'need', string> = {
-  ok: 'tw:bg-green-soft tw:border-green-edge', wait: 'tw:bg-yellow-soft tw:border-yellow-edge', need: 'tw:bg-lav-soft tw:border-lav-edge',
-};
-const TINTA_FIRMA: Record<'ok' | 'wait' | 'need', string> = { ok: 'tw:text-green-softink', wait: 'tw:text-yellow-softink', need: 'tw:text-lav-softink' };
-
-function BloqueFirma({ e, f, abierto, acc }: { e: IEtapa; f: IFirmaEtapa | null; abierto: boolean; acc: IFichaNegocioAcciones }) {
-  const k = f?.estado === 'firmado' ? 'ok' : f?.operacion ? 'wait' : 'need';
-  const [titulo, detalle] = k === 'ok'
-    ? [`${e.firma} firmado`, `${f!.fuera ? 'Firmado fuera de Asset' : 'Operación ' + f!.operacion} · ${dia(f!.firmado)}`]
-    : k === 'wait'
-      ? [`${e.firma}: en firma`, [`Operación ${f!.operacion}`, f!.total ? `${f!.firmados} de ${f!.total} firmas` : '', f!.revisado ? 'revisado ' + dia(f!.revisado) : '', f!.error || ''].filter(Boolean).join(' · ')]
-      : [`Falta firmar: ${e.firma}`, 'Al quedar firmado, el negocio pasa solo a la siguiente etapa.'];
-  return (
-    <div className={cx('ng-fb', k, 'tw:mt-4 tw:flex tw:flex-wrap tw:items-center tw:gap-3 tw:rounded-xl tw:border tw:border-solid tw:border-b-2 tw:px-4 tw:py-3', CAJA_FIRMA[k])}>
-      <span className={cx('tw:grid tw:size-9 tw:flex-none tw:place-items-center tw:rounded-lg tw:bg-card', TINTA_FIRMA[k])}><Icono nombre={k === 'ok' ? 'check' : 'sign'} tam={18} /></span>
-      <span className="tw:flex tw:min-w-[180px] tw:flex-1 tw:flex-col tw:gap-0.5">
-        <b className="tw:text-sm tw:font-semibold tw:text-text">{titulo}</b>
-        <small className="tw:text-xs tw:text-muted">{detalle}</small>
-      </span>
-      {k === 'wait' && <span className="tw:flex tw:flex-wrap tw:gap-1.5">
-        <Boton id="ngRev" variante="secundario" tamano="sm" icono="rotateR" onClick={acc.revisarFirmas}>Revisar ahora</Boton>
-        <Boton id="ngOp" variante="fantasma" tamano="sm" onClick={acc.verOperacion}>Ver operación</Boton>
-        <Boton id="ngFq" variante="fantasma" tamano="sm" icono="x" title="Desvincular" aria-label="Desvincular" onClick={acc.quitarFirma} />
-      </span>}
-      {k === 'need' && <span className="tw:flex tw:flex-wrap tw:gap-1.5">
-        <Boton id="ngEnv" tamano="sm" icono="sign" disabled={!abierto} onClick={acc.enviarFirma}>Enviar a firmar</Boton>
-        <Boton id="ngVin" variante="secundario" tamano="sm" disabled={!abierto} onClick={acc.vincularFirma}>Ya lo envié</Boton>
-      </span>}
-    </div>
-  );
-}
-
-function EtapaActual({ n, etapas, vez, acc }: { n: INegocioDetalle; etapas: IEtapa[]; vez: number; acc: IFichaNegocioAcciones }) {
-  const e = n.etapaInfo!; const abierto = n.estado === 'abierto'; const sig = etapas[(n.orden ?? 0) + 1];
-  const hechas = n.tareas?.[n.etapa] || [];
-  return (
-    <Card className="ng-etapa" titulo={`Etapa actual: ${e.t}`} subtitulo={e.d} accion={<Badge icono="clock">{dias(n.diasEnEtapa)}</Badge>}>
-      {(e.tareas || []).length > 0 && (
-        <div className="ng-tasks tw:flex tw:flex-col tw:gap-2">
-          {e.tareas.map((t, i) => (
-            <label key={i} className={cx('tw:m-0 tw:flex tw:items-center tw:gap-3 tw:rounded-xl tw:border tw:border-solid tw:border-b-2 tw:px-3.5 tw:py-2.5 tw:text-sm',
-              hechas[i] ? 'tw:bg-green-soft tw:border-green-edge' : 'tw:bg-card tw:border-edge tw:border-b-edge-b',
-              abierto ? 'tw:cursor-pointer tw:hover:bg-hover' : 'tw:cursor-default')}>
-              <input key={vez} type="checkbox" data-task={i} defaultChecked={!!hechas[i]} disabled={!abierto} onChange={(ev) => acc.tarea(i, ev.target.checked)}
-                className="tw:m-0 tw:size-[18px] tw:flex-none tw:p-0 tw:accent-[var(--ui-green-edge)]" />
-              <span className={cx(hechas[i] ? 'tw:text-green-softink tw:line-through' : 'tw:text-text')}>{t}</span>
-            </label>
-          ))}
-        </div>
-      )}
-      {e.firma && <BloqueFirma e={e} f={n.firmas?.[n.etapa] || null} abierto={abierto} acc={acc} />}
-      {abierto
-        ? (
-          <div className="ng-acts tw:mt-4 tw:flex tw:flex-wrap tw:items-center tw:gap-2 tw:border-0 tw:border-t tw:border-solid tw:border-edge tw:pt-4">
-            <Boton id="ngLost" variante="fantasma" icono="x" className="tw:text-red-softink!" onClick={acc.perder}>Marcar como perdido</Boton>
-            <span className="tw:flex-1" />
-            {e.final
-              ? <Boton id="ngWin" variante="exito" icono="check" onClick={acc.ganar}>Cerrar negocio con éxito</Boton>
-              : sig && <Boton id="ngNext" iconoDerecha="arrowR" onClick={acc.siguiente}>Pasar a «{sig.t}»</Boton>}
-          </div>
-        )
-        : <p className="tw:mt-4 tw:mb-0 tw:text-[13px] tw:text-muted">El negocio está cerrado. Para seguir moviéndolo, usa «Reabrir».</p>}
-    </Card>
-  );
 }
 
 function Historial({ n, vez, nota }: { n: INegocioDetalle; vez: number; nota: (t: string) => void }) {
@@ -384,6 +315,7 @@ export default function FichaNegocio({ n, etapas, corredores, vez, acc }: IFicha
       titulo={n.prop?.titulo || 'Negocio'}
       subtitulo={<Subtitulo n={n} />}
       acciones={<>
+        {n.estado === 'abierto' && <Boton id="ngLost" variante="secundario" icono="x" onClick={acc.perder}>Marcar como perdido</Boton>}
         {n.estado !== 'abierto' && <Boton id="ngReab" variante="secundario" icono="undo" onClick={acc.reabrir}>Reabrir</Boton>}
         <Boton id="ngDel" variante="secundario" icono="trash" title="Eliminar negocio" onClick={acc.eliminar}>Eliminar</Boton>
       </>}
@@ -392,7 +324,6 @@ export default function FichaNegocio({ n, etapas, corredores, vez, acc }: IFicha
       <Etapas n={n} etapas={etapas} mover={acc.mover} />
       <div className={COLUMNAS}>
         <div className="tw:flex tw:min-w-0 tw:flex-col tw:gap-4">
-          <EtapaActual n={n} etapas={etapas} vez={vez} acc={acc} />
           <Pasos key={n.id} vez={vez} pasos={acc.pasos} />
           <Historial n={n} vez={vez} nota={acc.nota} />
         </div>
