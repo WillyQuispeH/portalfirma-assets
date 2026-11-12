@@ -514,12 +514,18 @@ function iaFalsa() {
     const cig = conv({ nombre: 'Lucía Insta', tipo: 'TYPE_INSTAGRAM', usuario: 'lucia.insta', asignado: 'wu-1' });
     escribe(cig, 'Hola, busco depto 2D en Ñuñoa hasta 500 lucas');
     ok(
-      await hasta(() => salidas(cel).some((t) => /Lucía Insta/.test(t) && /Instagram @lucia\.insta/.test(t) && /busco depto 2D/.test(t) && /Para Lucía:/.test(t)), 180),
+      await hasta(() => salidas(cel).some((t) => /Lucía Insta/.test(t) && /Instagram @lucia\.insta/.test(t) && /busco depto 2D/.test(t) && /Para @lucia\.insta:/.test(t)), 180),
       'lo que escribe el interesado por Instagram le llega al celular de su corredor, con cómo responderle',
     );
     const leadIg = await db.lead.findFirst({ where: { corredoraId: co.id, origen: 'instagram', convIds: { has: cig.id } } });
     ok(leadIg && leadIg.corredorId === c1.id, 'el lead de Instagram quedó a cargo del corredor 1');
-    escribe(cel, 'Para Lucía: claro, te muestro el depto el sábado a las 11');
+    // otro lead con el mismo primer nombre y con celular: «Para Lucía» ya no adivina, pregunta
+    await db.lead.create({ data: { id: `ldl${SUF}`, corredoraId: co.id, corredorId: c1.id, telefonoNorm: '955500001', origen: 'whatsapp', datos: { nombre: 'Lucía', telefono: '+56 9 5550 0001' } } });
+    const envAntes = W.enviados.length;
+    escribe(cel, 'Para Lucía: hola, ¿cómo estás?');
+    ok(await hasta(() => salidas(cel).some((t) => /Hay 2 interesados que calzan con «Lucía»/.test(t) && /@lucia\.insta/.test(t))), 'con una sola palabra que calza con varios, pregunta a cuál en vez de adivinar');
+    ok(W.enviados.slice(envAntes).every((e) => !/cómo estás/.test(e.message)), 'y no le escribió a ninguno');
+    escribe(cel, 'Para @lucia.insta: claro, te muestro el depto el sábado a las 11');
     ok(
       await hasta(() => W.enviados.some((e) => e.type === 'IG' && e.contactId === cig.contactId && /te muestro el depto el sábado/.test(e.message))),
       'la respuesta del corredor sale al interesado por Instagram (tipo IG), no por WhatsApp',

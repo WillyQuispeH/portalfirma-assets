@@ -34,6 +34,12 @@ const nombreDe = (l: Lead) => {
   const d = (l.datos ?? {}) as Record<string, unknown>;
   return String(d.nombre || d.chatCon || d.telefono || 'Interesado');
 };
+/** el usuario de Instagram o Facebook con que escribió el lead (sin @), si se conoce */
+const usuarioDe = (l: Lead) => {
+  const d = (l.datos ?? {}) as Record<string, any>;
+  const c = ([...(d.canales ?? [])] as { usuario?: string }[]).reverse().find((x) => x.usuario);
+  return String(c?.usuario || d.ig?.usuario || '').replace(/^@/, '');
+};
 const telDe = (l: Lead) => String(((l.datos ?? {}) as Record<string, unknown>).telefono ?? '');
 const cola = (t: string) => {
   const d = t.replace(/\D/g, '');
@@ -94,7 +100,7 @@ export class PuenteService {
   private async reenviar(wa: Wechatia, corredoraId: string, act: Lead, nombre: string, via: string, texto: string) {
     const cuerpo =
       `💬 *${nombre}* ${via} escribió:\n«${texto.slice(0, 1200)}»\n\n` +
-      `↩ Para responderle: cita este mensaje, o escribe «Para ${nombre.split(/\s+/)[0]}: …».`;
+      `↩ Para responderle: cita este mensaje, o escribe «Para ${usuarioDe(act) ? '@' + usuarioDe(act) : nombre}: …».`;
     // al corredor a cargo y, si no recibe por WhatsApp (sin celular vinculado o fuera de las 24 h), a los administradores
     const admins = await this.ejecutivo.responsables(corredoraId, null);
     const destinos = [...new Set([...(act.corredorId ? [act.corredorId] : []), ...admins])];
@@ -204,9 +210,9 @@ export class PuenteService {
       if (busca.length > 1) {
         const lista = busca
           .slice(0, 6)
-          .map((c, i) => `${i + 1}) ${c.nombre} ${cola(c.telefono)}`.trim())
+          .map((c, i) => `${i + 1}) ${c.nombre} ${cola(c.telefono) || (usuarioDe(c.lead) ? '@' + usuarioDe(c.lead) : c.lead.origen ? '(' + c.lead.origen + ')' : '')}`.trim())
           .join('\n');
-        await this.decir(wa, v, cv, `Hay ${busca.length} interesados que calzan con «${x[1].trim()}»:\n${lista}\nRepite con el nombre completo o los últimos dígitos del celular: «Para ${cola(busca[0].telefono) || busca[0].nombre}: …».`);
+        await this.decir(wa, v, cv, `Hay ${busca.length} interesados que calzan con «${x[1].trim()}»:\n${lista}\nRepite con el nombre y apellido, los últimos dígitos del celular o el @usuario: «Para ${cola(busca[0].telefono) || (usuarioDe(busca[0].lead) ? '@' + usuarioDe(busca[0].lead) : busca[0].nombre)}: …».`);
         return true;
       }
       destino = busca[0];
@@ -231,6 +237,12 @@ export class PuenteService {
     const q = norm(consulta);
     const dig = consulta.replace(/\D/g, '');
     const fichas = leads.map((l) => ({ lead: l, nombre: nombreDe(l), telefono: telDe(l) }));
+    // por usuario de Instagram o Facebook: «Para @lucia.ig: …»
+    const usr = consulta.trim().replace(/^@/, '').toLowerCase();
+    if (consulta.trim().startsWith('@') && usr) {
+      const porUsuario = fichas.filter((c) => usuarioDe(c.lead).toLowerCase() === usr);
+      return porUsuario;
+    }
     // por celular (los últimos dígitos)
     if (dig.length >= 4) {
       const porTel = fichas.filter((c) => c.telefono.replace(/\D/g, '').endsWith(dig));
@@ -244,7 +256,8 @@ export class PuenteService {
     });
     // un nombre exacto gana si hay varios que lo contienen
     const exacto = todas.filter((c) => norm(c.nombre) === q);
-    return exacto.length === 1 ? exacto : todas;
+    // con una sola palabra («Willy») nunca se adivina: puede ser el primer nombre de varios; con nombre y apellido, el exacto gana
+    return exacto.length === 1 && palabras.length >= 2 ? exacto : todas;
   }
 
   private async enviarAlInteresado(wa: Wechatia, v: WaVinculo, cv: Conversacion, d: Candidato, cuerpo: string, m: MensajeWa) {
