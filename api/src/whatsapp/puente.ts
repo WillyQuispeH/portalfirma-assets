@@ -167,7 +167,15 @@ export class PuenteService {
       });
       if (p) {
         const l = await this.db.lead.findFirst({ where: { id: p.leadId, corredoraId: v.corredoraId, eliminadoEn: null } });
-        if (l) destino = { lead: l, nombre: nombreDe(l), telefono: telDe(l) };
+        if (l) {
+          // el lead pudo reasignarse desde que se reenvió el aviso: solo el dueño de hoy (o un administrador) puede responderle
+          const quien = await this.db.usuario.findUnique({ where: { id: v.usuarioId }, select: { rol: true } });
+          if (quien?.rol === 'ADMIN' || l.corredorId === v.usuarioId) destino = { lead: l, nombre: nombreDe(l), telefono: telDe(l) };
+          else {
+            await this.decir(wa, v, cv, `${nombreDe(l)} ya no está a tu cargo: no puedo enviarle ese mensaje.`);
+            return true;
+          }
+        }
       }
     }
     // a) «Para Juan: …»

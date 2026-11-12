@@ -6,7 +6,7 @@
 //    los campos «asset_*» de su contacto y la etiqueta dispara el flujo de wechatia que envía la plantilla.
 //  · Si no tiene el celular vinculado, o falla el envío, queda en sus avisos de la app (también cuando sale por plantilla).
 // No avisa si el corredor se asignó el lead a sí mismo ni repite el aviso al mismo corredor por el mismo lead.
-import { Controller, Get, Injectable, Logger, NotFoundException, Param, Redirect } from '@nestjs/common';
+import { Controller, Get, Header, Injectable, Logger, NotFoundException, Param } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHmac, timingSafeEqual } from 'crypto';
 import type { Lead } from '@prisma/client';
@@ -21,10 +21,6 @@ import { LeadsWaService } from './leads-wa';
 /** el botón «Mensaje» de la plantilla: https://<api>/whatsapp/lead/{{1}} → abre el chat directo con el interesado */
 const firmar = (secreto: string, id: string) =>
   createHmac('sha256', secreto).update('lead-directo:' + id).digest('hex').slice(0, 16);
-const celular = (t: unknown) => {
-  const d = String(t ?? '').replace(/\D/g, '');
-  return d.length === 9 && d.startsWith('9') ? '56' + d : d.length >= 10 ? d : '';
-};
 
 export const ETIQUETA_LEAD_ASIGNADO = 'nuevo_lead_asignado';
 const CANAL_TXT: Record<string, string> = {
@@ -65,7 +61,10 @@ export class AvisoLeadService {
     return { token, url: `${this.config.get('API_URL_PUBLICA', { infer: true })}/whatsapp/lead/${token}` };
   }
 
-  /** a dónde lleva el botón: WhatsApp del interesado; si no tiene celular, su Instagram; si no, la conversación en wechatia */
+  /**
+   * El botón «Mensaje» ya NO abre el WhatsApp personal del corredor con el interesado (no quedaría registro y rompería el
+   * aislamiento entre corredores): devuelve el primer nombre del lead si el enlace es válido, para mostrar cómo responder.
+   */
   async destino(token: string): Promise<string | null> {
     const [id, firma] = token.split('.');
     if (!id || !firma) return null;
@@ -74,15 +73,7 @@ export class AvisoLeadService {
     const lead = await this.db.lead.findFirst({ where: { id, eliminadoEn: null } });
     if (!lead) return null;
     const d = this.leads.datos(lead);
-    const tel = celular(d.telefono);
-    if (tel) return `https://wa.me/${tel}`;
-    const ig = String(d.ig?.usuario ?? '').replace(/[^\w.]/g, '');
-    if (ig) return `https://ig.me/m/${ig}`;
-    const cred = await this.wa.credenciales(lead.corredoraId);
-    const conv = lead.convIds?.[0];
-    return cred && conv
-      ? `https://app.wechatia.com/v2/location/${encodeURIComponent(cred.locationId)}/conversations/conversations/${encodeURIComponent(conv)}`
-      : null;
+    return String(d.nombre || d.chatCon || 'el interesado').split(/\s+/)[0];
   }
 
   /** qué busca, en una línea */
@@ -154,7 +145,7 @@ export class AvisoLeadService {
         `Canal: ${canal}`,
         `Busca: ${busca}`,
         `Propiedad: ${prop}`,
-        `Escríbele directo: ${enlace.url}`,
+        `Para responderle: cita este aviso, o escribe «Para ${nombre.split(/\s+/)[0]}: …». Sale por el número de la empresa y queda registrado.`,
       ].join('\n');
 
       const medio = await this.enviar(lead.corredoraId, co, texto, {
@@ -233,10 +224,17 @@ export class AvisoLeadController {
 
   @Publico()
   @Get(':token')
-  @Redirect()
+  @Header('Content-Type', 'text/html; charset=utf-8')
   async abrir(@Param('token') token: string) {
-    const url = await this.s.destino(token);
-    if (!url) throw new NotFoundException('Enlace no válido');
-    return { url, statusCode: 302 };
+    const nombre = await this.s.destino(token);
+    if (!nombre) throw new NotFoundException('Enlace no válido');
+    const n = nombre.replace(/[^\p{L}\p{N} .'-]/gu, '').slice(0, 40);
+    return (
+      '<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
+      '<title>Responder al interesado</title><body style="font-family:system-ui,sans-serif;max-width:28rem;margin:2rem auto;padding:0 1rem;line-height:1.5">' +
+      '<h2>Responder al interesado</h2>' +
+      `<p>Vuelve a WhatsApp y responde en el chat de Asset:</p><ul><li>cita el aviso del lead, o</li><li>escribe <b>Para ${n}: tu mensaje</b></li></ul>` +
+      '<p>El mensaje sale por el número de la empresa y queda registrado en Asset.</p></body></html>'
+    );
   }
 }

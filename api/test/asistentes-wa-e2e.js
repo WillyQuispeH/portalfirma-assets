@@ -318,6 +318,8 @@ function iaFalsa() {
     ok(r.s === 200 && salidas(cel).some((t) => /Tienes 1 propiedad/.test(t)), 'la respuesta de su Asset sale a su celular');
     ok(!salidas(cel).some((t) => /Tu Asset está cerrado/.test(t)), 'ya no hace falta el aviso de «Asset cerrado»: el equipo responde igual');
 
+    // SOLO_PUENTE=1 salta las secciones 2-8 (Sofía y otros asistentes que ya no conversan con leads tras el puente)
+    if (!process.env.SOLO_PUENTE) {
     // ---- 2. Sofía con un lead
     const cj = conv({ telefono: '+56 9 8765 4321', nombre: 'Juan Pérez' });
     escribe(cj, 'Hola, quiero agendar una visita al depto');
@@ -457,6 +459,7 @@ function iaFalsa() {
     await req('POST', '/whatsapp/programados', { id: `wp${SUF}`, telefono: '+56 9 8765 4321', nombre: 'Juan Pérez', texto: 'Juan, nos vemos mañana.', cuando: new Date(Date.now() - 1000).toISOString() }, t1);
     ok(await hasta(() => salidas(cel).some((t) => /Le envié a Juan Pérez el WhatsApp programado/.test(t)), 60), 'el resultado de un programado se le avisa al ejecutivo por su celular, desde el servidor');
 
+    }
     // ---- 8a. aviso al corredor cuando le asignan un lead (texto si escribió hace poco; plantilla si no; botón «Mensaje»)
     const c2 = await nu('c', null, { wechatiaId: 'wu-2' });
     W.contactos['k-c2'] = '+56 9 3333 4444';
@@ -474,11 +477,36 @@ function iaFalsa() {
     const n1 = (W.plantillas || []).length; await asignar(c2.id); await esperar(3000);
     ok((W.plantillas || []).length === n1, 'si se vuelve a guardar con el mismo corredor, no se repite el aviso');
     const rd = await fetch(`${B}/whatsapp/lead/${pl.campos.asset_lead_enlace}`, { redirect: 'manual' });
-    ok(rd.status === 302 && rd.headers.get('location') === 'https://wa.me/56987654321', 'el botón «Mensaje» abre el WhatsApp del interesado: ' + rd.headers.get('location'));
+    const html = await rd.text();
+    ok(rd.status === 200 && !rd.headers.get('location') && /Para Juan:/.test(html) && !/wa\.me|8765/.test(html), 'el botón «Mensaje» ya no abre el WhatsApp personal: explica cómo responder por el número de la empresa');
     ok((await fetch(`${B}/whatsapp/lead/${pl.campos.asset_lead_enlace.slice(0, -2)}xx`, { redirect: 'manual' })).status === 404, 'un enlace alterado no sirve');
     const antesTx = salidas(cel).length;
     await asignar(c1.id);
-    ok(await hasta(() => salidas(cel).slice(antesTx).some((t) => /Nuevo lead asignado/.test(t) && /Juan Pérez/.test(t) && /wa\.me\/56987654321|whatsapp\/lead\//.test(t))), 'a un corredor que le escribió hace poco le llega como texto, con el enlace para escribirle al interesado');
+    ok(await hasta(() => salidas(cel).slice(antesTx).some((t) => /Nuevo lead asignado/.test(t) && /Juan Pérez/.test(t) && /Para Juan:/.test(t) && !/wa\.me/.test(t))), 'a un corredor que le escribió hace poco le llega como texto, con cómo responderle por el número de la empresa');
+    // aislamiento: el lead es del corredor 1; el corredor 2 no puede escribirle por ninguna vía
+    const t2 = await ingresar(c2.email, 'clave-e2e-123');
+    const env0 = W.enviados.length;
+    for (const [ruta, cuerpo] of [
+      ['/whatsapp/enviar', { telefono: '+56 9 8765 4321', texto: 'Hola desde el corredor 2' }],
+      ['/whatsapp/enviar', { telefono: '+56 9 8765 4321', texto: 'Hola otra vez', revisar24: false }],
+      ['/whatsapp/enviar/contacto', { contactId: 'k-x', telefono: '+56 9 8765 4321', texto: 'Hola por contacto' }],
+      ['/whatsapp/enviar/plantilla', { telefono: '+56 9 8765 4321', etiqueta: 'solicitar_documentacion_', campos: {} }],
+    ]) {
+      r = await req('POST', ruta, cuerpo, t2);
+      ok(r.s === 403 && r.j?.code === 'OTRO_CORREDOR', `el corredor 2 no puede escribirle a un interesado del corredor 1 (${ruta})`);
+    }
+    ok(W.enviados.length === env0, 'y no salió ningún mensaje por wechatia');
+    r = await req('POST', '/whatsapp/enviar', { telefono: '+56 9 8765 4321', nombre: 'Juan Pérez', texto: 'Juan, el administrador le escribe.', revisar24: false }, tA);
+    ok(r.s === 200, 'el administrador sí puede escribirle a cualquiera ' + r.s + JSON.stringify(r.j).slice(0, 120));
+    r = await req('POST', '/whatsapp/enviar', { telefono: '+56 9 5555 0000', nombre: 'Sin lead', texto: 'Hola, un número que no es de ningún lead.', revisar24: false }, t2);
+    ok(r.s === 200, 'un número que no es de ningún lead no se bloquea (clientes, reservas, programados)');
+    // reasignar: el corredor 2 pasa a ser el dueño y el 1 deja de poder escribirle
+    await asignar(c2.id);
+    r = await req('POST', '/whatsapp/enviar', { telefono: '+56 9 8765 4321', nombre: 'Juan Pérez', texto: 'Juan, ahora soy tu corredor.', revisar24: false }, t2);
+    ok(r.s === 200, 'al cambiar de dueño, el corredor nuevo ya puede escribirle');
+    r = await req('POST', '/whatsapp/enviar', { telefono: '+56 9 8765 4321', texto: 'Soy el corredor anterior' }, t1);
+    ok(r.s === 403 && r.j?.code === 'OTRO_CORREDOR', 'y el corredor anterior ya no');
+    await asignar(c1.id);
     r = await req('GET', `/leads/${leadId}`, null, tA);
     ok(r.s === 200, 'el lead sigue entero');
     await db.usuario.update({ where: { id: c2.id }, data: { activo: false } });

@@ -9,7 +9,18 @@
 //    POST /whatsapp/enviar/contacto  { contactId, texto, telefono? } → a quien ya conversa (avisos de postventa);
 //    GET  /whatsapp/enviar/estado/:messageId → si WhatsApp lo entregó.
 //  · El mismo texto al mismo número dentro de 15 minutos no se vuelve a mandar (responde duplicado: true).
-import { BadRequestException, Body, Controller, Get, HttpCode, Injectable, Logger, Param, Post } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  ForbiddenException,
+  Get,
+  HttpCode,
+  Injectable,
+  Logger,
+  Param,
+  Post,
+} from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { PrismaService } from '../prisma/prisma.service';
@@ -117,6 +128,32 @@ export class EnviadosService {
     return (n[0]?.n ?? 0) > 0;
   }
 
+  /**
+   * Aislamiento entre corredores: un interesado (lead) tiene UN dueño (leads.corredor_id) y solo el dueño o un
+   * administrador puede escribirle por el número de la empresa. Si varios leads comparten el celular, manda el más antiguo
+   * (el mismo criterio con que se enrutan los mensajes que el interesado escribe). Un lead sin dueño no se bloquea.
+   * Un teléfono que no es de ningún lead (clientes del CRM, reservas, programados) tampoco.
+   */
+  async puedeEscribirle(u: { sub: string; corredoraId: string; rol: string }, telefono: string | null | undefined) {
+    if (u.rol === 'ADMIN') return true;
+    const t = telNorm(telefono);
+    if (!t) return true;
+    const l = await this.db.lead.findFirst({
+      where: { corredoraId: u.corredoraId, telefonoNorm: t, eliminadoEn: null },
+      orderBy: { creadoEn: 'asc' },
+      select: { corredorId: true },
+    });
+    return !l?.corredorId || l.corredorId === u.sub;
+  }
+
+  private async exigirDueno(u: UsuarioToken, telefono: string | null | undefined) {
+    if (!(await this.puedeEscribirle(u, telefono)))
+      throw new ForbiddenException({
+        message: 'Ese interesado está a cargo de otro corredor: solo él o un administrador puede escribirle.',
+        code: 'OTRO_CORREDOR',
+      });
+  }
+
   private async cliente(corredoraId: string): Promise<Wechatia> {
     const wa = await this.wa.cliente(corredoraId);
     if (!wa)
@@ -136,6 +173,7 @@ export class EnviadosService {
   }
 
   async enviar(u: UsuarioToken, b: z.infer<typeof enviarEsquema>) {
+    await this.exigirDueno(u, b.telefono);
     const clave = `${u.corredoraId}|${telNorm(b.telefono)}|${huella(b.texto)}`;
     const prev = this.repetido(clave);
     if (prev) return { ...(prev.r as object), duplicado: true };
@@ -164,6 +202,8 @@ export class EnviadosService {
   }
 
   async plantilla(u: UsuarioToken, b: z.infer<typeof plantillaEsquema>) {
+    // la plantilla de aviso al corredor (nuevo_lead_asignado) va al celular del corredor, no a un interesado: pasa por el mismo chequeo
+    await this.exigirDueno(u, b.telefono);
     const wa = await this.cliente(u.corredoraId);
     try {
       const r = await wa.enviarPlantilla(b);
@@ -175,6 +215,8 @@ export class EnviadosService {
   }
 
   async contacto(u: UsuarioToken, b: z.infer<typeof contactoEsquema>) {
+    // sin teléfono no se sabe a quién va (la app lo usa para avisos al propio corredor): solo se valida cuando viene
+    if (b.telefono) await this.exigirDueno(u, b.telefono);
     const wa = await this.cliente(u.corredoraId);
     try {
       const r = await wa.enviarAContacto(b.contactId, b.texto);
