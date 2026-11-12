@@ -47,7 +47,7 @@ import { ObservadorController, ObservadorService } from './whatsapp/observador';
 import { EvaluacionController, EvaluacionService } from './whatsapp/evaluacion';
 import { ActaVisitaController, ActaVisitaService } from './whatsapp/acta-visita';
 import { LectorController, LectorService } from './whatsapp/lector';
-import { PuenteService } from './whatsapp/puente';
+import { LeadsEnvioController, PuenteService } from './whatsapp/puente';
 
 @Module({
   imports: [
@@ -68,6 +68,7 @@ import { PuenteService } from './whatsapp/puente';
     EventosController,
     LeadsController,
     AvisoLeadController,
+    LeadsEnvioController,
     FirmasController,
     RegistrosController,
     ContadoresController,

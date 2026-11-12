@@ -63,6 +63,7 @@ declare global {
       mostrar: (sel: string | null, datos: object, filtro: string) => void;
       cuentas: () => void; comoExportar: () => void; comoInstagram: () => void;
       importarRuta: (ruta: string, canal?: string) => void;
+      derivar: (id: string) => void; eliminar: (id: string, nombre: string, mensajes: number) => void; agregarMensajes: (instagram: boolean) => void;
     };
     // Enviar a firmar, Google Drive y Firmas presenciales (los instala el bundle: components/functional/*/controlador)
     __envio: { analizar: (archivo: object, prellenar?: object[] | null) => Promise<void>; listo: (r: object) => void; hayAnalisis: () => boolean };

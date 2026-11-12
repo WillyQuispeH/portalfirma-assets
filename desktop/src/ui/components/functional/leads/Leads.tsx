@@ -2,10 +2,10 @@
 // Hecha con el kit: Layout (cabecera con ilustración), Boton, Buscador y Select. Los filtros de la lista llevan su número
 // (antes eran 4 tarjetas arriba: se quitaron para dar el alto a la bandeja).
 //
-// La conversación y la ficha del lead (columnas #ldChat y #ldFicha) siguen en src/renderer/leads.js:
-// React deja esos dos contenedores vacíos y nunca dibuja dentro. Puente en los dos sentidos:
-//  - React → leads.js: mostrarLead() con el elegido y los datos de la lista (los usa la ficha).
-//  - leads.js → React: el evento «pf:leads» (al guardar, asignar, importar…) pide recargar la lista.
+// La conversación y la ficha del lead (columnas #ldChat y #ldFicha) son LeadDetalle.tsx y FichaLead.tsx.
+// src/renderer/leads.js queda con las ventanas de importar, derivar y eliminar. Puente en los dos sentidos:
+//  - React → leads.js: mostrarLead() con el elegido (lo usa al importar) y window.Leads.derivar / eliminar / agregarMensajes.
+//  - leads.js → React: el evento «pf:leads» (al importar, eliminar, llegar mensajes…) pide recargar la lista.
 // Los id ldQ, ldChips (con data-f en cada filtro), ldItems, ldOrigen, ldBroker, ldFile, ldFileIg, ldCorBtn,
 // ldCuentas, ldImp2, ldIg2 y la clase .ld-vacio los usan las pruebas y leads.js.
 import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
@@ -20,6 +20,7 @@ import Select from '../../ui/Select';
 import Icono from '../../ui/Icono';
 import EstadoVacio from '../../ui/EstadoVacio';
 import LeadItem from './LeadItem';
+import LeadDetalle from './LeadDetalle';
 import { FILTROS } from './formato';
 import type { TLeadFiltro } from '../../../store/interfaces/lead.interface';
 
@@ -164,11 +165,9 @@ export default function Leads({ sel: selInicial, filtro: filtroInicial }: ILeads
         </div>
 
         {hayLeads ? (
-          <>
-            {/* los llena src/renderer/leads.js (detalle): React no dibuja dentro */}
-            <div className={cx('ld-chat', columna)} id="ldChat" key="chat" />
-            <div className={cx('ld-ficha', columna)} id="ldFicha" key="ficha" />
-          </>
+          sel
+            ? <LeadDetalle key="detalle" id={sel} datos={datos!} version={datos} alCambiar={leadGetAll} />
+            : <div className={cx('ld-chat', columna)} id="ldChat" key="nada"><EstadoVacio compacto texto="Elige un lead para ver su conversación." className="tw:m-auto" /></div>
         ) : cargado && (
           <>
             <div className={cx('ld-chat', columna)} key="vacio">

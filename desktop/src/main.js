@@ -1204,6 +1204,13 @@ handle('leads:atencion', (id, quien) => leads.atencion(id, quien));
 handle('leads:reanudar', async (id) => { const l = leads.obtener(id, { marcarLeido: false }); if (l?.telefono) { if (waSrv.enApi()) await waSrv.asistentes.reanudar(l.telefono); else clientesWa.reanudar(l.telefono); } if (l?.atiende === 'corredor') leads.atencion(id, 'agente'); return true; });
 handle('leads:responder', async (id, texto) => {
   const l = leads.obtener(id, { marcarLeido: false }); const t = String(texto || '').trim(); if (!t) throw new Error('Escribe el mensaje.');
+  // con cuenta de Asset lo envía el servidor (POST /leads/:id/enviar): solo el corredor a cargo o un administrador, por el
+  // canal en que escribió el interesado (WhatsApp, Instagram o Facebook) y, fuera de las 24 h, plantilla + mensaje pendiente
+  if (waSrv.enApi()) {
+    const envio = await asset.llamar('POST', `/leads/${encodeURIComponent(id)}/enviar`, { texto: t });
+    try { await leads.traerMensajes(id); } catch {}
+    return { ...leads.obtener(id), envio };
+  }
   if (!l.telefono) throw new Error('Este lead no tiene celular.');
   try { await reservas.enviarWhatsApp({ telefono: l.telefono, nombre: l.nombre || l.chatCon, texto: t, revisar24: true }); }
   catch (e) { if (e.code === 'FUERA_24H') throw new Error('Este lead no ha escrito en las últimas 24 horas: WhatsApp no deja enviar texto libre. Pídele a Fernanda que le envíe la plantilla de seguimiento.'); throw e; }

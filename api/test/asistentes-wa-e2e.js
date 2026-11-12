@@ -563,6 +563,15 @@ function iaFalsa() {
     ok(!W.enviados.some((e) => /soy otro corredor otra vez/.test(e.message)), 'y no sale');
     escribe(cel, '#99999 hola');
     ok(await hasta(() => salidas(cel).some((t) => /No encontré al interesado #99999/.test(t))), 'un número que no existe se avisa, sin pasar al Agente');
+    // desde la app (Leads): POST /leads/:id/enviar con las mismas reglas
+    r = await req('POST', `/leads/${leadIg.id}/enviar`, { texto: 'Hola Lucía, te escribo desde Asset' }, t1);
+    ok(r.s === 200 && r.j.ok && r.j.estado === 'enviado' && r.j.canal === 'instagram', 'desde la app, el corredor a cargo le escribe y sale por Instagram ' + JSON.stringify(r.j));
+    ok(await hasta(() => W.enviados.some((e) => e.type === 'IG' && /te escribo desde Asset/.test(e.message))), 'el mensaje salió por wechatia');
+    ok(await hasta(async () => (await db.leadMensaje.count({ where: { leadId: leadIg.id, texto: 'Hola Lucía, te escribo desde Asset', de: 'broker' } })) === 1), 'y queda una vez en la conversación del lead');
+    r = await req('POST', `/leads/${leadIg.id}/enviar`, { texto: 'Soy el corredor 2 desde la app' }, t2);
+    ok(r.s === 403 && r.j?.code === 'OTRO_CORREDOR', 'desde la app, otro corredor no puede');
+    r = await req('POST', `/leads/${leadIg.id}/enviar`, { texto: 'Hola, soy el administrador' }, tA);
+    ok(r.s === 200 && r.j.ok, 'el administrador sí');
 
     // ---- 8a3. fuera de las 24 h: plantilla de primer contacto y el mensaje del corredor sale cuando el interesado responde
     const antesPl2 = (W.plantillas || []).length;

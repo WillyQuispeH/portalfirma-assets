@@ -12,14 +12,29 @@
 //    Si no calza ninguna, el mensaje sigue su camino de siempre (el Agente interno).
 //  · Primer contacto: si el interesado escribió sin que Asset le hubiera escrito antes, recibe un único aviso fijo.
 //  WhatsApp solo deja mandar texto libre si la persona escribió en las últimas 24 h; si no, se le dice al corredor.
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  ForbiddenException,
+  HttpCode,
+  Injectable,
+  Logger,
+  NotFoundException,
+  Param,
+  Post,
+} from '@nestjs/common';
+import { z } from 'zod';
+import { ZodPipe } from '../comun/zod.pipe';
+import { idDoc } from '../comun/asignados';
+import { UsuarioActual, type UsuarioToken } from '../auth/usuario-actual';
 import type { Lead, WaVinculo } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { EjecutivoService } from './ejecutivo';
 import { EnviadosService } from './enviados';
 import { LeadsWaService, type MensajeLead } from './leads-wa';
 import { horaChile, norm, telNorm } from './comun';
-import { WechatiaError, type Conversacion, type MensajeWa, type Wechatia } from './wechatia';
+import { WechatiaError, WechatiaService, type Conversacion, type MensajeWa, type Wechatia } from './wechatia';
 
 /** etiqueta que dispara el flujo «Asset · Primer contacto (plantilla)» de wechatia (plantilla aprobada asset_primer_contacto) */
 const ETIQUETA_PRIMER_CONTACTO = 'asset-primer-contacto';
@@ -54,6 +69,15 @@ const cola = (t: string) => {
   const d = t.replace(/\D/g, '');
   return d.length >= 4 ? `…${d.slice(-4)}` : '';
 };
+
+/** lo que pasó al escribirle a un interesado (el `mensaje` es para el corredor) */
+export interface ResultadoEnvio {
+  ok: boolean;
+  estado: 'enviado' | 'plantilla' | 'error';
+  canal?: 'whatsapp' | 'instagram' | 'facebook';
+  codigo?: 'OTRO_CORREDOR' | 'SIN_CANAL' | 'NO_ENVIADO';
+  mensaje: string;
+}
 
 @Injectable()
 export class PuenteService {
@@ -348,68 +372,84 @@ export class PuenteService {
     return exacto.length === 1 && palabras.length >= 2 ? exacto : todas;
   }
 
+  /** desde el celular del corredor: se responde y se le cuenta el resultado por WhatsApp */
   private async enviarAlInteresado(wa: Wechatia, v: WaVinculo, cv: Conversacion, d: Candidato, cuerpo: string, m: MensajeWa) {
-    const usuario = await this.db.usuario.findUnique({ where: { id: v.usuarioId }, select: { nombre: true } });
+    const r = await this.responder(wa, v.corredoraId, v.usuarioId, d.lead, cuerpo);
+    const extra = r.ok && r.estado === 'enviado' && m.adjuntos.length ? ' (los archivos no se reenvían: solo el texto)' : '';
+    await this.decir(wa, v, cv, extra ? r.mensaje.replace(/\.$/, extra + '.') : r.mensaje);
+  }
+
+  /**
+   * Le escribe el corredor (`usuarioId`) a un interesado. Lo usan el puente (WhatsApp del corredor) y la app (Leads).
+   *  · Solo el corredor a cargo o un administrador.
+   *  · Por el canal en que el interesado escribió por última vez (Instagram o Facebook, por el mismo contacto de wechatia),
+   *    aunque tenga celular guardado; si no, por WhatsApp.
+   *  · WhatsApp fuera de las 24 h: se prueba Instagram/Facebook y, si no, la plantilla de primer contacto; el mensaje queda
+   *    pendiente en el lead y sale cuando el interesado responde (`entregarPendiente`).
+   * Nunca lanza: devuelve qué pasó, con el texto para el corredor.
+   */
+  async responder(wa: Wechatia, corredoraId: string, usuarioId: string, lead: Lead, cuerpo: string): Promise<ResultadoEnvio> {
+    const usuario = await this.db.usuario.findUnique({ where: { id: usuarioId }, select: { nombre: true, rol: true } });
+    const nombre = nombreDe(lead);
+    if (usuario?.rol !== 'ADMIN' && lead.corredorId !== usuarioId)
+      return { ok: false, estado: 'error', codigo: 'OTRO_CORREDOR', mensaje: `${nombre} no está a tu cargo: solo su corredor o un administrador puede escribirle.` };
     const corredor = usuario?.nombre || 'Tu corredor';
     const texto = `*${corredor}* (corredor):\n${cuerpo}`.slice(0, 3800);
-    const tel = telNorm(d.telefono);
-    // se le responde por el canal en que escribió por última vez: Instagram o Facebook (por el mismo contacto de wechatia),
-    // aunque tenga celular guardado (wechatia junta sus canales en un solo contacto)
-    const via = this.canalDe(d.lead);
+    const telefono = telDe(lead);
+    const tel = telNorm(telefono);
+    const via = this.canalDe(lead);
     let canalProbado = false;
     if (via) {
       const ult = await this.db.leadMensaje.findFirst({
-        where: { leadId: d.lead.id, de: 'cliente' },
+        where: { leadId: lead.id, de: 'cliente' },
         orderBy: { fecha: 'desc' },
         select: { datos: true },
       });
       const ultimoCanal = String(((ult?.datos ?? {}) as Record<string, unknown>).canal ?? '');
       if (!tel || ultimoCanal === via.canal) {
         canalProbado = true;
-        // con celular, si Instagram/Facebook falla se sigue con WhatsApp; sin celular, el error se le dice al corredor
-        if (await this.enviarPorCanal(wa, v, cv, d, via, cuerpo, texto, corredor, m, !!tel)) return;
-        if (!tel) return;
+        const r = await this.enviarPorCanal(wa, lead, via, cuerpo, texto, corredor);
+        // con celular, si Instagram/Facebook falla se sigue con WhatsApp
+        if (r.ok || !tel) return r;
       }
     }
-    if (!tel) {
-      await this.decir(wa, v, cv, `${d.nombre} no tiene celular guardado ni escribió por Instagram o Facebook: no puedo escribirle.`);
-      return;
-    }
+    if (!tel)
+      return { ok: false, estado: 'error', codigo: 'SIN_CANAL', mensaje: `${nombre} no tiene celular guardado ni escribió por Instagram o Facebook: no hay por dónde escribirle.` };
     try {
       const r = await wa.enviar({
-        telefono: d.telefono,
-        nombre: d.nombre,
+        telefono,
+        nombre,
         texto,
         revisiones: 1,
         entrante24: async () => {
-          const h = await this.db.waConversacion.findFirst({ where: { corredoraId: v.corredoraId, telefonoNorm: tel } });
+          const h = await this.db.waConversacion.findFirst({ where: { corredoraId, telefonoNorm: tel } });
           if (!h) return false;
           const ms = await wa.mensajes(h.convId, 15);
           return ms.some((x) => x.direccion === 'entrante' && Date.now() - new Date(x.fecha).getTime() < 24 * 36e5);
         },
       });
-      await this.enviados.registrar(v.corredoraId, d.telefono, { messageId: r.messageId, texto, enHilo: false });
-      const ms: MensajeLead[] = [
+      await this.enviados.registrar(corredoraId, telefono, { messageId: r.messageId, texto, enHilo: false });
+      await this.leads.anotar(lead, [
         {
           k: r.messageId ? 'wc' + r.messageId : 'as' + Date.now().toString(36),
           fecha: horaChile(),
           de: 'broker',
           autor: corredor,
           texto: cuerpo,
+          datos: { canal: 'whatsapp' },
         },
-      ];
-      await this.leads.anotar(d.lead, ms);
-      await this.leads.contactado(d.lead, `${corredor} respondió por WhatsApp`).catch(() => null);
-      const extra = m.adjuntos.length ? ' (los archivos no se reenvían: solo el texto)' : '';
-      await this.decir(wa, v, cv, `✅ Enviado a ${d.nombre}${extra}.`);
+      ]);
+      await this.leads.contactado(lead, `${corredor} respondió por WhatsApp`).catch(() => null);
+      return { ok: true, estado: 'enviado', canal: 'whatsapp', mensaje: `✅ Enviado a ${nombre} por WhatsApp.` };
     } catch (e) {
-      const fuera = e instanceof WechatiaError && e.codigo === 'FUERA_24H';
-      if (fuera) {
-        // fuera de las 24 h de WhatsApp: primero por Instagram/Facebook si no se había probado; si no, la plantilla de primer contacto
-        if (via && !canalProbado && (await this.enviarPorCanal(wa, v, cv, d, via, cuerpo, texto, corredor, m, true))) return;
-        return this.plantillaYPendiente(wa, v, cv, d, cuerpo, corredor);
+      if (e instanceof WechatiaError && e.codigo === 'FUERA_24H') {
+        if (via && !canalProbado) {
+          const r = await this.enviarPorCanal(wa, lead, via, cuerpo, texto, corredor);
+          if (r.ok) return r;
+        }
+        return this.plantillaYPendiente(wa, corredoraId, usuarioId, lead, cuerpo, corredor);
       }
-      await this.decir(wa, v, cv, `No pude enviarle a ${d.nombre}: ${(e as Error).message.slice(0, 200)}`);
+      return { ok: false, estado: 'error', codigo: 'NO_ENVIADO', mensaje: `No pude enviarle a ${nombre}: ${(e as Error).message.slice(0, 200)}` };
     }
   }
 
@@ -417,31 +457,39 @@ export class PuenteService {
    * Fuera de las 24 h: se le manda la plantilla aprobada «primer contacto» (abre la ventana) y el mensaje del corredor queda
    * pendiente en el lead; sale solo cuando el interesado responde (`entrante`).
    */
-  private async plantillaYPendiente(wa: Wechatia, v: WaVinculo, cv: Conversacion, d: Candidato, cuerpo: string, corredor: string) {
+  private async plantillaYPendiente(
+    wa: Wechatia,
+    corredoraId: string,
+    usuarioId: string,
+    lead: Lead,
+    cuerpo: string,
+    corredor: string,
+  ): Promise<ResultadoEnvio> {
+    const nombre = nombreDe(lead);
     try {
       await wa.enviarPlantilla({
-        telefono: d.telefono,
-        nombre: d.nombre,
+        telefono: telDe(lead),
+        nombre,
         etiqueta: ETIQUETA_PRIMER_CONTACTO,
-        campos: { nombre: d.nombre.split(/\s+/)[0], remitente: corredor, motivo: 'tu consulta' },
+        campos: { nombre: nombre.split(/\s+/)[0], remitente: corredor, motivo: 'tu consulta' },
       });
-      await this.enviados.registrar(v.corredoraId, d.telefono, { plantilla: true });
-      await this.leads.cambiar(d.lead.id, (dd) => {
-        dd.pendiente = { usuarioId: v.usuarioId, corredor, texto: cuerpo.slice(0, 3500), en: new Date().toISOString() };
+      await this.enviados.registrar(corredoraId, telDe(lead), { plantilla: true });
+      await this.leads.cambiar(lead.id, (dd) => {
+        dd.pendiente = { usuarioId, corredor, texto: cuerpo.slice(0, 3500), en: new Date().toISOString() };
         dd.historial = [
           ...(dd.historial || []),
           { fecha: new Date().toISOString(), texto: `${corredor} le mandó la plantilla de primer contacto; su mensaje saldrá cuando responda`, tipo: 'canal' },
         ].slice(-200);
         return { datos: dd, cols: {} };
       });
-      await this.decir(
-        wa,
-        v,
-        cv,
-        `📨 ${d.nombre} no ha escrito en las últimas 24 h: le mandé la plantilla de primer contacto. Tu mensaje saldrá solo cuando responda.`,
-      );
+      return {
+        ok: true,
+        estado: 'plantilla',
+        canal: 'whatsapp',
+        mensaje: `📨 ${nombre} no ha escrito en las últimas 24 h: le mandé la plantilla de primer contacto. Tu mensaje saldrá solo cuando responda.`,
+      };
     } catch (e) {
-      await this.decir(wa, v, cv, `No pude enviarle la plantilla a ${d.nombre}: ${(e as Error).message.slice(0, 200)}`);
+      return { ok: false, estado: 'error', codigo: 'NO_ENVIADO', mensaje: `No pude enviarle la plantilla a ${nombre}: ${(e as Error).message.slice(0, 200)}` };
     }
   }
 
@@ -483,20 +531,17 @@ export class PuenteService {
 
   private async enviarPorCanal(
     wa: Wechatia,
-    v: WaVinculo,
-    cv: Conversacion,
-    d: Candidato,
+    lead: Lead,
     via: { canal: 'instagram' | 'facebook'; contactId: string },
     cuerpo: string,
     texto: string,
     corredor: string,
-    m: MensajeWa,
-    silencioso = false,
-  ): Promise<boolean> {
+  ): Promise<ResultadoEnvio> {
     const nombreCanal = via.canal === 'instagram' ? 'Instagram' : 'Facebook';
+    const nombre = nombreDe(lead);
     try {
       const r = await wa.enviarAContacto(via.contactId, texto, via.canal);
-      await this.leads.anotar(d.lead, [
+      await this.leads.anotar(lead, [
         {
           k: r.messageId ? 'wc' + r.messageId : 'as' + Date.now().toString(36),
           fecha: horaChile(),
@@ -506,22 +551,17 @@ export class PuenteService {
           datos: { canal: via.canal },
         },
       ]);
-      await this.leads.contactado(d.lead, `${corredor} respondió por ${nombreCanal}`).catch(() => null);
-      const extra = m.adjuntos.length ? ' (los archivos no se reenvían: solo el texto)' : '';
-      await this.decir(wa, v, cv, `✅ Enviado a ${d.nombre} por ${nombreCanal}${extra}.`);
-      return true;
+      await this.leads.contactado(lead, `${corredor} respondió por ${nombreCanal}`).catch(() => null);
+      return { ok: true, estado: 'enviado', canal: via.canal, mensaje: `✅ Enviado a ${nombre} por ${nombreCanal}.` };
     } catch (e) {
-      if (silencioso) {
-        this.log.warn(`respuesta por ${nombreCanal}: ${(e as Error).message}`);
-        return false;
-      }
-      await this.decir(
-        wa,
-        v,
-        cv,
-        `No pude enviarle a ${d.nombre} por ${nombreCanal}: ${(e as Error).message.slice(0, 200)}. ${nombreCanal} solo deja responder a quien escribió hace poco.`,
-      );
-      return false;
+      this.log.warn(`respuesta por ${nombreCanal}: ${(e as Error).message}`);
+      return {
+        ok: false,
+        estado: 'error',
+        codigo: 'NO_ENVIADO',
+        canal: via.canal,
+        mensaje: `No pude enviarle a ${nombre} por ${nombreCanal}: ${(e as Error).message.slice(0, 200)}. ${nombreCanal} solo deja responder a quien escribió hace poco.`,
+      };
     }
   }
 
@@ -535,5 +575,37 @@ export class PuenteService {
     } catch (e) {
       this.log.warn(`aviso al corredor: ${(e as Error).message}`);
     }
+  }
+}
+
+const enviarEsquema = z.object({ texto: z.string().trim().min(1, 'Escribe el mensaje.').max(3500) });
+
+/** POST /v1/leads/:id/enviar { texto } — escribirle al interesado desde la app (Leads), con las mismas reglas del puente */
+@Controller('leads')
+export class LeadsEnvioController {
+  constructor(
+    private readonly puente: PuenteService,
+    private readonly db: PrismaService,
+    private readonly wa: WechatiaService,
+  ) {}
+
+  @Post(':id/enviar')
+  @HttpCode(200)
+  async enviar(
+    @UsuarioActual() u: UsuarioToken,
+    @Param('id', new ZodPipe(idDoc)) id: string,
+    @Body(new ZodPipe(enviarEsquema)) b: z.infer<typeof enviarEsquema>,
+  ) {
+    const lead = await this.db.lead.findFirst({ where: { id, corredoraId: u.corredoraId, eliminadoEn: null } });
+    if (!lead) throw new NotFoundException('El lead no existe.');
+    const wa = await this.wa.cliente(u.corredoraId);
+    if (!wa)
+      throw new BadRequestException({ message: 'El WhatsApp de la empresa no está conectado en Asset.', code: 'SIN_CLAVE' });
+    const r = await this.puente.responder(wa, u.corredoraId, u.sub, lead, b.texto);
+    if (!r.ok) {
+      const cuerpo = { message: r.mensaje, code: r.codigo };
+      throw r.codigo === 'OTRO_CORREDOR' ? new ForbiddenException(cuerpo) : new BadRequestException(cuerpo);
+    }
+    return r;
   }
 }

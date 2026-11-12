@@ -84,7 +84,7 @@ const AND = `16/10/26, 12:20 - Los mensajes y las llamadas están cifrados de ex
     ok(await val('b_operacion') === 'venta' && await val('b_tipo') === 'casa' && await val('b_moneda') === 'UF' && await val('b_valor') === '9000' && await val('b_dormitorios') === '3', 'IA: compra de casa en La Reina hasta UF 9.000, 3 dormitorios');
     // 7. estado y filtros
     await w.selectOption('#ldFicha [data-k="estado"]', 'perdido'); await w.waitForSelector('#ldFicha [data-k="motivo"]');
-    await w.fill('#ldFicha [data-k="motivo"]', 'Compró con otra corredora'); await w.click('#ldGuardar'); await w.waitForTimeout(400);
+    await w.fill('#ldFicha [data-k="motivo"]', 'Compró con otra corredora'); await w.waitForTimeout(1600); // se guarda sola
     await w.click('#ldChips [data-f="abiertos"]'); await w.waitForTimeout(300);
     ok((await w.$$('#ldItems .ld-it')).length === 1, 'un lead perdido sale de «Abiertos»');
     await w.click('#ldChips [data-f="perdido"]'); await w.waitForTimeout(300);
