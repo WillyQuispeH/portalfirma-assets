@@ -572,6 +572,11 @@ function iaFalsa() {
     ok(r.s === 403 && r.j?.code === 'OTRO_CORREDOR', 'desde la app, otro corredor no puede');
     r = await req('POST', `/leads/${leadIg.id}/enviar`, { texto: 'Hola, soy el administrador' }, tA);
     ok(r.s === 200 && r.j.ok, 'el administrador sí');
+    // freno: el mismo mensaje al mismo interesado no se repite, y las ráfagas se cortan
+    r = await req('POST', `/leads/${leadIg.id}/enviar`, { texto: 'Hola, soy el administrador' }, tA);
+    ok(r.s === 400 && r.j?.code === 'DUPLICADO', 'el mismo mensaje al mismo interesado no se repite (10 min)');
+    let corte = null; for (let i = 0; i < 8 && !corte; i++) { const x = await req('POST', `/leads/${leadIg.id}/enviar`, { texto: 'mensaje de ráfaga ' + i }, tA); if (x.j?.code === 'DEMASIADOS') corte = i; }
+    ok(corte !== null && corte <= 6, 'y más de 6 mensajes por minuto al mismo interesado se cortan (en el ' + corte + ')');
 
     // ---- 8a3. fuera de las 24 h: plantilla de primer contacto y el mensaje del corredor sale cuando el interesado responde
     const antesPl2 = (W.plantillas || []).length;

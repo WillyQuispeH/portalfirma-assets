@@ -33,7 +33,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { EjecutivoService } from './ejecutivo';
 import { EnviadosService } from './enviados';
 import { LeadsWaService, type MensajeLead } from './leads-wa';
-import { horaChile, norm, telNorm } from './comun';
+import { horaChile, huella, norm, telNorm } from './comun';
 import { WechatiaError, WechatiaService, type Conversacion, type MensajeWa, type Wechatia } from './wechatia';
 
 /** etiqueta que dispara el flujo «Asset · Primer contacto (plantilla)» de wechatia (plantilla aprobada asset_primer_contacto) */
@@ -75,13 +75,15 @@ export interface ResultadoEnvio {
   ok: boolean;
   estado: 'enviado' | 'plantilla' | 'error';
   canal?: 'whatsapp' | 'instagram' | 'facebook';
-  codigo?: 'OTRO_CORREDOR' | 'SIN_CANAL' | 'NO_ENVIADO';
+  codigo?: 'OTRO_CORREDOR' | 'SIN_CANAL' | 'NO_ENVIADO' | 'DUPLICADO' | 'DEMASIADOS';
   mensaje: string;
 }
 
 @Injectable()
 export class PuenteService {
   private readonly log = new Logger('Puente');
+  /** lo último que se le escribió a cada interesado (freno contra repeticiones y ráfagas): «corredor|lead» → instantes y huellas */
+  private readonly salidas = new Map<string, { t: number; h: string }[]>();
   constructor(
     private readonly db: PrismaService,
     private readonly ejecutivo: EjecutivoService,
@@ -393,6 +395,18 @@ export class PuenteService {
     const nombre = nombreDe(lead);
     if (usuario?.rol !== 'ADMIN' && lead.corredorId !== usuarioId)
       return { ok: false, estado: 'error', codigo: 'OTRO_CORREDOR', mensaje: `${nombre} no está a tu cargo: solo su corredor o un administrador puede escribirle.` };
+    // freno: el mismo mensaje al mismo interesado no se repite en 10 minutos, y no más de 6 por minuto a un interesado
+    const clave = `${usuarioId}|${lead.id}`;
+    const ahora = Date.now();
+    const previas = (this.salidas.get(clave) ?? []).filter((x) => ahora - x.t < 10 * 60_000);
+    const h = huella(cuerpo);
+    if (previas.some((x) => x.h === h))
+      return { ok: false, estado: 'error', codigo: 'DUPLICADO', mensaje: `Ya le mandé ese mismo mensaje a ${nombre} hace un momento: no lo repetí.` };
+    if (previas.filter((x) => ahora - x.t < 60_000).length >= 6)
+      return { ok: false, estado: 'error', codigo: 'DEMASIADOS', mensaje: `Le has escrito demasiadas veces seguidas a ${nombre}: espera un minuto.` };
+    previas.push({ t: ahora, h });
+    this.salidas.set(clave, previas);
+    if (this.salidas.size > 2000) for (const k of this.salidas.keys()) { this.salidas.delete(k); break; }
     const corredor = usuario?.nombre || 'Tu corredor';
     const texto = `*${corredor}* (corredor):\n${cuerpo}`.slice(0, 3800);
     const telefono = telDe(lead);
