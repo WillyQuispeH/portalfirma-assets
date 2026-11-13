@@ -32,7 +32,15 @@ const ABIERTO_MS = 60_000;
 /** «tu Asset está cerrado» a lo más cada tanto */
 const AVISO_CERRADO_MS = 30 * 60_000;
 /** el WhatsApp de la empresa (la línea conectada en wechatia): ahí escriben los clientes y los ejecutivos */
-export const NUMERO_EMPRESA = '+56 9 4497 5958';
+/**
+ * El número de WhatsApp de la empresa de ESTE ambiente («+56 9 4497 5958»): el de WA_NUMERO; si no está, el de producción.
+ * Es el que se le muestra al corredor para vincular su celular y para escribirle a sus asistentes.
+ */
+export const numeroEmpresa = (): string => {
+  const d = String(process.env.WA_NUMERO ?? '').replace(/\D/g, '');
+  const n = d.length === 9 ? '56' + d : d;
+  return /^569\d{8}$/.test(n) ? `+56 9 ${n.slice(3, 7)} ${n.slice(7)}` : '+56 9 4497 5958';
+};
 
 const vincularEsquema = z.object({
   nombre: z.string().trim().max(120).optional(),
@@ -76,7 +84,7 @@ export class EjecutivoService {
       telefono: v?.telefono ?? null,
       codigo: v?.codigo ?? null,
       vinculado: v?.vinculadoEn?.toISOString() ?? null,
-      numeroEmpresa: d.numeroEmpresa || NUMERO_EMPRESA,
+      numeroEmpresa: d.numeroEmpresa || numeroEmpresa(),
       nombre: d.nombre ?? '',
       email: d.email ?? '',
       apodo: d.apodo ?? '',
@@ -355,7 +363,7 @@ export class EjecutivoController {
 
   @Get('equipo')
   async equipo(@UsuarioActual() u: UsuarioToken) {
-    return { items: await equipoVinculado(this.db, u.corredoraId), numeroEmpresa: NUMERO_EMPRESA };
+    return { items: await equipoVinculado(this.db, u.corredoraId), numeroEmpresa: numeroEmpresa() };
   }
 
   @Post('pedir')
@@ -368,7 +376,7 @@ export class EjecutivoController {
       corredoraId: u.corredoraId,
       usuarioId: otro.id,
       tipo: 'wa_pedir_vinculo',
-      texto: `Vincula tu celular con tu equipo de Asset: abre Configuración › WhatsApp y asistentes › «Vincular mi celular» y manda el código por WhatsApp al ${NUMERO_EMPRESA}.`,
+      texto: `Vincula tu celular con tu equipo de Asset: abre Configuración › WhatsApp y asistentes › «Vincular mi celular» y manda el código por WhatsApp al ${numeroEmpresa()}.`,
     });
     return { ok: true };
   }

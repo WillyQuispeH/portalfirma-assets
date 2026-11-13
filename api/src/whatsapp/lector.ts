@@ -45,7 +45,7 @@ import { IaService } from './ia';
 import { PuenteService } from './puente';
 import { EvaluacionService } from './evaluacion';
 import { telNorm } from './comun';
-import { NUMERO_EMPRESA } from './ejecutivo';
+import { numeroEmpresa } from './ejecutivo';
 
 const TURNO_MS = 3 * 60_000;
 const RAPIDO_MS = 10 * 60_000;
@@ -343,7 +343,7 @@ export class LectorService implements OnModuleInit, OnModuleDestroy {
       conectado: !!cx,
       clientesActivo: a?.clientesActivo ?? true,
       leadsActivo: a?.leadsActivo ?? true,
-      numeroEmpresa: NUMERO_EMPRESA,
+      numeroEmpresa: numeroEmpresa(),
       lectorEncendido: this.cadaMs > 0,
       ultimaLectura: a?.lectorEn?.toISOString() ?? null,
       error: a?.lectorError ?? null,

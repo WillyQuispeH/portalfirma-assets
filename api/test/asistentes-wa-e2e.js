@@ -227,7 +227,7 @@ function iaFalsa() {
     ok(r.j.activo && r.j.telefono === '+56 9 9111 1111' && !r.j.codigo, 'su vínculo queda activo con ese celular');
     // Usuarios de la corredora: quién tiene su celular vinculado; el celular queda como su teléfono; pedirle a otro
     r = await req('GET', '/whatsapp/ejecutivo/equipo', null, tA);
-    ok(r.s === 200 && r.j.items.some((x) => x.usuarioId === c1.id && x.telefono === '+56 9 9111 1111') && /4497 5958/.test(r.j.numeroEmpresa), 'el equipo de la corredora muestra quién tiene su celular vinculado');
+    ok(r.s === 200 && r.j.items.some((x) => x.usuarioId === c1.id && x.telefono === '+56 9 9111 1111') && /^\+56 9 \d{4} \d{4}$/.test(r.j.numeroEmpresa), 'el equipo de la corredora muestra quién tiene su celular vinculado');
     ok((await db.usuario.findUnique({ where: { id: c1.id } })).telefono === '+56 9 9111 1111', 'el celular vinculado queda como teléfono del usuario (no tenía)');
     ok((await req('POST', '/whatsapp/ejecutivo/pedir', { usuarioId: adm.id }, t1)).s === 400, 'un corredor no le pide a otro que vincule');
     r = await req('POST', '/whatsapp/ejecutivo/pedir', { usuarioId: c1.id }, tA);
