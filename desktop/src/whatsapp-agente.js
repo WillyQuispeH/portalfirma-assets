@@ -22,8 +22,14 @@ function crear({ store, wa, crearAgente, locales, dictado, inmo, convs, leads = 
   const srvOn = () => !!servidor?.enApi?.();
   const cfg = () => ({ activo: false, telefono: null, codigo: null, numeroEmpresa: '+56 9 4497 5958', ...(store.get('waAgente') || {}) });
   const setCfg = (o) => { const c = { ...cfg(), ...o }; store.set('waAgente', c); return c; };
-  const S = { vistos: store.get('waAgenteVistos') || {}, busy: false, pend: null, ficha: null, lead: null, cola: [], ultimaActividad: 0, contactId: null, items: null,
-    persona: store.get('waPersona') || null, espera: null, agentes: {} };
+  // SIN MEMORIA DE MENSAJES EN EL COMPUTADOR (2026-11-12): lo que se habló por WhatsApp vive en el servidor (asistentes por celular,
+  // cola y registro). Aquí, con una cuenta de Asset, nada se guarda en disco ni se lee WhatsApp directo: antes un equipo con la
+  // memoria local de otro día volvió a procesar mensajes viejos y mandó decenas de mensajes de más. Solo PF_MOCK (pruebas) persiste.
+  const persiste = !!mock;
+  if (!persiste) for (const k of ['waAgenteVistos', 'waHilos', 'waPersona', 'waPropiosIds', 'waClientes']) { try { if (store.get(k) !== undefined) store.set(k, undefined); } catch { /* sin acceso */ } }
+  if (!persiste) { try { const a = store.get('waAgente'); if (a && (a.telefono || a.codigo || a.activo || a.contactId || a.vinculado)) store.set('waAgente', { ...(a.nombre ? { nombre: a.nombre } : {}), ...(a.email ? { email: a.email } : {}) }); } catch { /* sin acceso */ } }
+  const S = { vistos: persiste ? store.get('waAgenteVistos') || {} : {}, busy: false, pend: null, ficha: null, lead: null, cola: [], ultimaActividad: 0, contactId: null, items: null,
+    persona: persiste ? store.get('waPersona') || null : null, espera: null, agentes: {} };
 
   // 0.16 · el equipo: cada personaje (Pedro, Juanita, Diego, Fernanda) es un agente con su propia conversación, así
   // cambiar de personaje no pierde lo que se venía hablando con el anterior. Mismas herramientas de Asset, menos las
@@ -33,13 +39,13 @@ function crear({ store, wa, crearAgente, locales, dictado, inmo, convs, leads = 
   function agenteDe(id) {
     if (!S.agentes[id]) {
       const a = crearAgente({ canal: 'whatsapp', filtro, emit: (e) => evento(e, id) }); a.registrarLocales(locales);
-      try { a.restaurar(desdeUser((store.get('waHilos') || {})[id])); } catch {}
+      if (persiste) { try { a.restaurar(desdeUser((store.get('waHilos') || {})[id])); } catch {} }
       S.agentes[id] = a;
     }
     return S.agentes[id];
   }
-  const guardarHilos = () => { try { store.set('waHilos', Object.fromEntries(Object.entries(S.agentes).map(([k, a]) => [k, desdeUser(a.mensajes())]))); } catch {} };
-  const setPersona = (id) => { S.persona = id; store.set('waPersona', id); emitUI({ type: 'whatsapp', que: 'persona', persona: id }); };
+  const guardarHilos = () => { if (!persiste) return; try { store.set('waHilos', Object.fromEntries(Object.entries(S.agentes).map(([k, a]) => [k, desdeUser(a.mensajes())]))); } catch {} };
+  const setPersona = (id) => { S.persona = id; if (persiste) store.set('waPersona', id); emitUI({ type: 'whatsapp', que: 'persona', persona: id }); };
 
   // ---------- conversación «WhatsApp» visible en el Agente de la app ----------
   function items() { if (!S.items) { try { S.items = convs.obtener(CONV_ID).items || []; } catch { S.items = []; } } return S.items; }
@@ -169,7 +175,7 @@ function crear({ store, wa, crearAgente, locales, dictado, inmo, convs, leads = 
   function retoma(id) {
     if (id === 'pedro' && S.ficha) return 'Tenemos pendiente la propiedad que me dictaste: responde *CREAR* para guardarla o dime qué corregir.';
     if (id === 'fernanda' && S.lead) return `Tenemos pendiente el chat${S.lead.a.cliente ? ' de ' + S.lead.a.cliente : ''}: responde *SÍ* para registrarlo como lead.`;
-    if ((S.agentes[id] || null)?.mensajes().length || ((store.get('waHilos') || {})[id] || []).length) return 'Sigo con lo que estábamos viendo; cuéntame.';
+    if ((S.agentes[id] || null)?.mensajes().length || (persiste && ((store.get('waHilos') || {})[id] || []).length)) return 'Sigo con lo que estábamos viendo; cuéntame.';
     return '';
   }
   // al pasarle la conversación a otro personaje, se le cuenta lo último que se habló (códigos, nombres, lo pedido)
@@ -229,7 +235,8 @@ function crear({ store, wa, crearAgente, locales, dictado, inmo, convs, leads = 
 
   // ---------- revisar WhatsApp: vinculación por código y mensajes del celular vinculado ----------
   let revisando = null;
-  async function revisar() { if (revisando) return revisando; revisando = (srvOn() ? revisarServidor() : revisar1()).finally(() => { revisando = null; }); return revisando; }
+  // con cuenta de Asset: lo entrega el servidor. Sin cuenta o con la sesión vencida NO se lee WhatsApp directo desde aquí (solo PF_MOCK, para pruebas)
+  async function revisar() { if (revisando) return revisando; if (!srvOn() && !mock) return { procesados: 0 }; revisando = (srvOn() ? revisarServidor() : revisar1()).finally(() => { revisando = null; }); return revisando; }
   // con la cuenta de Asset: lo que el servidor guardó del celular vinculado (y si recién se vinculó)
   async function revisarServidor() {
     const antes = !!servidor.ejecutivo.estado().activo;
@@ -269,7 +276,7 @@ function crear({ store, wa, crearAgente, locales, dictado, inmo, convs, leads = 
         try { if (await clientes.manejar(cv, junto, cli, msgs)) procesados++; } catch (e) { try { await avisarCorredor(`No pude responderle a ${cli.nombre} por WhatsApp: ${String(e.message).slice(0, 160)}`); } catch {} }
       }
     }
-    store.set('waAgenteVistos', S.vistos);
+    if (persiste) store.set('waAgenteVistos', S.vistos);
     return { procesados };
   }
   // ritmo: rápido si hay una conversación activa (últimos 10 min) o algo pendiente
