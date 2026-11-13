@@ -217,7 +217,7 @@ app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) creat
 const SOLO_ADMIN = { 'gdrive:connect': 'conexiones', 'gdrive:setClient': 'conexiones', 'gdrive:disconnect': 'conexiones', 'ml:conectar': 'conexiones', 'ml:desconectar': 'conexiones', 'ml:contacto': 'conexiones',
   'res:configurar': 'conexiones', 'pv:claveWa': 'conexiones', 'obs:configurar': 'conexiones', 'dir:configurar': 'conexiones', 'ops:setFileKey': 'conexiones', 'ai:config': 'conexiones',
   'pv:configurar': 'fernanda', 'wallet:topup': 'saldo', 'inmo:propArchivar': 'borrar', 'inmo:perBorrar': 'borrar', 'leads:borrar': 'borrar', 'neg:borrar': 'borrar',
-  'leads:asignar': 'reasignar', 'neg:corredor': 'reasignar', 'inmo:importar': 'importar', 'pv:importar': 'importar', 'fmt:configurar': 'documentos', 'usr:listar': 'usuarios', 'usr:crear': 'usuarios', 'usr:editar': 'usuarios', 'usr:clave': 'usuarios', 'usr:wechatia': 'usuarios' };
+  'leads:asignar': 'reasignar', 'neg:corredor': 'reasignar', 'inmo:importar': 'importar', 'pv:importar': 'importar', 'fmt:configurar': 'documentos', 'usr:listar': 'usuarios', 'usr:crear': 'usuarios', 'usr:editar': 'usuarios', 'usr:clave': 'usuarios' };
 function handle(channel, fn) {
   ipcMain.handle(channel, async (_e, ...args) => {
     try { if (SOLO_ADMIN[channel] && !process.env.PF_SIN_PERFILES) permisos.permiso(SOLO_ADMIN[channel]); return { ok: true, data: await fn(...args) }; }
@@ -806,6 +806,8 @@ const avisosServidor = require('./avisos').crear({
     wa_pedir_vinculo: async (a) => { toUI('agent:event', { type: 'aviso', texto: a.texto }); },
     firmas: async (a) => { try { await inmo.sincronizar(); } catch {} avisarFirmas(a.texto); },
     // la firma de la etapa actual de un negocio: con el negocio ya sincronizado, avanza (lo hace la app: las etapas viven aquí)
+    // un cliente escribió: el lead se recarga al instante (aviso silencioso del servidor)
+    lead_msg: async (a) => { try { await inmo.recargarLead(a.datos?.leadId); } catch {} toUI('agent:event', { type: 'datos', que: 'leads', id: a.datos?.leadId }); },
     firma_negocio: async (a) => {
       try { await inmo.sincronizar(); } catch {}
       let extra = [];
@@ -814,7 +816,7 @@ const avisosServidor = require('./avisos').crear({
     },
   },
 });
-setInterval(() => { avisosServidor.traer().catch((e) => { if (inmo.API) console.warn('[avisos]', e.message); }); }, 30_000).unref?.();
+setInterval(() => { avisosServidor.traer().catch((e) => { if (inmo.API) console.warn('[avisos]', e.message); }); }, 3_000).unref?.();
 inmo.alCargar(async () => { setTimeout(() => avisosServidor.traer().catch(() => {}), 5000); return null; });
 const docs = require('./documentos').crear({ inmo, negocios, pf, firmas });
 const est = require('./estado').crear({ inmo, negocios, agenda });
@@ -1150,7 +1152,6 @@ handle('usr:listar', () => equipo.listar());
 handle('usr:crear', (o) => equipo.crear(o || {}));
 handle('usr:editar', (id, o) => equipo.editar(id, o || {}));
 handle('usr:clave', (id, clave) => equipo.clave(id, clave));
-handle('usr:wechatia', () => equipo.usuariosWechatia({ admin: permisos.esAdmin() }));
 // el nombre de quien usa Asset (para reconocer sus mensajes en los chats importados): el de su cuenta; en modo de
 // prueba, el último que dio la pantalla de Leads
 const miNombre = () => (inmo.API && inmo.usuario()?.nombre) || store.get('leadsBroker') || '';

@@ -21,9 +21,6 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÃ“: ' + m); console.log('  â
     await w.click('#nav [data-view="leads"]'); await w.waitForSelector('#view-leads [data-mas]'); await w.click('#view-leads [data-mas]'); await w.click('#ldCorBtn'); await w.waitForSelector('#usrNuevo');
     for (const [n, c, e] of [['Ana Rivas', '+56 9 5555 0001', 'ana@thelivingchile.cl'], ['Beto Soto', '+56 9 5555 0002', 'beto@thelivingchile.cl']]) {
       await w.click('#usrNuevo'); await w.fill('#usrNombre', n); await w.fill('#usrTel', c); await w.fill('#usrEmail', e); await w.fill('#usrClave', 'clave-inicial-1'); await w.click('#usrGuardar'); await w.waitForSelector(`#usrLista li:has-text("${n}")`); }
-    await w.click('#usrWcTraer'); await w.waitForSelector('#usrWcInfo');
-    await w.waitForFunction(() => /wechatia: Beto Soto/.test(document.querySelector('#usrLista')?.textContent || ''));
-    ok(/wechatia: Ana Rivas/.test(await txt('#usrLista')) && /wechatia: Beto Soto/.test(await txt('#usrLista')) && /2 vinculados/.test(await txt('#usrWcInfo')), 'los usuarios se vinculan solos con su usuario de wechatia (por el correo)');
     await shot('gl0-corredores.png'); await w.click('#mCancel');
     // llega un lead por Instagram, asignado a Ana en wechatia
     await pfc('obsConfigurar', { activo: true, autorizado: true }); await pfc('obsRevisar');

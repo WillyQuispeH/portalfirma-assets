@@ -130,11 +130,34 @@ export class LeadsWaService {
       d.actualizado = new Date().toISOString();
       return { datos: d, cols: masNuevo ? { ultimoEn: u.fecha } : {} };
     });
+    if (delCliente) await this.avisarMensaje(l).catch(() => null);
     return {
       agregados: nuevos.length,
       delCliente: delCliente > 0,
       claves: nuevos.filter((m) => m.de === 'cliente').map((m) => m.k),
     };
+  }
+
+  /**
+   * Aviso silencioso (sin texto) para que la app recargue el lead al instante: va al corredor a cargo y a los
+   * administradores. La app lo recoge en segundos (avisos.js) en vez de esperar la sincronización de cada minuto.
+   */
+  private async avisarMensaje(l: Lead) {
+    const admins = await this.db.usuario.findMany({
+      where: { corredoraId: l.corredoraId, activo: true, rol: 'ADMIN' },
+      select: { id: true },
+    });
+    const para = new Set(admins.map((a) => a.id));
+    if (l.corredorId) para.add(l.corredorId);
+    await this.db.aviso.createMany({
+      data: [...para].map((usuarioId) => ({
+        corredoraId: l.corredoraId,
+        usuarioId,
+        tipo: 'lead_msg',
+        texto: '',
+        datos: { leadId: l.id },
+      })),
+    });
   }
 
   /** un lead nuevo (desde una conversación de WhatsApp o de otro canal) */

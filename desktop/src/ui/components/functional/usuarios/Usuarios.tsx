@@ -41,10 +41,9 @@ export default function Usuarios() {
   // el rol sale del proceso principal (accEstado: el usuario de la sesión de Asset), no del estado de la pantalla
   const { perfil, perfilGet } = usePerfil();
   const admin = !!perfil?.esAdmin; const yo = { id: perfil?.usuarioId || '' };
-  const { lista, cargando, error, wechatia, usuarioGetAll, usuarioWechatia } = useUsuario();
+  const { lista, cargando, error, usuarioGetAll } = useUsuario();
   const [modo, setModo] = useState<TModo>(null);
   const [verAgente, setVerAgente] = useState<IUsuario | null>(null);
-  const [trayendo, setTrayendo] = useState(false);
   const [listoPerfil, setListoPerfil] = useState(false);
   // el celular vinculado de cada usuario (por id)
   const [wa, setWa] = useState<Record<string, string>>({});
@@ -65,13 +64,10 @@ export default function Usuarios() {
     <VentanaCuerpo><div id="usrPanel" className="usr"><EstadoVacio compacto texto="Cargando…" /></div></VentanaCuerpo>
     <VentanaPie><Boton id="mCancel" variante="secundario" onClick={() => cerrarModal()}>Cerrar</Boton></VentanaPie>
   </>;
-  const traerWechatia = async () => {
-    setTrayendo(true); await usuarioWechatia(); setTrayendo(false);
-  };
 
   // agregar, editar o asignar clave: cada formulario es una vista de la ventana; al terminar o cancelar vuelve a la lista
   if (admin && modo?.tipo === 'nuevo') return <FormNuevo onListo={() => { listo(); toast('Usuario agregado. Ya puede entrar con su correo y la clave inicial.'); }} onCancelar={() => setModo(null)} />;
-  if (admin && modo?.tipo === 'editar') return <FormEditar key={modo.u.id} u={modo.u} yo={yo.id} wechatia={wechatia} onListo={() => { listo(); toast('Usuario guardado.'); }} onCancelar={() => setModo(null)} />;
+  if (admin && modo?.tipo === 'editar') return <FormEditar key={modo.u.id} u={modo.u} yo={yo.id} onListo={() => { listo(); toast('Usuario guardado.'); }} onCancelar={() => setModo(null)} />;
   if (admin && modo?.tipo === 'clave') return <FormClave key={modo.u.id} u={modo.u} onListo={() => { setModo(null); toast(`Clave nueva asignada a ${modo.u.nombre}. Sus sesiones abiertas se cerraron.`); }} onCancelar={() => setModo(null)} />;
 
   return <>
@@ -88,16 +84,10 @@ export default function Usuarios() {
 
         {admin && verAgente && <ConversacionesUsuario u={verAgente} onCerrar={() => setVerAgente(null)} />}
 
-        {admin && wechatia && (
-          <p className={NOTA} id="usrWcInfo">
-            {wechatia.error ? wechatia.error : `wechatia: ${wechatia.usuarios.length} usuario${wechatia.usuarios.length === 1 ? '' : 's'}${wechatia.vinculados ? ` · ${wechatia.vinculados} vinculado${wechatia.vinculados === 1 ? '' : 's'} por su correo` : ''}. Elige el de cada uno al editarlo.`}
-          </p>
-        )}
         {!admin && <p className={NOTA}>Agregar o editar usuarios lo hace el administrador.</p>}
       </div>
     </VentanaCuerpo>
     <VentanaPie>
-      {admin && <Boton id="usrWcTraer" variante="secundario" icono="users" className="tw:mr-auto" cargando={trayendo} onClick={traerWechatia}>Traer usuarios de wechatia</Boton>}
       <Boton id="mCancel" variante="secundario" onClick={() => cerrarModal()}>Cerrar</Boton>
       {admin && <Boton id="usrNuevo" icono="plus" onClick={() => setModo({ tipo: 'nuevo' })}>Agregar usuario</Boton>}
     </VentanaPie>
@@ -173,17 +163,15 @@ function FormNuevo({ onListo, onCancelar }: { onListo: () => void; onCancelar: (
   </>;
 }
 
-function FormEditar({ u, yo, wechatia, onListo, onCancelar }: { u: IUsuario; yo: string; wechatia: ReturnType<typeof useUsuario>['wechatia']; onListo: () => void; onCancelar: () => void }) {
+function FormEditar({ u, yo, onListo, onCancelar }: { u: IUsuario; yo: string; onListo: () => void; onCancelar: () => void }) {
   const { usuarioEditar } = useUsuario();
   const [d, setD] = useState({ nombre: u.nombre, telefono: u.telefono || '', rol: u.rol, activo: u.activo, wechatiaId: u.wechatiaId || '' });
   const [err, setErr] = useState(''); const [enviando, setEnviando] = useState(false);
   const soyYo = u.id === yo;
-  const opcionesWc = wechatia?.usuarios?.length ? wechatia.usuarios : null;
   const enviar = async (e: FormEvent) => {
     e.preventDefault(); setEnviando(true); setErr('');
-    const wc = opcionesWc?.find((x) => x.id === d.wechatiaId);
     const r = await usuarioEditar(u.id, { nombre: d.nombre, telefono: d.telefono, ...(soyYo ? {} : { rol: d.rol, activo: d.activo }),
-      ...(d.wechatiaId !== (u.wechatiaId || '') ? { wechatiaId: d.wechatiaId || null, wechatiaNombre: wc?.nombre || null } : {}) });
+      ...(d.wechatiaId !== (u.wechatiaId || '') ? { wechatiaId: d.wechatiaId || null, wechatiaNombre: null } : {}) });
     setEnviando(false);
     if (r) setErr(r); else onListo();
   };
@@ -196,11 +184,7 @@ function FormEditar({ u, yo, wechatia, onListo, onCancelar }: { u: IUsuario; yo:
         <Input id="usrTel" etiqueta="Teléfono" placeholder="+56 9 …" value={d.telefono} onChange={(e) => setD({ ...d, telefono: e.target.value })} />
         <Select id="usrRol" etiqueta="Rol" opciones={ROLES} value={d.rol} disabled={soyYo} onChange={(e) => setD({ ...d, rol: e.target.value as RolAsset })}
           ayuda={soyYo ? 'No puedes quitarte el rol de administrador.' : undefined} />
-        {opcionesWc
-          ? <Select id="usrWc" etiqueta="Usuario en wechatia" vacia="— sin vincular —" value={d.wechatiaId} onChange={(e) => setD({ ...d, wechatiaId: e.target.value })}
-              opciones={opcionesWc.map((w) => [w.id, `${w.nombre}${w.email ? ' · ' + w.email : ''}`] as [string, string])} />
-          : <Input id="usrWc" etiqueta="Usuario en wechatia (ID)" placeholder="Opcional" value={d.wechatiaId} onChange={(e) => setD({ ...d, wechatiaId: e.target.value })}
-              ayuda="O usa «Traer usuarios de wechatia» para elegirlo de la lista." />}
+        <Input id="usrWc" etiqueta="Usuario en wechatia (ID)" placeholder="Opcional" value={d.wechatiaId} onChange={(e) => setD({ ...d, wechatiaId: e.target.value })} />
       </div>
       <Switch id="usrActivo" activo={d.activo} deshabilitado={soyYo} alCambiar={(v) => setD({ ...d, activo: v })} etiqueta="Activo"
         descripcion={soyYo ? 'No puedes desactivarte.' : 'Desactivado no puede entrar y se cierran sus sesiones abiertas.'} />

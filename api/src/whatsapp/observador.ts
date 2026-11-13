@@ -64,7 +64,7 @@ export const CFG_OBS = {
   ia: true,
   diasInicio: 30,
 };
-const CADA_MS = 2 * 60_000;
+const CADA_MS = 8_000; // la ronda salta lo que no cambió (marca), así que es barata: el mensaje se anota al tiro
 
 const SISTEMA = `Eres el asistente de una corredora de propiedades en Chile. Lees la conversación (WhatsApp, Instagram o correo) entre un broker y un cliente (lead) y devuelves SOLO un JSON:
 {"resumen": "1 o 2 frases: qué busca y en qué quedaron", "busqueda": {"operacion": "arriendo"|"venta"|null, "tipo": "departamento"|"casa"|"oficina"|"local_comercial"|"parcela"|"terreno_construccion"|"bodega"|"estacionamiento"|null, "comunas": [..], "presupuesto": {"valor": número, "moneda": "CLP"|"UF"} o null, "dormitorios": número o null, "banos": número o null, "estacionamiento": true|false|null, "mascotas": true|false|null, "plazo": "cuándo lo necesita" o null, "otros": ["requisitos cortos"]},

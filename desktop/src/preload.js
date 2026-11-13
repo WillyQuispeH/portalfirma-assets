@@ -127,7 +127,6 @@ contextBridge.exposeInMainWorld('pf', {
   usrCrear: (o) => inv('usr:crear', o),
   usrEditar: (id, o) => inv('usr:editar', id, o),
   usrClave: (id, clave) => inv('usr:clave', id, clave),
-  usrWechatia: () => inv('usr:wechatia'),
   // conexión con Portalfirma (firma y plantillas)
   restore: () => inv('auth:restore'),
   login: () => inv('auth:login'),

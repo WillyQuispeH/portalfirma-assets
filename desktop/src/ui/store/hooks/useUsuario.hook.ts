@@ -4,8 +4,8 @@ import { useUsuarioStore } from '../zustand/usuario.store';
 
 export function useUsuario() {
   return useUsuarioStore(useShallow((s) => ({
-    lista: s.lista, cargando: s.cargando, error: s.error, wechatia: s.wechatia,
+    lista: s.lista, cargando: s.cargando, error: s.error,
     usuarioGetAll: s.usuarioGetAll, usuarioCrear: s.usuarioCrear, usuarioEditar: s.usuarioEditar,
-    usuarioClave: s.usuarioClave, usuarioWechatia: s.usuarioWechatia,
+    usuarioClave: s.usuarioClave,
   })));
 }

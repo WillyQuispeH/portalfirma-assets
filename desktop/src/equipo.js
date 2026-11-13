@@ -48,19 +48,6 @@ function crear({ asset, res = null, alCambiar = () => {} }) {
     if (String(nueva || '').length < 8) throw err('La clave debe tener al menos 8 caracteres.');
     return asset.llamar('PUT', `/usuarios/${id}/clave`, { clave: String(nueva) }).then(() => true);
   }
-  // usuarios de wechatia (para vincular); el que tiene el mismo correo que un usuario de Asset se vincula solo
-  async function usuariosWechatia({ admin = false } = {}) {
-    if (!res) return { usuarios: [], error: 'wechatia no está disponible.' };
-    let us;
-    try {
-      const j = await res.api('GET', `/users/?locationId=${encodeURIComponent(res.locationId() || '')}`);
-      us = (j.users || []).map((u) => ({ id: u.id, nombre: u.name || [u.firstName, u.lastName].filter(Boolean).join(' '), email: (u.email || '').toLowerCase(), telefono: u.phone || '' }));
-    } catch (e) { return { usuarios: [], error: /permiso|CLAVE|401|403/i.test(e.message + (e.code || '')) ? 'La clave de wechatia no tiene permiso para ver usuarios: agrega «Ver usuarios» a la integración privada, o escribe a mano el ID de usuario.' : e.message }; }
-    let vinculados = 0;
-    if (admin) for (const c of cache) if (!c.wechatiaId && c.email) { const u = us.find((x) => x.email === c.email.toLowerCase()); if (u) { try { await asset.llamar('PATCH', `/usuarios/${c.id}`, { wechatiaId: u.id, wechatiaNombre: u.nombre }); c.wechatiaId = u.id; c.wechatiaNombre = u.nombre; vinculados++; } catch {} } }
-    if (vinculados) await despues();
-    return { usuarios: us, vinculados };
-  }
-  return { cargar, vaciar, lista, activos, porId, nombre, porWechatia, listar, crear: crearUsuario, editar, clave, usuariosWechatia };
+  return { cargar, vaciar, lista, activos, porId, nombre, porWechatia, listar, crear: crearUsuario, editar, clave };
 }
 module.exports = { crear };
