@@ -101,6 +101,12 @@ export class PropiedadesController {
     return this.propiedades.desvincular(u, id, v);
   }
 
+  /** POST /v1/propiedades/importar-convecta — lee la cartera de Convecta y la asigna a cada corredor por su correo (admin) */
+  @Post('importar-convecta')
+  importarConvecta(@UsuarioActual() u: UsuarioToken) {
+    return this.propiedades.importarConvecta(u);
+  }
+
   /** POST /v1/propiedades/importar — { sistema, items: [{ origenId, datos, propietario? }] } por tandas de hasta 100 */
   @Post('importar')
   importar(@UsuarioActual() u: UsuarioToken, @Body(new ZodPipe(importarEsquema)) b: ImportarEntrada) {

@@ -17,6 +17,8 @@ export interface MensajeLead {
   autor: string;
   texto: string;
   tipo?: string;
+  /** foto o archivo del mensaje (tipo «imagen», etc.): se muestra en el chat */
+  mediaUrl?: string;
   datos?: Record<string, unknown>;
 }
 
@@ -109,6 +111,7 @@ export class LeadsWaService {
         autor: m.autor.slice(0, 200),
         texto: m.texto.slice(0, 6000),
         tipo: m.tipo ?? 'texto',
+        mediaUrl: m.mediaUrl ?? null,
         datos: { wa: true, ...(m.datos ?? {}) },
       })),
     });

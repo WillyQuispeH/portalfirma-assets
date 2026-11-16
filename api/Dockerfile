@@ -24,6 +24,9 @@ RUN yarn install --frozen-lockfile --production --ignore-scripts --prefer-offlin
 # --- runner ---
 FROM base AS runner
 ENV NODE_ENV=production TZ=UTC
+# Chromium para generar los PDF (orden de visita…) con puppeteer-core: ver src/documentos/pdf.service.ts
+RUN apk add --no-cache chromium font-liberation font-noto-emoji
+ENV PDF_CHROMIUM=/usr/bin/chromium
 USER node
 COPY --chown=node:node package.json ./
 COPY --from=deps --chown=node:node /app/node_modules ./node_modules

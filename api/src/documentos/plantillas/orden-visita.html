@@ -1,0 +1,99 @@
+<!doctype html>
+<!--
+  ORDEN DE VISITA de PortalFirma Asset. Es un HTML normal: se edita el texto y el estilo aquí.
+  Las variables van entre llaves dobles y se reemplazan solas al generar el PDF:
+
+    {{numero}}  {{fechaEmision}}  {{visita.fecha}}  {{visita.hora}}
+    {{corredora.nombre}}  {{corredora.rut}}
+    {{corredor.nombre}}   {{corredor.email}}   {{corredor.telefono}}
+    {{visitante.nombre}}  {{visitante.rut}}    {{visitante.email}}   {{visitante.telefono}}
+
+  Las propiedades se repiten con  {{#propiedades}} … {{/propiedades}}  y dentro llevan:
+    {{codigo}} {{tipo}} {{direccion}} {{operacion}} {{precio}} {{descripcion}} {{foto}}
+  y su lista de características con  {{#rasgos}} {{nombre}}: {{valor}} {{/rasgos}}.
+
+  Un bloque  {{#algo}} … {{/algo}}  solo aparece si «algo» tiene valor (por ejemplo la foto o el teléfono).
+  Este documento NO lleva cajas ni líneas de firma: Portalfirma agrega su propia hoja de firma al enviarlo.
+  Este texto es un borrador para que lo revise el notario: al cambiarlo, el documento que firman los visitantes cambia.
+-->
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Orden de visita nº {{numero}}</title>
+<style>
+  @page { size: A4; margin: 13mm 15mm 14mm; }
+  * { box-sizing: border-box; }
+  body { font-family: "Helvetica Neue", Arial, sans-serif; font-size: 10pt; line-height: 1.4; color: #1c2230; margin: 0; }
+  .top { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #1c2230; padding-bottom: 10px; margin-bottom: 16px; }
+  .top h1 { margin: 0; font-size: 17pt; letter-spacing: .02em; }
+  .top .emp { font-size: 9.5pt; color: #4a5266; margin-top: 2px; }
+  .top .n { text-align: right; font-size: 9.5pt; color: #4a5266; }
+  .top .n b { display: block; font-size: 12pt; color: #1c2230; }
+  h2 { font-size: 10pt; text-transform: uppercase; letter-spacing: .06em; color: #4a5266; margin: 13px 0 5px; }
+  .caja { border: 1px solid #cfd5e2; border-radius: 6px; padding: 10px 12px; }
+  .datos { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 18px; }
+  .datos span { color: #4a5266; font-size: 9pt; display: block; }
+  .datos b { font-weight: 600; }
+  .prop { display: flex; gap: 12px; border: 1px solid #cfd5e2; border-radius: 6px; padding: 8px 10px; margin-bottom: 8px; page-break-inside: avoid; }
+  .prop .ft { width: 130px; flex: none; }
+  .prop .ft img { width: 130px; height: 96px; object-fit: cover; border-radius: 4px; display: block; }
+  .prop .cod { font-size: 9pt; color: #4a5266; }
+  .prop .ti { font-weight: 700; font-size: 11pt; }
+  .prop .pr { margin-top: 2px; font-weight: 600; }
+  .prop .rs { margin-top: 4px; font-size: 9.5pt; color: #4a5266; }
+  .prop .rs span { margin-right: 10px; }
+  .prop .de { margin-top: 4px; font-size: 9.5pt; }
+  .leg p { margin: 0 0 6px; text-align: justify; font-size: 9.5pt; }
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div>
+    <h1>ORDEN DE VISITA</h1>
+    <div class="emp">{{corredora.nombre}}{{#corredora.rut}} · RUT {{corredora.rut}}{{/corredora.rut}}</div>
+  </div>
+  <div class="n"><b>Nº {{numero}}</b>Emitida el {{fechaEmision}}</div>
+</div>
+
+<h2>Visitante</h2>
+<div class="caja datos">
+  <div><span>Nombre</span><b>{{visitante.nombre}}</b></div>
+  <div><span>RUT</span><b>{{visitante.rut}}</b></div>
+  <div><span>Correo</span><b>{{visitante.email}}</b></div>
+  <div><span>Teléfono</span><b>{{visitante.telefono}}</b></div>
+</div>
+
+<h2>Propiedades que visitará</h2>
+{{#propiedades}}
+<div class="prop">
+  {{#foto}}<div class="ft"><img src="{{foto}}" alt=""></div>{{/foto}}
+  <div>
+    <div class="cod">Código {{codigo}}</div>
+    <div class="ti">{{tipo}} · {{direccion}}</div>
+    <div class="pr">{{operacion}}{{#precio}}: {{precio}}{{/precio}}</div>
+    <div class="rs">{{#rasgos}}<span>{{nombre}}: <b>{{valor}}</b></span>{{/rasgos}}</div>
+    {{#descripcion}}<div class="de">{{descripcion}}</div>{{/descripcion}}
+  </div>
+</div>
+{{/propiedades}}
+
+<h2>Visita</h2>
+<div class="caja datos">
+  <div><span>Fecha</span><b>{{visita.fecha}}</b></div>
+  <div><span>Hora</span><b>{{visita.hora}}</b></div>
+  <div><span>Atiende</span><b>{{corredor.nombre}}</b></div>
+  <div><span>Contacto</span><b>{{corredor.email}}{{#corredor.telefono}} · {{corredor.telefono}}{{/corredor.telefono}}</b></div>
+</div>
+
+<h2>Declaraciones del visitante</h2>
+<div class="leg">
+  <p>1. {{visitante.nombre}} (el «Visitante») solicita a {{corredora.nombre}} (la «Corredora») visitar las propiedades indicadas en esta orden, y declara que la información que se le entrega sobre ellas es referencial.</p>
+  <p>2. El Visitante reconoce que la Corredora fue quien le presentó estas propiedades. Si decide arrendarlas o comprarlas, se obliga a realizar la operación por intermedio de la Corredora y a pagar la comisión de corretaje que corresponda según los honorarios informados por la Corredora, más los impuestos aplicables.</p>
+  <p>3. La información de las propiedades y de sus propietarios es personal e intransferible: el Visitante no la usará ni la entregará a terceros para contratar la propiedad por otra vía, directa o indirectamente.</p>
+  <p>4. Declara contar con las facultades para firmar esta orden, por sí o en representación de quien indique, y autoriza a la Corredora a contactarlo por los medios señalados para coordinar visitas y dar seguimiento, conforme a la Ley Nº 19.628 sobre protección de la vida privada.</p>
+  <p>5. Esta orden se firma electrónicamente con Portalfirma y su vigencia es de 180 días corridos desde su fecha de emisión.</p>
+</div>
+
+</body>
+</html>

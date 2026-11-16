@@ -1,0 +1,91 @@
+<!doctype html>
+<!--
+  ACTA DE VISITA de PortalFirma Asset: la constancia de que la visita se realizó, con lo conversado y el interés del visitante.
+  Va con el número de la orden de visita. La firma el visitante. Es un HTML normal: se edita el texto y el estilo aquí.
+  Las variables van entre llaves dobles y se reemplazan solas al generar el PDF:
+
+    {{fechaVisita}}  {{fechaEmision}}  {{orden.texto}} («Orden de visita nº 12» o «Sin orden de visita registrada»)
+    {{corredora.nombre}}  {{corredora.rut}}   {{corredor.nombre}}  {{corredor.email}}
+    {{visitante.nombre}}  {{visitante.rut}}   {{visitante.email}}  {{visitante.telefono}}
+    {{propiedad.codigo}}  {{propiedad.tipo}}  {{propiedad.direccion}}
+    {{interes}}  («Alto», «Medio», «Bajo» o «Sin datos»)   {{observaciones}}   {{notas}}
+    listas con  {{#interesado}}{{texto}}{{/interesado}}  —  interesado, comentarioCorredor, objeciones, acuerdos, proximosPasos
+
+  Un bloque  {{#algo}} … {{/algo}}  solo aparece si «algo» tiene valor (o lista) .
+  Este documento NO lleva cajas ni líneas de firma: Portalfirma agrega su propia hoja de firma al enviarlo.
+  Este texto es un borrador para que lo revise el notario.
+-->
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Acta de visita</title>
+<style>
+  @page { size: A4; margin: 13mm 15mm 14mm; }
+  * { box-sizing: border-box; }
+  body { font-family: "Helvetica Neue", Arial, sans-serif; font-size: 10pt; line-height: 1.4; color: #1c2230; margin: 0; }
+  .top { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #1c2230; padding-bottom: 10px; margin-bottom: 14px; }
+  .top h1 { margin: 0; font-size: 17pt; letter-spacing: .02em; }
+  .top .emp { font-size: 9.5pt; color: #4a5266; margin-top: 2px; }
+  .top .n { text-align: right; font-size: 9.5pt; color: #4a5266; }
+  .top .n b { display: block; font-size: 12pt; color: #1c2230; }
+  h2 { font-size: 10pt; text-transform: uppercase; letter-spacing: .06em; color: #4a5266; margin: 13px 0 5px; }
+  .caja { border: 1px solid #cfd5e2; border-radius: 6px; padding: 10px 12px; }
+  .datos { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 18px; }
+  .datos span { color: #4a5266; font-size: 9pt; display: block; }
+  .datos b { font-weight: 600; }
+  .datos .ancho { grid-column: 1 / -1; }
+  .obs { white-space: pre-wrap; text-align: justify; }
+  ul { margin: 3px 0 8px; padding-left: 18px; }
+  li { margin-bottom: 2px; }
+  h3 { font-size: 9.5pt; margin: 8px 0 2px; }
+  .leg p { margin: 0 0 6px; text-align: justify; font-size: 9.5pt; }
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div>
+    <h1>ACTA DE VISITA</h1>
+    <div class="emp">{{corredora.nombre}}{{#corredora.rut}} · RUT {{corredora.rut}}{{/corredora.rut}}</div>
+  </div>
+  <div class="n"><b>{{orden.texto}}</b>Visita del {{fechaVisita}}</div>
+</div>
+
+<h2>Visitante</h2>
+<div class="caja datos">
+  <div><span>Nombre</span><b>{{visitante.nombre}}</b></div>
+  <div><span>RUT</span><b>{{visitante.rut}}</b></div>
+  <div><span>Correo</span><b>{{visitante.email}}</b></div>
+  <div><span>Teléfono</span><b>{{visitante.telefono}}</b></div>
+</div>
+
+<h2>Propiedad visitada</h2>
+<div class="caja datos">
+  <div><span>Código</span><b>{{propiedad.codigo}}</b></div>
+  <div><span>Atendió</span><b>{{corredor.nombre}}</b></div>
+  <div class="ancho"><span>{{propiedad.tipo}}</span><b>{{propiedad.direccion}}</b></div>
+</div>
+
+<h2>Constancia</h2>
+<p style="margin: 0; text-align: justify;">Se deja constancia de que el día {{fechaVisita}} {{visitante.nombre}} visitó la propiedad individualizada, atendido(a) por {{corredor.nombre}} de {{corredora.nombre}}, en cumplimiento de la {{orden.texto}}.</p>
+
+<h2>Observaciones de la visita</h2>
+<div class="obs">{{observaciones}}</div>
+{{#hayInteresado}}<h3>Lo que comentó el visitante</h3><ul>{{#interesado}}<li>{{texto}}</li>{{/interesado}}</ul>{{/hayInteresado}}
+{{#hayCorredor}}<h3>Lo que comentó el corredor</h3><ul>{{#comentarioCorredor}}<li>{{texto}}</li>{{/comentarioCorredor}}</ul>{{/hayCorredor}}
+{{#hayObjeciones}}<h3>Objeciones</h3><ul>{{#objeciones}}<li>{{texto}}</li>{{/objeciones}}</ul>{{/hayObjeciones}}
+{{#hayAcuerdos}}<h3>Acuerdos</h3><ul>{{#acuerdos}}<li>{{texto}}</li>{{/acuerdos}}</ul>{{/hayAcuerdos}}
+{{#hayProximos}}<h3>Próximos pasos</h3><ul>{{#proximosPasos}}<li>{{texto}}</li>{{/proximosPasos}}</ul>{{/hayProximos}}
+
+<h2>Interés del visitante</h2>
+<div class="caja datos"><div class="ancho"><span>Nivel de interés</span><b>{{interes}}</b></div></div>
+{{#notas}}<h2>Notas del corredor</h2><div class="obs">{{notas}}</div>{{/notas}}
+
+<h2>Declaración del visitante</h2>
+<div class="leg">
+  <p>El visitante declara que la visita se realizó en la fecha indicada y que lo anotado en esta acta refleja lo conversado durante ella.</p>
+  <p>Esta acta se firma electrónicamente con Portalfirma.</p>
+</div>
+
+</body>
+</html>

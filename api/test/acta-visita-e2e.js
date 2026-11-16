@@ -47,6 +47,14 @@ const ingresar = async (email, clave) => (await req('POST', '/auth/ingresar', { 
     r = await req('POST', `/actas-visita/${id}/foto`, { imagen: Buffer.alloc(900, 1).toString('base64'), mime: 'image/jpeg' }, tA);
     ok(r.s === 400, 'un archivo que no es imagen se rechaza');
 
+    // 0.18.10 · se puede quitar un audio o una foto de un acta abierta
+    r = await req('POST', `/actas-visita/${id}/foto`, { imagen: png.toString('base64'), mime: 'image/png' }, tA);
+    ok(r.s === 200 && r.j.fotos.length === 2, 'se suma una segunda foto');
+    r = await req('DELETE', `/actas-visita/${id}/archivo/foto/2`, null, tA);
+    ok(r.s === 200 && r.j.fotos.length === 1 && r.j.fotos[0].n === 1, 'una foto se puede eliminar del acta (la otra queda con su número)');
+    ok((await req('DELETE', `/actas-visita/${id}/archivo/foto/9`, null, tA)).s === 404, 'eliminar un archivo que no existe da 404');
+    ok((await req('DELETE', `/actas-visita/${id}/archivo/foto/1`, null, tB)).s === 403, 'otro corredor no puede eliminar archivos del acta');
+
     r = await req('POST', `/actas-visita/${id}/audio`, { audio: Buffer.alloc(3000, 7).toString('base64'), mime: 'audio/webm', origen: 'app' }, tA);
     ok(r.s === 200 && r.j.audios.length === 1 && r.j.audios[0].origen === 'app' && r.j.audios[0].tipo === 'audio/webm', 'un audio queda guardado en el acta');
     ok(r.j.audios[0].transcripcion !== undefined && !r.j.audios[0].clave, 'el audio trae su transcripción (o el error) y no expone la clave');
@@ -69,6 +77,32 @@ const ingresar = async (email, clave) => (await req('POST', '/auth/ingresar', { 
     ok(r.s === 400, 'a un acta cerrada ya no se le suma nada');
     const act = await db.actividad.findFirst({ where: { corredoraId: co.id, entidadId: ng.id, texto: { contains: 'Acta de visita' } } });
     ok(!!act, 'el cierre queda en la actividad del negocio');
+    // 0.18.10 · el resumen queda en el historial del negocio y el paso «Acta de visita» queda logrado desde el servidor
+    const res = await db.actividad.findFirst({ where: { corredoraId: co.id, entidadId: ng.id, texto: { startsWith: 'Resumen del acta de visita' } } });
+    ok(!!res, 'el resumen del acta queda también en el historial del negocio');
+    const ngDb = await db.negocio.findUnique({ where: { id: ng.id } });
+    ok(ngDb.datos?.pasos?.acta?.e === 'pend' && /firmar/.test(ngDb.datos.pasos.acta.d), 'al cerrar el acta, el paso «Acta de visita» queda pendiente: falta enviarla a firmar (se logra con la firma del visitante)');
+    const av = await db.aviso.findFirst({ where: { corredoraId: co.id, tipo: 'acta_cerrada' } });
+    ok(!!av && av.datos?.negocioId === ng.id, 'se avisa a la app para que traiga el negocio al día');
+    ok((await req('DELETE', `/actas-visita/${id}/archivo/foto/1`, null, tA)).s === 400, 'de un acta cerrada ya no se quitan archivos');
+
+    // 0.18.10 · acta firmada: PDF con el número de la orden, ajustes guardados en la persona y envío a firmar al visitante
+    r = await req('POST', `/actas-visita/${id}/firma/vista-previa`, {}, tA);
+    ok(r.s === 200 && /no tiene RUT/.test(r.j.error) && r.j.visitante?.nombre === 'Ana Interesada' && !r.j.pdf, 'sin RUT del visitante, la vista previa lo dice claro y trae sus datos para completarlos');
+    r = await req('POST', `/actas-visita/${id}/firma/ajustes`, { visitante: { nombre: 'Ana Interesada', rut: '7.654.321-6', email: 'ana@correo.cl' }, observaciones: 'Le gustó mucho la propiedad.', interes: 'alto' }, tA);
+    ok(r.s === 200 && r.j.ok, 'los ajustes (visitante, observaciones e interés) se guardan');
+    const perDb = await db.persona.findUnique({ where: { id: per.id } });
+    ok(perDb.email === 'ana@correo.cl' && /7\.654\.321-6/.test(perDb.rutFormato || perDb.rut), 'los datos del visitante quedaron guardados en la persona del CRM');
+    r = await req('POST', `/actas-visita/${id}/firma/vista-previa`, {}, tA);
+    ok(r.s === 200 && !r.j.error && Buffer.from(r.j.pdf, 'base64').slice(0, 4).toString() === '%PDF' && r.j.interes === 'alto' && /gustó mucho/.test(r.j.observaciones), 'con los datos completos devuelve el PDF del acta con las observaciones y el interés');
+    ok(r.j.orden === 'Sin orden de visita registrada', 'sin orden de visita, el acta lo dice');
+    await db.firma.create({ data: { id: 'op' + SUF, corredoraId: co.id, operacion: Number('9' + Date.now().toString().slice(-6)), documento: 'Orden de visita nº 7', origen: 'asset', estado: 'firmado', negocioId: ng.id, propiedadIds: [prop.id], firmantes: [], datos: { numero: 7 } } });
+    r = await req('POST', `/actas-visita/${id}/firma/vista-previa`, {}, tA);
+    ok(r.j.orden === 'Orden de visita nº 7', 'el acta va con el número de la orden de visita del negocio');
+    ok((await req('POST', `/actas-visita/${id}/firma/vista-previa`, {}, tB)).s === 403, 'otro corredor no puede ver el acta de un negocio ajeno');
+    r = await req('POST', `/actas-visita/${id}/firma/enviar`, {}, tA);
+    ok(r.s === 200 && /Portalfirma/.test(r.j.error || ''), 'sin Portalfirma conectado, enviar a firmar lo dice claro y no registra nada');
+    ok(!(await db.firma.findFirst({ where: { corredoraId: co.id, documento: { startsWith: 'Acta de visita' } } })), 'si no se pudo enviar, no queda ninguna firma registrada');
 
     r = await req('POST', `/actas-visita/negocio/${ng.id}`, {}, tA);
     ok(r.s === 200 && r.j.id !== id, 'se puede abrir otra acta (otra visita) del mismo negocio');
@@ -87,7 +121,7 @@ const ingresar = async (email, clave) => (await req('POST', '/auth/ingresar', { 
     if (co) {
       const w = { where: { corredoraId: co.id } };
       const usuarios = (await db.usuario.findMany({ ...w, select: { id: true } })).map((u) => u.id);
-      for (const m of ['registro', 'actividad', 'iaConsumo', 'negocio']) await db[m].deleteMany(w).catch((e) => console.log('limpieza ' + m + ': ' + e.message));
+      for (const m of ['registro', 'actividad', 'iaConsumo', 'firma', 'aviso', 'negocio']) await db[m].deleteMany(w).catch((e) => console.log('limpieza ' + m + ': ' + e.message));
       await db.propiedadPersona.deleteMany({ where: { propiedad: { corredoraId: co.id } } }).catch(() => null);
       await db.propiedad.deleteMany(w).catch(() => null); await db.persona.deleteMany(w).catch(() => null); await db.contador.deleteMany(w).catch(() => null);
       await db.sesion.deleteMany({ where: { usuarioId: { in: usuarios } } }).catch(() => null);

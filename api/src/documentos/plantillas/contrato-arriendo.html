@@ -1,0 +1,65 @@
+<!doctype html>
+<!--
+  CONTRATO DE ARRENDAMIENTO de PortalFirma Asset. HTML normal: se edita el texto y el estilo aquí.
+  Variables entre llaves dobles (se reemplazan solas al generar el PDF):
+    {{numero}} {{fechaEmision}} {{ciudad}}
+    {{corredora.nombre}} {{corredora.rut}}
+    {{arrendador}}  (texto con los propietarios: «Ana Pérez, RUT 1-9, y Juan Soto, RUT 2-7»)
+    {{arrendatario.nombre}} {{arrendatario.rut}} {{arrendatario.email}} {{arrendatario.telefono}}
+    {{#codeudor}} … {{/codeudor}}   (solo si hay codeudores: son los avales que se evaluaron con el arrendatario)
+    {{codeudor.texto}} (nombres y RUT)  {{codeudor.titulo}}  {{codeudor.etiqueta}}  {{codeudor.verbo}}  {{codeudor.obliga}}  {{codeudor.nombres}}
+    {{propiedad.codigo}} {{propiedad.tipo}} {{propiedad.direccion}}
+    {{contrato.inicio}} {{contrato.plazo}} {{contrato.renta}} {{contrato.diaPago}} {{contrato.garantia}}
+    {{contrato.reajuste}} {{contrato.aviso}} {{contrato.destino}} {{contrato.clausulas}}
+  Un bloque  {{#algo}} … {{/algo}}  solo aparece si «algo» tiene valor.
+  Este documento NO lleva cajas de firma: Portalfirma agrega su propia hoja de firma al enviarlo.
+  Este texto es un BORRADOR para que lo revise el notario: al cambiarlo, cambia lo que firman las partes.
+-->
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Contrato de arrendamiento nº {{numero}}</title>
+<style>
+  @page { size: A4; margin: 15mm 17mm 16mm; }
+  * { box-sizing: border-box; }
+  body { font-family: "Helvetica Neue", Arial, sans-serif; font-size: 10pt; line-height: 1.45; color: #1c2230; margin: 0; }
+  h1 { text-align: center; font-size: 15pt; margin: 0 0 4px; letter-spacing: .03em; }
+  .sub { text-align: center; color: #4a5266; font-size: 9.5pt; margin-bottom: 14px; }
+  h2 { font-size: 10pt; text-transform: uppercase; letter-spacing: .05em; margin: 12px 0 4px; }
+  p { margin: 0 0 7px; text-align: justify; }
+  .cl { white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h1>CONTRATO DE ARRENDAMIENTO</h1>
+<div class="sub">Nº {{numero}} · {{ciudad}}, {{fechaEmision}} · Intermediado por {{corredora.nombre}}</div>
+
+<h2>Comparecientes</h2>
+<p>Por una parte, {{arrendador}} (el «Arrendador»); y por la otra, {{arrendatario.nombre}}, RUT {{arrendatario.rut}}, correo {{arrendatario.email}} (el «Arrendatario»){{#codeudor}}; {{codeudor.verbo}} además como {{codeudor.titulo}} {{codeudor.texto}} ({{codeudor.etiqueta}}){{/codeudor}}. Las partes convienen el siguiente contrato:</p>
+
+<h2>Primero · La propiedad</h2>
+<p>El Arrendador da en arrendamiento al Arrendatario la propiedad código {{propiedad.codigo}}, {{propiedad.tipo}}, ubicada en {{propiedad.direccion}} (la «Propiedad»), en el estado en que se entrega según el acta de entrega e inventario que las partes firmarán.</p>
+
+<h2>Segundo · Plazo</h2>
+<p>El arrendamiento comienza el {{contrato.inicio}} y dura {{contrato.plazo}}. {{contrato.aviso}}</p>
+
+<h2>Tercero · Renta</h2>
+<p>La renta mensual es de {{contrato.renta}}, pagadera dentro de los primeros {{contrato.diaPago}} días de cada mes, por los medios que el Arrendador indique. {{contrato.reajuste}}</p>
+
+<h2>Cuarto · Garantía</h2>
+<p>El Arrendatario entrega al Arrendador una garantía de {{contrato.garantia}}, que se restituirá al término del contrato, previa restitución de la Propiedad conforme al inventario y descontados los daños y deudas pendientes, si los hubiere.</p>
+
+<h2>Quinto · Destino y obligaciones</h2>
+<p>La Propiedad se destina exclusivamente a {{contrato.destino}}. El Arrendatario debe mantenerla en buen estado, pagar los consumos y gastos de su uso, no subarrendar ni ceder el contrato sin autorización escrita del Arrendador, y restituirla al término en el estado en que la recibió, salvo el desgaste natural.</p>
+
+<h2>Sexto · Término anticipado</h2>
+<p>El incumplimiento grave de cualquiera de las obligaciones de este contrato, en especial el no pago de la renta, faculta a la otra parte para ponerle término conforme a la ley.</p>
+{{#codeudor}}<h2>Séptimo · Codeudores solidarios</h2>
+<p>{{codeudor.nombres}} {{codeudor.obliga}} con el Arrendatario al cumplimiento de todas las obligaciones de este contrato, hasta la restitución efectiva de la Propiedad.</p>{{/codeudor}}
+{{#contrato.clausulas}}<h2>Cláusulas adicionales</h2>
+<p class="cl">{{contrato.clausulas}}</p>{{/contrato.clausulas}}
+
+<h2>Firma electrónica</h2>
+<p>Este contrato se firma electrónicamente con Portalfirma. Las partes declaran haberlo leído y aceptado, y que los datos entregados son verdaderos.</p>
+</body>
+</html>

@@ -51,6 +51,8 @@ export const COLECCIONES: Record<string, IColeccion> = {
   // gestión documental (de cada usuario, con sus archivos)
   plazos: { max: 256 * KB, porUsuario: true, archivos: true },
   expedientes: { max: 512 * KB, porUsuario: true, archivos: true },
+  // archivos de un negocio (comprobantes de pago, versiones del contrato…): la carpeta en R2 es la del negocio; no guarda documentos
+  archivos_negocio: { max: 4 * KB, archivos: true },
   // la corredora
   evaluaciones: { max: 512 * KB }, // documentos de un arriendo (arrendatario y avales), con su análisis; lo escribe el servidor
   corredora_config: { max: 128 * KB },
@@ -60,6 +62,7 @@ export const COLECCIONES: Record<string, IColeccion> = {
   envios_masivos: { max: 4 * KB }, // huella (sha1) de cada archivo enviado a firmar en la carga masiva: no se envía dos veces
   // cada usuario
   perfil: { max: 32 * KB, porUsuario: true }, // datos propios para los documentos (RUT del corredor…); id «perfil-<usuario>»
+  comandos: { max: 64 * KB, porUsuario: true }, // plantillas de texto del chat de Leads (/plantilla); id «comandos-<usuario>»: siguen al usuario en cualquier equipo
 };
 const ARCHIVO_MAX = 50 * 1024 * 1024;
 const coleccionEsquema = z.string().refine((c) => c in COLECCIONES, 'colección desconocida');
@@ -260,6 +263,14 @@ export class RegistrosService {
     if (!clave.startsWith(dir)) throw new BadRequestException('Ese archivo no es de este registro.');
     if ((await this.r2.tamano(clave)) == null) throw new NotFoundException('El archivo ya no está.');
     return { url: await this.r2.urlDescarga(clave, nombre) };
+  }
+
+  /** los bytes de un archivo del registro (los usa el servidor, p. ej. para enviar a firmar el contrato aprobado) */
+  async archivoBytes(u: UsuarioToken, c: string, id: string, clave: string) {
+    const dir = await this.puedeArchivos(u, c, id);
+    if (!clave.startsWith(dir)) throw new BadRequestException('Ese archivo no es de este registro.');
+    if ((await this.r2.tamano(clave)) == null) throw new NotFoundException('El archivo ya no está.');
+    return this.r2.bajar(clave);
   }
 
   async borrarArchivos(u: UsuarioToken, c: string, id: string, claves: string[]) {

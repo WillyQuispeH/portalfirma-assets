@@ -96,6 +96,12 @@ export class AlmacenamientoService {
     return getSignedUrl(this.s3, new GetObjectCommand({ Bucket: this.bucket, Key: clave }), { expiresIn: DESCARGA_SEGUNDOS });
   }
 
+  /** Los bytes de un archivo (p. ej. el contrato aprobado que se envía a firmar). */
+  async bajar(clave: string): Promise<Buffer> {
+    const r = await this.s3.send(new GetObjectCommand({ Bucket: this.bucket, Key: clave }));
+    return Buffer.from(await (r.Body as { transformToByteArray(): Promise<Uint8Array> }).transformToByteArray());
+  }
+
   /** Tamaño del archivo en R2, o null si no está. */
   async tamano(clave: string): Promise<number | null> {
     try {

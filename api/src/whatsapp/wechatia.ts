@@ -245,10 +245,21 @@ export class Wechatia {
   }
 
   /** un texto a un contacto que ya conversa (dentro de las 24 h): lo usan los asistentes al responder */
-  async enviarAContacto(contactId: string, texto: string, canal: 'whatsapp' | 'instagram' | 'facebook' = 'whatsapp') {
+  async enviarAContacto(
+    contactId: string,
+    texto: string,
+    canal: 'whatsapp' | 'instagram' | 'facebook' = 'whatsapp',
+    adjuntos: string[] = [],
+  ) {
     const type = canal === 'instagram' ? 'IG' : canal === 'facebook' ? 'FB' : 'WhatsApp';
     const env = await this.api('POST', '/conversations/messages', {
-      body: { type, contactId, message: texto, ...(type === 'WhatsApp' ? this.desde : {}) },
+      body: {
+        type,
+        contactId,
+        message: texto,
+        ...(adjuntos.length ? { attachments: adjuntos } : {}),
+        ...(type === 'WhatsApp' ? this.desde : {}),
+      },
       permiso:
         'La clave de wechatia no tiene permiso para enviar mensajes. Agrega «Editar mensajes de conversaciones» a la integración privada.',
     });
@@ -337,6 +348,8 @@ export class Wechatia {
     entrante24?: () => Promise<boolean>;
     /** cuántas veces revisar si se entregó (cada 4 s) */
     revisiones?: number;
+    /** urls https de fotos o archivos que van con el mensaje */
+    adjuntos?: string[];
   }) {
     const contactId = await this.contacto(o.telefono, o.nombre);
     let v24 = await this.ventana24(contactId);
@@ -347,7 +360,13 @@ export class Wechatia {
         'FUERA_24H',
       );
     const env = await this.api('POST', '/conversations/messages', {
-      body: { type: 'WhatsApp', contactId, message: o.texto, ...this.desde },
+      body: {
+        type: 'WhatsApp',
+        contactId,
+        message: o.texto,
+        ...(o.adjuntos?.length ? { attachments: o.adjuntos } : {}),
+        ...this.desde,
+      },
       permiso:
         'La clave de wechatia no tiene permiso para enviar mensajes. Agrega «Editar mensajes de conversaciones» a la integración privada.',
     });

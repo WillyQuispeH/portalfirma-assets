@@ -27,6 +27,7 @@ import { z } from 'zod';
 import { PrismaService } from '../prisma/prisma.service';
 import { AlmacenamientoService } from '../archivos/almacenamiento.service';
 import { ActividadService } from '../comun/actividad.service';
+import { AvisosService } from '../avisos/avisos';
 import { ZodPipe } from '../comun/zod.pipe';
 import { UsuarioActual, type UsuarioToken } from '../auth/usuario-actual';
 import { buscarVisible } from '../comun/asignados';
@@ -60,7 +61,8 @@ interface Pendiente {
   esperando?: boolean;
   sugerida?: { negocioId: string; etiqueta: string } | null;
 }
-const TERMINA = /^(listo|lista|terminado|terminada|termine|termino|cerrar|cierra|cierralo|fin|eso es todo|eso seria todo)\b/;
+const TERMINA =
+  /^(listo|lista|terminado|terminada|termine|termino|cerrar|cierra|cierralo|fin|eso es todo|eso seria todo)\b/;
 const EXT_AUDIO: Record<string, string> = {
   'audio/webm': 'webm',
   'audio/ogg': 'ogg',
@@ -120,6 +122,8 @@ export interface ActaVisita {
   fotos: FotoActa[];
   resumen: ResumenActa | null;
   cerradaEn: string | null;
+  /** el acta enviada a firmar al visitante (acta-firma.ts); el estado lo trae el listado desde la firma */
+  firma?: { operacion: number; enviadaEn: string; ordenNumero: number | null; nombre: string; estado?: string; firmadoEn?: string | null };
 }
 
 const audioEsquema = z.object({
@@ -132,7 +136,12 @@ const fotoEsquema = z.object({
   mime: z.string().max(80).default('image/jpeg'),
 });
 const notasEsquema = z.object({ notas: z.string().max(6000).default('') });
-const crearEsquema = z.object({ fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() });
+const crearEsquema = z.object({
+  fecha: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+});
 
 const SISTEMA_RESUMEN = `Eres el asistente de un corredor de propiedades en Chile. Con las transcripciones de los audios de una VISITA a una propiedad (y las notas del corredor) escribe el acta de la visita. Los audios pueden ser la conversación grabada durante la visita o una nota de voz del corredor después de ella; las voces no vienen identificadas: deduce con cuidado quién dice cada cosa (el interesado pregunta, opina y objeta; el corredor muestra, explica y ofrece).
 Devuelve un objeto JSON:
@@ -167,6 +176,7 @@ export class ActaVisitaService {
     private readonly enviados: EnviadosService,
     private readonly wa: WechatiaService,
     private readonly actividad: ActividadService,
+    private readonly avisos: AvisosService,
   ) {}
 
   // ------------------------------------------------------------------ registro
@@ -208,11 +218,25 @@ export class ActaVisitaService {
   async listar(u: UsuarioToken, negocioId: string) {
     await buscarVisible(this.db.negocio, u, negocioId, 'El negocio');
     const filas = await this.db.registro.findMany({
-      where: { corredoraId: u.corredoraId, coleccion: COLECCION, eliminadoEn: null, datos: { path: ['negocioId'], equals: negocioId } },
+      where: {
+        corredoraId: u.corredoraId,
+        coleccion: COLECCION,
+        eliminadoEn: null,
+        datos: { path: ['negocioId'], equals: negocioId },
+      },
       orderBy: { creadoEn: 'desc' },
       take: 50,
     });
-    return { items: filas.map((f) => this.publica(f.datos as unknown as ActaVisita)) };
+    const items = filas.map((f) => this.publica(f.datos as unknown as ActaVisita));
+    const ops = items.map((x) => x.firma?.operacion).filter((x): x is number => !!x);
+    if (ops.length) {
+      const fs = await this.db.firma.findMany({ where: { corredoraId: u.corredoraId, operacion: { in: ops } }, select: { operacion: true, estado: true, firmadoEn: true } });
+      for (const x of items) {
+        const f = x.firma && fs.find((y) => y.operacion === x.firma?.operacion);
+        if (x.firma && f) x.firma = { ...x.firma, estado: f.estado, firmadoEn: f.firmadoEn ? f.firmadoEn.toISOString() : null };
+      }
+    }
+    return { items };
   }
 
   async crear(u: UsuarioToken, negocioId: string, fecha?: string) {
@@ -303,6 +327,20 @@ export class ActaVisitaService {
     return { ok: true };
   }
 
+  /** quita un audio o una foto de un acta abierta (el archivo de R2 se borra en segundo plano) */
+  async eliminarArchivo(u: UsuarioToken, id: string, tipo: string, n: number) {
+    const a = await this.visible(u, id);
+    if (a.estado === 'cerrada') throw new BadRequestException('El acta ya está cerrada.');
+    const lista = tipo === 'audio' ? a.audios : tipo === 'foto' ? a.fotos : null;
+    const f = lista?.find((x) => x.n === n);
+    if (!lista || !f) throw new NotFoundException('Ese archivo no existe.');
+    if (tipo === 'audio') a.audios = a.audios.filter((x) => x.n !== n);
+    else a.fotos = a.fotos.filter((x) => x.n !== n);
+    this.r2.borrar([f.clave]);
+    await this.guardar(u.corredoraId, a, u.sub);
+    return this.publica(a);
+  }
+
   async enlaceArchivo(u: UsuarioToken, id: string, tipo: string, n: number) {
     const a = await this.visible(u, id);
     const f = (tipo === 'audio' ? a.audios : tipo === 'foto' ? a.fotos : []).find((x) => x.n === n);
@@ -324,11 +362,13 @@ export class ActaVisitaService {
       throw new BadRequestException('Tu celular no está vinculado a WhatsApp. Vincúlalo en Asset › Integraciones.');
     const wa = await this.wa.cliente(u.corredoraId);
     if (!wa) throw new BadRequestException('La corredora no tiene WhatsApp conectado.');
-    const p = a.propiedadId ? await this.db.propiedad.findUnique({ where: { id: a.propiedadId }, select: { codigo: true } }) : null;
+    const p = a.propiedadId
+      ? await this.db.propiedad.findUnique({ where: { id: a.propiedadId }, select: { codigo: true } })
+      : null;
     const d = (v.datos ?? {}) as Record<string, unknown>;
     await this.db.waVinculo.update({
       where: { usuarioId: u.sub },
-      data: { datos: { ...d, actaAbierta: { id, desde: new Date().toISOString() } } as Prisma.InputJsonValue },
+      data: { datos: { ...d, actaAbierta: { id, desde: new Date().toISOString() } } },
     });
     const texto = `${firma('juanita')}\n📝 Acta de visita${p ? ' de ' + p.codigo : ''} abierta. Mándame por aquí el *audio* de la visita (o varios) y las *fotos*; las voy sumando al acta. Cuando termines, escribe *listo* y te mando el resumen.`;
     const r = await wa.enviarAContacto(v.contactId, texto);
@@ -338,7 +378,13 @@ export class ActaVisitaService {
 
   // ------------------------------------------------------------------ lo que se agrega (app y WhatsApp)
 
-  private async agregarAudio(corredoraId: string, a: ActaVisita, buf: Buffer, mime: string, origen: AudioActa['origen']) {
+  private async agregarAudio(
+    corredoraId: string,
+    a: ActaVisita,
+    buf: Buffer,
+    mime: string,
+    origen: AudioActa['origen'],
+  ) {
     if (a.estado === 'cerrada') throw new BadRequestException('El acta ya está cerrada.');
     if (a.audios.length >= MAX_AUDIOS) throw new BadRequestException(`Un acta admite hasta ${MAX_AUDIOS} audios.`);
     if (buf.length < 1000) throw new BadRequestException('El audio está vacío.');
@@ -389,7 +435,14 @@ export class ActaVisitaService {
     const n = (a.fotos.reduce((m, x) => Math.max(m, x.n), 0) || 0) + 1;
     const clave = `c/${corredoraId}/r/${COLECCION}/${a.id}/foto-${n}-${randomUUID().slice(0, 8)}.jpg`;
     await this.r2.subir(clave, jpg, 'image/jpeg');
-    a.fotos.push({ n, clave, nombre: `foto-visita-${n}.jpg`, tipo: 'image/jpeg', origen, recibido: new Date().toISOString() });
+    a.fotos.push({
+      n,
+      clave,
+      nombre: `foto-visita-${n}.jpg`,
+      tipo: 'image/jpeg',
+      origen,
+      recibido: new Date().toISOString(),
+    });
     return n;
   }
 
@@ -430,7 +483,10 @@ export class ActaVisitaService {
       const interes = String(j.interes ?? '');
       return {
         hechoEn: new Date().toISOString(),
-        resumen: String(j.resumen ?? '').trim().slice(0, 2500) || 'No se pudo redactar el resumen.',
+        resumen:
+          String(j.resumen ?? '')
+            .trim()
+            .slice(0, 2500) || 'No se pudo redactar el resumen.',
         interesado: lista(j.interesado),
         corredor: lista(j.corredor),
         interes: (['alto', 'medio', 'bajo', 'sin_datos'] as const).find((x) => x === interes) ?? 'sin_datos',
@@ -440,7 +496,9 @@ export class ActaVisitaService {
       };
     } catch (e) {
       this.log.warn(`resumen del acta ${a.id}: ${(e as Error).message}`);
-      return vacio('No pude redactar el resumen con la IA ahora. Las transcripciones quedaron guardadas: vuelve a intentarlo.');
+      return vacio(
+        'No pude redactar el resumen con la IA ahora. Las transcripciones quedaron guardadas: vuelve a intentarlo.',
+      );
     }
   }
 
@@ -459,6 +517,49 @@ export class ActaVisitaService {
         usuarioId,
       })
       .catch(() => null);
+    // lo que se habló en la visita queda también en el historial del negocio
+    const r = a.resumen;
+    if (r?.resumen)
+      await this.actividad
+        .registrar({
+          corredoraId,
+          entidadTipo: 'negocio',
+          entidadId: a.negocioId,
+          texto: `Resumen del acta de visita del ${a.fecha.slice(8, 10)}/${a.fecha.slice(5, 7)}${r.interes !== 'sin_datos' ? ` (interés ${r.interes})` : ''}: ${r.resumen.replace(/s+/g, ' ').trim().slice(0, 900)}`,
+          usuarioId,
+        })
+        .catch(() => null);
+    await this.marcarPaso(corredoraId, a, usuarioId);
+  }
+
+  /**
+   * Al cerrar el acta, la cierre quien la cierre (la app o «listo» por WhatsApp), el paso «Acta de visita» queda pendiente:
+   * falta enviarla a firmar al visitante (el paso se logra con su firma, ver acta-firma.ts). Se guarda como marca del paso en el
+   * negocio y se avisa a la app para que lo traiga.
+   */
+  private async marcarPaso(corredoraId: string, a: ActaVisita, usuarioId: string | null) {
+    try {
+      const n = await this.db.negocio.findUnique({ where: { id: a.negocioId } });
+      if (!n || n.corredoraId !== corredoraId) return;
+      const datos = { ...((n.datos as Record<string, unknown>) ?? {}) };
+      const pasos = { ...((datos.pasos as Record<string, unknown>) ?? {}) };
+      pasos.acta = { e: 'pend', f: null, d: 'El acta está cerrada: envíala a firmar al visitante.', quien: '', vence: null };
+      await this.db.negocio.update({
+        where: { id: n.id },
+        data: { datos: { ...datos, pasos } as Prisma.InputJsonValue, version: { increment: 1 } },
+      });
+      const destino = usuarioId ?? a.usuarioId;
+      if (destino)
+        await this.avisos.crear({
+          corredoraId,
+          usuarioId: destino,
+          tipo: 'acta_cerrada',
+          texto: `Acta de visita del ${a.fecha.slice(8, 10)}/${a.fecha.slice(5, 7)} cerrada: falta enviarla a firmar`,
+          datos: { negocioId: n.id, actaId: a.id },
+        });
+    } catch (e) {
+      this.log.warn(`no pude marcar el paso del acta ${a.id}: ${(e as Error).message}`);
+    }
   }
 
   // ------------------------------------------------------------------ WhatsApp
@@ -467,11 +568,16 @@ export class ActaVisitaService {
    * Los mensajes del celular de un ejecutivo con un acta abierta: sus audios y fotos se suman al acta y «listo» la cierra.
    * Devuelve lo que sigue su camino (lo que no es del acta). Si algo falla, deja pasar todo.
    */
-  async interceptar(wa: Wechatia, v: { usuarioId: string; corredoraId: string; datos: unknown }, cv: Conversacion, nuevos: MensajeWa[]): Promise<MensajeWa[]> {
+  async interceptar(
+    wa: Wechatia,
+    v: { usuarioId: string; corredoraId: string; datos: unknown },
+    cv: Conversacion,
+    nuevos: MensajeWa[],
+  ): Promise<MensajeWa[]> {
     const d = (v.datos ?? {}) as { actaAbierta?: { id: string; desde: string } };
     try {
       if (d.actaAbierta) return await this.recibirWa(wa, v, d, d.actaAbierta, cv, nuevos);
-      return await this.pedidoDirecto(wa, v, d as Record<string, unknown>, cv, nuevos);
+      return await this.pedidoDirecto(wa, v, d, cv, nuevos);
     } catch (e) {
       this.log.warn(`acta de visita por WhatsApp: ${(e as Error).message}`);
       return nuevos;
@@ -492,12 +598,21 @@ export class ActaVisitaService {
    * propone su visita más reciente y se espera su sí. Se transcribe, se suma al acta del negocio (se abre una si no hay)
    * y se responde con el resumen.
    */
-  private async pedidoDirecto(wa: Wechatia, v: { usuarioId: string; corredoraId: string }, d: Record<string, unknown>, cv: Conversacion, nuevos: MensajeWa[]) {
+  private async pedidoDirecto(
+    wa: Wechatia,
+    v: { usuarioId: string; corredoraId: string },
+    d: Record<string, unknown>,
+    cv: Conversacion,
+    nuevos: MensajeWa[],
+  ) {
     let pend = d.actaPend as Pendiente | undefined;
     if (pend && Date.now() - new Date(pend.desde).getTime() > PENDIENTE_MS) pend = undefined;
     const audios = nuevos.flatMap((m) => m.adjuntos.filter((u) => ES_AUDIO.test(u)));
     const fotos = nuevos.flatMap((m) => m.adjuntos.filter((u) => !ES_AUDIO.test(u) && !ES_OTRO.test(u)));
-    const texto = nuevos.map((m) => m.texto).join(' ').trim();
+    const texto = nuevos
+      .map((m) => m.texto)
+      .join(' ')
+      .trim();
     const n = norm(texto);
     const pide = PIDE_ACTA.test(n);
     const responde = !!pend?.sugerida && !pide;
@@ -505,7 +620,12 @@ export class ActaVisitaService {
 
     // sin pedido: solo se recuerdan los audios por si dice «guárdalo en el acta de visita» enseguida
     if (!captura && !responde) {
-      if (audios.length) await this.guardarDatos(v.usuarioId, d, { audios: [...(pend?.audios ?? []), ...audios].slice(-6), fotos: pend?.fotos ?? [], desde: new Date().toISOString() });
+      if (audios.length)
+        await this.guardarDatos(v.usuarioId, d, {
+          audios: [...(pend?.audios ?? []), ...audios].slice(-6),
+          fotos: pend?.fotos ?? [],
+          desde: new Date().toISOString(),
+        });
       return nuevos;
     }
     const decir = async (t: string) => {
@@ -514,8 +634,13 @@ export class ActaVisitaService {
       const r = await wa.enviarAContacto(cv.contactId, x);
       await this.enviados.registrar(v.corredoraId, cv.telefono, { messageId: r.messageId, texto: t, enHilo: false });
     };
-    const medios = { audios: [...new Set([...(pend?.audios ?? []), ...audios])], fotos: [...new Set([...(pend?.fotos ?? []), ...(captura ? fotos : [])])] };
-    const consumidos = (m: MensajeWa) => (pide && PIDE_ACTA.test(norm(m.texto))) || (captura && m.adjuntos.length > 0 && m.adjuntos.every((u) => ES_AUDIO.test(u) || !ES_OTRO.test(u)));
+    const medios = {
+      audios: [...new Set([...(pend?.audios ?? []), ...audios])],
+      fotos: [...new Set([...(pend?.fotos ?? []), ...(captura ? fotos : [])])],
+    };
+    const consumidos = (m: MensajeWa) =>
+      (pide && PIDE_ACTA.test(norm(m.texto))) ||
+      (captura && m.adjuntos.length > 0 && m.adjuntos.every((u) => ES_AUDIO.test(u) || !ES_OTRO.test(u)));
 
     // respuesta a «¿es la visita de …?»
     if (responde && pend?.sugerida) {
@@ -533,31 +658,63 @@ export class ActaVisitaService {
         return cod ? [] : nuevos;
       }
       await this.guardarDatos(v.usuarioId, d, null);
-      await this.guardarEnActa(v, neg, { audios: [...new Set([...pend.audios, ...audios])], fotos: [...pend.fotos, ...fotos] }, decir, CIERRA.test(n));
-      return nuevos.filter((m) => !SI.test(norm(m.texto)) && !(CODIGO.test(m.texto) && m.texto.trim().length < 30) && !consumidos(m));
+      await this.guardarEnActa(
+        v,
+        neg,
+        { audios: [...new Set([...pend.audios, ...audios])], fotos: [...pend.fotos, ...fotos] },
+        decir,
+        CIERRA.test(n),
+      );
+      return nuevos.filter(
+        (m) => !SI.test(norm(m.texto)) && !(CODIGO.test(m.texto) && m.texto.trim().length < 30) && !consumidos(m),
+      );
     }
 
     // ¿a qué negocio?
     const cod = CODIGO.exec(texto);
-    const neg: { id: string; etiqueta: string } | null = cod ? await this.negocioPorCodigo(v, `${cod[1].toUpperCase()}-${cod[2]}`) : null;
+    const neg: { id: string; etiqueta: string } | null = cod
+      ? await this.negocioPorCodigo(v, `${cod[1].toUpperCase()}-${cod[2]}`)
+      : null;
     if (cod && !neg) {
-      await decir(`No encontré un negocio abierto tuyo en la propiedad ${cod[1].toUpperCase()}-${cod[2]}. Revisa el código.`);
+      await decir(
+        `No encontré un negocio abierto tuyo en la propiedad ${cod[1].toUpperCase()}-${cod[2]}. Revisa el código.`,
+      );
       return nuevos.filter((m) => !consumidos(m));
     }
     const sinMedios = !medios.audios.length && !medios.fotos.length;
     if (!neg) {
       const sug = await this.negocioSugerido(v);
       if (sinMedios) {
-        await this.guardarDatos(v.usuarioId, d, { ...medios, desde: new Date().toISOString(), esperando: true, sugerida: null });
-        await decir('Listo, mándame el *audio* de la visita (y las fotos si quieres) y lo guardo en el acta de visita. Dime también el código de la propiedad (por ejemplo PF-1001).');
+        await this.guardarDatos(v.usuarioId, d, {
+          ...medios,
+          desde: new Date().toISOString(),
+          esperando: true,
+          sugerida: null,
+        });
+        await decir(
+          'Listo, mándame el *audio* de la visita (y las fotos si quieres) y lo guardo en el acta de visita. Dime también el código de la propiedad (por ejemplo PF-1001).',
+        );
         return nuevos.filter((m) => !consumidos(m));
       }
-      await this.guardarDatos(v.usuarioId, d, { ...medios, desde: new Date().toISOString(), sugerida: sug ? { negocioId: sug.id, etiqueta: sug.etiqueta } : null });
-      await decir(sug ? `¿Lo guardo en el acta de la visita de *${sug.etiqueta}*? Responde *sí*, o escríbeme otro código de propiedad.` : 'No sé a qué visita corresponde. Escríbeme el código de la propiedad (por ejemplo PF-1001).');
+      await this.guardarDatos(v.usuarioId, d, {
+        ...medios,
+        desde: new Date().toISOString(),
+        sugerida: sug ? { negocioId: sug.id, etiqueta: sug.etiqueta } : null,
+      });
+      await decir(
+        sug
+          ? `¿Lo guardo en el acta de la visita de *${sug.etiqueta}*? Responde *sí*, o escríbeme otro código de propiedad.`
+          : 'No sé a qué visita corresponde. Escríbeme el código de la propiedad (por ejemplo PF-1001).',
+      );
       return nuevos.filter((m) => !consumidos(m));
     }
     if (sinMedios) {
-      await this.guardarDatos(v.usuarioId, d, { ...medios, desde: new Date().toISOString(), esperando: true, sugerida: null });
+      await this.guardarDatos(v.usuarioId, d, {
+        ...medios,
+        desde: new Date().toISOString(),
+        esperando: true,
+        sugerida: null,
+      });
       await decir(`Listo, mándame el audio de la visita de *${neg.etiqueta}* (y las fotos) y lo guardo en el acta.`);
       return nuevos.filter((m) => !consumidos(m));
     }
@@ -582,7 +739,13 @@ export class ActaVisitaService {
 
   private async negocioPorCodigo(v: { usuarioId: string; corredoraId: string }, codigo: string) {
     const n = await this.db.negocio.findFirst({
-      where: { corredoraId: v.corredoraId, eliminadoEn: null, estado: 'abierto', ...(await this.visibles(v)), propiedad: { codigo: { equals: codigo, mode: 'insensitive' } } },
+      where: {
+        corredoraId: v.corredoraId,
+        eliminadoEn: null,
+        estado: 'abierto',
+        ...(await this.visibles(v)),
+        propiedad: { codigo: { equals: codigo, mode: 'insensitive' } },
+      },
       orderBy: { actualizadoEn: 'desc' },
     });
     return n ? { id: n.id, etiqueta: await this.etiquetaNegocio(n) } : null;
@@ -592,13 +755,31 @@ export class ActaVisitaService {
   private async negocioSugerido(v: { usuarioId: string; corredoraId: string }) {
     const vis = await this.visibles(v);
     const ev = await this.db.evento.findFirst({
-      where: { corredoraId: v.corredoraId, eliminadoEn: null, tipo: 'visita', estado: { not: 'cancelado' }, negocioId: { not: null }, ...vis, fecha: { gte: new Date(Date.now() - 3 * 86400_000), lte: new Date(Date.now() + 86400_000) } },
+      where: {
+        corredoraId: v.corredoraId,
+        eliminadoEn: null,
+        tipo: 'visita',
+        estado: { not: 'cancelado' },
+        negocioId: { not: null },
+        ...vis,
+        fecha: { gte: new Date(Date.now() - 3 * 86400_000), lte: new Date(Date.now() + 86400_000) },
+      },
       orderBy: { fecha: 'desc' },
     });
-    let n = ev?.negocioId ? await this.db.negocio.findFirst({ where: { id: ev.negocioId, corredoraId: v.corredoraId, eliminadoEn: null, estado: 'abierto' } }) : null;
+    let n = ev?.negocioId
+      ? await this.db.negocio.findFirst({
+          where: { id: ev.negocioId, corredoraId: v.corredoraId, eliminadoEn: null, estado: 'abierto' },
+        })
+      : null;
     if (!n)
       n = await this.db.negocio.findFirst({
-        where: { corredoraId: v.corredoraId, eliminadoEn: null, estado: 'abierto', ...vis, actualizadoEn: { gt: new Date(Date.now() - 7 * 86400_000) } },
+        where: {
+          corredoraId: v.corredoraId,
+          eliminadoEn: null,
+          estado: 'abierto',
+          ...vis,
+          actualizadoEn: { gt: new Date(Date.now() - 7 * 86400_000) },
+        },
         orderBy: { actualizadoEn: 'desc' },
       });
     return n ? { id: n.id, etiqueta: await this.etiquetaNegocio(n) } : null;
@@ -613,14 +794,33 @@ export class ActaVisitaService {
     cerrar: boolean,
   ) {
     const fila = await this.db.registro.findFirst({
-      where: { corredoraId: v.corredoraId, coleccion: COLECCION, eliminadoEn: null, AND: [{ datos: { path: ['negocioId'], equals: neg.id } }, { datos: { path: ['estado'], equals: 'abierta' } }] },
+      where: {
+        corredoraId: v.corredoraId,
+        coleccion: COLECCION,
+        eliminadoEn: null,
+        AND: [{ datos: { path: ['negocioId'], equals: neg.id } }, { datos: { path: ['estado'], equals: 'abierta' } }],
+      },
       orderBy: { creadoEn: 'desc' },
     });
     let acta = fila ? (fila.datos as unknown as ActaVisita) : null;
     if (!acta) {
       const n = await this.db.negocio.findUnique({ where: { id: neg.id }, select: { propiedadId: true } });
       const yo = await this.db.usuario.findUnique({ where: { id: v.usuarioId }, select: { nombre: true } });
-      acta = { id: randomUUID(), negocioId: neg.id, propiedadId: n?.propiedadId ?? null, fecha: hoy(), estado: 'abierta', creadaEn: new Date().toISOString(), creadaPor: yo?.nombre || 'Corredor', usuarioId: v.usuarioId, notas: '', audios: [], fotos: [], resumen: null, cerradaEn: null };
+      acta = {
+        id: randomUUID(),
+        negocioId: neg.id,
+        propiedadId: n?.propiedadId ?? null,
+        fecha: hoy(),
+        estado: 'abierta',
+        creadaEn: new Date().toISOString(),
+        creadaPor: yo?.nombre || 'Corredor',
+        usuarioId: v.usuarioId,
+        notas: '',
+        audios: [],
+        fotos: [],
+        resumen: null,
+        cerradaEn: null,
+      };
     }
     const { nAudios, nFotos, aviso } = await this.sumarMedios(v.corredoraId, acta, medios.audios, medios.fotos);
     if (cerrar) await this.terminar(v.corredoraId, acta, v.usuarioId);
@@ -629,16 +829,27 @@ export class ActaVisitaService {
       await this.guardar(v.corredoraId, acta, v.usuarioId);
     }
     const s = acta.resumen;
-    const recibido = [nAudios ? (nAudios === 1 ? 'tu audio' : nAudios + ' audios') : '', nFotos ? (nFotos === 1 ? 'la foto' : nFotos + ' fotos') : ''].filter(Boolean).join(' y ');
+    const recibido = [
+      nAudios ? (nAudios === 1 ? 'tu audio' : nAudios + ' audios') : '',
+      nFotos ? (nFotos === 1 ? 'la foto' : nFotos + ' fotos') : '',
+    ]
+      .filter(Boolean)
+      .join(' y ');
     await decir(
       [
-        recibido ? `📝 Guardé ${recibido} en el acta de visita de *${neg.etiqueta}*${nAudios ? ' y lo transcribí' : ''}.` : `📝 No pude guardar nada en el acta de *${neg.etiqueta}*.`,
+        recibido
+          ? `📝 Guardé ${recibido} en el acta de visita de *${neg.etiqueta}*${nAudios ? ' y lo transcribí' : ''}.`
+          : `📝 No pude guardar nada en el acta de *${neg.etiqueta}*.`,
         s?.resumen ? `*Resumen:* ${s.resumen}` : '',
         s?.acuerdos.length ? `*Acuerdos:* ${s.acuerdos.join('; ')}` : '',
         s?.proximosPasos.length ? `*Próximos pasos:* ${s.proximosPasos.join('; ')}` : '',
         ...aviso,
-        cerrar ? 'Acta cerrada. La ves completa en Asset, en la etapa 1 del negocio.' : 'El acta sigue abierta: mándame más audios o fotos y los sumo, o dime «cierra el acta». La ves en Asset, en la etapa 1 del negocio.',
-      ].filter(Boolean).join('\n'),
+        cerrar
+          ? 'Acta cerrada. La ves completa en Asset, en la etapa 1 del negocio.'
+          : 'El acta sigue abierta: mándame más audios o fotos y los sumo, o dime «cierra el acta». La ves en Asset, en la etapa 1 del negocio.',
+      ]
+        .filter(Boolean)
+        .join('\n'),
     );
   }
 
@@ -651,7 +862,13 @@ export class ActaVisitaService {
       try {
         const r = await fetch(u, { signal: AbortSignal.timeout(90_000) });
         if (!r.ok) throw new Error(`wechatia respondió ${r.status}`);
-        const x = await this.agregarAudio(corredoraId, acta, Buffer.from(await r.arrayBuffer()), r.headers.get('content-type') || 'audio/ogg', 'whatsapp');
+        const x = await this.agregarAudio(
+          corredoraId,
+          acta,
+          Buffer.from(await r.arrayBuffer()),
+          r.headers.get('content-type') || 'audio/ogg',
+          'whatsapp',
+        );
         nAudios++;
         if (x.error) aviso.push(`El audio ${x.n} quedó guardado pero no pude transcribirlo (${x.error}).`);
       } catch (e) {
@@ -705,7 +922,9 @@ export class ActaVisitaService {
       fotos.push(...f);
       if (a.length || f.length) propios.push(m);
     }
-    const cierra = nuevos.find((m) => !m.adjuntos.length && TERMINA.test(norm(m.texto).trim()) && m.texto.trim().length < 40);
+    const cierra = nuevos.find(
+      (m) => !m.adjuntos.length && TERMINA.test(norm(m.texto).trim()) && m.texto.trim().length < 40,
+    );
     if (!audios.length && !fotos.length && !cierra) return nuevos;
 
     const { nAudios, nFotos, aviso } = await this.sumarMedios(v.corredoraId, acta, audios, fotos);
@@ -727,8 +946,13 @@ export class ActaVisitaService {
           .join('\n'),
       );
     } else {
-      const partes = [nAudios ? `🎙️ ${nAudios === 1 ? 'Audio recibido' : nAudios + ' audios recibidos'}` : '', nFotos ? `📷 ${nFotos === 1 ? 'Foto recibida' : nFotos + ' fotos recibidas'}` : ''].filter(Boolean);
-      await decir(`${partes.join(' y ')} (el acta lleva ${acta.audios.length} audio${acta.audios.length === 1 ? '' : 's'} y ${acta.fotos.length} foto${acta.fotos.length === 1 ? '' : 's'}). ${aviso.join(' ')} Escribe *listo* cuando termines.`.trim());
+      const partes = [
+        nAudios ? `🎙️ ${nAudios === 1 ? 'Audio recibido' : nAudios + ' audios recibidos'}` : '',
+        nFotos ? `📷 ${nFotos === 1 ? 'Foto recibida' : nFotos + ' fotos recibidas'}` : '',
+      ].filter(Boolean);
+      await decir(
+        `${partes.join(' y ')} (el acta lleva ${acta.audios.length} audio${acta.audios.length === 1 ? '' : 's'} y ${acta.fotos.length} foto${acta.fotos.length === 1 ? '' : 's'}). ${aviso.join(' ')} Escribe *listo* cuando termines.`.trim(),
+      );
     }
     return nuevos.filter((m) => !propios.includes(m) && m !== cierra);
   }
@@ -765,19 +989,31 @@ export class ActaVisitaController {
 
   @Post(':id/audio')
   @HttpCode(200)
-  audio(@UsuarioActual() u: UsuarioToken, @Param('id') id: string, @Body(new ZodPipe(audioEsquema)) b: z.infer<typeof audioEsquema>) {
+  audio(
+    @UsuarioActual() u: UsuarioToken,
+    @Param('id') id: string,
+    @Body(new ZodPipe(audioEsquema)) b: z.infer<typeof audioEsquema>,
+  ) {
     return this.s.subirAudio(u, id.slice(0, 80), b);
   }
 
   @Post(':id/foto')
   @HttpCode(200)
-  foto(@UsuarioActual() u: UsuarioToken, @Param('id') id: string, @Body(new ZodPipe(fotoEsquema)) b: z.infer<typeof fotoEsquema>) {
+  foto(
+    @UsuarioActual() u: UsuarioToken,
+    @Param('id') id: string,
+    @Body(new ZodPipe(fotoEsquema)) b: z.infer<typeof fotoEsquema>,
+  ) {
     return this.s.subirFoto(u, id.slice(0, 80), b);
   }
 
   @Post(':id/notas')
   @HttpCode(200)
-  notas(@UsuarioActual() u: UsuarioToken, @Param('id') id: string, @Body(new ZodPipe(notasEsquema)) b: z.infer<typeof notasEsquema>) {
+  notas(
+    @UsuarioActual() u: UsuarioToken,
+    @Param('id') id: string,
+    @Body(new ZodPipe(notasEsquema)) b: z.infer<typeof notasEsquema>,
+  ) {
     return this.s.notas(u, id.slice(0, 80), b.notas);
   }
 
@@ -799,8 +1035,23 @@ export class ActaVisitaController {
     return this.s.abrirWhatsapp(u, id.slice(0, 80));
   }
 
+  @Delete(':id/archivo/:tipo/:n')
+  eliminarArchivo(
+    @UsuarioActual() u: UsuarioToken,
+    @Param('id') id: string,
+    @Param('tipo') tipo: string,
+    @Param('n') n: string,
+  ) {
+    return this.s.eliminarArchivo(u, id.slice(0, 80), tipo.slice(0, 10), Number(n) || 0);
+  }
+
   @Get(':id/archivo/:tipo/:n')
-  archivo(@UsuarioActual() u: UsuarioToken, @Param('id') id: string, @Param('tipo') tipo: string, @Param('n') n: string) {
+  archivo(
+    @UsuarioActual() u: UsuarioToken,
+    @Param('id') id: string,
+    @Param('tipo') tipo: string,
+    @Param('n') n: string,
+  ) {
     return this.s.enlaceArchivo(u, id.slice(0, 80), tipo.slice(0, 10), Number(n) || 0);
   }
 }

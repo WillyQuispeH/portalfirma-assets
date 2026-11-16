@@ -306,7 +306,7 @@ export class FirmasRondaService implements OnModuleInit, OnModuleDestroy {
         if (d.status === 'finalized') {
           f.estado = 'firmado';
           f.firmado = new Date().toISOString();
-          if (n.etapa === etapaId) f.avanzar = true; // la app del corredor mueve el negocio
+          if (n.etapa === etapaId || etapaId === 'entrega_acta') f.avanzar = true; // la app del corredor mueve el negocio (el acta de entrega: deja la propiedad arrendada)
           const m = `${titulo}: se firmó el documento de la etapa «${etapaId}» (operación ${f.operacion}).`;
           cambios.push(m);
           const quien = n.corredorId ?? n.creadoPorId;

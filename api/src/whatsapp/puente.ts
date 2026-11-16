@@ -390,7 +390,14 @@ export class PuenteService {
    *    pendiente en el lead y sale cuando el interesado responde (`entregarPendiente`).
    * Nunca lanza: devuelve qué pasó, con el texto para el corredor.
    */
-  async responder(wa: Wechatia, corredoraId: string, usuarioId: string, lead: Lead, cuerpo: string): Promise<ResultadoEnvio> {
+  async responder(
+    wa: Wechatia,
+    corredoraId: string,
+    usuarioId: string,
+    lead: Lead,
+    cuerpo: string,
+    adjuntos: string[] = [],
+  ): Promise<ResultadoEnvio> {
     const usuario = await this.db.usuario.findUnique({ where: { id: usuarioId }, select: { nombre: true, rol: true } });
     const nombre = nombreDe(lead);
     if (usuario?.rol !== 'ADMIN' && lead.corredorId !== usuarioId)
@@ -422,7 +429,7 @@ export class PuenteService {
       const ultimoCanal = String(((ult?.datos ?? {}) as Record<string, unknown>).canal ?? '');
       if (!tel || ultimoCanal === via.canal) {
         canalProbado = true;
-        const r = await this.enviarPorCanal(wa, lead, via, cuerpo, texto, corredor);
+        const r = await this.enviarPorCanal(wa, lead, via, cuerpo, texto, corredor, adjuntos);
         // con celular, si Instagram/Facebook falla se sigue con WhatsApp
         if (r.ok || !tel) return r;
       }
@@ -434,6 +441,7 @@ export class PuenteService {
         telefono,
         nombre,
         texto,
+        adjuntos,
         revisiones: 1,
         entrante24: async () => {
           const h = await this.db.waConversacion.findFirst({ where: { corredoraId, telefonoNorm: tel } });
@@ -450,6 +458,7 @@ export class PuenteService {
           de: 'broker',
           autor: corredor,
           texto: cuerpo,
+          ...(adjuntos[0] ? { tipo: 'imagen', mediaUrl: adjuntos[0] } : {}),
           datos: { canal: 'whatsapp' },
         },
       ]);
@@ -458,7 +467,7 @@ export class PuenteService {
     } catch (e) {
       if (e instanceof WechatiaError && e.codigo === 'FUERA_24H') {
         if (via && !canalProbado) {
-          const r = await this.enviarPorCanal(wa, lead, via, cuerpo, texto, corredor);
+          const r = await this.enviarPorCanal(wa, lead, via, cuerpo, texto, corredor, adjuntos);
           if (r.ok) return r;
         }
         return this.plantillaYPendiente(wa, corredoraId, usuarioId, lead, cuerpo, corredor);
@@ -550,10 +559,31 @@ export class PuenteService {
     cuerpo: string,
     texto: string,
     corredor: string,
+    adjuntos: string[] = [],
   ): Promise<ResultadoEnvio> {
     const nombreCanal = via.canal === 'instagram' ? 'Instagram' : 'Facebook';
     const nombre = nombreDe(lead);
     try {
+      // wechatia separa la foto del texto en dos mensajes (cada uno con su id): se mandan y se anotan por separado, la foto primero
+      for (const url of adjuntos) {
+        const f = await wa.enviarAContacto(via.contactId, '', via.canal, [url]).catch((e) => {
+          this.log.warn(`foto por ${nombreCanal}: ${(e as Error).message}`);
+          return null;
+        });
+        if (f)
+          await this.leads.anotar(lead, [
+            {
+              k: f.messageId ? 'wc' + f.messageId : 'as' + Date.now().toString(36),
+              fecha: horaChile(),
+              de: 'broker',
+              autor: corredor,
+              texto: '',
+              tipo: 'imagen',
+              mediaUrl: url,
+              datos: { canal: via.canal },
+            },
+          ]);
+      }
       const r = await wa.enviarAContacto(via.contactId, texto, via.canal);
       await this.leads.anotar(lead, [
         {
@@ -593,6 +623,22 @@ export class PuenteService {
 }
 
 const enviarEsquema = z.object({ texto: z.string().trim().min(1, 'Escribe el mensaje.').max(3500) });
+const enviarPropiedadEsquema = z.object({ propiedadId: z.string().uuid(), operacion: z.enum(['venta', 'arriendo']).optional() });
+
+const pesos = (n: unknown, m: string | null | undefined) => {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return '';
+  const t = v.toLocaleString('es-CL', { maximumFractionDigits: 2 });
+  return m === 'UF' ? `UF ${t}` : m === 'USD' ? `US$ ${t}` : `$${t}`;
+};
+/** el aviso público de la propiedad en un portal: el activo primero, y el de la operación pedida */
+const enlaceDePortal = (portales: unknown, op?: string) => {
+  const todos: { url: string; activo: boolean; op: string }[] = [];
+  for (const por of Object.values((portales ?? {}) as Record<string, Record<string, { permalink?: string; status?: string }>>))
+    for (const [o, a] of Object.entries(por ?? {})) if (a?.permalink) todos.push({ url: a.permalink, activo: a.status === 'active', op: o });
+  todos.sort((x, y) => Number(y.activo) - Number(x.activo) || Number(y.op === op) - Number(x.op === op));
+  return todos[0]?.url ?? '';
+};
 
 /** POST /v1/leads/:id/enviar { texto } — escribirle al interesado desde la app (Leads), con las mismas reglas del puente */
 @Controller('leads')
@@ -621,5 +667,56 @@ export class LeadsEnvioController {
       throw r.codigo === 'OTRO_CORREDOR' ? new ForbiddenException(cuerpo) : new BadRequestException(cuerpo);
     }
     return r;
+  }
+
+  /**
+   * POST /v1/leads/:id/enviar-propiedad { propiedadId, operacion? } — le manda al interesado una propiedad de la cartera:
+   * una foto, los datos clave y el enlace de su aviso en el portal. Mismas reglas que /enviar (canal, 24 h, freno).
+   */
+  @Post(':id/enviar-propiedad')
+  @HttpCode(200)
+  async enviarPropiedad(
+    @UsuarioActual() u: UsuarioToken,
+    @Param('id', new ZodPipe(idDoc)) id: string,
+    @Body(new ZodPipe(enviarPropiedadEsquema)) b: z.infer<typeof enviarPropiedadEsquema>,
+  ) {
+    const lead = await this.db.lead.findFirst({ where: { id, corredoraId: u.corredoraId, eliminadoEn: null } });
+    if (!lead) throw new NotFoundException('El lead no existe.');
+    const p = await this.db.propiedad.findFirst({
+      where: { id: b.propiedadId, corredoraId: u.corredoraId, eliminadoEn: null, archivada: false },
+      include: { fotos: { orderBy: [{ destacada: 'desc' }, { orden: 'asc' }], take: 1 } },
+    });
+    if (!p) throw new NotFoundException('Esa propiedad ya no está en la cartera.');
+    const wa = await this.wa.cliente(u.corredoraId);
+    if (!wa)
+      throw new BadRequestException({ message: 'El WhatsApp de la empresa no está conectado en Asset.', code: 'SIN_CLAVE' });
+    const op = b.operacion ?? (p.arriendo && !p.venta ? 'arriendo' : 'venta');
+    const precio =
+      op === 'arriendo' && p.precioArriendo != null
+        ? `${pesos(p.precioArriendo, p.monedaArriendo)}/mes`
+        : p.precioVenta != null
+          ? pesos(p.precioVenta, p.monedaVenta)
+          : p.precioArriendo != null
+            ? `${pesos(p.precioArriendo, p.monedaArriendo)}/mes`
+            : '';
+    const m2 = p.supUtil ?? p.supTotal;
+    const datos = [
+      p.dormitorios != null && `${p.dormitorios}D`,
+      p.banos != null && `${p.banos}B`,
+      p.estacionamientos ? `${p.estacionamientos} est.` : '',
+      m2 ? `${Number(m2)} m²` : '',
+    ].filter(Boolean);
+    const enlace = enlaceDePortal(p.portales, op);
+    const cuerpo = [`*${p.titulo}*`, [p.comuna, datos.join(' · ')].filter(Boolean).join(' · '), precio, enlace]
+      .filter(Boolean)
+      .join('\n')
+      .slice(0, 3500);
+    const foto = p.fotos[0]?.url;
+    const r = await this.puente.responder(wa, u.corredoraId, u.sub, lead, cuerpo, foto ? [foto] : []);
+    if (!r.ok) {
+      const c = { message: r.mensaje, code: r.codigo };
+      throw r.codigo === 'OTRO_CORREDOR' ? new ForbiddenException(c) : new BadRequestException(c);
+    }
+    return { ...r, sinEnlace: !enlace, sinFoto: !foto };
   }
 }

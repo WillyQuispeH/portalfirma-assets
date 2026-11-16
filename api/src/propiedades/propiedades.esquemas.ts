@@ -111,6 +111,10 @@ export const importarEsquema = z.object({
         origenId: z.string().trim().min(1).max(80),
         origenDatos: z.record(z.string(), z.unknown()).optional(),
         datos: propiedadEsquema,
+        /** captador de la propiedad (solo se fija si aún no tiene uno: no pisa una reasignación hecha en Asset) */
+        captadorId: z.uuid().nullish(),
+        /** la propiedad llega archivada (solo al crearla) */
+        archivada: z.boolean().optional(),
         propietario: z
           .object({
             nombre: z.string().max(200),

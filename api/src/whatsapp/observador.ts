@@ -347,7 +347,10 @@ export class ObservadorService {
           .map((m) => {
             let texto = m.texto;
             if (canal === 'email') texto = sinCita(limpiarHtml(texto));
-            if (m.adjuntos.length) texto = [texto, ...m.adjuntos.map((u) => '📎 ' + u)].filter(Boolean).join('\n');
+            // una foto se muestra como foto; otros archivos, como enlace
+            const foto = m.adjuntos.find((u) => /\.(jpe?g|png|webp|gif)(\?|$)/i.test(u));
+            const otros = m.adjuntos.filter((u) => u !== foto);
+            if (otros.length) texto = [texto, ...otros.map((u) => '📎 ' + u)].filter(Boolean).join('\n');
             if (canal === 'email' && m.asunto) texto = `[${m.asunto}] ${texto}`;
             return {
               k: 'wc' + m.id,
@@ -355,10 +358,11 @@ export class ObservadorService {
               de: m.direccion === 'entrante' ? ('cliente' as const) : ('broker' as const),
               autor: m.direccion === 'entrante' ? d.nombre || d.chatCon || 'Cliente' : 'Corredora',
               texto: texto.slice(0, 6000),
+              ...(foto ? { tipo: 'imagen', mediaUrl: foto } : {}),
               datos: { canal, ...(m.asunto ? { asunto: m.asunto } : {}) },
             };
           })
-          .filter((m) => m.texto.trim());
+          .filter((m) => m.texto.trim() || m.mediaUrl);
         const r = await this.leads.anotar(l, msgs);
         await this.db.waConversacion.upsert({
           where: { corredoraId_convId: { corredoraId, convId: cv.id } },

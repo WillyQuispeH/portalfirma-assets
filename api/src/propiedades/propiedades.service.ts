@@ -27,6 +27,7 @@ import {
   textoBusqueda,
   type PropiedadCompleta,
 } from './propiedades.mapper';
+import { aPropiedadAsset, ConvectaService, SISTEMA_CONVECTA } from './convecta';
 import type { ImportarEntrada, ListarPropiedades, PropiedadEntrada, VinculoEntrada } from './propiedades.esquemas';
 
 type Tx = Prisma.TransactionClient;
@@ -40,6 +41,7 @@ export class PropiedadesService {
     private readonly db: PrismaService,
     private readonly actividad: ActividadService,
     private readonly r2: AlmacenamientoService,
+    private readonly convecta: ConvectaService,
   ) {}
 
   private log(u: UsuarioToken, entidadId: string, texto: string, extra: Partial<NuevaActividad> = {}): NuevaActividad {
@@ -353,13 +355,24 @@ export class PropiedadesService {
    */
   async importar(u: UsuarioToken, { sistema, items }: ImportarEntrada) {
     soloAdmin(u, 'Importar la cartera');
-    const res = { nuevas: 0, actualizadas: 0, sinCambios: 0, personas: 0, total: items.length };
+    const res = { nuevas: 0, actualizadas: 0, sinCambios: 0, personas: 0, captadores: 0, total: items.length };
     for (const it of items) {
       await this.db.$transaction(async (tx) => {
-        const previa = await tx.propiedad.findFirst({
+        let previa = await tx.propiedad.findFirst({
           where: { corredoraId: u.corredoraId, origenSistema: sistema, origenId: it.origenId },
           include: INCLUIR,
         });
+        // lo que antes vino de Portalfirma con el mismo código pasa a ser de este origen (así no se duplica)
+        if (!previa && sistema === SISTEMA_CONVECTA && it.datos.codigo) {
+          previa = await tx.propiedad.findFirst({
+            where: { corredoraId: u.corredoraId, origenSistema: 'portalfirma', codigo: it.datos.codigo, eliminadoEn: null },
+            include: INCLUIR,
+          });
+          if (previa) {
+            await tx.propiedad.update({ where: { id: previa.id }, data: { origenSistema: sistema, origenId: it.origenId } });
+            previa = { ...previa, origenSistema: sistema, origenId: it.origenId };
+          }
+        }
         let propId: string;
         if (!previa) {
           const o = it.datos;
@@ -378,6 +391,8 @@ export class PropiedadesService {
               origenSistema: sistema,
               origenId: it.origenId,
               origenDatos: (it.origenDatos ?? {}) as Prisma.InputJsonValue,
+              captadorId: it.captadorId ?? null,
+              archivada: !!it.archivada,
               creadoPorId: u.sub,
               busqueda: textoBusqueda({ ...o, codigo, titulo }),
             },
@@ -386,6 +401,7 @@ export class PropiedadesService {
           await this.actividad.registrar(this.log(u, creada.id, `Importada desde ${sistema}`), tx);
           propId = creada.id;
           res.nuevas++;
+          if (it.captadorId) res.captadores++;
         } else {
           propId = previa.id;
           // solo lo que no se editó en Asset
@@ -427,6 +443,13 @@ export class PropiedadesService {
             );
             res.actualizadas++;
           } else res.sinCambios++;
+          if (it.captadorId && !previa.captadorId) {
+            await tx.propiedad.update({
+              where: { id: previa.id },
+              data: { captadorId: it.captadorId, version: { increment: 1 } },
+            });
+            res.captadores++;
+          }
         }
         // el propietario al CRM (por RUT) y vinculado
         const pr = it.propietario;
@@ -473,6 +496,50 @@ export class PropiedadesService {
       });
     }
     return res;
+  }
+
+  /**
+   * Importa la cartera desde Convecta (único origen). Cada propiedad se asigna como captación al usuario de Asset cuyo
+   * correo coincide con el del corredor en Convecta (sin distinguir mayúsculas); si no hay coincidencia queda sin captador
+   * y se informa el correo para crearlo o corregirlo. Las que Convecta marca no visibles llegan archivadas.
+   */
+  async importarConvecta(u: UsuarioToken) {
+    soloAdmin(u, 'Importar la cartera');
+    const leidas = await this.convecta.propiedades();
+    const usuarios = await this.db.usuario.findMany({
+      where: { corredoraId: u.corredoraId, activo: true },
+      select: { id: true, email: true },
+    });
+    const porCorreo = new Map(usuarios.map((x) => [x.email.trim().toLowerCase(), x.id]));
+    const faltan = new Map<string, { email: string; nombre: string; propiedades: number }>();
+    const items = leidas.map((x) => {
+      const email = (x.user?.email ?? '').trim().toLowerCase();
+      const captadorId = email ? (porCorreo.get(email) ?? null) : null;
+      if (!captadorId) {
+        const clave = email || '(sin correo)';
+        const f = faltan.get(clave) ?? { email: email || '', nombre: x.user?.fullName?.trim() ?? '', propiedades: 0 };
+        f.propiedades++;
+        faltan.set(clave, f);
+      }
+      return {
+        origenId: String(x.idProperty),
+        origenDatos: {
+          corredor: x.user?.fullName ?? null,
+          correo: email || null,
+          idExterno: x.idExternal ?? null,
+          importado: new Date().toISOString(),
+        },
+        datos: aPropiedadAsset(x),
+        captadorId,
+        archivada: x.visible === false,
+      };
+    });
+    const res = { nuevas: 0, actualizadas: 0, sinCambios: 0, personas: 0, captadores: 0, total: items.length };
+    for (let i = 0; i < items.length; i += 100) {
+      const r = await this.importar(u, { sistema: SISTEMA_CONVECTA, items: items.slice(i, i + 100) });
+      for (const k of ['nuevas', 'actualizadas', 'sinCambios', 'personas', 'captadores'] as const) res[k] += r[k];
+    }
+    return { ...res, sinCorredor: [...faltan.values()], sinCaptador: [...faltan.values()].reduce((a, f) => a + f.propiedades, 0) };
   }
 
   // ------------------------------------------------------------------ resumen (inicio)

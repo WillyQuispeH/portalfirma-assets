@@ -76,6 +76,12 @@ const esquema = z.object({
   /** app de Asset en Mercado Libre (Portal Inmobiliario); sin las dos, la integración no aparece */
   ML_CLIENT_ID: z.string().optional(),
   ML_CLIENT_SECRET: z.string().optional(),
+  /** API de Convecta (de donde se importa la cartera): dirección base y clave de suscripción (cabecera Ocp-Apim-Subscription-Key) */
+  CONVECTA_API_URL: z
+    .url()
+    .transform((u) => u.replace(/\/+$/, ''))
+    .optional(),
+  CONVECTA_SUBSCRIPTION_KEY: z.string().trim().optional(),
   /** solo fuera de producción: otras direcciones para la API y la autorización de Mercado Libre (las pruebas) */
   ML_API_URL: z.url().optional(),
   ML_AUTH_URL: z.url().optional(),

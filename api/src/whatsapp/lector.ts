@@ -44,6 +44,8 @@ import { ObservadorService, canalDe } from './observador';
 import { IaService } from './ia';
 import { PuenteService } from './puente';
 import { EvaluacionService } from './evaluacion';
+import { ConfirmacionVisitaService } from './confirmacion-visita';
+import { DocumentoRevisionService } from './documento-revision';
 import { telNorm } from './comun';
 import { numeroEmpresa } from './ejecutivo';
 
@@ -80,6 +82,8 @@ export class LectorService implements OnModuleInit, OnModuleDestroy {
     private readonly observador: ObservadorService,
     private readonly ia: IaService,
     private readonly evaluacion: EvaluacionService,
+    private readonly confirmacionVisita: ConfirmacionVisitaService,
+    private readonly documentoRevision: DocumentoRevisionService,
     private readonly puente: PuenteService,
     config: ConfigService<Env, true>,
   ) {
@@ -246,6 +250,18 @@ export class LectorService implements OnModuleInit, OnModuleDestroy {
       return;
     }
     // 2b. documentos de una evaluación de arriendo (del arrendatario o de un aval): se leen antes que cualquier asistente
+    // 2a. la respuesta a la confirmación de una visita (sí / no puedo): confirma el paso «Visita agendada»
+    nuevos = await this.confirmacionVisita.interceptar(wa, corredoraId, cv, nuevos);
+    if (!nuevos.length) {
+      await this.rapido(corredoraId);
+      return;
+    }
+    // 2c. respondió a la plantilla de un documento a revisión: se le manda el PDF (la ventana de 24 h ya está abierta)
+    nuevos = await this.documentoRevision.interceptar(wa, corredoraId, cv, nuevos);
+    if (!nuevos.length) {
+      await this.rapido(corredoraId);
+      return;
+    }
     nuevos = await this.evaluacion.interceptar(wa, corredoraId, cv, nuevos);
     if (!nuevos.length) {
       await this.rapido(corredoraId);

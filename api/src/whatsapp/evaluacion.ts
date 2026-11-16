@@ -67,6 +67,8 @@ export interface ArchivoEval {
   clase: string;
   legible: boolean;
   resumen: string;
+  /** el corredor eligió el tipo (la IA se había equivocado o no lo reconoció): el archivo se volvió a leer con esa premisa */
+  claseManual?: boolean;
   persona: { nombre?: string; rut?: string };
   datos: J;
   alertas: string[];
@@ -82,6 +84,8 @@ export interface PersonaEval {
   /** todos sus documentos recibidos (los lee la IA) */
   completa: boolean;
   analisis: AnalisisPersona | null;
+  /** lo que decidió el corredor de ESTA persona (el arrendatario y cada aval se aprueban o rechazan por separado) */
+  decision?: { estado: 'aprobada' | 'rechazada'; por: string; en: string } | null;
 }
 export interface Evaluacion {
   negocioId: string;
@@ -119,13 +123,28 @@ export interface Analisis {
   porPersona: { personaId: string; rol: string; nombre: string; porcentaje: number; nivel: string }[];
 }
 
+const CLASES = [
+  'contrato_trabajo',
+  'cedula_frente',
+  'cedula_reverso',
+  'cedula_ambas',
+  'liquidacion',
+  'afp',
+  'dicom',
+  'otro',
+] as const;
+const claseEsquema = z.object({ clase: z.enum(CLASES) });
+
 const solicitarEsquema = z.object({
   avales: z.array(z.uuid()).max(10).default([]),
   titular: z.boolean().default(true),
 });
 const decidirEsquema = z.object({
-  decision: z.enum(['aprobada', 'rechazada']),
+  /** con `personaId`, 'pendiente' deshace la decisión de esa persona */
+  decision: z.enum(['aprobada', 'rechazada', 'pendiente']),
   nota: z.string().trim().max(1000).default(''),
+  /** la persona a la que se refiere (el arrendatario o un aval); sin él, es la decisión global de la evaluación */
+  personaId: z.string().trim().max(80).optional(),
 });
 
 const SISTEMA_LECTURA = `Eres un analista que revisa los documentos que un postulante a arriendo en Chile manda por WhatsApp. Recibes UNA foto o PDF. Devuelve un objeto JSON con:
@@ -536,20 +555,39 @@ export class EvaluacionService {
     const x = await this.leer(u.corredoraId, negocioId);
     if (!x) throw new NotFoundException('Todavía no se solicitó la documentación.');
     const yo = await this.db.usuario.findUnique({ where: { id: u.sub }, select: { nombre: true } });
-    const ev: Evaluacion = {
-      ...x,
-      estado: 'revisada',
-      decision: { estado: b.decision, por: yo?.nombre || 'Corredor', en: new Date().toISOString(), nota: b.nota },
-    };
+    const por = yo?.nombre || 'Corredor';
+    const ahora = new Date().toISOString();
+    let ev: Evaluacion;
+    let texto: string;
+    if (b.personaId) {
+      // el arrendatario y cada aval se aprueban o rechazan por separado
+      const personas = x.personas.map((p) => ({ ...p }));
+      const p = personas.find((q) => q.personaId === b.personaId);
+      if (!p) throw new NotFoundException('Esa persona no está en la evaluación.');
+      p.decision = b.decision === 'pendiente' ? null : { estado: b.decision, por, en: ahora };
+      // la evaluación se resuelve sola: se rechaza si el arrendatario fue rechazado y se aprueba cuando TODOS están aprobados
+      const tit = personas.find((q) => q.rol === 'arrendatario');
+      const global: Evaluacion['decision'] =
+        tit?.decision?.estado === 'rechazada'
+          ? { estado: 'rechazada', por, en: ahora, nota: 'Arrendatario rechazado' }
+          : personas.length && personas.every((q) => q.decision?.estado === 'aprobada')
+            ? { estado: 'aprobada', por, en: ahora, nota: '' }
+            : null;
+      ev = {
+        ...x,
+        personas,
+        decision: global,
+        estado: global ? 'revisada' : x.estado === 'revisada' ? (personas.every((q) => q.completa) ? 'completa' : 'solicitada') : x.estado,
+      };
+      texto = `Evaluación: ${p.nombre} (${p.rol === 'aval' ? 'aval' : 'arrendatario'}) ${b.decision === 'pendiente' ? 'vuelve a quedar sin decidir' : b.decision === 'aprobada' ? 'aprobado' : 'rechazado'} por ${por}${global ? ` · evaluación ${global.estado === 'aprobada' ? 'aprobada' : 'rechazada'}` : ''}`;
+    } else {
+      if (b.decision === 'pendiente') throw new BadRequestException('Indica la persona para deshacer su decisión.');
+      ev = { ...x, estado: 'revisada', decision: { estado: b.decision, por, en: ahora, nota: b.nota } };
+      texto = `Evaluación del arrendatario ${b.decision === 'aprobada' ? 'aprobada' : 'rechazada'} por ${por}${x.analisis ? ` (puntaje ${x.analisis.porcentaje}%)` : ''}`;
+    }
     await this.guardar(u.corredoraId, negocioId, ev, u.sub);
     await this.actividad
-      .registrar({
-        corredoraId: u.corredoraId,
-        entidadTipo: 'negocio',
-        entidadId: negocioId,
-        texto: `Evaluación del arrendatario ${b.decision === 'aprobada' ? 'aprobada' : 'rechazada'} por ${yo?.nombre || 'el corredor'}${x.analisis ? ` (puntaje ${x.analisis.porcentaje}%)` : ''}`,
-        usuarioId: u.sub,
-      })
+      .registrar({ corredoraId: u.corredoraId, entidadTipo: 'negocio', entidadId: negocioId, texto, usuarioId: u.sub })
       .catch(() => null);
     return this.publica(ev);
   }
@@ -559,6 +597,64 @@ export class EvaluacionService {
     await buscarVisible(this.db.negocio, u, negocioId, 'El negocio');
     const x = await this.leer(u.corredoraId, negocioId);
     if (!x) throw new NotFoundException('Todavía no se solicitó la documentación.');
+    const ev = { ...x, analisis: await this.analizar(u.corredoraId, x) };
+    await this.guardar(u.corredoraId, negocioId, ev, u.sub);
+    return this.publica(ev);
+  }
+
+  /**
+   * El corredor dice de qué tipo es un documento (la IA se equivocó o no lo reconoció). El archivo se vuelve a leer con esa premisa
+   * (para sacar sus datos: sueldo, periodo, meses cotizados…), se actualiza lo que falta por entregar y se recalcula el puntaje.
+   */
+  async cambiarClase(u: UsuarioToken, negocioId: string, personaId: string, n: number, clase: (typeof CLASES)[number]) {
+    await buscarVisible(this.db.negocio, u, negocioId, 'El negocio');
+    const x = await this.leer(u.corredoraId, negocioId);
+    if (!x) throw new NotFoundException('Todavía no se solicitó la documentación.');
+    const persona = x.personas.find((p) => p.personaId === personaId);
+    const a = persona?.archivos.find((f) => f.n === n);
+    if (!persona || !a) throw new NotFoundException('Ese archivo no existe.');
+    if (a.clase !== clase || !a.claseManual) {
+      if (clase === 'otro') {
+        a.clase = 'otro';
+        a.datos = {};
+        a.alertas = [];
+      } else {
+        // se vuelve a leer con la premisa del corredor; si la IA falla, queda el tipo elegido con lo que ya se había leído
+        try {
+          const bytes = await this.r2.bajar(a.clave);
+          const contenido: Anthropic.Beta.BetaContentBlockParam =
+            a.tipo === 'application/pdf'
+              ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: bytes.toString('base64') } }
+              : { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: bytes.toString('base64') } };
+          const lectura = await this.ia.leerDocumento({
+            corredoraId: u.corredoraId,
+            uso: 'evaluacion:archivo',
+            sistema: SISTEMA_LECTURA,
+            contenido: [
+              contenido,
+              {
+                type: 'text',
+                text: `El corredor indica que este archivo es de la clase «${clase}». Léelo con esa premisa y devuelve el JSON pedido con "clase": "${clase}".`,
+              },
+            ],
+          });
+          a.datos = typeof lectura.datos === 'object' && lectura.datos ? (lectura.datos as J) : {};
+          a.resumen = String(lectura.resumen ?? a.resumen).slice(0, 600);
+          a.legible = lectura.legible !== false;
+          a.alertas = Array.isArray(lectura.alertas) ? lectura.alertas.map(String).slice(0, 8) : [];
+          a.persona = {
+            nombre: txt((lectura.persona as J | undefined)?.nombre) || a.persona.nombre,
+            rut: txt((lectura.persona as J | undefined)?.rut) || a.persona.rut,
+          };
+        } catch (e) {
+          this.log.warn(`releer documento con IA: ${(e as Error).message}`);
+        }
+        a.clase = clase;
+      }
+    }
+    a.claseManual = true;
+    persona.completa = revisarDocumentos(persona).completo;
+    x.estado = x.personas.every((p) => p.completa) ? 'completa' : x.estado === 'completa' ? 'solicitada' : x.estado;
     const ev = { ...x, analisis: await this.analizar(u.corredoraId, x) };
     await this.guardar(u.corredoraId, negocioId, ev, u.sub);
     return this.publica(ev);
@@ -909,6 +1005,19 @@ export class EvaluacionController {
     @Body(new ZodPipe(decidirEsquema)) b: z.infer<typeof decidirEsquema>,
   ) {
     return this.s.decidir(u, id.slice(0, 80), b);
+  }
+
+  /** el corredor asigna el tipo de un documento (contrato, cédula, liquidación, AFP, Dicom u otro) */
+  @Post(':negocioId/archivo/:personaId/:n/clase')
+  @HttpCode(200)
+  clase(
+    @UsuarioActual() u: UsuarioToken,
+    @Param('negocioId') id: string,
+    @Param('personaId') pid: string,
+    @Param('n') n: string,
+    @Body(new ZodPipe(claseEsquema)) b: z.infer<typeof claseEsquema>,
+  ) {
+    return this.s.cambiarClase(u, id.slice(0, 80), pid.slice(0, 80), Number(n) || 0, b.clase);
   }
 
   @Get(':negocioId/archivo/:personaId/:n')

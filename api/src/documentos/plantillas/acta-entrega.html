@@ -1,0 +1,65 @@
+<!doctype html>
+<!--
+  ACTA DE ENTREGA E INVENTARIO de PortalFirma Asset. HTML normal: se edita el texto y el estilo aquí.
+  Variables entre llaves dobles (se reemplazan solas al generar el PDF):
+    {{numero}} {{fechaEmision}} {{fechaEntrega}}
+    {{corredora.nombre}}
+    {{arrendador}} (propietarios con su RUT)   {{arrendatario.nombre}} {{arrendatario.rut}}
+    {{propiedad.codigo}} {{propiedad.tipo}} {{propiedad.direccion}}
+    {{llaves}}  {{observaciones}}
+    {{#hayMedidores}} … {{/hayMedidores}} y {{#medidores}} {{nombre}} {{numero}} {{lectura}} {{/medidores}}   (luz, agua, gas: los que tengan dato)
+    {{#inventario}} {{espacio}} {{estado}} {{nota}} {{/inventario}}   (una fila por espacio o ítem)
+  Un bloque  {{#algo}} … {{/algo}}  solo aparece si «algo» tiene valor.
+  Este documento NO lleva cajas de firma: Portalfirma agrega su propia hoja de firma al enviarlo.
+  Este texto es un BORRADOR para que lo revise el notario.
+-->
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Acta de entrega nº {{numero}}</title>
+<style>
+  @page { size: A4; margin: 14mm 16mm 15mm; }
+  * { box-sizing: border-box; }
+  body { font-family: "Helvetica Neue", Arial, sans-serif; font-size: 10pt; line-height: 1.4; color: #1c2230; margin: 0; }
+  h1 { text-align: center; font-size: 15pt; margin: 0 0 3px; letter-spacing: .03em; }
+  .sub { text-align: center; color: #4a5266; font-size: 9.5pt; margin-bottom: 12px; }
+  h2 { font-size: 10pt; text-transform: uppercase; letter-spacing: .05em; margin: 12px 0 4px; color: #4a5266; }
+  p { margin: 0 0 6px; text-align: justify; }
+  table { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
+  th, td { border: 1px solid #cfd5e2; padding: 4px 7px; text-align: left; vertical-align: top; }
+  th { background: #f1f3f8; font-weight: 600; }
+  tr { page-break-inside: avoid; }
+  .cl { white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h1>ACTA DE ENTREGA E INVENTARIO</h1>
+<div class="sub">Nº {{numero}} · Entrega del {{fechaEntrega}} · Intermediado por {{corredora.nombre}}</div>
+
+<h2>Partes y propiedad</h2>
+<p>Arrendador: {{arrendador}}.<br>Arrendatario: {{arrendatario.nombre}}, RUT {{arrendatario.rut}}.<br>Propiedad: código {{propiedad.codigo}}, {{propiedad.tipo}}, {{propiedad.direccion}}.</p>
+<p>Las partes dejan constancia de que en la fecha indicada el Arrendador entrega al Arrendatario la propiedad individualizada, en el estado que se describe a continuación, y que el Arrendatario la recibe a su entera conformidad con lo aquí anotado.</p>
+
+<h2>Llaves</h2>
+<p>{{llaves}}</p>
+
+{{#hayMedidores}}<h2>Medidores</h2>
+<table>
+  <tr><th>Servicio</th><th>N.º de medidor</th><th>Lectura</th></tr>
+  {{#medidores}}<tr><td>{{nombre}}</td><td>{{numero}}</td><td>{{lectura}}</td></tr>{{/medidores}}
+</table>{{/hayMedidores}}
+
+<h2>Inventario y estado</h2>
+<table>
+  <tr><th style="width:30%">Espacio o ítem</th><th style="width:16%">Estado</th><th>Observaciones</th></tr>
+  {{#inventario}}<tr><td>{{espacio}}</td><td>{{estado}}</td><td>{{nota}}</td></tr>{{/inventario}}
+</table>
+
+{{#observaciones}}<h2>Observaciones generales</h2>
+<p class="cl">{{observaciones}}</p>{{/observaciones}}
+
+<h2>Restitución</h2>
+<p>Al término del arrendamiento, el Arrendatario restituirá la propiedad en el mismo estado en que la recibe según esta acta, salvo el desgaste natural por el uso legítimo. La garantía se devolverá comparando el estado de restitución con este inventario.</p>
+<p>Esta acta se firma electrónicamente con Portalfirma.</p>
+</body>
+</html>

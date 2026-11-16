@@ -13,6 +13,7 @@ import { PersonasController } from './personas/personas.controller';
 import { PersonasService } from './personas/personas.service';
 import { PropiedadesController } from './propiedades/propiedades.controller';
 import { PropiedadesService } from './propiedades/propiedades.service';
+import { ConvectaService } from './propiedades/convecta';
 import { ArchivosModule } from './archivos/archivos';
 import { NegociosController, NegociosService } from './negocios/negocios';
 import { EventosController, EventosService } from './agenda/eventos';
@@ -38,13 +39,21 @@ import { EnviadosController, EnviadosService } from './whatsapp/enviados';
 import { EjecutivoController, EjecutivoService } from './whatsapp/ejecutivo';
 import { EquipoService } from './whatsapp/equipo';
 import { FotosWaService } from './whatsapp/fotos-wa';
-import { OrdenVisitaService } from './whatsapp/orden-visita';
+import { OrdenVisitaController, OrdenVisitaService } from './whatsapp/orden-visita';
+import { PdfService } from './documentos/pdf.service';
+import { EnvioFirmaService } from './documentos/envio-firma';
+import { CartaOfertaController, CartaOfertaService } from './negocios/carta-oferta';
+import { ContratoArriendoController, ContratoArriendoService } from './negocios/contrato-arriendo';
+import { ActaEntregaController, ActaEntregaService } from './negocios/acta-entrega';
+import { ActaFirmaController, ActaFirmaService } from './whatsapp/acta-firma';
 import { LeadsWaService } from './whatsapp/leads-wa';
 import { AvisoLeadController, AvisoLeadService } from './whatsapp/aviso-lead';
 import { ClientesService } from './whatsapp/clientes';
 import { PostventaWaService } from './whatsapp/postventa';
 import { ObservadorController, ObservadorService } from './whatsapp/observador';
 import { EvaluacionController, EvaluacionService } from './whatsapp/evaluacion';
+import { ConfirmacionVisitaController, ConfirmacionVisitaService } from './whatsapp/confirmacion-visita';
+import { DocumentoRevisionService } from './whatsapp/documento-revision';
 import { ActaVisitaController, ActaVisitaService } from './whatsapp/acta-visita';
 import { LectorController, LectorService } from './whatsapp/lector';
 import { LeadsEnvioController, PuenteService } from './whatsapp/puente';
@@ -88,12 +97,19 @@ import { LeadsEnvioController, PuenteService } from './whatsapp/puente';
     ObservadorController,
     LectorController,
     EvaluacionController,
+    OrdenVisitaController,
+    CartaOfertaController,
+    ContratoArriendoController,
+    ActaEntregaController,
+    ActaFirmaController,
+    ConfirmacionVisitaController,
     ActaVisitaController,
   ],
   // el límite de intentos va antes que la sesión: un login fallido también cuenta
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     PropiedadesService,
+    ConvectaService,
     PersonasService,
     NegociosService,
     EventosService,
@@ -114,6 +130,12 @@ import { LeadsEnvioController, PuenteService } from './whatsapp/puente';
     EquipoService,
     FotosWaService,
     OrdenVisitaService,
+    PdfService,
+    EnvioFirmaService,
+    CartaOfertaService,
+    ContratoArriendoService,
+    ActaEntregaService,
+    ActaFirmaService,
     TranscripcionService,
     FirmasRondaService,
     IaService,
@@ -127,6 +149,8 @@ import { LeadsEnvioController, PuenteService } from './whatsapp/puente';
     LectorService,
     PuenteService,
     EvaluacionService,
+    ConfirmacionVisitaService,
+    DocumentoRevisionService,
     ActaVisitaService,
   ],
 })
