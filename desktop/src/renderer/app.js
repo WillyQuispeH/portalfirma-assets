@@ -79,13 +79,36 @@ function armarSecciones(card) {
   card.appendChild(cuerpo);
   if (pie) card.appendChild(pie);
 }
+// Las ventanas se mueven como las de Windows: se arrastra su encabezado (el título) y la ventana sigue al puntero, sin salirse de la pantalla.
+// Doble clic en el encabezado la devuelve al centro. La posición se olvida al cerrar. Mientras se arrastra, el fondo se aclara para ver lo que hay detrás.
+(() => {
+  let d = null;
+  const MARGEN = 90;   // lo mínimo del encabezado que debe quedar a la vista
+  const poner = (c, dx, dy) => { c.style.translate = dx || dy ? dx + 'px ' + dy + 'px' : ''; c.dataset.dx = dx; c.dataset.dy = dy; };
+  document.addEventListener('pointerdown', (e) => {
+    const cab = e.target.closest?.('#modalCard .mdl-cab'); if (!cab || e.button !== 0 || e.target.closest('button, a, input, select, textarea, [role=menuitem]')) return;
+    const c = $('#modalCard'); const r = c.getBoundingClientRect(); const ox = Number(c.dataset.dx) || 0; const oy = Number(c.dataset.dy) || 0;
+    d = { x: e.clientX, y: e.clientY, ox, oy, l0: r.left - ox, t0: r.top - oy, w: r.width, cab };
+    try { cab.setPointerCapture(e.pointerId); } catch {}
+    c.classList.add('arrastrando'); e.preventDefault();
+  });
+  document.addEventListener('pointermove', (e) => {
+    if (!d) return; const c = $('#modalCard');
+    const dx = Math.min(innerWidth - MARGEN - d.l0, Math.max(MARGEN - d.w - d.l0, d.ox + e.clientX - d.x));
+    const dy = Math.min(innerHeight - 48 - d.t0, Math.max(-d.t0, d.oy + e.clientY - d.y));
+    poner(c, Math.round(dx), Math.round(dy));
+  });
+  const soltar = () => { if (!d) return; d = null; $('#modalCard').classList.remove('arrastrando'); };
+  document.addEventListener('pointerup', soltar); document.addEventListener('pointercancel', soltar);
+  document.addEventListener('dblclick', (e) => { if (e.target.closest?.('#modalCard .mdl-cab') && !e.target.closest('button, a, input, select, textarea')) poner($('#modalCard'), 0, 0); });
+})();
 // Esc cierra la ventana antigua como su X (el Modal del kit atiende su propio Esc antes y no lo deja pasar)
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape' || $('#modal').classList.contains('hidden')) return;
   const x = $('#modalCard .mdl-x'); if (x) { e.preventDefault(); x.click(); }
 });
 // al cerrar también se vacía: si no, sus botones (#mOk, #mCancel…) quedan ocultos en la página y chocan con los de otra ventana
-function closeModal() { $('#modal').classList.add('hidden'); $('#modalCard').classList.remove('im-wide'); delete $('#modalCard').dataset.clave; window.ReactUI?.liberarModal(); $('#modalCard').innerHTML = ''; }
+function closeModal() { const mc = $('#modalCard'); mc.style.translate = ''; delete mc.dataset.dx; delete mc.dataset.dy; mc.classList.remove('arrastrando'); $('#modal').classList.add('hidden'); $('#modalCard').classList.remove('im-wide'); delete $('#modalCard').dataset.clave; window.ReactUI?.liberarModal(); $('#modalCard').innerHTML = ''; }
 async function api(fn, ...args) {
   const r = await pf[fn](...args);
   if (!r.ok) {

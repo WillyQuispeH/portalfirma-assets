@@ -45,24 +45,26 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
       await w.waitForSelector('.vt-b .ga, .vt-b .error', { timeout: 15000 }); ok(await w.$('.vt-b .ga'), 'el formulario del documento aparece dentro de la ventana'); await shot('et3-ventana.png'); await w.click('.vt-x'); await w.waitForSelector('.vt-ov', { state: 'detached' }); }
     await w.click('#hoyNuevo'); await w.waitForSelector('.vt-nuevo'); ok((await w.$$('.vt-nuevo button')).length === 7, '«Empezar algo nuevo» abre una ventana con las 3 etapas'); await w.keyboard.press('Escape'); await w.waitForSelector('.vt-ov', { state: 'detached' });
     // reprogramar: vuelve a pendiente y «Todo en orden»
-    await w.click('#view-inicio [data-l="atencion"][data-acc="0"]'); await w.waitForSelector('#rpF'); await w.fill('#rpF', '2099-01-10'); await w.click('#mOk');
+    await w.click('#view-inicio [data-l="atencion"][data-acc="0"]'); await w.waitForSelector('#pvForm'); ok(/Agendar la visita/.test(await txt('#pvForm')), '0.18.10 · «Reprogramar» abre el paso de la visita con el formulario adentro (no otra ventana)'); await w.fill('#pvDia', '2099-01-10'); await w.click('#pvAgendar');
     await w.waitForFunction(() => /Todo en orden/.test(document.querySelector('#view-inicio')?.textContent || ''));
     ok(true, 'al reprogramar, deja de estar en rojo: «Todo en orden»');
+    await w.waitForTimeout(500); await shot('pv1-visita.png');
+    ok(/Agendada/.test(await txt('#pvLista')) && /Confirmar por WhatsApp/.test(await txt('#pvLista')), '0.18.10 · la visita queda listada en la ventana (agendada, con «Confirmar por WhatsApp»)');
+    await w.evaluate(() => window.closeModal());
     // el negocio: 3 etapas, siguiente paso, marcar logrado
-    await w.click(`#view-inicio .hoy-neg:has-text("${pA.titulo.slice(0, 20).replace(/"/g, '')}")`); await w.waitForSelector('#ngEt .et-cards');
+    await w.click(`#view-inicio .hoy-neg:has-text("${pA.titulo.slice(0, 20).replace(/"/g, '')}")`); await w.waitForSelector('#ngEt .et-col');
     const e = await txt('#ngEt');
     ok(!/Captación/.test(e) && /Comercialización/.test(e) && /Post(venta|arriendo)/.test(e), '0.16.11 · el negocio muestra comercialización y postventa (postarriendo si es arriendo) (la captación quedó en Cartera)');
     ok(/Siguiente paso · te toca/.test(e) && /Visita agendada/.test(e), 'y un solo siguiente paso destacado (visita)');
     ok(await w.evaluate(() => document.querySelector('#ngEt .luz.on #etAcc') != null), 'la luz guía está en el botón del siguiente paso');
-    await w.click('#etOk'); await w.waitForFunction(() => /Orden de visita firmada/.test(document.querySelector('#ngEt .et-next')?.textContent || ''), null, { timeout: 8000 });
+    await w.click('#etOk'); await w.waitForFunction(() => /Orden de visita/.test(document.querySelector('#ngEt .et-next')?.textContent || ''), null, { timeout: 8000 });
     ok(/Logrado/.test(await txt('#ngEt .et-p:has-text("Visita agendada")')), '«Marcar como logrado» avanza al siguiente paso (orden de visita)');
     await shot('et2-negocio.png');
-    // otro estado: esperando a alguien
-    await w.click('#etMas'); await w.click('.et-mopts [data-e="otro"]'); await w.fill('#emT', 'el cliente'); await w.click('#emOk');
-    await w.waitForFunction(() => /Esperando a el cliente/.test(document.querySelector('#ngEt .et-next')?.textContent || ''), null, { timeout: 8000 });
-    ok(true, '«Esperando a alguien» queda como pendiente de otro');
+    // 0.18.10 · ya no existe «Esperando a alguien» (solo logrado, no logrado y volver a lo automático)
+    await w.click('#etMas'); ok(await w.$('.et-mopts [data-e="otro"]') === null, 'el menú de estados ya no ofrece «Esperando a alguien»'); await w.keyboard.press('Escape');
     // postventa de arriendo sin escritura ni Conservador
-    await w.click('#ngEt [data-tog="1"]'); const pv = await txt('#ngEt .et-e >> nth=1');
+    if (await w.$('#ngEt .et-col >> nth=1 >> [data-mas]')) await w.click('#ngEt .et-col >> nth=1 >> [data-mas]');
+    const pv = await txt('#ngEt .et-col >> nth=1');
     ok(/Contrato de arriendo firmado/.test(pv) && !/Conservador/.test(pv), 'la postventa de un arriendo tiene sus pasos (sin escritura ni Conservador)');
     // 0.16.11 · la captación de la propiedad se ve en Cartera: en la tarjeta y en la ficha
     await w.evaluate(() => window.Inmo.cartera({ especial: '', op: 'todas' })); await w.waitForSelector('.im-card .im-capt');

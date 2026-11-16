@@ -37,12 +37,12 @@ export default function Conversaciones() {
           return (
             <Fragment key={c.id}>
               {titulo && <h5 className="tw:mt-3 tw:mb-1 tw:mx-2 tw:text-xs tw:font-semibold tw:uppercase tw:tracking-wide tw:text-muted">{g}</h5>}
-              <div className={cx('ag-ci tw:group tw:relative tw:flex tw:items-center tw:rounded-xl', on ? 'on tw:bg-lav-soft' : 'tw:hover:bg-hover')} data-c={c.id}>
+              <div className={cx('ag-ci tw:group tw:relative tw:flex tw:items-center tw:rounded-control', on ? 'on tw:bg-lav-soft' : 'tw:hover:bg-hover')} data-c={c.id}>
                 <button type="button" className="ag-cit tw:flex-1 tw:min-w-0 tw:m-0 tw:px-3 tw:py-2 tw:text-left tw:border-0 tw:bg-transparent tw:cursor-pointer tw:font-[inherit]" data-abrir onClick={() => abrirConv(c.id)}>
                   <b className={cx('tw:block tw:truncate tw:text-[13.5px] tw:font-semibold', on ? 'tw:text-lav-softink' : 'tw:text-text')}>{c.titulo || 'Conversación'}</b>
                   <small className="tw:block tw:truncate tw:text-xs tw:text-muted">{cuando(c.actualizado)}{c.resumen ? ' · ' + c.resumen : ''}</small>
                 </button>
-                <span className="ag-cia tw:absolute tw:right-1 tw:top-1/2 tw:-translate-y-1/2 tw:hidden tw:group-hover:flex tw:group-focus-within:flex tw:items-center tw:gap-0.5 tw:p-0.5 tw:rounded-lg tw:bg-card tw:shadow-sm">
+                <span className="ag-cia tw:absolute tw:right-1 tw:top-1/2 tw:-translate-y-1/2 tw:hidden tw:group-hover:flex tw:group-focus-within:flex tw:items-center tw:gap-0.5 tw:p-0.5 tw:rounded-card tw:bg-card tw:shadow-sm">
                   <Boton variante="fantasma" tamano="sm" className={cx(ACCION, c.fijada && 'on tw:text-brand')} data-fijar title={c.fijada ? 'Quitar de fijadas' : 'Fijar arriba'} aria-label={c.fijada ? 'Quitar de fijadas' : 'Fijar arriba'} icono="bookmark" onClick={() => fijarConv(c.id, !c.fijada)} />
                   <Boton variante="fantasma" tamano="sm" className={ACCION} data-ren title="Cambiar nombre" aria-label="Cambiar nombre" icono="edit" onClick={() => renombrarConversacion(c)} />
                   <Boton variante="fantasma" tamano="sm" className={cx(ACCION, 'tw:hover:text-err')} data-del title="Eliminar" aria-label="Eliminar" icono="trash" onClick={() => borrarConversacion(c)} />

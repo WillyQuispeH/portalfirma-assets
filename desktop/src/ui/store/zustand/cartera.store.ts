@@ -5,6 +5,13 @@ import { propiedadService } from '../services/propiedad.service';
 import { personaService } from '../services/persona.service';
 import type { ICartera, TCaptaciones, TPropiedadEstado, TPropiedadTipo } from '../interfaces/propiedad.interface';
 import type { IPersona, TPersonaRol } from '../interfaces/persona.interface';
+import type { IOrdenTabla } from '../../components/ui/Tabla';
+
+export type TVistaCartera = 'grilla' | 'tabla';
+const VISTA = 'pf.cartera.vista';
+const ORDEN = 'pf.cartera.orden';
+const leer = <T,>(clave: string, siNo: T): T => { try { const v = localStorage.getItem(clave); return v ? JSON.parse(v) as T : siNo; } catch { return siNo; } };
+const guardar = (clave: string, v: unknown) => { try { localStorage.setItem(clave, JSON.stringify(v)); } catch { /* sin almacenamiento: solo dura la sesión */ } };
 
 export type TFiltroEspecial = '' | 'enCaptacion' | 'sinProp' | 'sinFotos' | 'reservadas' | 'leads';
 
@@ -33,6 +40,10 @@ interface ICarteraState {
   filtros: IFiltrosCartera;
   filtrosPersonas: IFiltrosPersonas;
   seleccion: string[] | null; // null: fuera del modo «Asignar captador»
+  vista: TVistaCartera;
+  ordenTabla: IOrdenTabla | null;
+  carteraSetVista: (v: TVistaCartera) => void;
+  carteraSetOrden: (o: IOrdenTabla | null) => void;
   carteraGetAll: () => Promise<void>;
   carteraSetFiltros: (f: Partial<IFiltrosCartera>) => void;
   personasSetFiltros: (f: Partial<IFiltrosPersonas>) => void;
@@ -54,6 +65,11 @@ export const useCarteraStore = create<ICarteraState>((set, get) => ({
   filtros: { q: '', op: 'todas', tipo: '', estado: '', comuna: '', especial: '', archivadas: false, captador: '' },
   filtrosPersonas: { q: '', rol: '' },
   seleccion: null,
+  vista: leer<TVistaCartera>(VISTA, 'grilla') === 'tabla' ? 'tabla' : 'grilla',
+  ordenTabla: leer<IOrdenTabla | null>(ORDEN, null),
+
+  carteraSetVista: (vista) => { guardar(VISTA, vista); set({ vista }); },
+  carteraSetOrden: (ordenTabla) => { guardar(ORDEN, ordenTabla); set({ ordenTabla }); },
 
   carteraGetAll: async () => {
     set({ cargando: true, error: null });

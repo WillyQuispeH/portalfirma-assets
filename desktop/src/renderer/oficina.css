@@ -7,7 +7,7 @@
 .of-fondo { position: absolute; inset: 0; width: 100%; height: 100%; display: block; user-select: none; pointer-events: none; }
 .of-zona { position: absolute; transform: translate(-50%, -100%); display: inline-flex; align-items: center; gap: 7px; padding: 5px 11px 5px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; color: #1b1f2a; background: rgba(255,255,255,.6); backdrop-filter: blur(14px) saturate(1.6); border: 1px solid rgba(255,255,255,.8); box-shadow: 0 6px 18px rgba(20,30,40,.14); white-space: nowrap; pointer-events: none; z-index: 1; }
 .of-zona i { width: 9px; height: 9px; border-radius: 50%; }
-.of-esc { position: absolute; padding: 0; border: 0; background: none; cursor: pointer; z-index: 1; border-radius: 18px; }
+.of-esc { position: absolute; padding: 0; border: 0; background: none; cursor: pointer; z-index: 1; border-radius: var(--ui-radio); }
 .of-esc img { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; transition: opacity .25s ease; pointer-events: none; }
 .of-esc:hover img, .of-esc:focus-visible img { opacity: 1; filter: drop-shadow(0 0 4px rgba(255,255,255,.95)) drop-shadow(0 0 10px rgba(255,236,190,.8)); }
 .of-esc.sel img { filter: drop-shadow(0 0 4px rgba(255,255,255,.95)) drop-shadow(0 0 12px rgba(255,236,190,.9)); }
@@ -24,7 +24,7 @@
 .of-chip { position: absolute; left: 50%; bottom: calc(100% + 6px); transform: translateX(-50%); display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px 4px 8px; border-radius: 999px; font-size: 12.5px; font-weight: 700; color: #1b1f2a; background: rgba(255,255,255,.78); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,.9); box-shadow: 0 4px 14px rgba(20,30,40,.18); white-space: nowrap; transition: transform .2s; }
 .of-chip i { width: 9px; height: 9px; border-radius: 50%; }
 .of-bur { margin-left: 2px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: #1b1f2a; color: #fff; font-size: 11px; display: grid; place-items: center; font-style: normal; }
-.of-globo { position: absolute; left: 50%; bottom: calc(100% + 40px); transform: translateX(-50%); width: max-content; max-width: 210px; padding: 7px 11px; border-radius: 14px; font-size: 12.5px; font-weight: 600; line-height: 1.3; color: #1b1f2a; background: #fff; border: 2px solid var(--gc, #1b1f2a); box-shadow: 0 8px 22px rgba(20,30,40,.22); text-align: left; animation: ofFlota 3s ease-in-out infinite; }
+.of-globo { position: absolute; left: 50%; bottom: calc(100% + 40px); transform: translateX(-50%); width: max-content; max-width: 210px; padding: 7px 11px; border-radius: var(--ui-radio); font-size: 12.5px; font-weight: 600; line-height: 1.3; color: #1b1f2a; background: #fff; border: 2px solid var(--gc, #1b1f2a); box-shadow: 0 8px 22px rgba(20,30,40,.22); text-align: left; animation: ofFlota 3s ease-in-out infinite; }
 .of-globo::after { content: ""; position: absolute; left: 50%; bottom: -8px; width: 12px; height: 12px; background: #fff; border-right: 2px solid var(--gc, #1b1f2a); border-bottom: 2px solid var(--gc, #1b1f2a); transform: translateX(-50%) rotate(45deg); border-radius: 0 0 3px 0; }
 .of-globo b { display: block; font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--gc); }
 .of-globo.der { left: auto; right: 30%; transform: none; } .of-globo.der::after { left: auto; right: 14px; transform: rotate(45deg); }

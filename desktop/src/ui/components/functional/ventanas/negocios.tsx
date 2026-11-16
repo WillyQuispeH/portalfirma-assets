@@ -4,6 +4,9 @@
 import type { TVentanas } from './registro';
 import { EliminarNegocio, EnviarDocumento, MarcarPerdido, NuevoNegocio, PasarSinFirma, VincularFirma } from '../negocios/VentanasAntiguas';
 import { ConfirmarOrden, NuevoEvento, PreparandoOrden } from '../agenda/VentanasAntiguas';
+import { CartaOferta } from '../negocios/CartaOferta';
+import { ContratoArriendo } from '../negocios/ContratoArriendo';
+import { ActaEntrega } from '../negocios/ActaEntrega';
 import { NuevoContratista, NuevoReclamo } from '../postventa/VentanasAntiguas';
 
 export const ventanas: TVentanas = {
@@ -18,6 +21,10 @@ export const ventanas: TVentanas = {
   'negocios.agendaNuevo': NuevoEvento, // modal-1
   'negocios.agendaPreparandoOrden': PreparandoOrden, // modal-2
   'negocios.agendaOrdenVisita': ConfirmarOrden, // modal-3
+  // etapas.js (carta oferta)
+  'negocios.cartaOferta': CartaOferta, // modal-125
+  'negocios.contratoArriendo': ContratoArriendo, // modal-127
+  'negocios.actaEntrega': ActaEntrega, // modal-128
   // postventa.js
   'negocios.postventaContratista': NuevoContratista, // modal-53
   'negocios.postventaReclamo': NuevoReclamo, // modal-54

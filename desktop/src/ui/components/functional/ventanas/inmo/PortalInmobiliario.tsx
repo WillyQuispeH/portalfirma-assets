@@ -17,7 +17,7 @@ const Logo = () => <span className="im-pilogo">PI</span>;
 
 function Aviso({ tono, titulo, lista }: { tono: TTono; titulo: ReactNode; lista: string[] }) {
   return (
-    <div className={cx('tw:rounded-[10px] tw:py-2.5 tw:px-3.5 tw:text-[13px]', SUAVE[tono])}>
+    <div className={cx('tw:rounded-control tw:py-2.5 tw:px-3.5 tw:text-[13px]', SUAVE[tono])}>
       <b>{titulo}</b>
       <ul className="tw:mt-1.5 tw:mb-0 tw:pl-[18px]">{lista.map((e, i) => <li key={i}>{e}</li>)}</ul>
     </div>

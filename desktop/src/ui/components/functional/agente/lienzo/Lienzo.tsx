@@ -28,7 +28,7 @@ function Cabeza({ titulo, sub, icono, foto }: { titulo: ReactNode; sub?: ReactNo
       {!inicio && <Boton variante="fantasma" tamano="sm" className="lz-back tw:self-start tw:-ml-2" data-lz="inicio" icono="chevL" title="Volver a tu día" onClick={() => mostrar({ tipo: 'inicio' })}>Tu día</Boton>}
       <div className="lz-ht tw:flex tw:items-center tw:gap-3">
         {foto !== undefined ? <Miniatura src={foto} icono={icono} tam={48} />
-          : <span className="lz-hic tw:grid tw:place-items-center tw:flex-none tw:size-11 tw:rounded-xl tw:bg-lav-soft tw:text-lav-softink"><Icono nombre={icono} tam={20} /></span>}
+          : <span className="lz-hic tw:grid tw:place-items-center tw:flex-none tw:size-11 tw:rounded-icono tw:bg-lav-soft tw:text-lav-softink"><Icono nombre={icono} tam={20} /></span>}
         <div className="tw:min-w-0"><b className="tw:block tw:text-[17px] tw:leading-tight tw:truncate">{titulo}</b>{sub && <small className="tw:block tw:mt-0.5 tw:text-[13px] tw:text-muted tw:truncate">{sub}</small>}</div>
       </div>
     </div>
@@ -45,7 +45,7 @@ function Seccion({ icono, titulo, cuenta, children, className, relleno = false }
   );
 }
 const Vacio = ({ children }: { children: ReactNode }) => <EstadoVacio compacto className="lz-vacio tw:px-3 tw:py-2" texto={children} />;
-const Hora = ({ children }: { children: ReactNode }) => <span className="lz-hr tw:grid tw:place-items-center tw:flex-none tw:min-w-12 tw:h-10 tw:px-1.5 tw:rounded-xl tw:bg-lav-soft tw:text-lav-softink tw:text-[12.5px] tw:font-bold tw:leading-tight tw:text-center">{children}</span>;
+const Hora = ({ children }: { children: ReactNode }) => <span className="lz-hr tw:grid tw:place-items-center tw:flex-none tw:min-w-12 tw:h-10 tw:px-1.5 tw:rounded-icono tw:bg-lav-soft tw:text-lav-softink tw:text-[12.5px] tw:font-bold tw:leading-tight tw:text-center">{children}</span>;
 const Punto = ({ tono }: { tono: 'bad' | 'wait' }) => <span className={cx('lz-dot', tono, 'tw:block tw:size-2.5 tw:rounded-full', tono === 'bad' ? 'tw:bg-err' : 'tw:bg-yellow-edge')} />;
 function Barra({ pct, ok }: { pct: number; ok?: boolean }) {
   return <div className={cx('lz-bar', ok && 'ok', 'tw:flex-1 tw:h-2 tw:rounded-full tw:bg-sunken tw:overflow-hidden')}><i className={cx('tw:block tw:h-full tw:rounded-full', ok ? 'tw:bg-green-edge' : 'tw:bg-brand')} style={{ width: `${pct}%` }} /></div>;
@@ -71,8 +71,8 @@ const agendar = (p: any, n: any) => W.Gestion.agendar({ propId: p?.id || n?.prop
 function Inicio({ v }: { v: Extract<TVista, { tipo: 'inicio' }> }) {
   const kpi = (k: string, icono: string, n: number, t: string, abrir: () => void) => (
     <button type="button" data-ver={k} onClick={ver(abrir)}
-      className="tw:flex tw:flex-col tw:items-start tw:gap-1.5 tw:w-full tw:m-0 tw:p-3 tw:text-left tw:rounded-2xl tw:border tw:border-solid tw:border-edge tw:border-b-[3px] tw:border-b-edge-b tw:bg-card tw:cursor-pointer tw:font-[inherit] tw:hover:bg-hover">
-      <span className="tw:grid tw:place-items-center tw:size-8 tw:rounded-lg tw:bg-lav-soft tw:text-lav-softink"><Icono nombre={icono} tam={15} /></span>
+      className="tw:flex tw:flex-col tw:items-start tw:gap-1.5 tw:w-full tw:m-0 tw:p-3 tw:text-left tw:rounded-card tw:border tw:border-solid tw:border-edge tw:border-b-[3px] tw:border-b-edge-b tw:bg-card tw:cursor-pointer tw:font-[inherit] tw:hover:bg-hover">
+      <span className="tw:grid tw:place-items-center tw:size-8 tw:rounded-icono tw:bg-lav-soft tw:text-lav-softink"><Icono nombre={icono} tam={15} /></span>
       <b className="tw:text-xl tw:leading-none">{n}</b><small className="tw:text-xs tw:text-muted tw:leading-tight">{t}</small>
     </button>
   );
@@ -136,7 +136,7 @@ function Pasos({ n, et, conf, setConf }: { n: any; et: any[]; conf: TConf; setCo
       {et.map((x, i) => (
         <li key={x.id} className={cx(i < n.orden ? 'hecho' : i === n.orden ? 'ahora' : '')}>
           <button type="button" data-etapa={x.id} data-i={i} disabled={i === n.orden} title={i === n.orden ? 'Etapa actual' : 'Pasar a esta etapa'} onClick={() => setConf({ tipo: 'etapa', i })}
-            className={cx('tw:flex tw:items-center tw:gap-3 tw:w-full tw:m-0 tw:px-2.5 tw:py-2 tw:text-left tw:rounded-xl tw:border-0 tw:cursor-pointer tw:font-[inherit] tw:disabled:cursor-default',
+            className={cx('tw:flex tw:items-center tw:gap-3 tw:w-full tw:m-0 tw:px-2.5 tw:py-2 tw:text-left tw:rounded-control tw:border-0 tw:cursor-pointer tw:font-[inherit] tw:disabled:cursor-default',
               i === n.orden ? 'tw:bg-lav-soft tw:text-lav-softink' : 'tw:bg-transparent tw:text-text tw:hover:bg-hover')}>
             <span className={cx('tw:grid tw:place-items-center tw:flex-none tw:size-6 tw:rounded-full tw:text-xs tw:font-bold', i < n.orden ? 'tw:bg-green-soft tw:text-green-softink' : i === n.orden ? 'tw:boton-brand tw:text-white' : 'tw:bg-sunken tw:text-muted')}>{i < n.orden ? <Icono nombre="check" tam={12} /> : i + 1}</span>
             <b className={cx('tw:text-[13.5px] tw:flex-1', i > n.orden && 'tw:font-medium tw:text-muted')}>{x.t}</b>
@@ -151,7 +151,7 @@ function Pasos({ n, et, conf, setConf }: { n: any; et: any[]; conf: TConf; setCo
         {!atras && conf?.tipo === 'etapa' && conf.i > n.orden + 1 && <span className="tw:text-yellow-ink">Te saltas etapas: puede pasar si lo hiciste por fuera.</span>}
       </Confirmar>
     )}
-    <div className="lz-ahora tw:flex tw:flex-col tw:gap-2.5 tw:p-3.5 tw:rounded-xl tw:bg-sunken">
+    <div className="lz-ahora tw:flex tw:flex-col tw:gap-2.5 tw:p-3.5 tw:rounded-control tw:bg-sunken">
       <h5 className="tw:m-0 tw:text-[13px] tw:font-bold">Ahora: {n.etapaInfo?.t || ''}</h5>
       {tareas.map((t: string, i: number) => (
         <label key={i} className="lz-tarea tw:flex tw:items-start tw:gap-2.5 tw:m-0 tw:text-[13px] tw:cursor-pointer">
@@ -227,7 +227,7 @@ function Propiedad({ v }: { v: Extract<TVista, { tipo: 'propiedad' }> }) {
               <small className="tw:text-xs tw:text-muted">Toca un cliente para ver su estado</small>
               {negs.map((x) => (
                 <button key={x.id} type="button" data-tabneg={x.id} onClick={() => mostrar({ ...useLienzo.getState().ctx, negocio: x.id })}
-                  className={cx('lz-cli', x.id === n.id && 'on', 'tw:flex tw:items-center tw:gap-2.5 tw:w-full tw:m-0 tw:px-3 tw:py-2 tw:text-left tw:rounded-xl tw:border tw:border-solid tw:cursor-pointer tw:font-[inherit]', x.id === n.id ? 'tw:border-lav-edge tw:bg-lav-soft' : 'tw:border-edge tw:bg-card tw:hover:bg-hover')}>
+                  className={cx('lz-cli', x.id === n.id && 'on', 'tw:flex tw:items-center tw:gap-2.5 tw:w-full tw:m-0 tw:px-3 tw:py-2 tw:text-left tw:rounded-control tw:border tw:border-solid tw:cursor-pointer tw:font-[inherit]', x.id === n.id ? 'tw:border-lav-edge tw:bg-lav-soft' : 'tw:border-edge tw:bg-card tw:hover:bg-hover')}>
                   <Avatar nombre={x.cliente?.nombre || '?'} tamano="sm" />
                   <span className="tw:min-w-0 tw:flex-1"><b className="tw:block tw:text-[13px] tw:truncate">{x.cliente?.nombre || 'Sin cliente'}</b><small className="tw:block tw:text-xs tw:text-muted">{x.tipo === 'venta' ? 'Venta' : 'Arriendo'} · {x.etapaInfo?.t || ''}</small></span>
                   <span className="tw:w-16"><Etapas etapas={v.etapas[x.tipo]} orden={x.orden} /></span>
@@ -284,7 +284,7 @@ function Propiedad({ v }: { v: Extract<TVista, { tipo: 'propiedad' }> }) {
           derecha={<>
             {e.orden && <Badge tono="verde">Con orden</Badge>}
             {e.tipo === 'visita' && e.personas?.length > 0 && (
-              <span role="button" tabIndex={0} className={cx('lz-wa', e.confirmada && 'ok', 'tw:grid tw:place-items-center tw:size-8 tw:rounded-lg tw:cursor-pointer', e.confirmada ? 'tw:bg-green-soft tw:text-green-softink' : 'tw:bg-sunken tw:text-muted tw:hover:text-green-softink')}
+              <span role="button" tabIndex={0} className={cx('lz-wa', e.confirmada && 'ok', 'tw:grid tw:place-items-center tw:size-8 tw:rounded-icono tw:cursor-pointer', e.confirmada ? 'tw:bg-green-soft tw:text-green-softink' : 'tw:bg-sunken tw:text-muted tw:hover:text-green-softink')}
                 data-confev={e.id} title={e.confirmada ? 'Confirmada por WhatsApp (enviar de nuevo)' : 'Confirmar por WhatsApp'}
                 onClick={(ev) => { ev.stopPropagation(); W.Gestion.confirmar(e.id); }} onKeyDown={(ev) => { if (ev.key === 'Enter') { ev.stopPropagation(); W.Gestion.confirmar(e.id); } }}>
                 <Icono nombre={e.confirmada ? 'check' : 'whatsapp'} tam={14} />
@@ -302,7 +302,7 @@ function Propiedad({ v }: { v: Extract<TVista, { tipo: 'propiedad' }> }) {
         ); })}
       </Seccion>
     )}
-    <details className="lz-sec lz-det tw:rounded-2xl tw:border tw:border-solid tw:border-edge tw:border-b-[3px] tw:border-b-edge-b tw:bg-card tw:px-4 tw:py-3" open={hist}
+    <details className="lz-sec lz-det tw:rounded-card tw:border tw:border-solid tw:border-edge tw:border-b-[3px] tw:border-b-edge-b tw:bg-card tw:px-4 tw:py-3" open={hist}
       onToggle={(e) => useLienzo.setState({ histAbierto: (e.target as HTMLDetailsElement).open })}>
       <summary className="tw:flex tw:items-center tw:gap-2 tw:cursor-pointer tw:list-none">
         <h4 className="tw:flex tw:items-center tw:gap-2 tw:m-0 tw:text-[14px] tw:font-bold tw:whitespace-nowrap"><span className="tw:text-muted tw:flex"><Icono nombre="clock" tam={15} /></span>Historial <Badge tono="gris">{s.historial.length}</Badge></h4>
@@ -328,7 +328,7 @@ function Negocio({ v }: { v: Extract<TVista, { tipo: 'negocio' }> }) {
     <Card relleno={false}>
       <ol className="lz-steps tw:flex tw:flex-col tw:gap-0.5 tw:m-0 tw:p-1.5 tw:list-none">
         {et.map((e, i) => (
-          <li key={e.id} className={cx(i < n.orden ? 'hecho' : i === n.orden ? 'ahora' : '', 'tw:flex tw:items-center tw:gap-3 tw:px-2.5 tw:py-2 tw:rounded-xl', i === n.orden && 'tw:bg-lav-soft tw:text-lav-softink')}>
+          <li key={e.id} className={cx(i < n.orden ? 'hecho' : i === n.orden ? 'ahora' : '', 'tw:flex tw:items-center tw:gap-3 tw:px-2.5 tw:py-2 tw:rounded-control', i === n.orden && 'tw:bg-lav-soft tw:text-lav-softink')}>
             <span className={cx('tw:grid tw:place-items-center tw:flex-none tw:size-6 tw:rounded-full tw:text-xs tw:font-bold', i < n.orden ? 'tw:bg-green-soft tw:text-green-softink' : i === n.orden ? 'tw:boton-brand tw:text-white' : 'tw:bg-sunken tw:text-muted')}>{i < n.orden ? <Icono nombre="check" tam={12} /> : i + 1}</span>
             <b className={cx('tw:text-[13.5px] tw:flex-1', i > n.orden && 'tw:font-medium tw:text-muted')}>{e.t}</b>
             {e.firma && <Badge tono="gris" icono="sign">{e.firma}</Badge>}

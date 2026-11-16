@@ -217,7 +217,7 @@ export function EnviarDocumento({ firma, codigo, documentos, alElegirDocumento, 
         <div className="tw:flex tw:flex-col tw:gap-0.5 tw:-mx-3">
           {documentos.map((d) => (
             <ItemLista key={d.id} data-doc={d.id} alTocar={() => alElegirDocumento(d.id)} flecha titulo={d.nombre} detalle={d.fecha}
-              media={<span className="tw:grid tw:place-items-center tw:w-9 tw:h-9 tw:rounded-[10px] tw:bg-sunken tw:text-muted"><Icono nombre="file" tam={16} /></span>} />
+              media={<span className="tw:grid tw:place-items-center tw:w-9 tw:h-9 tw:rounded-icono tw:bg-sunken tw:text-muted"><Icono nombre="file" tam={16} /></span>} />
           ))}
         </div>
       </div> : <p className={NOTA}>La propiedad aún no tiene documentos guardados.</p>}

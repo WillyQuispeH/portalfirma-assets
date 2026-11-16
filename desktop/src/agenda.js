@@ -46,8 +46,10 @@ function crear(o) {
 }
 function actualizar(id, o) {
   const e = ev(id);
+  const antes = `${e.fecha} ${e.hora || ''}`;
   if ('fecha' in o) { if (!fechaOk(o.fecha)) throw err('Fecha no válida (AAAA-MM-DD).'); e.fecha = o.fecha; }
   if ('hora' in o) { if (!horaOk(o.hora)) throw err('Hora no válida (HH:MM).'); e.hora = o.hora || null; }
+  if (e.confirmacion && `${e.fecha} ${e.hora || ''}` !== antes) delete e.confirmacion;   // otro día u hora: la confirmación anterior ya no vale
   for (const k of ['titulo', 'notas', 'lugar']) if (k in o) e[k] = String(o[k] || '').slice(0, k === 'notas' ? 1000 : 200);
   if ('duracion' in o) e.duracion = Number(o.duracion) || e.duracion;
   if ('estado' in o) { if (!ESTADOS.includes(o.estado)) throw err('Estado no válido.'); e.estado = o.estado; }

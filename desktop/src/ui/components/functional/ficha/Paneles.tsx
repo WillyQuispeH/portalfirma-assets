@@ -39,7 +39,7 @@ function FilaNegocio({ n }: { n: INegocio }) {
   const abierto = n.estado === 'abierto';
   return (
     <button type="button" data-neg={n.id} onClick={() => abrirNegocio(n.id)} className={cx(FILA_NEGOCIO,
-      'tw:w-full tw:m-0 tw:px-3 tw:py-3 tw:text-left tw:font-[inherit] tw:text-text tw:bg-transparent tw:cursor-pointer tw:rounded-xl',
+      'tw:w-full tw:m-0 tw:px-3 tw:py-3 tw:text-left tw:font-[inherit] tw:text-text tw:bg-transparent tw:cursor-pointer tw:rounded-control',
       'tw:border-0 tw:border-t tw:border-solid tw:border-edge tw:hover:bg-hover tw:focus-visible:outline-2 tw:focus-visible:outline-lav-edge')}>
       <span className="tw:flex tw:min-w-0 tw:items-center tw:gap-2.5">
         <Avatar nombre={n.cliente?.nombre || '?'} tamano="sm" />

@@ -43,8 +43,8 @@ interface ILayoutProps extends Partial<TCabecera> {
   children?: ReactNode;
   /** color del tinte del fondo general (por defecto, el de la ilustración o el de la marca) */
   tinte?: string;
-  /** espacio entre los bloques del contenido */
-  espacio?: 'normal' | 'compacto';
+  /** espacio entre los bloques del contenido (pantalla: el mismo margen de los costados) */
+  espacio?: 'normal' | 'compacto' | 'pantalla';
   id?: string;
   className?: string;
   /** clases del contenedor del contenido (p. ej. una grilla) */
@@ -59,9 +59,14 @@ interface ILayoutProps extends Partial<TCabecera> {
   migas?: IMiga[] | false;
   /** texto de la última miga cuando el título no es texto (por defecto, el título) */
   miga?: string;
+  /**
+   * pantallas de trabajo (bandejas, tableros): la pantalla ocupa justo el alto de la ventana, la ventana no se desplaza
+   * y la cabecera queda quieta con sus migas; el contenido estira y cada panel se desplaza por dentro (flex-1 min-h-0)
+   */
+  altoCompleto?: boolean;
 }
 
-export default function Layout({ barra, children, tinte, espacio = 'normal', id, className, contenidoClassName, cabeceraClassName, fondo, ref, titulo, migas, miga, volver, ...cabecera }: ILayoutProps) {
+export default function Layout({ barra, children, tinte, espacio = 'normal', id, className, contenidoClassName, cabeceraClassName, fondo, ref, titulo, migas, miga, volver, altoCompleto, ...cabecera }: ILayoutProps) {
   useAnchoBarra();
   useDesplazada();
   const color = tinte ?? cabecera.ilustracion?.tinte ?? 'var(--brand)';
@@ -70,18 +75,22 @@ export default function Layout({ barra, children, tinte, espacio = 'normal', id,
       + ` radial-gradient(900px 340px at 100% 0%, color-mix(in srgb, ${color} 4%, transparent), transparent 70%), var(--bg)`,
   };
   const rastro = migas === false ? undefined : migas ?? rastroPorDefecto(volver, miga ?? (typeof titulo === 'string' ? titulo : ''));
-  const gap = espacio === 'compacto' ? 'tw:gap-3' : 'tw:gap-5';
-  // bajo la cabecera, el mismo aire que a los costados: 24px (padding de main 20px + .im-wrap 4px) = gap + este margen
-  const bajoCabecera = espacio === 'compacto' ? 'tw:mb-3' : 'tw:mb-1';
   return (
-    <div ref={ref} id={id} data-layout className={cx('im-wrap tw:relative tw:flex tw:flex-col', gap, className)}>
+    // entre la cabecera, la barra y el contenido, el mismo margen que a los costados y abajo (ver main:has(…) en globals.css)
+    <div ref={ref} id={id} data-layout data-alto-completo={altoCompleto ? '' : undefined}
+      // alto completo: la ventana menos el menú principal (56px), el padding de arriba de main (20px) y el margen de abajo
+      className={cx('im-wrap tw:relative tw:flex tw:flex-col tw:gap-[var(--ui-margen-pantalla)]', altoCompleto && 'tw:h-[calc(100vh-76px-var(--ui-margen-pantalla))] tw:min-h-[560px]', className)}>
       {/* el fondo general: fijo detrás de la pantalla; se va con ella cuando la vista se oculta */}
       {fondo === undefined
         ? <div aria-hidden data-layout-fondo className="tw:pointer-events-none tw:fixed tw:inset-0 tw:-z-10" style={tintado} />
         : fondo}
-      {titulo != null && <CabeceraPagina pegada migas={rastro} titulo={titulo} {...cabecera} className={cx(bajoCabecera, cabeceraClassName)} />}
+      {titulo != null && (
+        <CabeceraPagina pegada migas={rastro} titulo={titulo} {...cabecera}
+          // con la ventana quieta no hace falta que se pegue: relative (no static) por la ilustración en ::before
+          className={cx(altoCompleto && 'tw:relative! tw:top-auto!', cabeceraClassName)} />
+      )}
       {barra && <div data-layout-barra className="tw:flex tw:flex-wrap tw:items-center tw:gap-3">{barra}</div>}
-      <div data-layout-contenido className={cx('tw:flex tw:min-w-0 tw:flex-col', espacio === 'compacto' ? 'tw:gap-3' : 'tw:gap-4', contenidoClassName)}>
+      <div data-layout-contenido className={cx('tw:flex tw:min-w-0 tw:flex-col', { normal: 'tw:gap-4', compacto: 'tw:gap-3', pantalla: 'tw:gap-[var(--ui-margen-pantalla)]' }[espacio], altoCompleto && 'tw:min-h-0 tw:flex-1', contenidoClassName)}>
         {children}
       </div>
     </div>

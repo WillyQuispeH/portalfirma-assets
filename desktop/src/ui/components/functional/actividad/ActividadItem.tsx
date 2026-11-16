@@ -19,9 +19,9 @@ interface IActividadItemProps {
 export default function ActividadItem({ item: a, alAbrir }: IActividadItemProps) {
   return (
     <button
-      className="ac-it tw:w-full tw:m-0 tw:flex tw:items-center tw:gap-3 tw:px-3 tw:py-2 tw:rounded-xl tw:border-0 tw:bg-transparent tw:text-left tw:text-text tw:font-[inherit] tw:cursor-pointer tw:hover:bg-hover tw:focus-visible:outline-2 tw:focus-visible:outline-lav-edge"
+      className="ac-it tw:w-full tw:m-0 tw:flex tw:items-center tw:gap-3 tw:px-3 tw:py-2 tw:rounded-control tw:border-0 tw:bg-transparent tw:text-left tw:text-text tw:font-[inherit] tw:cursor-pointer tw:hover:bg-hover tw:focus-visible:outline-2 tw:focus-visible:outline-lav-edge"
       data-clase={a.clase} data-ir={a.ir || ''} onClick={alAbrir}>
-      <span className={cx('tw:w-8 tw:h-8 tw:flex-none tw:grid tw:place-items-center tw:rounded-[10px]', SUAVE[TONO[a.clase] ?? 'gris'])}>
+      <span className={cx('tw:w-8 tw:h-8 tw:flex-none tw:grid tw:place-items-center tw:rounded-icono', SUAVE[TONO[a.clase] ?? 'gris'])}>
         <Icono nombre={a.nota ? 'edit' : ICONO[a.clase] || 'clock'} tam={14} />
       </span>
       <span className="tw:min-w-0 tw:flex tw:flex-col">

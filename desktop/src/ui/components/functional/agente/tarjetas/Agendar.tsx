@@ -113,7 +113,7 @@ export function Agendar({ pre, res0 }: { pre: IPreAgendar; res0: any }) {
                 : <span className="warn"><Badge tono="amarillo" icono="alert" ajustar>Sin conectar: después de reservar, anota la hora en «Rápido en Asset».</Badge></span>}
               <Boton variante="fantasma" tamano="sm" className="tw:ml-auto" data-conf onClick={() => setConfigurando(true)}>{res?.conectado ? 'Configurar' : 'Conectar'}</Boton>
             </div>
-            <div className="ga-resf tw:rounded-xl tw:overflow-hidden tw:border tw:border-solid tw:border-edge">
+            <div className="ga-resf tw:rounded-control tw:overflow-hidden tw:border tw:border-solid tw:border-edge">
               <iframe src={`${res?.url || ''}${q ? '?' + q : ''}`} title="Calendario de reservas" allow="payment" referrerPolicy="strict-origin-when-cross-origin" className="tw:block tw:w-full tw:h-[520px] tw:border-0 tw:bg-white" />
             </div>
           </>}

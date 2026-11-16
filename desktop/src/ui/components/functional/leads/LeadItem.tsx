@@ -29,7 +29,7 @@ export default function LeadItem({ l, elegido, verCorredor, alElegir }: ILeadIte
       elegido ? 'on tw:bg-lav-soft' : 'tw:bg-transparent tw:hover:bg-hover',
     )}>
       {iniciales(nombre) === '#'
-        ? <span aria-hidden="true" className={cx('tw:grid tw:size-9 tw:flex-none tw:place-items-center tw:rounded-xl', SUAVE.gris)}><Icono nombre="phone" tam={16} /></span>
+        ? <span aria-hidden="true" className={cx('tw:grid tw:size-9 tw:flex-none tw:place-items-center tw:rounded-icono', SUAVE.gris)}><Icono nombre="phone" tam={16} /></span>
         : <Avatar nombre={nombre} tono={l.ig ? 'durazno' : undefined} />}
       <span className="tw:flex tw:min-w-0 tw:flex-1 tw:flex-col tw:gap-1">
         <span className="tw:flex tw:items-center tw:gap-2">

@@ -37,7 +37,7 @@ function Pasos() {
           return (
             <li key={n} className={cx(hecho && 'hecho', actual && 'ahora')}>
               <button type="button" aria-current={actual ? 'step' : undefined} onClick={() => { if (puede) publicarIr(n); }}
-                className={cx('tw:flex tw:h-full tw:w-full tw:items-center tw:gap-3 tw:m-0 tw:px-3 tw:py-2.5 tw:rounded-xl tw:border-0 tw:text-left tw:font-[inherit]',
+                className={cx('tw:flex tw:h-full tw:w-full tw:items-center tw:gap-3 tw:m-0 tw:px-3 tw:py-2.5 tw:rounded-control tw:border-0 tw:text-left tw:font-[inherit]',
                   actual ? 'tw:bg-lav-soft tw:text-text' : 'tw:bg-transparent tw:text-muted', puede ? 'tw:cursor-pointer tw:hover:bg-hover' : 'tw:cursor-default')}>
                 <span className={cx('tw:grid tw:size-8 tw:flex-none tw:place-items-center tw:rounded-full tw:text-[13px] tw:font-bold',
                   hecho ? 'tw:bg-green-edge tw:text-white' : actual ? 'tw:bg-lav-edge tw:text-white' : 'tw:bg-sunken tw:text-muted')}>

@@ -31,7 +31,7 @@ function Visor() {
   return <>
     <div className={BARRA}><div className="es-seg2 tw:inline-flex tw:bg-[color-mix(in_srgb,var(--bg)_80%,var(--card))] tw:rounded-full tw:p-[3px] tw:gap-0.5">{VISTAS.map(([k, t]) => <button key={k} data-v={k} className={cx(SEGMENTO, vista === k ? 'on tw:bg-card tw:text-text tw:[box-shadow:0_1px_3px_rgba(16,24,64,.12)]' : 'tw:bg-transparent tw:text-muted')} onClick={() => S.escrituraVista(k)}>{t}</button>)}</div>
       <span className="muted small">{vista === 'orig' ? (priv ? origenes(S) : S.name) : <><span className={MARCA}>[ ]</span> lo completa la notaría</>}</span></div>
-    <div className={cx('tw:rounded-[18px] tw:overflow-hidden', dos && 'tw:grid tw:grid-cols-2 tw:gap-2.5')} id="esViewer">
+    <div className={cx('tw:rounded-card tw:overflow-hidden', dos && 'tw:grid tw:grid-cols-2 tw:gap-2.5')} id="esViewer">
       {dos ? <>
         <div className={COLUMNA}><div className={LEYENDA}>Cómo llegó</div>{verOriginal}</div>
         <div className={COLUMNA}><div className={LEYENDA}>Cómo va a la notaría</div>{verNotaria}</div>
@@ -64,7 +64,7 @@ export default function Trabajo() {
         <Precio q={q} />
         <TarjetaNotaria />
         <button className="primary tw:py-[13px]! tw:px-4! tw:text-[14px]" id="esPrim" disabled={S.enviando} onClick={() => pagar(q)}>{S.enviando ? 'Enviando…' : q.cotizacion ? 'Solicitar cotización' : 'Pagar y enviar a la notaría'}</button>
-        {falta.length > 0 && <div className="tw:flex tw:items-center tw:gap-2.5 tw:rounded-[14px] tw:py-[11px] tw:px-3.5 tw:text-[13px] tw:mt-2 tw:bg-[color-mix(in_srgb,#fff6e0_70%,var(--card))] tw:[box-shadow:inset_0_0_0_1px_color-mix(in_srgb,#d08a00_20%,transparent)] tw:text-[#7a4d00] tw:[&>span]:flex-1" id="esFalta"><Icono nombre="alert" tam={15} /><span>Falta: {falta.join('; ')}.</span></div>}
+        {falta.length > 0 && <div className="tw:flex tw:items-center tw:gap-2.5 tw:rounded-card tw:py-[11px] tw:px-3.5 tw:text-[13px] tw:mt-2 tw:bg-[color-mix(in_srgb,#fff6e0_70%,var(--card))] tw:[box-shadow:inset_0_0_0_1px_color-mix(in_srgb,#d08a00_20%,transparent)] tw:text-[#7a4d00] tw:[&>span]:flex-1" id="esFalta"><Icono nombre="alert" tam={15} /><span>Falta: {falta.join('; ')}.</span></div>}
         {!proto
           ? <button className="ghost with-ic" id="esEdit" onClick={() => abrirModal(red ? <EditarReduccion /> : <EditarEscritura />, { clave: 'modal-108', ancho: true })}><Icono nombre="edit" tam={15} /><span>{red ? 'Modificar el escrito' : 'Modificar el texto'}</span></button>
           : <div className="small tw:flex tw:gap-1.5 tw:items-start tw:text-muted tw:leading-[1.5] tw:py-1 tw:px-0.5"><Icono nombre="lock" tam={13} /> El documento se protocoliza tal como lo subiste; la carátula se arma sola. El ejecutivo de la notaría completa el requirente.</div>}

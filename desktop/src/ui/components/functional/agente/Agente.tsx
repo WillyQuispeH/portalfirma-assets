@@ -21,7 +21,7 @@ import Mensaje from './Mensaje';
 /** el ícono del Agente (degradado de la marca) */
 export function LogoAgente({ tam = 32 }: { tam?: number }) {
   return (
-    <span className="ag-logo tw:grid tw:place-items-center tw:flex-none tw:rounded-xl tw:text-white tw:boton-brand tw:border tw:border-solid tw:border-transparent"
+    <span className="ag-logo tw:grid tw:place-items-center tw:flex-none tw:rounded-icono tw:text-white tw:boton-brand tw:border tw:border-solid tw:border-transparent"
       style={{ width: tam, height: tam }}><Icono nombre="sparkle" tam={Math.round(tam * 0.5)} /></span>
   );
 }
@@ -124,16 +124,16 @@ export default function Agente() {
     <div className="ag-foot tw:relative tw:flex tw:flex-col tw:gap-2 tw:px-4 tw:pb-4 tw:pt-1">
       <div className={ancho}>
         {rapidas && (
-          <div id="agQuick" role="menu" className="ag-quick tw:absolute tw:bottom-full tw:z-20 tw:mb-1 tw:min-w-[260px] tw:p-1.5 tw:rounded-xl tw:border tw:border-solid tw:border-edge tw:border-b-[3px] tw:border-b-edge-b tw:bg-card tw:shadow-[0_16px_40px_-12px_rgb(16_24_64/.28)]">
+          <div id="agQuick" role="menu" className="ag-quick tw:absolute tw:bottom-full tw:z-20 tw:mb-1 tw:min-w-[260px] tw:p-1.5 tw:rounded-card tw:border tw:border-solid tw:border-edge tw:border-b-[3px] tw:border-b-edge-b tw:bg-card tw:shadow-[0_16px_40px_-12px_rgb(16_24_64/.28)]">
             {RAPIDAS.map(([id, ic, t, fn]) => (
               <button key={id} type="button" data-rapida={id} role="menuitem" onClick={() => { setRapidas(false); if (!ocupado()) fn(); }}
-                className="tw:flex tw:w-full tw:items-center tw:gap-2.5 tw:m-0 tw:h-9 tw:px-2.5 tw:rounded-lg tw:border-0 tw:bg-transparent tw:text-left tw:text-sm tw:font-medium tw:text-text tw:cursor-pointer tw:hover:bg-hover">
+                className="tw:flex tw:w-full tw:items-center tw:gap-2.5 tw:m-0 tw:h-9 tw:px-2.5 tw:rounded-control tw:border-0 tw:bg-transparent tw:text-left tw:text-sm tw:font-medium tw:text-text tw:cursor-pointer tw:hover:bg-hover">
                 <span className="tw:text-lav-softink tw:flex"><Icono nombre={ic} tam={16} /></span><span>{t}</span>
               </button>
             ))}
           </div>
         )}
-        <div className="ag-box tw:flex tw:flex-col tw:gap-1 tw:px-2 tw:pt-2 tw:pb-2 tw:rounded-2xl tw:border tw:border-solid tw:border-edge tw:border-b-[3px] tw:border-b-edge-b tw:bg-card tw:transition-[border-color,box-shadow] tw:focus-within:border-lav-edge tw:focus-within:ring-[3px] tw:focus-within:ring-lav/60">
+        <div className="ag-box tw:flex tw:flex-col tw:gap-1 tw:px-2 tw:pt-2 tw:pb-2 tw:rounded-card tw:border tw:border-solid tw:border-edge tw:border-b-[3px] tw:border-b-edge-b tw:bg-card tw:transition-[border-color,box-shadow] tw:focus-within:border-lav-edge tw:focus-within:ring-[3px] tw:focus-within:ring-lav/60">
           {adjuntos.length > 0 && (
             <div className="ag-att tw:flex tw:flex-wrap tw:gap-1.5 tw:px-1" id="agAtt">
               {adjuntos.map((a) => (

@@ -6,10 +6,10 @@ import { SUAVE, type TTono } from './tonos';
 export type TAvatarTamano = 'sm' | 'md' | 'lg' | 'xl';
 
 const TAMANO: Record<TAvatarTamano, string> = {
-  sm: 'tw:w-7 tw:h-7 tw:text-[11px] tw:rounded-lg',
-  md: 'tw:w-9 tw:h-9 tw:text-[13px] tw:rounded-xl',
-  lg: 'tw:w-12 tw:h-12 tw:text-base tw:rounded-2xl',
-  xl: 'tw:w-16 tw:h-16 tw:text-[22px] tw:rounded-[20px]',
+  sm: 'tw:w-7 tw:h-7 tw:text-[11px] tw:rounded-icono',
+  md: 'tw:w-9 tw:h-9 tw:text-[13px] tw:rounded-icono',
+  lg: 'tw:w-12 tw:h-12 tw:text-base tw:rounded-icono',
+  xl: 'tw:w-16 tw:h-16 tw:text-[22px] tw:rounded-icono',
 };
 const TONOS: TTono[] = ['lavanda', 'azul', 'verde', 'durazno', 'amarillo', 'rojo'];
 

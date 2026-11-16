@@ -40,7 +40,7 @@ export default function VistaPrevia({ op }: { op: number }) {
   }, [pdf, pagina]);
 
   // fondo hundido del kit; el canvas de la página lo pone el efecto de arriba (#opdCanvas lo usan las pruebas)
-  const caja0 = 'tw:grid tw:place-items-center tw:min-h-[320px] tw:p-3 tw:rounded-xl tw:bg-sunken tw:border tw:border-solid tw:border-edge tw:[&_canvas]:max-w-full tw:[&_canvas]:rounded tw:[&_canvas]:bg-white tw:[&_canvas]:shadow-md';
+  const caja0 = 'tw:grid tw:place-items-center tw:min-h-[320px] tw:p-3 tw:rounded-icono tw:bg-sunken tw:border tw:border-solid tw:border-edge tw:[&_canvas]:max-w-full tw:[&_canvas]:rounded tw:[&_canvas]:bg-white tw:[&_canvas]:shadow-md';
   if (problema) return (
     <div className={caja0} id="opdCanvas">
       {problema.sinAcceso

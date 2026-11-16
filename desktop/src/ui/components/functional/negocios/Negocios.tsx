@@ -1,8 +1,9 @@
-// Negocios: el tablero por etapas (Ventas / Arriendos), con resumen, búsqueda y «Cerrados».
+// Negocios: el tablero por etapas (Ventas / Arriendos), con resumen, búsqueda y «Cerrados»; y la pestaña «Panel»
+// (Panel de brokers: metas, pendientes y negocios por corredor, en panel/PanelBrokers.tsx). La pestaña es ngVista (data-vi).
 // Arrastrar una tarjeta a otra columna mueve el negocio de etapa.
 // Hecha con el kit: Layout (cabecera y barra), Boton, Tabs, Buscador, Kpi, Card y EstadoVacio; las columnas y tarjetas del
 // tablero siguen con sus clases ng-* de styles.css, con el color de su etapa en --c (colores.ts).
-// .ng-tablero hace que el tablero ocupe el alto de la ventana; cada columna se desplaza por su cuenta.
+// Layout altoCompleto: el tablero ocupa el alto de la ventana con la cabecera quieta; cada columna se desplaza por su cuenta.
 //
 // La ficha del negocio y «Nuevo negocio» siguen en src/renderer/negocios.js; se llaman por utils/app.ts.
 // Los id ngNew, ngTipo (data-t), ngVer (data-v), ngQ y las clases ng-kpis, ng-board, ng-col[data-e], ng-card y
@@ -20,6 +21,8 @@ import EstadoVacio from '../../ui/EstadoVacio';
 import Icono from '../../ui/Icono';
 import Kpi from '../../ui/Kpi';
 import NegocioCard from './NegocioCard';
+import PanelBrokers from './panel/PanelBrokers';
+import { meses } from './panel/calculo';
 import { colorEtapa, conColor } from './colores';
 import { sumar } from '../finanzas/resumen';
 import type { TNegocioTipo } from '../../../store/interfaces/negocio.interface';
@@ -65,23 +68,37 @@ export default function Negocios({ tipo: tipoInicial }: INegociosProps) {
 
   return (
     <Layout
+      altoCompleto={f.vista === 'tablero'}
       className="ng-tablero"
-      contenidoClassName="tw:flex-1"
       titulo="Negocios"
       ilustracion={{ imagen: 'img/formas/negocios.svg', tinte: '#3d9cf0' }}
-      subtitulo="Cada etapa dice qué falta. Arrastra una tarjeta para moverla; cuando un documento queda firmado, el negocio avanza solo."
+      subtitulo={f.vista === 'panel'
+        ? 'Metas, pendientes y negocios de cada corredor en el mes.'
+        : 'Cada etapa dice qué falta. Arrastra una tarjeta para moverla; cuando un documento queda firmado, el negocio avanza solo.'}
       acciones={<Boton id="ngNew" icono="plus" onClick={() => nuevoNegocio({ tipo: f.tipo })}>Nuevo negocio</Boton>}
       barra={<>
+        <Tabs id="ngVista" dato="vi" etiqueta="Vista" valor={f.vista} alCambiar={(vista) => negocioSetFiltros({ vista })}
+          opciones={[['tablero', 'Tablero', undefined, 'grid'], ['panel', 'Panel', undefined, 'chart']]} />
+        {f.vista === 'panel' && <>
+          <Tabs id="pnbMes" dato="m" etiqueta="Mes" valor={f.pMes || meses(1)[0].id} alCambiar={(pMes) => negocioSetFiltros({ pMes })}
+            opciones={meses(3).map((m) => [m.id, m.enCurso ? `${m.corto} · en curso` : m.corto])} />
+          <Tabs id="pnbTipo" dato="t" etiqueta="Tipo de negocio" valor={f.pTipo} alCambiar={(pTipo) => negocioSetFiltros({ pTipo })}
+            opciones={[['todos', 'Todos'], ['venta', 'Ventas', cuenta('venta')], ['arriendo', 'Arriendos', cuenta('arriendo')]]} />
+        </>}
+        {f.vista === 'tablero' && <>
         <Tabs id="ngTipo" dato="t" etiqueta="Tipo de negocio" valor={f.tipo} alCambiar={(tipo) => negocioSetFiltros({ tipo })}
           opciones={[['venta', 'Ventas', cuenta('venta')], ['arriendo', 'Arriendos', cuenta('arriendo')]]} />
         <Buscador kit id="ngQ" valor={f.q} alCambiar={(q) => negocioSetFiltros({ q })} espera={180} placeholder="Buscar por propiedad, cliente o RUT" />
         <Tabs id="ngVer" dato="v" etiqueta="Abiertos o cerrados" valor={f.ver} alCambiar={(ver) => negocioSetFiltros({ ver })}
           opciones={[['abiertos', 'Abiertos'], ['cerrados', 'Cerrados']]} />
+        </>}
       </>}
     >
       {error && <p role="alert" className="tw:text-red-softink">No se pudieron leer los negocios: {error}</p>}
 
-      {cargado && (
+      {cargado && f.vista === 'panel' && <PanelBrokers />}
+
+      {cargado && f.vista === 'tablero' && (
         <>
           <div className="ng-kpis">
             <Kpi icono="briefcase" tono="azul" valor={abiertos.length} texto="negocios abiertos" />

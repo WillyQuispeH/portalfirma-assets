@@ -13,19 +13,19 @@ import { cx } from '../../../../utils/cx';
 import { ALERTA, COLOR_ALERTA, MARCA, SW, SW_INPUT, SW_RIEL, seccion } from './estilos';
 
 // La materia: encabezado con ícono, nombre, coincidencia y precio
-const MATERIA = 'tw:rounded-[18px] tw:py-[18px] tw:px-5 tw:mb-4 tw:bg-[radial-gradient(120%_140%_at_0%_0%,color-mix(in_srgb,#3d9cf0_9%,var(--card)),var(--card)_60%)] tw:[box-shadow:inset_0_0_0_1px_color-mix(in_srgb,var(--brand)_14%,transparent)]';
+const MATERIA = 'tw:rounded-card tw:py-[18px] tw:px-5 tw:mb-4 tw:bg-[radial-gradient(120%_140%_at_0%_0%,color-mix(in_srgb,#3d9cf0_9%,var(--card)),var(--card)_60%)] tw:[box-shadow:inset_0_0_0_1px_color-mix(in_srgb,var(--brand)_14%,transparent)]';
 const MATERIA_H = 'tw:flex tw:items-center tw:gap-3.5 tw:flex-wrap';
-const MATERIA_IC = 'tw:size-[38px] tw:rounded-[12px] tw:grid tw:place-items-center tw:bg-[image:var(--grad)] tw:text-white tw:[box-shadow:0_6px_14px_-6px_rgba(63,79,230,.6)]';
+const MATERIA_IC = 'tw:size-[38px] tw:rounded-icono tw:grid tw:place-items-center tw:bg-[image:var(--grad)] tw:text-white tw:[box-shadow:0_6px_14px_-6px_rgba(63,79,230,.6)]';
 const MATERIA_T = 'tw:flex tw:flex-col tw:flex-1 tw:min-w-[200px] tw:gap-0.5 tw:[&_small]:text-[11.5px] tw:[&_b]:text-[17px] tw:[&_b]:font-semibold tw:[&_b]:tracking-[-.01em]';
 const MATERIA_P = 'tw:text-[19px] tw:font-[650] tw:tracking-[-.01em] tw:[&_small]:font-normal tw:[&_small]:text-[11.5px]';
 
 // Materias ocultas (es-hid la usan las pruebas). Todos los <small> de la caja van en gris, también la nota de un acto desmarcado.
-const OCULTOS = 'es-hid tw:rounded-[18px] tw:py-4 tw:px-[18px] tw:mb-2 tw:flex tw:[&_small]:text-muted tw:[&_small]:leading-[1.5] tw:[&_small]:text-[12.5px]';
+const OCULTOS = 'es-hid tw:rounded-card tw:py-4 tw:px-[18px] tw:mb-2 tw:flex tw:[&_small]:text-muted tw:[&_small]:leading-[1.5] tw:[&_small]:text-[12.5px]';
 const OCULTOS_AVISO = 'tw:flex-col tw:gap-2.5 tw:[box-shadow:inset_0_0_0_1px_color-mix(in_srgb,#d08a00_22%,transparent)] tw:bg-[color-mix(in_srgb,#fff6e0_45%,var(--card))]';
 // Sin materias ocultas: todos los div de adentro van en columna (también los de los actos agregados)
 const OCULTOS_OK = 'tw:flex-row tw:items-start tw:gap-3 tw:[box-shadow:inset_0_0_0_1px_color-mix(in_srgb,var(--ok)_18%,transparent)] tw:bg-[color-mix(in_srgb,var(--ok-soft)_55%,var(--card))] tw:[&_div]:flex tw:[&_div]:flex-col tw:[&_div]:gap-[3px]';
-const OCULTOS_IC = 'tw:size-[30px] tw:rounded-[10px] tw:grid tw:place-items-center tw:shrink-0';
-const ACTO = 'tw:bg-card tw:rounded-[14px] tw:py-3 tw:px-3.5 tw:flex tw:flex-col tw:gap-1.5 tw:[transition:opacity_.2s]';
+const OCULTOS_IC = 'tw:size-[30px] tw:rounded-icono tw:grid tw:place-items-center tw:shrink-0';
+const ACTO = 'tw:bg-card tw:rounded-card tw:py-3 tw:px-3.5 tw:flex tw:flex-col tw:gap-1.5 tw:[transition:opacity_.2s]';
 const ACTO_T = 'tw:flex tw:items-center tw:gap-2.5 tw:[&_b]:font-semibold tw:[&_b]:text-[13.5px] tw:[&_button]:w-auto tw:[&_button]:m-0';
 const ACTO_CL = 'tw:text-[11px] tw:text-muted tw:bg-bg tw:rounded-full tw:py-0.5 tw:px-2';
 const ACTO_P = 'tw:ml-auto tw:font-semibold tw:text-[13px]';
@@ -33,7 +33,7 @@ const cita = (agregado: boolean) => cx('tw:text-[12px] tw:text-[#4a5160] tw:dark
   agregado ? 'tw:border-l-[color-mix(in_srgb,#3f4fe6_40%,transparent)]' : 'tw:border-l-[color-mix(in_srgb,#d08a00_35%,transparent)]');
 const CHIP_ALERTA = "tw:bg-transparent! tw:p-0 tw:min-w-[62px] tw:shrink-0 tw:before:content-[''] tw:before:size-[7px] tw:before:rounded-full tw:before:bg-[color:var(--c)]";
 // Filas etiqueta / valor de la ficha. Todos los span van en gris.
-const FILAS = 'tw:flex tw:flex-col tw:rounded-[14px] tw:overflow-hidden tw:mt-2.5 tw:mb-4 tw:[box-shadow:inset_0_0_0_1px_var(--es-line)] tw:[&>div]:grid tw:[&>div]:grid-cols-[170px_1fr] tw:[&>div]:gap-2.5 tw:[&>div]:py-[11px] tw:[&>div]:px-3.5 tw:[&>div]:text-[13px] tw:[&>div+div]:border-t tw:[&>div+div]:border-t-[color:var(--es-line)] tw:[&_span]:text-muted tw:[&_b]:font-[550] tw:[&_small]:font-normal';
+const FILAS = 'tw:flex tw:flex-col tw:rounded-card tw:overflow-hidden tw:mt-2.5 tw:mb-4 tw:[box-shadow:inset_0_0_0_1px_var(--es-line)] tw:[&>div]:grid tw:[&>div]:grid-cols-[170px_1fr] tw:[&>div]:gap-2.5 tw:[&>div]:py-[11px] tw:[&>div]:px-3.5 tw:[&>div]:text-[13px] tw:[&>div+div]:border-t tw:[&>div+div]:border-t-[color:var(--es-line)] tw:[&_span]:text-muted tw:[&_b]:font-[550] tw:[&_small]:font-normal';
 
 const colorConfianza = (c: string) => (c === 'alta' ? '#13804b' : c === 'media' ? '#b26a00' : '#c0362c');
 
@@ -122,7 +122,7 @@ export function Ocultos() {
       <div className="tw:flex tw:gap-3 tw:items-start tw:[&_div]:flex tw:[&_div]:flex-col tw:[&_div]:gap-[3px]"><span className={cx(OCULTOS_IC, 'tw:bg-[color-mix(in_srgb,#d08a00_15%,var(--card))] tw:text-[#a56a00]')}><Icono nombre="search" tam={15} /></span><div><b>Materias ocultas en el texto</b>
         <small>Revisamos el escrito completo: además de «{declarada}», contiene {lista.length === 1 ? 'este acto' : 'estos actos'}. {proto ? 'La protocolización tiene tarifa fija; quedan informados a la notaría.' : red ? 'Están incluidos en la tarifa fija de la reducción; quedan informados a la notaría.' : 'Cada acto se cobra aparte según la planilla.'}</small></div></div>
       {principales.length > 0 && !proto && (
-        <div className="tw:flex tw:gap-2 tw:items-center tw:flex-wrap tw:text-[13px] tw:text-[#9b2c22] tw:bg-[color-mix(in_srgb,var(--err)_7%,var(--card))] tw:rounded-[12px] tw:py-2.5 tw:px-3 tw:[&_span]:flex-1 tw:[&_span]:min-w-[220px] tw:[&_button]:w-auto tw:[&_button]:m-0"><Icono nombre="alert" tam={14} />
+        <div className="tw:flex tw:gap-2 tw:items-center tw:flex-wrap tw:text-[13px] tw:text-[#9b2c22] tw:bg-[color-mix(in_srgb,var(--err)_7%,var(--card))] tw:rounded-control tw:py-2.5 tw:px-3 tw:[&_span]:flex-1 tw:[&_span]:min-w-[220px] tw:[&_button]:w-auto tw:[&_button]:m-0"><Icono nombre="alert" tam={14} />
           <span>El escrito se presenta como <b>{declarada}</b>, pero su contenido corresponde a <b>{principales.map((x) => x.nombre).join(' y ')}</b>.</span>
           {principales[0].value && <button className="ghost small" data-main={principales[0].value} onClick={() => { S.escrituraMateria(principales[0].value); toast('Materia principal actualizada'); }}>Usar {principales[0].nombre} como materia</button>}
         </div>
@@ -165,6 +165,6 @@ export function Caratula() {
   const partes = textoCaratula(S).split(/(\*\*[^*]+\*\*|\[[^\]]+\])/).filter(Boolean);
   return <>
     <h4>Texto de la carátula</h4>
-    <div className="tw:mt-4 tw:bg-[color-mix(in_srgb,var(--bg)_50%,var(--card))] tw:rounded-[16px] tw:py-[18px] tw:px-5 tw:font-[Verdana,Tahoma,sans-serif] tw:text-[13px] tw:leading-[1.75] tw:text-justify tw:[box-shadow:inset_0_0_0_1px_var(--es-line)]" id="prTxt">{partes.map((p, i) => (p.startsWith('**') ? <b key={i}>{p.slice(2, -2)}</b> : p.startsWith('[') ? <span key={i} className={MARCA}>{p}</span> : p))}</div>
+    <div className="tw:mt-4 tw:bg-[color-mix(in_srgb,var(--bg)_50%,var(--card))] tw:rounded-card tw:py-[18px] tw:px-5 tw:font-[Verdana,Tahoma,sans-serif] tw:text-[13px] tw:leading-[1.75] tw:text-justify tw:[box-shadow:inset_0_0_0_1px_var(--es-line)]" id="prTxt">{partes.map((p, i) => (p.startsWith('**') ? <b key={i}>{p.slice(2, -2)}</b> : p.startsWith('[') ? <span key={i} className={MARCA}>{p}</span> : p))}</div>
   </>;
 }

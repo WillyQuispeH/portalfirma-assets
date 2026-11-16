@@ -32,7 +32,7 @@ export default function Card({ titulo, subtitulo, accion, pie, tono, relleno = t
   const cabecera = titulo || subtitulo || accion;
   return (
     <section className={cx(
-      'tw:rounded-2xl tw:border tw:border-solid tw:border-b-[3px] tw:overflow-hidden',
+      'tw:rounded-card tw:border tw:border-solid tw:border-b-[3px] tw:overflow-hidden',
       tono ? TONO[tono] : 'tw:bg-card tw:border-edge tw:border-b-edge-b tw:text-text',
       className,
     )}>
@@ -56,7 +56,7 @@ export default function Card({ titulo, subtitulo, accion, pie, tono, relleno = t
 export function Estadistica({ etiqueta, valor, variacion, className }: { etiqueta: ReactNode; valor: ReactNode; variacion?: number; className?: string }) {
   const sube = (variacion ?? 0) >= 0;
   return (
-    <div className={cx('tw:rounded-2xl tw:border tw:border-solid tw:border-edge tw:border-b-[3px] tw:border-b-edge-b tw:bg-card tw:px-5 tw:py-4', className)}>
+    <div className={cx('tw:rounded-card tw:border tw:border-solid tw:border-edge tw:border-b-[3px] tw:border-b-edge-b tw:bg-card tw:px-5 tw:py-4', className)}>
       <div className="tw:flex tw:items-center tw:justify-between tw:gap-2">
         <span className="tw:text-[13px] tw:text-muted">{etiqueta}</span>
         {variacion != null && (

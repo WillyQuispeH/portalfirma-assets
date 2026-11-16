@@ -56,7 +56,7 @@ export default function PasoPublicar() {
       <div className="tw:min-w-0">
         <Card titulo="El aviso">
           <div className="tw:flex tw:flex-col tw:gap-4">
-            <span className="tw:grid tw:h-44 tw:w-full tw:place-items-center tw:overflow-hidden tw:rounded-xl tw:bg-lav-soft tw:text-lav-softink">
+            <span className="tw:grid tw:h-44 tw:w-full tw:place-items-center tw:overflow-hidden tw:rounded-icono tw:bg-lav-soft tw:text-lav-softink">
               {foto && !fotoRota ? <img src={foto} alt="" loading="lazy" className="tw:size-full tw:object-cover" onError={() => setFotoRota(true)} /> : <Icono nombre="house" tam={34} />}
             </span>
             <div className="tw:flex tw:items-center tw:gap-3">

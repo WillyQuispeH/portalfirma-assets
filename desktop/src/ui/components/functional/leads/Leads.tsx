@@ -8,11 +8,10 @@
 //  - leads.js → React: el evento «pf:leads» (al importar, eliminar, llegar mensajes…) pide recargar la lista.
 // Los id ldQ, ldChips (con data-f en cada filtro), ldItems, ldOrigen, ldBroker, ldFile, ldFileIg, ldCorBtn,
 // ldCuentas, ldImp2, ldIg2 y la clase .ld-vacio los usan las pruebas y leads.js.
-import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { useLead } from '../../../store/hooks/useLead.hook';
 import { leadsComoExportar, leadsComoInstagram, leadsCuentas, leadsImportar, mostrarLead, rutaDe } from '../../../utils/app';
 import { cx } from '../../../utils/cx';
-import { abrirUsuarios } from '../usuarios/controlador';
 import Layout from '../../ui/Layout';
 import Boton from '../../ui/Boton';
 import Buscador from '../../ui/Buscador';
@@ -20,7 +19,9 @@ import Select from '../../ui/Select';
 import Icono from '../../ui/Icono';
 import EstadoVacio from '../../ui/EstadoVacio';
 import LeadItem from './LeadItem';
-import LeadDetalle from './LeadDetalle';
+import LeadDetalle, { leerFicha } from './LeadDetalle';
+import { EsqueletoChat, EsqueletoFicha, EsqueletoLista } from './EsqueletoLeads';
+import Divisor, { useAnchosGuardados } from './Divisor';
 import { FILTROS } from './formato';
 import type { TLeadFiltro } from '../../../store/interfaces/lead.interface';
 
@@ -34,29 +35,12 @@ interface ILeadsProps {
   filtro?: TLeadFiltro;
 }
 
-/** alto de las columnas: desde donde empiezan hasta el borde de abajo de la ventana (en pantallas anchas) */
-function useAltoHastaAbajo() {
-  const ref = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => {
-    const el = ref.current; if (!el) return;
-    const medir = () => {
-      if (!el.offsetParent || window.innerWidth <= 1180) { el.style.height = ''; return; } // oculta o angosta: la de styles.css
-      const arriba = el.getBoundingClientRect().top + window.scrollY;
-      el.style.height = `${Math.max(460, window.innerHeight - arriba - 20)}px`;
-    };
-    medir();
-    const obs = new ResizeObserver(medir); obs.observe(document.body);
-    window.addEventListener('resize', medir);
-    return () => { obs.disconnect(); window.removeEventListener('resize', medir); };
-  }, []);
-  return ref;
-}
-
 export default function Leads({ sel: selInicial, filtro: filtroInicial }: ILeadsProps) {
   const { datos, sel, cargado, error, filtros: f, leadGetAll, leadSetFiltros, leadSeleccionar } = useLead();
   const archivo = useRef<HTMLInputElement>(null);
   const archivoIg = useRef<HTMLInputElement>(null);
-  const columnas = useAltoHastaAbajo();
+  const columnas = useRef<HTMLDivElement>(null);
+  useAnchosGuardados(columnas);
   // el filtro actual, para el listener (vive mientras la pantalla esté montada y no debe ver un valor viejo)
   const filtroRef = useRef(f.filtro); filtroRef.current = f.filtro;
 
@@ -98,10 +82,12 @@ export default function Leads({ sel: selInicial, filtro: filtroInicial }: ILeads
   const AYUDA: Record<string, string> = { nuevo: 'Sin trabajar', seguimiento: 'Sin respuesta o con la acción vencida', visita: 'Con visita agendada' };
   const cajaFiltro = 'tw:h-9 tw:pl-2.5 tw:pr-7 tw:text-[13px]';
   // las tres columnas con el borde de una Card del kit (react-ui.css va después de styles.css: gana a .ld-lista…)
-  const columna = 'tw:rounded-2xl tw:border-edge tw:border-b-[3px] tw:border-b-edge-b';
+  const columna = 'tw:rounded-card tw:border-edge tw:border-b-[3px] tw:border-b-edge-b';
 
   return (
     <Layout
+      altoCompleto
+      // en ventanas angostas, columnas apiladas y la ventana vuelve a desplazarse: .ld-* en styles.css
       className="ld-wrap"
       titulo="Leads"
       ilustracion={{ imagen: 'img/formas/personas.svg', tinte: '#13a35b' }}
@@ -110,7 +96,6 @@ export default function Leads({ sel: selInicial, filtro: filtroInicial }: ILeads
         <Boton id="ldImp" icono="upload" onClick={() => archivo.current?.click()}>Importar chat</Boton>
         <Boton variante="secundario" id="ldCuentas" icono="link" onClick={leadsCuentas}>Cuentas e historial</Boton>
         <Boton variante="secundario" id="ldComo" icono="help" onClick={leadsComoExportar}>Cómo exportar un chat</Boton>
-        <Boton variante="secundario" id="ldCorBtn" icono="users" title="El equipo de la corredora: a quién pertenece cada lead" onClick={abrirUsuarios}>Usuarios</Boton>
         <input ref={archivo} type="file" id="ldFile" accept=".txt,.zip,text/plain,application/zip" className="hidden" onChange={(e) => importar(e.target)} />
         <input ref={archivoIg} type="file" id="ldFileIg" accept=".zip,application/zip" className="hidden" onChange={(e) => importar(e.target, 'instagram')} />
       </>}
@@ -158,28 +143,30 @@ export default function Leads({ sel: selInicial, filtro: filtroInicial }: ILeads
             </div>
           </div>
           <div id="ldItems" className="ld-items">
+            {!cargado && <EsqueletoLista />}
             {hayLeads && (datos!.leads.length
               ? datos!.leads.map((l) => <LeadItem key={l.id} l={l} elegido={l.id === sel} verCorredor={!!datos!.corredores.length} alElegir={() => leadSeleccionar(l.id)} />)
               : <EstadoVacio compacto texto="No hay leads con este filtro." className="tw:p-4" />)}
           </div>
         </div>
+        <Divisor lado="lista" />
 
         {hayLeads ? (
           sel
             ? <LeadDetalle key="detalle" id={sel} datos={datos!} version={datos} alCambiar={leadGetAll} />
             : <div className={cx('ld-chat', columna)} id="ldChat" key="nada"><EstadoVacio compacto texto="Elige un lead para ver su conversación." className="tw:m-auto" /></div>
-        ) : cargado && (
+        ) : cargado ? (
           <>
             <div className={cx('ld-chat', columna)} key="vacio">
               <div className="ld-vacio tw:m-auto tw:flex tw:max-w-[520px] tw:flex-col tw:items-center tw:gap-2 tw:p-7 tw:text-center">
-                <span className="tw:grid tw:size-14 tw:place-items-center tw:rounded-2xl tw:border tw:border-solid tw:border-green-edge/40 tw:border-b-[3px] tw:border-b-green-edge tw:bg-green-soft tw:text-green-softink">
+                <span className="tw:grid tw:size-14 tw:place-items-center tw:rounded-icono tw:border tw:border-solid tw:border-green-edge/40 tw:border-b-[3px] tw:border-b-green-edge tw:bg-green-soft tw:text-green-softink">
                   <Icono nombre="whatsapp" tam={28} />
                 </span>
                 <h2 className="tw:mt-2 tw:mb-0 tw:text-lg tw:font-bold tw:text-text">Guarda aquí tus conversaciones con clientes</h2>
                 <p className="tw:m-0 tw:text-sm tw:leading-relaxed tw:text-muted">Exporta un chat de WhatsApp o el historial de Instagram y arrástralo a esta ventana. Asset lo ordena, entiende qué busca el cliente y te dice qué sigue.</p>
                 <div className="tw:my-2 tw:grid tw:w-full tw:gap-2 tw:text-left">
                   {PASOS.map(([so, texto]) => (
-                    <div key={so} className="tw:flex tw:gap-3 tw:rounded-xl tw:border tw:border-solid tw:border-edge tw:border-b-2 tw:border-b-edge-b tw:bg-sunken tw:px-3 tw:py-2.5 tw:text-[13px] tw:leading-relaxed">
+                    <div key={so} className="tw:flex tw:gap-3 tw:rounded-control tw:border tw:border-solid tw:border-edge tw:border-b-2 tw:border-b-edge-b tw:bg-sunken tw:px-3 tw:py-2.5 tw:text-[13px] tw:leading-relaxed">
                       <b className="tw:w-16 tw:flex-none">{so}</b><span>{texto}</span>
                     </div>
                   ))}
@@ -190,7 +177,13 @@ export default function Leads({ sel: selInicial, filtro: filtroInicial }: ILeads
                 </div>
               </div>
             </div>
+            <Divisor lado="ficha" key="vacio-div" />
             <div className={cx('ld-ficha', columna)} key="vacio-ficha" />
+          </>
+        ) : (
+          <>
+            <EsqueletoChat key="esq-chat" />
+            {leerFicha() && <><Divisor lado="ficha" key="esq-div" /><EsqueletoFicha key="esq-ficha" /></>}
           </>
         )}
       </div>

@@ -69,7 +69,7 @@ function Detalle({ d, items, alRefrescar }: { d: IDetalleOperacion; items: IOper
       </div>
 
       {/* etapas: Enviado → Firmado → (Legalizado / Protocolizado) */}
-      <div className="op-etapas tw:flex tw:items-center tw:gap-2 tw:p-3 tw:rounded-xl tw:bg-sunken tw:border tw:border-solid tw:border-edge">
+      <div className="op-etapas tw:flex tw:items-center tw:gap-2 tw:p-3 tw:rounded-control tw:bg-sunken tw:border tw:border-solid tw:border-edge">
         {d.versions.map((v, i) => (
           <span key={i} className="tw:contents">
             {i > 0 && <span className={cx('op-linea tw:h-0.5 tw:flex-1 tw:min-w-4 tw:rounded-full', v.done ? 'done tw:bg-green-edge' : 'tw:bg-edge')} />}
@@ -199,7 +199,7 @@ export default function Operaciones({ sel: selInicial }: { sel?: number | null }
               return (
                 <ItemLista key={it.operation} data-op={it.operation} alTocar={() => operacionElegir(it.operation)} aria-current={on || undefined}
                   className={cx('op-fila', on && 'sel tw:bg-lav-soft tw:hover:bg-lav-soft')}
-                  media={<span className={cx('tw:grid tw:place-items-center tw:w-9 tw:h-9 tw:rounded-xl tw:text-muted', on ? 'tw:bg-card' : 'tw:bg-sunken')}><Icono nombre="file" tam={17} /></span>}
+                  media={<span className={cx('tw:grid tw:place-items-center tw:w-9 tw:h-9 tw:rounded-icono tw:text-muted', on ? 'tw:bg-card' : 'tw:bg-sunken')}><Icono nombre="file" tam={17} /></span>}
                   titulo={String(it.name).replace(/\.pdf$/i, '')}
                   detalle={<>N° {it.operation}{it.asset?.codigo && <> · <span className="op-asset tw:font-semibold tw:text-lav-softink" title="Enviado desde Asset">{it.asset.codigo}</span></>} · {fecha(it.updated || it.created)}{it.signers ? ` · ${it.signed}/${it.signers} firmaron` : ''}</>}
                   derecha={<Badge tono={tono(c)} punto>{l}</Badge>} />

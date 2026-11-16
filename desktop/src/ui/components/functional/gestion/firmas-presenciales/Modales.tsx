@@ -25,7 +25,7 @@ const CAMPOS = 'tw:flex tw:flex-col tw:gap-3.5';
 // el texto completo del documento (estas ventanas se abren anchas: abrirModal con ancho)
 const TEXTO_LARGO = 'tw:min-h-[460px] tw:text-[13px]';
 // Una notaría de la lista (botón con su radio a la derecha)
-const opcion = (on: boolean) => cx('tw:box-border tw:min-w-0 tw:w-full tw:m-0 tw:flex tw:gap-3 tw:items-start tw:text-left tw:p-3.5 tw:rounded-[16px]! tw:bg-card tw:text-text tw:[transition:border-color_.15s,box-shadow_.15s] tw:enabled:hover:border-[color-mix(in_srgb,var(--brand)_30%,var(--line))] tw:disabled:opacity-[.55] tw:disabled:cursor-not-allowed',
+const opcion = (on: boolean) => cx('tw:box-border tw:min-w-0 tw:w-full tw:m-0 tw:flex tw:gap-3 tw:items-start tw:text-left tw:p-3.5 tw:rounded-card! tw:bg-card tw:text-text tw:[transition:border-color_.15s,box-shadow_.15s] tw:enabled:hover:border-[color-mix(in_srgb,var(--brand)_30%,var(--line))] tw:disabled:opacity-[.55] tw:disabled:cursor-not-allowed',
   on ? 'tw:border-brand tw:[box-shadow:0_0_0_4px_color-mix(in_srgb,var(--brand)_10%,transparent)]' : 'tw:border-[color:var(--es-line,var(--line))]');
 const OPCION_T = 'tw:flex-1 tw:flex tw:flex-col tw:gap-[3px] tw:min-w-0 tw:[&_b]:font-semibold tw:[&_small]:text-muted tw:[&_small]:text-[12px] tw:[&_small]:leading-[1.45]';
 const radio = (on: boolean) => cx('tw:size-[18px] tw:rounded-full tw:shrink-0 tw:mt-0.5', on ? 'tw:[box-shadow:inset_0_0_0_5px_var(--brand)]' : 'tw:[box-shadow:inset_0_0_0_1.5px_var(--line)]');

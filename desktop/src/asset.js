@@ -32,7 +32,11 @@ async function pedir(metodo, ruta, cuerpo, token, ms = 20000) {
     });
   } catch (e) {
     if (e.code === 'SIN_API') throw e;
-    throw err('No se pudo conectar con el servidor de Asset. Revisa tu conexión a internet.', 'SIN_CONEXION');
+    const causa = e.cause?.code || e.name;
+    console.warn(`[asset] ${metodo} ${ruta} falló: ${e.cause?.message || e.message} (${causa})`);
+    // tiempo agotado: el servidor está, pero no contestó a tiempo (no es la conexión de quien usa la app); el código sigue siendo SIN_CONEXION para que se reintente
+    if (e.name === 'TimeoutError' || e.name === 'AbortError') throw err(`El servidor de Asset no respondió a tiempo${app.isPackaged ? '' : ` (${metodo} ${ruta})`}. Vuelve a intentarlo.`, 'SIN_CONEXION');
+    throw err(`No se pudo conectar con el servidor de Asset. Revisa tu conexión a internet.${app.isPackaged ? '' : ` [${causa}]`}`, 'SIN_CONEXION');
   }
   let d = null;
   try { d = r.status === 204 ? null : await r.json(); } catch {}

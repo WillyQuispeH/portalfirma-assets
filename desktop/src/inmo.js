@@ -1017,40 +1017,31 @@ async function leerPF(pf, progreso) {
   }
   return { items: out, total: ids.length, errores };
 }
-async function importarPF(pf, progreso = () => {}) {
-  const leido = await leerPF(pf, progreso);
-  const res = { nuevas: 0, actualizadas: 0, sinCambios: 0, personas: 0, total: leido.total, ...(leido.errores ? { errores: leido.errores } : {}) };
+// Convecta es el ÚNICO origen de la importación. En el servidor la API lee su cartera (la clave de Convecta vive solo ahí) y
+// asigna cada propiedad al usuario de Asset con el mismo correo; la app solo pide la importación y sincroniza.
+// En modo de prueba (PF_MOCK=1) la «cartera de Convecta» sale de los datos de prueba (mock.js), sin red.
+async function importarConvecta(pf, progreso = () => {}) {
   if (API) {
-    // a la base, por tandas de 100: crea o actualiza por (sistema, id en Portalfirma) y respeta lo editado en Asset
-    const ya = new Set(R.props.filter((p) => p.origen?.sistema === 'portalfirma').map((p) => String(p.origen.id)));
-    const items = leido.items.map((x) => ({
-      origenId: String(x.id), origenDatos: { fuente: x.source || '', externo: x.external_id ?? null, sincronizado: x.synced_at || null, importado: now() },
-      datos: propApi(desdePF(x)),
-      propietario: x.owner_rut && validRut(x.owner_rut) ? { nombre: String(x.owner_name || 'Propietario').trim().slice(0, 200), rut: fmtRut(x.owner_rut), email: x.owner_email || null, telefono: x.owner_phone ? String(x.owner_phone).slice(0, 40) : null } : null,
-    }));
-    for (let i = 0; i < items.length; i += 100) {
-      const r = await llamarEnCola('POST', '/propiedades/importar', { sistema: 'portalfirma', items: items.slice(i, i + 100) });
-      for (const k of ['nuevas', 'actualizadas', 'sinCambios', 'personas']) res[k] += r[k] || 0;
-    }
+    progreso({ etapa: 'convecta' });
+    const r = await enCola(() => asset().llamar('POST', '/propiedades/importar-convecta', {}, 300000)); // 177 propiedades con fotos: no cabe en 20 s
     await sincronizar();
-    for (const x of leido.items) if (inactivaPF(x) && !ya.has(String(x.id))) { // las inactivas en Portalfirma llegan archivadas
-      const p = R.props.find((q) => q.origen?.sistema === 'portalfirma' && String(q.origen.id) === String(x.id));
-      if (p && !p.archivada) await archivarPropiedad(p.id, true).catch(() => {});
-    }
+    const res = { nuevas: 0, actualizadas: 0, sinCambios: 0, personas: 0, captadores: 0, sinCaptador: 0, sinCorredor: [], total: 0, ...r };
     const d = db(); d.ultimaImportacion = { fecha: now(), ...res }; save(); H.cambio('propiedades'); return res;
   }
+  const leido = await leerPF(pf, progreso);
+  const res = { nuevas: 0, actualizadas: 0, sinCambios: 0, personas: 0, total: leido.total, ...(leido.errores ? { errores: leido.errores } : {}) };
   const d = db();
   for (const x of leido.items) {
     const datos = desdePF(x); const inactiva = inactivaPF(x);
     let p = d.propiedades.find((q) => q.origen?.id === x.id);
     if (!p) {
-      p = { id: uid('p'), vinculos: [], documentos: [], creado: now(), ...datos, actualizado: now(), origen: { sistema: 'portalfirma', id: x.id, fuente: x.source || '', externo: x.external_id ?? null, sincronizado: x.synced_at || null, importado: now() }, ...(inactiva ? { archivada: true } : {}) };
-      d.propiedades.push(p); res.nuevas++; log(p.id, `Importada desde Portalfirma${x.source ? ' (origen ' + x.source + ')' : ''}`);
+      p = { id: uid('p'), vinculos: [], documentos: [], creado: now(), ...datos, actualizado: now(), origen: { sistema: 'convecta', id: x.id, fuente: x.source || '', externo: x.external_id ?? null, sincronizado: x.synced_at || null, importado: now() }, ...(inactiva ? { archivada: true } : {}) };
+      d.propiedades.push(p); res.nuevas++; log(p.id, 'Importada desde Convecta');
     } else {
       const libres = Object.keys(datos).filter((k) => !(p.editados || []).includes(k) && JSON.stringify(p[k]) !== JSON.stringify(datos[k]));
       for (const k of libres) p[k] = datos[k];
       p.origen = { ...p.origen, sincronizado: x.synced_at || p.origen.sincronizado, importado: now() };
-      if (libres.length) { p.actualizado = now(); res.actualizadas++; log(p.id, `Actualizada desde Portalfirma (${libres.length} ${libres.length === 1 ? 'dato' : 'datos'})`); } else res.sinCambios++;
+      if (libres.length) { p.actualizado = now(); res.actualizadas++; log(p.id, `Actualizada desde Convecta (${libres.length} ${libres.length === 1 ? 'dato' : 'datos'})`); } else res.sinCambios++;
     }
     if (x.owner_rut && validRut(x.owner_rut)) { // el propietario pasa al CRM con su RUT
       let c = porRut(x.owner_rut);
@@ -1226,6 +1217,6 @@ function exportarDatos() { return { ...clonar(db()), propiedades: clonar(P()), p
 const _reset = () => { cache = null; };
 
 module.exports = { personaDesdeLead, esEmpresa, eventos, negocios, personaPorId, registrar, obtener, parchear, todas, config, guardarConfig, ajusteCorredora, guardarAjusteCorredora, enlaceFirma, guardarEnlaceFirma, registrarLead, guardar: guardarTodo, TIPOS, ESTADOS, ROLES, validRut, fmtRut, listar, resumen, guardarPropiedad, archivarPropiedad, guardarPersona, borrarPersona, vincular, desvincular,
-  nota, actividadDe, actividadTodas, agregarDocumentos, quitarDocumento, docPath, mostrarCarpeta, subirFotos, importarPF, desdePF, exportarDatos, _reset,
+  nota, actividadDe, actividadTodas, agregarDocumentos, quitarDocumento, docPath, mostrarCarpeta, subirFotos, importarConvecta, exportarDatos, _reset,
   // repositorio (sesión de Asset y sincronización)
   API, configurar, iniciar, cerrar, sincronizar, registros, folio, alCargar, subirArchivoRegistro, bajarArchivoRegistro, borrarArchivosRegistro, firmasDe, todasLasFirmas, agregarFirma, actualizarFirma, firmaDeOperacion, historialEnvios, registrarEnvio, leadsLista: () => R.leads, encolarMensajes, subirR2, recargarLead: (id) => recargarDoc('lead', id), esperarCola, usuario, listo, asignarCaptador, asignarVarios };

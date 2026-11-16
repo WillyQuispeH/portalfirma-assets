@@ -26,7 +26,7 @@ export default function ItemLista({ titulo, detalle, media, derecha, alTocar, fl
     {derecha && <span className="tw:flex-none tw:flex tw:items-center tw:gap-2">{derecha}</span>}
     {flecha && <span className="tw:flex-none tw:text-muted"><Icono nombre="chevR" tam={16} /></span>}
   </>;
-  const clases = cx('tw:flex tw:items-center tw:gap-3 tw:w-full tw:m-0 tw:px-3 tw:py-2.5 tw:rounded-xl', className);
+  const clases = cx('tw:flex tw:items-center tw:gap-3 tw:w-full tw:m-0 tw:px-3 tw:py-2.5 tw:rounded-control', className);
   return alTocar ? (
     <button type="button" onClick={alTocar} {...resto}
       className={cx(clases, 'tw:border-0 tw:bg-transparent tw:cursor-pointer tw:font-[inherit] tw:hover:bg-hover tw:focus-visible:outline-2 tw:focus-visible:outline-lav-edge')}>
@@ -39,7 +39,7 @@ export default function ItemLista({ titulo, detalle, media, derecha, alTocar, fl
 export function Miniatura({ src, icono = 'image', tam = 48 }: { src?: string | null; icono?: string; tam?: number }) {
   const [rota, setRota] = useState(false);
   return (
-    <span className="tw:grid tw:place-items-center tw:overflow-hidden tw:rounded-xl tw:bg-sunken tw:text-muted" style={{ width: tam, height: tam }}>
+    <span className="tw:grid tw:place-items-center tw:overflow-hidden tw:rounded-icono tw:bg-sunken tw:text-muted" style={{ width: tam, height: tam }}>
       {src && !rota ? <img src={src} alt="" loading="lazy" onError={() => setRota(true)} className="tw:w-full tw:h-full tw:object-cover" /> : <Icono nombre={icono} tam={Math.round(tam * 0.45)} />}
     </span>
   );

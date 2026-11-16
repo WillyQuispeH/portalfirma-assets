@@ -67,7 +67,7 @@ function Subtitulo({ p }: { p: IPropiedad }) {
 
 // Franja de resumen: cada indicador lleva a su pestaña
 const INDICADOR = 'im-sc tw:flex tw:items-center tw:gap-3 tw:min-w-0 tw:m-0 tw:px-4 tw:py-3 tw:text-left tw:font-[inherit] tw:cursor-pointer '
-  + 'tw:rounded-2xl tw:border tw:border-solid tw:border-edge tw:border-b-[3px] tw:border-b-edge-b tw:bg-card tw:text-text tw:transition-colors tw:duration-100 '
+  + 'tw:rounded-card tw:border tw:border-solid tw:border-edge tw:border-b-[3px] tw:border-b-edge-b tw:bg-card tw:text-text tw:transition-colors tw:duration-100 '
   + 'tw:hover:bg-hover tw:focus-visible:outline-2 tw:focus-visible:outline-offset-2 tw:focus-visible:outline-lav-edge';
 
 function Indicador({ etiqueta, valor, detalle, icono, color, tono, idValor, idDetalle, ...resto }: {
@@ -76,7 +76,7 @@ function Indicador({ etiqueta, valor, detalle, icono, color, tono, idValor, idDe
 }) {
   return (
     <button type="button" className={INDICADOR} {...resto}>
-      <span className={cx('tw:grid tw:size-10 tw:flex-none tw:place-items-center tw:rounded-xl', SUAVE[color])}><Icono nombre={icono} tam={18} /></span>
+      <span className={cx('tw:grid tw:size-10 tw:flex-none tw:place-items-center tw:rounded-icono', SUAVE[color])}><Icono nombre={icono} tam={18} /></span>
       <span className="tw:flex tw:min-w-0 tw:flex-col tw:items-start tw:gap-0.5">
         <small className="tw:text-xs tw:text-muted">{etiqueta}</small>
         <b id={idValor} className={cx('tw:text-[15px] tw:font-bold tw:leading-tight', tono === 'ok' && 'tw:text-green-softink', tono === 'wait' && 'tw:text-yellow-softink')}>{valor}</b>
@@ -158,7 +158,7 @@ export default function FichaPropiedad({ id, vez }: IFichaPropiedadProps) {
       <Franja p={p} irA={irA} />
       {/* las pestañas quedan fijas bajo la cabecera de la pantalla (--cab-visible: su alto fija, lo pone CabeceraPagina) */}
       <div data-ficha-fija className="tw:sticky tw:top-[calc(56px+var(--cab-visible,0px))] tw:z-[3] tw:-mx-1 tw:px-1 tw:bg-bg">
-        <Tabs variante="linea" etiqueta="Secciones de la ficha" className="im-ftabs tw:max-w-full tw:overflow-x-auto tw:overflow-y-hidden" opciones={TABS} valor={tab} alCambiar={irA} />
+        <Tabs etiqueta="Secciones de la ficha" className="im-ftabs tw:max-w-full tw:overflow-x-auto tw:overflow-y-hidden" opciones={TABS} valor={tab} alCambiar={irA} />
       </div>
       {pane('resumen', <Resumen p={p} irA={irA} version={version} />)}
       {pane('propietario', <Propietario p={p} />)}

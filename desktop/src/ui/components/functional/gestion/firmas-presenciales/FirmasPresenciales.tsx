@@ -23,11 +23,11 @@ import { PANEL } from './estilos';
 
 const DETALLE = cx(PANEL, 'tw:py-[22px] tw:px-6 tw:min-w-0 tw:min-h-[520px]');
 // Un elemento de la lista; el elegido lleva una barra a la izquierda. es-item y on los usan las pruebas.
-const elemento = (on: boolean, admin = false) => cx('es-item tw:w-full tw:flex tw:items-center tw:gap-[11px] tw:py-[11px] tw:px-3 tw:rounded-[14px]! tw:text-left tw:text-text tw:relative',
+const elemento = (on: boolean, admin = false) => cx('es-item tw:w-full tw:flex tw:items-center tw:gap-[11px] tw:py-[11px] tw:px-3 tw:rounded-card! tw:text-left tw:text-text tw:relative',
   admin ? 'tw:m-2 tw:mt-auto tw:border-t-line tw:[border-top-style:dashed]' : 'tw:m-0',
   on ? "on tw:bg-[color-mix(in_srgb,var(--brand)_7%,var(--card))] tw:border-[color-mix(in_srgb,var(--brand)_18%,transparent)] tw:before:content-[''] tw:before:absolute tw:before:-left-px tw:before:top-2.5 tw:before:bottom-2.5 tw:before:w-[3px] tw:before:rounded-[3px] tw:before:bg-brand"
     : 'tw:bg-transparent tw:hover:bg-[color-mix(in_srgb,var(--brand)_4%,var(--card))]');
-const ICONO = 'tw:size-9 tw:rounded-[11px] tw:grid tw:place-items-center tw:shrink-0';
+const ICONO = 'tw:size-9 tw:rounded-icono tw:grid tw:place-items-center tw:shrink-0';
 const ICONO_OK = 'tw:bg-[color-mix(in_srgb,var(--ok)_10%,var(--card))] tw:text-ok';
 const TEXTO = 'xp-tx tw:flex-1 tw:min-w-0';
 const TITULO = 'tw:font-semibold tw:text-[13.5px]';

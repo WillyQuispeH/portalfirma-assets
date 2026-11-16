@@ -21,7 +21,7 @@ export const TONO_FIRMA: Record<string, TTono> = { ok: 'verde', wait: 'amarillo'
 
 // Ícono de una fila de documento (en ItemLista)
 export function IconoDoc({ nombre }: { nombre: string }) {
-  return <span className="tw:grid tw:place-items-center tw:w-9 tw:h-9 tw:rounded-xl tw:bg-sunken tw:text-muted"><Icono nombre={nombre} tam={16} /></span>;
+  return <span className="tw:grid tw:place-items-center tw:w-9 tw:h-9 tw:rounded-icono tw:bg-sunken tw:text-muted"><Icono nombre={nombre} tam={16} /></span>;
 }
 
 // El historial (lo último o completo), en línea de tiempo: las notas escritas a mano se destacan (li[data-nota])

@@ -37,7 +37,7 @@ const DOC = `<svg viewBox="0 0 120 140" width="64" height="76" aria-hidden="true
 
 // botón táctil del kit (borde inferior más grueso, como Card), para las tarjetas de acción; el color va aparte:
 // RELLENO del kit (fondo, borde y texto del tono de la acción) o el degradado de marca (boton-brand)
-const TACTIL = 'tw:relative tw:m-0 tw:cursor-pointer tw:font-[inherit] tw:text-left tw:rounded-2xl tw:border tw:border-solid tw:border-b-[3px] tw:transition-[transform,box-shadow,filter] tw:duration-150 tw:hover:-translate-y-0.5 tw:hover:shadow-md tw:active:translate-y-0 tw:focus-visible:outline-2 tw:focus-visible:outline-offset-2 tw:focus-visible:outline-lav-edge';
+const TACTIL = 'tw:relative tw:m-0 tw:cursor-pointer tw:font-[inherit] tw:text-left tw:rounded-card tw:border tw:border-solid tw:border-b-[3px] tw:transition-[transform,box-shadow,filter] tw:duration-150 tw:hover:-translate-y-0.5 tw:hover:shadow-md tw:active:translate-y-0 tw:focus-visible:outline-2 tw:focus-visible:outline-offset-2 tw:focus-visible:outline-lav-edge';
 const MARCA = 'tw:boton-brand tw:text-white tw:hover:brightness-[1.06]';
 const color = (k: string) => RELLENO[tonoDe(k)];
 
@@ -45,7 +45,7 @@ const Candado = () => <span className="lock-badge" title="Exclusivo para cliente
 // el ícono de la acción: en una tarjeta de color va sobre blanco (toma el color del texto de la tarjeta)
 const Burbuja = ({ k, tam = 'md', sobre = 'color' }: { k: string; tam?: 'sm' | 'md' | 'lg'; sobre?: 'color' | 'marca' }) => (
   <span className={cx('ic tw:grid tw:flex-none tw:place-items-center tw:shadow-sm', sobre === 'marca' ? 'tw:bg-white/20 tw:text-white' : 'tw:bg-card',
-    tam === 'lg' ? 'tw:w-14 tw:h-14 tw:rounded-2xl' : tam === 'md' ? 'tw:w-11 tw:h-11 tw:rounded-xl' : 'tw:w-9 tw:h-9 tw:rounded-xl')}>
+    tam === 'lg' ? 'tw:w-14 tw:h-14 tw:rounded-icono' : tam === 'md' ? 'tw:w-11 tw:h-11 tw:rounded-icono' : 'tw:w-9 tw:h-9 tw:rounded-icono')}>
     <Icono nombre={ACCION[k][1]} tam={tam === 'lg' ? 28 : tam === 'md' ? 22 : 18} />
   </span>
 );
@@ -131,7 +131,7 @@ export default function InicioGestion() {
           {/* abrir arrastrando (home.js recibe los archivos soltados en la ventana) */}
           <div className="hub-panel">
             <div id="hubDrop" role="button" tabIndex={0} title="Abrir PDF"
-              className="tw:flex tw:items-center tw:gap-5 tw:p-5 tw:rounded-2xl tw:cursor-pointer tw:border-2 tw:border-dashed tw:border-lav-edge tw:bg-lav-soft/40 tw:transition-colors tw:hover:bg-lav-soft tw:focus-visible:outline-2 tw:focus-visible:outline-lav-edge"
+              className="tw:flex tw:items-center tw:gap-5 tw:p-5 tw:rounded-card tw:cursor-pointer tw:border-2 tw:border-dashed tw:border-lav-edge tw:bg-lav-soft/40 tw:transition-colors tw:hover:bg-lav-soft tw:focus-visible:outline-2 tw:focus-visible:outline-lav-edge"
               onClick={(e) => { if ((e.target as HTMLElement).closest('#hubDrive, [data-act]')) return; hacer('open'); }}
               onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); hacer('open'); } }}>
               <span className="tw:flex-none" dangerouslySetInnerHTML={{ __html: DOC }} />

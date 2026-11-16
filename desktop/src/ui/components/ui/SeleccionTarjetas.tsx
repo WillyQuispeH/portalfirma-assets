@@ -58,13 +58,13 @@ export default function SeleccionTarjetas<T extends string>({
               {...(unica ? { role: 'radio', 'aria-checked': on } : { 'aria-pressed': on })}
               onClick={() => elegir(o.valor)}
               className={cx(
-                'tw:group tw:relative tw:flex tw:items-start tw:gap-3 tw:m-0 tw:p-3 tw:pr-9 tw:text-left tw:rounded-xl tw:cursor-pointer tw:font-[inherit]',
+                'tw:group tw:relative tw:flex tw:items-start tw:gap-3 tw:m-0 tw:p-3 tw:pr-9 tw:text-left tw:rounded-card tw:cursor-pointer tw:font-[inherit]',
                 'tw:border tw:border-solid tw:border-b-[3px] tw:transition-[transform,background-color,border-color] tw:duration-100',
                 'tw:active:translate-y-px tw:focus-visible:outline-2 tw:focus-visible:outline-offset-2 tw:focus-visible:outline-lav-edge',
                 on ? 'tw:bg-lav-soft tw:border-lav-edge' : 'tw:bg-card tw:border-edge tw:border-b-edge-b tw:hover:bg-sunken',
               )}>
               {o.icono && (
-                <span className={cx('tw:flex-none tw:grid tw:place-items-center tw:w-9 tw:h-9 tw:rounded-lg tw:transition-colors',
+                <span className={cx('tw:flex-none tw:grid tw:place-items-center tw:w-9 tw:h-9 tw:rounded-icono tw:transition-colors',
                   on ? 'tw:bg-lav tw:text-lav-ink' : 'tw:bg-sunken tw:text-muted tw:group-hover:text-text')}>
                   <Icono nombre={o.icono} tam={17} />
                 </span>

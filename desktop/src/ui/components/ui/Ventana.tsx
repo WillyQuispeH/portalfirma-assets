@@ -41,7 +41,7 @@ export function VentanaCabecera({ titulo, descripcion, icono, tonoIcono = 'lavan
   return (
     <header className={cx('mdl-cab', className)}>
       {icono && (
-        <span className={cx('tw:flex-none tw:grid tw:place-items-center tw:w-10 tw:h-10 tw:rounded-xl', SUAVE[tonoIcono])}>
+        <span className={cx('tw:flex-none tw:grid tw:place-items-center tw:w-10 tw:h-10 tw:rounded-icono', SUAVE[tonoIcono])}>
           <Icono nombre={icono} tam={19} />
         </span>
       )}

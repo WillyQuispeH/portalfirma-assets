@@ -24,7 +24,7 @@ export default function Checkbox({ marcado, alCambiar, etiqueta, descripcion, de
           aria-describedby={descripcion ? `${idCb}-desc` : undefined}
           className="tw:peer tw:absolute tw:inset-0 tw:m-0 tw:size-full tw:opacity-0 tw:cursor-pointer tw:disabled:cursor-default" />
         <span aria-hidden="true" className={cx(
-          'tw:flex tw:items-center tw:justify-center tw:size-5 tw:rounded-md tw:border tw:border-solid tw:border-b-2 tw:transition-colors tw:duration-150',
+          'tw:flex tw:items-center tw:justify-center tw:size-5 tw:rounded-icono tw:border tw:border-solid tw:border-b-2 tw:transition-colors tw:duration-150',
           'tw:peer-focus-visible:outline-2 tw:peer-focus-visible:outline-offset-2 tw:peer-focus-visible:outline-lav-edge',
           marcado ? 'tw:bg-lav tw:border-lav-edge tw:text-white' : 'tw:bg-card tw:border-edge tw:border-b-edge-b',
           deshabilitado && 'tw:opacity-55',

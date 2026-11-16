@@ -16,9 +16,25 @@
   --color-ok-soft: var(--ok-soft);
   --color-err: var(--err);
   --radius-app: var(--radius);
+  /* radios del kit (los valores, en :root): tw:rounded-card, tw:rounded-control, tw:rounded-icono */
+  --radius-card: var(--ui-radio-card);
+  --radius-control: var(--ui-radio-control);
+  --radius-icono: var(--ui-radio-icono);
 }
 
+/* ---------- medidas globales de diseño (regla en .cursor/rules/diseno-pantallas.mdc) ----------
+   Cambiar aquí cambia toda la app: componentes React (Tailwind) y CSS de src/renderer (border-radius: var(--ui-radio)). */
 :root {
+  /* el radio base de todo lo que tiene esquinas (los círculos y las píldoras usan rounded-full / 999px) */
+  --ui-radio: 5px;
+  /* superficies: Card, columnas, paneles, tarjetas de listas, menús flotantes, ventanas modales */
+  --ui-radio-card: var(--ui-radio);
+  /* lo que se toca o se escribe: botones, campos, pestañas, filas de listas, badges */
+  --ui-radio-control: var(--ui-radio);
+  /* cuadritos de ícono, avatares, miniaturas, casillas */
+  --ui-radio-icono: var(--ui-radio);
+  /* el margen de las pantallas: a los costados, bajo la cabecera y abajo (lo pone Layout) */
+  --ui-margen-pantalla: 5px;
   --ui-edge: color-mix(in srgb, var(--text) 14%, transparent);
   --ui-edge-b: color-mix(in srgb, var(--text) 26%, transparent);
   --ui-field: var(--card);
@@ -221,11 +237,37 @@ html[data-theme="dark"] {
   }
 }
 
+/* Esqueleto (components/ui/Esqueleto.tsx): el brillo es un degradado fijo a la ventana (background-attachment: fixed),
+   así todas las piezas brillan a la vez, como una sola luz que pasa, y no cada una por su cuenta. */
+.ui-esqueleto {
+  --esq-base: color-mix(in srgb, var(--text) 8%, var(--card));
+  --esq-luz: color-mix(in srgb, var(--text) 3%, var(--card));
+  background: linear-gradient(100deg, var(--esq-base) 40%, var(--esq-luz) 50%, var(--esq-base) 60%) fixed;
+  background-size: 200vw 100vh;
+  animation: esqueleto-brillo 1.6s cubic-bezier(.4, 0, .6, 1) infinite;
+}
+
+@keyframes esqueleto-brillo {
+  from {
+    background-position: 100vw 0;
+  }
+  to {
+    background-position: -100vw 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-esqueleto {
+    animation: none;
+    background: var(--esq-base);
+  }
+}
+
 
 .es {
   --es-line: color-mix(in srgb, var(--line) 75%, transparent);
   --es-soft: 0 1px 2px rgba(16, 24, 64, .04), 0 10px 30px -12px rgba(16, 24, 64, .10);
-  --es-r: 20px;
+  --es-r: var(--ui-radio-card);
 }
 
 .es h2 {
@@ -272,7 +314,7 @@ html[data-theme="dark"] {
 .es input:not([type=checkbox]),
 .es select,
 .es textarea {
-  border-radius: 11px;
+  border-radius: var(--ui-radio);
   border: 1px solid var(--es-line);
   background: color-mix(in srgb, var(--bg) 55%, var(--card));
   transition: border-color .15s, background .15s, box-shadow .15s;
@@ -293,7 +335,7 @@ html[data-theme="dark"] {
 }
 
 .es .xp-ic {
-  border-radius: 12px;
+  border-radius: var(--ui-radio);
   background: color-mix(in srgb, var(--brand) 8%, var(--card));
 }
 
@@ -320,8 +362,18 @@ html[data-theme="dark"] {
   color: transparent;
 }
 
+/* las pantallas con Layout: a lo ancho de la ventana, con --ui-margen-pantalla a los costados, bajo la cabecera y abajo
+   (regla en .cursor/rules/diseno-pantallas.mdc). Arriba no hace falta: la cabecera sube hasta el menú (--layout-arriba).
+   Le gana a «main», «body.*-on main» y «.im-wrap» de styles.css. */
 main:has(> .view:not(.hidden) [data-layout]) {
   max-width: none;
+  padding-inline: var(--ui-margen-pantalla);
+  padding-bottom: var(--ui-margen-pantalla);
+}
+
+.im-wrap[data-layout] {
+  padding-inline: 0;
+  padding-bottom: 0;
 }
 
 .ui-cabecera-pegada {
@@ -329,7 +381,8 @@ main:has(> .view:not(.hidden) [data-layout]) {
   --cab-fondo: color-mix(in srgb, var(--text) 6%, var(--card));
   margin-top: calc(-1 * var(--layout-arriba, 26px));
   margin-inline: calc(-1 * var(--cab-lado));
-  padding: 14px var(--cab-lado) 22px;
+  /* el texto de la cabecera conserva 24px desde el borde de la ventana, aunque el contenido vaya a 5px */
+  padding: 14px calc(var(--cab-lado) + 24px - var(--ui-margen-pantalla)) 22px;
   background: var(--cab-fondo);
   /* el borde inferior de las Card del kit (grueso, el que «se hunde») */
   border-bottom: 3px solid var(--ui-edge-b);

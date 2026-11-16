@@ -36,9 +36,9 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     ok(/Generar la orden de visita/.test(conf) && /CV-9002/.test(conf) && /11\.111\.111-1/.test(conf) && /saldo/.test(conf), 'la orden de visita pide confirmar (cobra) y muestra los datos');
     await shot('aa1-confirmar.png');
     await w.click('[data-conf] [data-si]'); r = await respuesta(n);
-    ok(/Orden de visita enviada a firmar a JUAN PEREZ SOTO: operación \d+/.test(r), 'envía la orden de visita a firmar');
+    ok(/Orden de visita( nº \d+)? enviada a firmar a JUAN PEREZ SOTO: operación \d+/.test(r), 'envía la orden de visita a firmar');
     const ord = await app.evaluate(() => JSON.parse(JSON.stringify(global.__pfMock._ordenes || [])));
-    ok(ord.length === 1 && ord[0].values['rut_visitante_signer'] === '11.111.111-1' && ord[0].values['fecha-firma_documento_nosigner'] === man && ord[0].property_id === '00000000-0000-4000-8000-000000000002', 'plantilla completada: fecha, visitante y la propiedad de Portalfirma');
+    ok(ord.length === 1, '0.18.10 · la orden se generó una vez como PDF (Asset, sin la plantilla de la Notaría virtual) y se envió a firmar');
     const ev = await w.evaluate(() => window.pf.agendaListar({}).then((x) => x.data));
     ok(ev.length === 1 && ev[0].orden?.operacion, 'la visita ya agendada queda con su orden (no se duplica el evento)');
 
@@ -62,11 +62,26 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     ok(/Orden de visita · operación/.test(await txt('#view-agenda')), 'la Agenda muestra la visita con su orden');
     await w.click('#agNew'); await w.selectOption('#evP', { label: 'CV-9004 · Parcela en Pirque' }); await w.selectOption('#evC', { label: 'MARIA GONZALEZ ROJAS · 22.222.222-2' }); await w.fill('#evH', '16:30'); await w.click('#mOk');
     await w.waitForSelector('[data-orden]'); await w.click('[data-orden]'); await w.waitForSelector('text=Generar y enviar a firmar');
-    ok(/MARIA GONZALEZ ROJAS/.test(await txt('#modalCard')) && /CV-9004/.test(await txt('#modalCard')), 'el botón «Generar orden de visita» muestra lo que se enviará');
+    ok(await w.inputValue('#ovNombre') === 'MARIA GONZALEZ ROJAS' && /CV-9004/.test(await txt('#modalCard')), 'el botón «Generar orden de visita» muestra lo que se enviará (visitante, visita y propiedad ordenados)');
+    await w.waitForTimeout(1200); await shot('ov1-orden.png');
+    // 0.18.10 · los datos se pueden editar: se guardan en la persona del CRM y el PDF se vuelve a armar; sin guardar no se envía
+    await w.fill('#ovEmail', 'maria.gonzalez@correo.cl'); await w.fill('#ovTel', '+56 9 5555 1234');
+    ok(await w.isDisabled('#mOk'), 'con cambios sin guardar no se puede enviar a firmar'); await w.click('#ovGuardar');
+    await w.waitForFunction(() => /Todo guardado/.test(document.querySelector('#modalCard')?.textContent || ''), null, { timeout: 15000 });
+    const per = (await w.evaluate(() => window.pf.inmoListar().then((r) => r.data))).personas.find((x) => x.rut === '22.222.222-2');
+    ok(per.email === 'maria.gonzalez@correo.cl' && /5555 1234/.test(per.telefono), 'lo editado quedó guardado en su origen: la persona del CRM');
     await w.click('#mOk'); await w.waitForSelector('text=Orden de visita enviada a firmar');
     await w.waitForFunction(() => document.querySelectorAll('#view-agenda [data-orden-ok]').length === 2);
     ok(true, 'orden generada desde la Agenda');
     await shot('aa3-agenda.png');
+    // 0.18.10 · el paso «Orden de visita» del negocio sigue a ESA orden: enviada → esperando la firma del visitante (con su operación)
+    await w.evaluate(() => window.Ventanas.abrir('inmo.menuPaso', { titulo: 'Orden de visita', descripcion: 'test', documentos: [{ nombre: 'Orden de visita nº 1', estado: 'En firma', fecha: '13/11', operacion: '27144', firmantes: ['Constanza Rojas Gil'] }], alEnviar() {}, etiquetaEnviar: 'Enviar una orden nueva', alElegir() {}, alGuardar() {} }, { clave: 'modal-13', ancho: true }));
+    await w.waitForTimeout(600); await shot('ov2-doc.png'); await w.evaluate(() => window.closeModal());
+    { const d0 = await datos(); const pr = d0.propiedades.find((x) => x.codigo === 'CV-9004'); const mg = d0.personas.find((x) => x.rut === '22.222.222-2');
+      const ng = await w.evaluate(([propId, clienteId, tipo]) => window.pf.negGuardar({ tipo, propId, clienteId }).then((r) => r.data), [pr.id, mg.id, pr.venta ? 'venta' : 'arriendo']);
+      const pasos = await w.evaluate((negocioId) => window.pf.etPasos({ negocioId }).then((r) => r.data), ng.id);
+      const po = pasos.etapas.flatMap((e) => e.pasos).find((x) => x.id === 'orden');
+      ok(po && po.e === 'pend' && po.q === 'otro' && /la firma del visitante/.test(po.quien) && /operación \d+/.test(po.d), 'el paso «Orden de visita» queda esperando la firma del visitante, con el número de operación'); }
     await w.click('#nav [data-view="inicio"]'); await w.waitForSelector('#view-inicio .hoy-agenda'); ok(/Agenda de hoy/.test(await txt('#view-inicio')), '«Hoy» muestra la agenda de hoy');
     ok(!errs.length, 'sin errores de JavaScript' + (errs.length ? ': ' + errs.join(' | ') : ''));
     console.log('OK agente asset');

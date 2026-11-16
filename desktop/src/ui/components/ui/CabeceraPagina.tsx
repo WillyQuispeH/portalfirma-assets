@@ -100,13 +100,13 @@ export default function CabeceraPagina({ titulo, subtitulo, sobretitulo, antes, 
         !pegada && 'tw:mb-5',
         pegada && 'ui-cabecera-pegada',
         ilustracion && 'tw:overflow-hidden tw:flex tw:flex-col tw:justify-center',
-        ilustracion && !pegada && 'tw:relative tw:min-h-[168px] tw:px-7 tw:py-6 tw:rounded-[20px] tw:border tw:border-solid tw:border-edge tw:border-b-[3px] tw:border-b-edge-b',
+        ilustracion && !pegada && 'tw:relative tw:min-h-[168px] tw:px-7 tw:py-6 tw:rounded-card tw:border tw:border-solid tw:border-edge tw:border-b-[3px] tw:border-b-edge-b',
         className,
       )}>
       {migas && <Migas migas={migas} className="tw:mb-2.5" />}
       {volver && (
         <button type="button" id={volver.id} onClick={volver.alTocar}
-          className="tw:inline-flex tw:items-center tw:gap-1 tw:mb-3 tw:-ml-1 tw:px-1.5 tw:py-1 tw:rounded-lg tw:border-0 tw:bg-transparent tw:text-[13px] tw:font-semibold tw:text-muted tw:cursor-pointer tw:hover:text-text tw:hover:bg-hover">
+          className="tw:inline-flex tw:items-center tw:gap-1 tw:mb-3 tw:-ml-1 tw:px-1.5 tw:py-1 tw:rounded-control tw:border-0 tw:bg-transparent tw:text-[13px] tw:font-semibold tw:text-muted tw:cursor-pointer tw:hover:text-text tw:hover:bg-hover">
           <Icono nombre="chevL" tam={15} /> {volver.texto}
         </button>
       )}

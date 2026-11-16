@@ -12,7 +12,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     await w.setViewportSize({ width: 1440, height: 920 });
     await w.waitForFunction(() => window.ReactUI && window.Inmo, null, { timeout: 15000 }); await w.waitForTimeout(500);
     await w.click('#userBtn'); await w.click('[data-um="config"]'); await w.waitForSelector('#view-integraciones:not(.hidden) #cfgTabs');
-    ok(/Configuración/.test(await txt('#view-integraciones h1')) && (await w.$$('#cfgTabs [data-t]')).length === 3, 'se abre desde el menú del usuario, con 3 pestañas');
+    ok(/Configuración/.test(await txt('#view-integraciones h1')) && (await w.$$('#cfgTabs [data-t]')).length >= 4, 'se abre desde el menú del usuario, con sus pestañas (el administrador ve también Metas)');
     // General
     await w.click('#cfgTema [data-tema="dark"]'); await w.waitForTimeout(200);
     ok(await w.evaluate(() => document.documentElement.dataset.theme === 'dark'), 'General: el tema cambia a oscuro');
@@ -45,6 +45,12 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     // Integraciones
     await w.click('#cfgTabs [data-t="integraciones"]'); await w.waitForSelector('[data-integracion="portalfirma"]');
     ok(true, 'Integraciones: las conexiones están en su pestaña');
+    // Metas (solo administrador): la facturación y la captación de cada corredor; la de la empresa es la suma
+    await w.click('#cfgTabs [data-t="metas"]'); await w.waitForSelector('#cfgMetas input[name^="f-"]');
+    await w.fill('#cfgMetas input[name^="f-"]', '8000000'); await w.fill('#cfgMetas input[name^="c-"]', '4'); await w.click('#cfgMetasGuardar'); await w.waitForTimeout(400);
+    const metas = await w.evaluate(() => window.pf.metasGet().then((r) => r.data));
+    ok(Object.values(metas).some((m) => m.facturacion === 8000000 && m.captacion === 4), 'Metas: lo que escribe el administrador queda guardado');
+    ok(/\$8\.000\.000/.test(await txt('#cfgMetas')), 'Metas: muestra la meta de la empresa (suma)');
     ok(!errs.length, 'sin errores de JavaScript' + (errs.length ? ': ' + errs.join(' | ') : ''));
     console.log('OK configuración');
   } catch (e) { console.error('FAIL', e); process.exitCode = 1; } finally { await app.close(); }

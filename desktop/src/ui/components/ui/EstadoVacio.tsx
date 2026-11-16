@@ -20,7 +20,7 @@ export default function EstadoVacio({ icono, titulo, texto, accion, compacto = f
   return (
     <div className={cx('tw:flex tw:flex-col tw:items-center tw:text-center tw:gap-2 tw:px-6 tw:py-10', className)}>
       {icono && (
-        <span className="tw:grid tw:place-items-center tw:w-14 tw:h-14 tw:mb-1 tw:rounded-2xl tw:bg-lav-soft tw:text-lav-softink">
+        <span className="tw:grid tw:place-items-center tw:w-14 tw:h-14 tw:mb-1 tw:rounded-icono tw:bg-lav-soft tw:text-lav-softink">
           <Icono nombre={icono} tam={26} />
         </span>
       )}

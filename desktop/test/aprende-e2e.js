@@ -32,7 +32,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     await w.click('[data-go="cartera"]'); await w.waitForSelector('text=Lección 2 de 10');
     await shot('ap5-leccion.png');
     await w.click('#apVivo'); await w.waitForSelector('.tour-tip', { timeout: 8000 });
-    ok(/Importar desde Portalfirma/.test(await txt('.tour-tip')) && await w.isVisible('#imQ'), '«Verlo en vivo» abre Cartera y empieza el recorrido');
+    ok(/Importar desde Convecta/.test(await txt('.tour-tip')) && await w.isVisible('#imQ'), '«Verlo en vivo» abre Cartera y empieza el recorrido');
     await shot('ap6-recorrido.png');
     let n = 1; while (await w.$('.tour-tip [data-tour="next"]')) { const t = await txt('.tour-tip [data-tour="next"]'); await w.click('.tour-tip [data-tour="next"]'); n++; if (/Terminar|Listo/i.test(t) || n > 10) break; }
     ok(n >= 5 && !(await w.$('.tour')), `recorrido completo (${n - 1} pasos)`);

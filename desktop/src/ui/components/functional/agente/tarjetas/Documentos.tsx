@@ -22,7 +22,7 @@ import { docNuevo, formulario, operaciones, plantillas, resultado } from './gest
 
 const FUENTE: Record<string, string> = { propiedad: 'de la ficha', persona: 'del CRM', hoy: 'hoy', corredor: 'tus datos', cuenta: 'de la cuenta' };
 const icTpl = (n: string) => (/arriendo|arrendamiento/i.test(n) ? 'key' : /compraventa|promesa|oferta/i.test(n) ? 'coins' : /visita|acta/i.test(n) ? 'pin' : /poder|mandato|corretaje/i.test(n) ? 'briefcase' : 'file');
-export const IconoFila = ({ nombre }: { nombre: string }) => <span className="tw:grid tw:place-items-center tw:size-9 tw:rounded-xl tw:bg-lav-soft tw:text-lav-softink"><Icono nombre={nombre} tam={16} /></span>;
+export const IconoFila = ({ nombre }: { nombre: string }) => <span className="tw:grid tw:place-items-center tw:size-9 tw:rounded-icono tw:bg-lav-soft tw:text-lav-softink"><Icono nombre={nombre} tam={16} /></span>;
 
 // ---------- 3. qué documento ----------
 export function Plantillas({ p }: { p: any }) {

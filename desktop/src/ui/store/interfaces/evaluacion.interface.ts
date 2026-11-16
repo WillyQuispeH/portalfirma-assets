@@ -8,7 +8,7 @@ export interface IEvalAnalisisPersona {
   alertas: string[];
   rentaLiquidaClp: number | null;
 }
-export interface IEvalArchivo { n: number; nombre: string; clase: string; legible: boolean; resumen: string; alertas: string[]; recibido: string }
+export interface IEvalArchivo { n: number; nombre: string; clase: string; claseManual?: boolean; legible: boolean; resumen: string; alertas: string[]; recibido: string }
 export interface IEvalDocumento { id: string; nombre: string; ok: boolean; detalle: string }
 export interface IEvalPersona {
   personaId: string;
@@ -21,6 +21,8 @@ export interface IEvalPersona {
   analisis: IEvalAnalisisPersona | null;
   documentos: IEvalDocumento[];
   faltan: string[];
+  /** lo que decidió el corredor de esta persona */
+  decision?: { estado: 'aprobada' | 'rechazada'; por: string; en: string } | null;
 }
 export interface IEvalAnalisis {
   hechoEn: string;

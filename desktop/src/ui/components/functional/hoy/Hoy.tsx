@@ -120,10 +120,10 @@ export default function Hoy() {
     >
       {!hayCartera && (
         <Card>
-          <EstadoVacio icono="house" titulo="Trae tu cartera" texto="Importa las propiedades que ya tienes en Portalfirma o crea la primera."
+          <EstadoVacio icono="house" titulo="Trae tu cartera" texto="Importa tus propiedades desde Convecta o crea la primera."
             accion={(
               <div className="tw:flex tw:flex-wrap tw:justify-center tw:gap-2">
-                <span className="luz" data-def=""><Boton data-do="importar" icono="download" onClick={importarCartera}>Importar desde Portalfirma</Boton></span>
+                <span className="luz" data-def=""><Boton data-do="importar" icono="download" onClick={importarCartera}>Importar desde Convecta</Boton></span>
                 <span className="luz"><Boton variante="secundario" data-do="nuevaProp" icono="plus" onClick={nuevaPropiedad}>Nueva propiedad</Boton></span>
               </div>
             )} />
@@ -181,7 +181,7 @@ export default function Hoy() {
             <Titulo>Tus negocios ({r.negocios.length})</Titulo>
             {r.negocios.length ? r.negocios.map((n, i) => (
               <span key={i} className="luz blk">
-                <button type="button" className="hoy-neg tw:flex tw:w-full tw:flex-col tw:gap-1.5 tw:m-0 tw:p-3.5 tw:text-left tw:cursor-pointer tw:font-[inherit] tw:text-text tw:bg-card tw:rounded-2xl tw:border tw:border-solid tw:border-edge tw:border-b-[3px] tw:border-b-edge-b tw:transition-shadow tw:hover:shadow-md"
+                <button type="button" className="hoy-neg tw:flex tw:w-full tw:flex-col tw:gap-1.5 tw:m-0 tw:p-3.5 tw:text-left tw:cursor-pointer tw:font-[inherit] tw:text-text tw:bg-card tw:rounded-card tw:border tw:border-solid tw:border-edge tw:border-b-[3px] tw:border-b-edge-b tw:transition-shadow tw:hover:shadow-md"
                   data-hneg={i} onClick={() => abrirItem(n)}>
                   <span className="tw:flex tw:w-full tw:items-center tw:gap-2"><small className="tw:flex-1 tw:text-xs tw:text-muted">{n.codigo} · {n.op}</small><Badge tono={TONO_NEG[n.estado]}>{ESTADO_NEG[n.estado]}</Badge></span>
                   <b className="tw:text-sm tw:font-semibold">{n.titulo}</b>

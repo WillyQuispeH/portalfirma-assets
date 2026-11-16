@@ -3,6 +3,7 @@
 //  · WhatsApp: tu celular vinculado (cada usuario el suyo): verlo, cambiarlo con un código nuevo o desvincularlo, para
 //    hablar con tu equipo (Pedro, Juanita, Diego, Fernanda). El administrador además enciende o apaga a Sofía, Tomás y
 //    la postventa (si el servidor no responde, la tarjeta lo dice sin bloquear la pantalla).
+//  · Usuarios (Equipo, para el corredor): el equipo de la corredora; el administrador agrega, edita y asigna claves.
 //  · Integraciones: Portalfirma, wechatia y sus canales, portales, Drive… (IntegracionesContenido).
 // Se monta en #view-integraciones (src/renderer/app.js: abrirConfiguracion(pestaña)). Marcas para las pruebas:
 // #cfgTabs [data-t], #cfgTema [data-tema], #cfgLuz [data-luz], #cfgMiWa, #cfgMiTel, #cfgVincular, #cfgCodigo, #cfgSofia, #cfgTomas.
@@ -21,10 +22,13 @@ import { useOficina, type TLuzPref } from '../../../store/hooks/useOficina.hook'
 import { useWhatsApp } from '../../../store/hooks/useWhatsApp.hook';
 import { useCuenta } from '../../../store/hooks/useCuenta.hook';
 import { IntegracionesContenido } from '../integraciones/Integraciones';
+import Usuarios from '../usuarios/Usuarios';
+import Metas from './Metas';
 
-export type TPestanaConfig = 'general' | 'whatsapp' | 'integraciones';
-const PESTANAS: [TPestanaConfig, string, undefined, string][] = [
-  ['general', 'General', undefined, 'sun'], ['whatsapp', 'WhatsApp', undefined, 'whatsapp'], ['integraciones', 'Integraciones', undefined, 'link'],
+export type TPestanaConfig = 'general' | 'whatsapp' | 'usuarios' | 'metas' | 'integraciones';
+const pestanas = (admin: boolean): [TPestanaConfig, string, undefined, string][] => [
+  ['general', 'General', undefined, 'sun'], ['whatsapp', 'WhatsApp', undefined, 'whatsapp'], ['usuarios', admin ? 'Usuarios' : 'Equipo', undefined, 'users'],
+  ...(admin ? [['metas', 'Metas', undefined, 'chart'] as [TPestanaConfig, string, undefined, string]] : []), ['integraciones', 'Integraciones', undefined, 'link'],
 ];
 
 // ---------------------------------------------------------------- General
@@ -35,12 +39,12 @@ const LUCES: [TLuzPref, string][] = [['auto', 'Automática'], ['dia', 'Mañana']
 /** botones de una sola opción (como Tabs, pero el valor se marca con data-*) */
 function Opciones<T extends string>({ id, dato, opciones, valor, alCambiar }: { id: string; dato: string; opciones: [T, string][]; valor: T; alCambiar: (v: T) => void }) {
   return (
-    <div id={id} role="radiogroup" className="tw:inline-flex tw:flex-wrap tw:gap-1 tw:p-1 tw:rounded-xl tw:bg-sunken tw:border tw:border-solid tw:border-edge">
+    <div id={id} role="radiogroup" className="tw:inline-flex tw:flex-wrap tw:gap-1 tw:p-1 tw:rounded-control tw:bg-sunken tw:border tw:border-solid tw:border-edge">
       {opciones.map(([v, t]) => {
         const on = v === valor;
         return (
           <button key={v} type="button" role="radio" aria-checked={on} {...{ [`data-${dato}`]: v }} onClick={() => alCambiar(v)}
-            className={cx(on && 'on', 'tw:h-8 tw:m-0 tw:px-3 tw:rounded-lg tw:border tw:border-solid tw:text-sm tw:font-semibold tw:cursor-pointer tw:font-[inherit]',
+            className={cx(on && 'on', 'tw:h-8 tw:m-0 tw:px-3 tw:rounded-control tw:border tw:border-solid tw:text-sm tw:font-semibold tw:cursor-pointer tw:font-[inherit]',
               on ? 'tw:bg-card tw:text-text tw:border-edge tw:border-b-2 tw:border-b-edge-b' : 'tw:bg-transparent tw:border-transparent tw:text-muted tw:hover:text-text')}>
             {t}
           </button>
@@ -117,14 +121,14 @@ function MiWhatsApp() {
             <div className="tw:flex tw:flex-col tw:gap-3">
               <p className="tw:m-0 tw:text-sm">Desde <b>tu celular</b>, envía este mensaje por WhatsApp al <b>{numero}</b>:</p>
               <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-3">
-                <b id="cfgCodigo" className="tw:px-4 tw:py-2 tw:rounded-xl tw:bg-sunken tw:border tw:border-solid tw:border-edge tw:font-mono tw:text-2xl tw:tracking-wider">{e.codigo}</b>
+                <b id="cfgCodigo" className="tw:px-4 tw:py-2 tw:rounded-control tw:bg-sunken tw:border tw:border-solid tw:border-edge tw:font-mono tw:text-2xl tw:tracking-wider">{e.codigo}</b>
                 <Boton variante="secundario" tamano="sm" icono="link" onClick={copiar}>Copiar</Boton>
               </div>
               <p className="tw:m-0 tw:flex tw:items-center tw:gap-2 tw:text-[13px] tw:text-muted"><span className="spinner sm" /> Esperando tu mensaje… (se revisa cada pocos segundos)</p>
             </div>
           ) : (
             <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-4">
-              <span className={cx('tw:grid tw:flex-none tw:place-items-center tw:w-12 tw:h-12 tw:rounded-2xl', e.telefono ? 'tw:bg-green-soft tw:text-green-softink' : 'tw:bg-gray-soft tw:text-gray-softink')}><Icono nombre="whatsapp" tam={24} /></span>
+              <span className={cx('tw:grid tw:flex-none tw:place-items-center tw:w-12 tw:h-12 tw:rounded-icono', e.telefono ? 'tw:bg-green-soft tw:text-green-softink' : 'tw:bg-gray-soft tw:text-gray-softink')}><Icono nombre="whatsapp" tam={24} /></span>
               <div className="tw:min-w-0 tw:flex-1">
                 <small className="tw:block tw:text-[13px] tw:text-muted">Tu celular</small>
                 <b id="cfgMiTel" className="tw:block tw:text-xl tw:font-bold tw:tabular-nums">{e.telefono ? fmtTel(e.telefono) : 'Sin vincular'}</b>
@@ -188,14 +192,15 @@ function WhatsApp() {
 
 export default function Configuracion({ pestana: inicial = 'general' }: { pestana?: TPestanaConfig }) {
   const [pestana, setPestana] = useState<TPestanaConfig>(inicial);
+  const { usuario } = useAcceso();
   return (
     <Layout
       id="configuracion"
       titulo="Configuración"
-      subtitulo="Tus preferencias, tu WhatsApp y las integraciones de la corredora."
-      barra={<Tabs id="cfgTabs" dato="t" etiqueta="Secciones" variante="linea" opciones={PESTANAS} valor={pestana} alCambiar={setPestana} className="tw:w-full" />}
+      subtitulo="Tus preferencias, tu WhatsApp, el equipo y las integraciones de la corredora."
+      barra={<Tabs id="cfgTabs" dato="t" etiqueta="Secciones" opciones={pestanas(usuario?.rol === 'ADMIN')} valor={pestana} alCambiar={setPestana} />}
     >
-      {pestana === 'general' ? <General /> : pestana === 'whatsapp' ? <WhatsApp /> : <IntegracionesContenido />}
+      {pestana === 'general' ? <General /> : pestana === 'whatsapp' ? <WhatsApp /> : pestana === 'usuarios' ? <Usuarios /> : pestana === 'metas' ? <Metas /> : <IntegracionesContenido />}
     </Layout>
   );
 }

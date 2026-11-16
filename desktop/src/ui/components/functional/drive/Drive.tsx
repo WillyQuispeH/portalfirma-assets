@@ -20,12 +20,12 @@ const iconoArchivo = (f: IDriveArchivo) => (f.mimeType === 'application/pdf' ? '
 
 const LISTA = 'tw:max-h-[48vh] tw:min-h-[220px] tw:overflow-auto tw:my-2.5 tw:mx-0 tw:flex tw:flex-col tw:gap-1';
 // Un archivo o carpeta (drv-item la usan las pruebas). El elegido va resaltado.
-const item = (sel: boolean) => cx('drv-item tw:flex tw:items-center tw:gap-2.5 tw:py-2 tw:px-2.5 tw:border tw:rounded-[9px] tw:cursor-pointer',
+const item = (sel: boolean) => cx('drv-item tw:flex tw:items-center tw:gap-2.5 tw:py-2 tw:px-2.5 tw:border tw:rounded-control tw:cursor-pointer',
   sel ? 'tw:bg-brand-soft tw:border-[color-mix(in_srgb,var(--brand)_40%,transparent)]' : 'tw:border-line tw:hover:bg-bg');
 const ICONO = 'tw:text-brand tw:inline-flex';
 const MARCA = 'tw:size-4 tw:m-0 tw:flex-none';
 const NOMBRE = 'drv-nm tw:flex-1 tw:min-w-0 tw:flex tw:flex-col tw:[&_b]:text-[13px] tw:[&_b]:overflow-hidden tw:[&_b]:text-ellipsis tw:[&_b]:whitespace-nowrap tw:[&_small]:text-muted tw:[&_small]:text-[11.5px]';
-const pestana = (on: boolean) => cx('tw:w-auto tw:m-0 tw:py-1.5 tw:px-3 tw:border-0 tw:rounded-[8px] tw:text-[12.5px] tw:cursor-pointer',
+const pestana = (on: boolean) => cx('tw:w-auto tw:m-0 tw:py-1.5 tw:px-3 tw:border-0 tw:rounded-control tw:text-[12.5px] tw:cursor-pointer',
   on ? 'on tw:bg-card tw:text-text tw:font-semibold tw:[box-shadow:0_1px_2px_rgba(0,0,0,.08)]' : 'tw:bg-transparent tw:text-muted');
 // textos del cuerpo: párrafo y nota en gris
 const P = 'tw:mt-0 tw:mb-3 tw:leading-relaxed';
@@ -154,7 +154,7 @@ export function Explorador({ alHacer, alDesconectar, alReconectar }: { alHacer: 
     <VentanaCabecera icono="drive" titulo="Google Drive" descripcion={<CuentaYSalir email={email} alDesconectar={alDesconectar} vacio="Conectado" />} />
     <VentanaCuerpo className="drv">
       <div className="tw:flex tw:gap-2.5 tw:items-center tw:mb-2">
-        <div className="drv-scope tw:flex tw:gap-0.5 tw:p-0.5 tw:rounded-[10px] tw:bg-bg tw:border tw:border-line tw:flex-none">
+        <div className="drv-scope tw:flex tw:gap-0.5 tw:p-0.5 tw:rounded-control tw:bg-bg tw:border tw:border-line tw:flex-none">
           <button data-sc="mine" className={pestana(ambito === 'mine' && !consulta)} onClick={() => { setQ(''); driveAmbito('mine'); }}>Mi unidad</button>
           <button data-sc="shared" className={pestana(ambito === 'shared' && !consulta)} onClick={() => { setQ(''); driveAmbito('shared'); }}>Compartidos conmigo</button>
         </div>

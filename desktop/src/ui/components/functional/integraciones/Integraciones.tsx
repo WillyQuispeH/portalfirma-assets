@@ -28,7 +28,7 @@ import type { ICanal } from '../../../store/interfaces/integraciones.interface';
 /** el logo de cada servicio: un ícono de la app (o una letra) sobre su color */
 function Logo({ icono, letra, color }: { icono?: string; letra?: string; color: string }) {
   return (
-    <span className="tw:inline-grid tw:place-items-center tw:size-10 tw:rounded-xl tw:text-white tw:font-bold tw:text-lg" style={{ background: color }}>
+    <span className="tw:inline-grid tw:place-items-center tw:size-10 tw:rounded-icono tw:text-white tw:font-bold tw:text-lg" style={{ background: color }}>
       {icono ? <Icono nombre={icono} tam={20} /> : letra}
     </span>
   );

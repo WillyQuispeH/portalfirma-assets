@@ -44,7 +44,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     e0 = (await enviados()).length; await escribe('sí');
     await esperaEnvio(/^k9\|[\s\S]*(operaci[oó]n|orden)/i, e0);
     const p2 = (await w.evaluate(() => window.pf.inmoListar().then((r) => r.data))).propiedades.find((x) => x.codigo === 'CV-9002');
-    ok((p2.firmas || []).some((f) => f.plantilla === 'Orden de visita' && f.operacion), 'al responder SÍ, genera la orden y queda en la ficha de la propiedad');
+    ok((p2.firmas || []).some((f) => /^Orden de visita/.test(f.plantilla) && f.operacion), 'al responder SÍ, genera la orden y queda en la ficha de la propiedad');
     // 5. «Pedro» lo activa; nota de voz: dictar una propiedad → resumen → (cambiar de personaje y volver) → CREAR
     e0 = (await enviados()).length; await escribe('Pedro'); await esperaEnvio(/^k9\|\*Pedro\* · Captación\nHola, soy \*Pedro\*/, e0); ok(true, 'escribir «Pedro» activa a Pedro, que se presenta');
     e0 = (await enviados()).length; await escribe('', ['mock://nota-de-voz.ogg']);

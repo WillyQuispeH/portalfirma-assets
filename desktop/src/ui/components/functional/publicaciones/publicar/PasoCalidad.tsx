@@ -101,7 +101,7 @@ export default function PasoCalidad() {
               const k = estadoItem(x);
               return (
                 <li key={x.id} className={cx(k, 'tw:flex tw:items-start tw:gap-3 tw:py-2.5 tw:border-0 tw:border-t tw:border-solid tw:border-edge')}>
-                  <span className={cx('tw:mt-0.5 tw:grid tw:size-7 tw:flex-none tw:place-items-center tw:rounded-lg', SUAVE[k === 'ok' ? 'verde' : k === 'med' ? 'amarillo' : 'rojo'])}>
+                  <span className={cx('tw:mt-0.5 tw:grid tw:size-7 tw:flex-none tw:place-items-center tw:rounded-icono', SUAVE[k === 'ok' ? 'verde' : k === 'med' ? 'amarillo' : 'rojo'])}>
                     <Icono nombre={k === 'ok' ? 'check' : 'alert'} tam={14} />
                   </span>
                   <span className="tw:flex tw:min-w-0 tw:flex-1 tw:flex-col tw:gap-0.5">

@@ -148,7 +148,7 @@ function Ficha({ r, transcripcion, alCorregir }: { r: any; transcripcion: string
         <Select etiqueta="Tipo" {...marcas('tipo')} data-k="tipo" value={t.tipo} onChange={poner('tipo')} vacia="—" opciones={TIPOS} />
         <div data-f="operacion" className={cx('dc-op tw:flex tw:flex-col tw:gap-1.5', falta('operacion') && 'falta')}>
           <span className="tw:text-[13px] tw:font-semibold">Operación</span>
-          <span className={cx('tw:flex tw:items-center tw:gap-5 tw:h-10 tw:px-3 tw:rounded-[10px] tw:border tw:border-solid tw:border-b-2',
+          <span className={cx('tw:flex tw:items-center tw:gap-5 tw:h-10 tw:px-3 tw:rounded-control tw:border tw:border-solid tw:border-b-2',
             falta('operacion') ? 'tw:border-yellow-edge tw:bg-field' : operacionDictada ? 'tw:border-edge tw:bg-lav-soft' : 'tw:border-edge tw:bg-field')}>
             <Casilla data-k="venta" checked={ck.venta} onChange={(e) => { tocar('operacion'); setV((s) => ({ ...s, ck: { ...s.ck, venta: e.target.checked } })); }}>Venta</Casilla>
             <Casilla data-k="arriendo" checked={ck.arriendo} onChange={(e) => { tocar('operacion'); setV((s) => ({ ...s, ck: { ...s.ck, arriendo: e.target.checked } })); }}>Arriendo</Casilla>

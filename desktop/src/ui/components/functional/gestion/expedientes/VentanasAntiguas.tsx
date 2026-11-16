@@ -52,7 +52,7 @@ export function NuevoExpediente({ tipos, alCrear }: { tipos: TOpciones; alCrear:
         <span className="tw:text-[13px] tw:font-semibold tw:text-text">¿Dónde se guarda?</span>
         {LUGARES.map(([v, ic, t, d]) => (
           <Opcion key={v} type="radio" name="xnSt" value={v} checked={storage === v} onChange={() => setStorage(v)}
-            className={cx('tw:py-2.5 tw:px-3 tw:border tw:border-solid tw:rounded-xl', storage === v ? 'tw:border-brand tw:bg-brand-soft' : 'tw:border-line')}>
+            className={cx('tw:py-2.5 tw:px-3 tw:border tw:border-solid tw:rounded-control', storage === v ? 'tw:border-brand tw:bg-brand-soft' : 'tw:border-line')}>
             <b className="tw:inline-flex tw:items-center tw:gap-1.5"><Icono nombre={ic} tam={14} /> {t}</b>
             <small className="tw:block tw:text-xs tw:text-muted">{d}</small>
           </Opcion>

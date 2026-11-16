@@ -7,6 +7,7 @@ import AgendaPage from './agenda/page';
 import ArriendosPage from './arriendos/page';
 import CarteraPage from './cartera/page';
 import FichaPropiedadPage from './cartera/ficha/page';
+import PortalesCarteraPage from './cartera/portales/page';
 import FichaNegocioPage from './negocios/ficha/page';
 import FichaPersonaPage from './personas/ficha/page';
 import FinanzasPage from './finanzas/page';
@@ -40,6 +41,7 @@ export const paginas: Record<string, ComponentType<any>> = {
   Arriendos: ArriendosPage, // pestaña Arriendos: abrirArriendos() en src/renderer/app.js // pestaña Agenda: abrirAgenda() en src/renderer/agenda.js
   Cartera: CarteraPage,
   FichaPropiedad: FichaPropiedadPage, // { id, vez }: Inmo.abrirFicha(id) en src/renderer/inmo.js, en #view-cartera
+  PortalesCartera: PortalesCarteraPage, // Cartera › Portales: Inmo.portales() en src/renderer/inmo.js
   FichaNegocio: FichaNegocioPage, // { n, etapas, corredores, vez, acc }: Negocios.abrirNegocio(id) en src/renderer/negocios.js, en #view-negocios
   FichaPersona: FichaPersonaPage, // { id, vez }: Inmo.abrirPersona(id) en src/renderer/inmo.js, en #view-personas
   Finanzas: FinanzasPage, // pestaña Finanzas: abrirFinanzas() en src/renderer/app.js

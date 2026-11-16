@@ -101,7 +101,7 @@ function SiguientePaso({ titulo, children, className, ...resto }: { titulo: stri
 export default function Mensaje({ m, i }: { m: IAgenteItem; i: number }) {
   switch (m.k) {
     case 'user': return (
-      <div className="ag-msg user tw:self-end tw:max-w-[85%] tw:px-4 tw:py-2.5 tw:rounded-2xl tw:rounded-br-md tw:bg-lav-soft tw:text-text tw:text-[14.5px] tw:leading-relaxed tw:break-words">
+      <div className="ag-msg user tw:self-end tw:max-w-[85%] tw:px-4 tw:py-2.5 tw:rounded-card tw:rounded-br-sm tw:bg-lav-soft tw:text-text tw:text-[14.5px] tw:leading-relaxed tw:break-words">
         {m.text.split('\n').map((l, j) => <span key={j}>{j > 0 && <br />}{l}</span>)}
       </div>
     );
@@ -132,7 +132,7 @@ export default function Mensaje({ m, i }: { m: IAgenteItem; i: number }) {
       </SiguientePaso>
     );
     case 'error': return (
-      <div className={cx('ag-msg err tw:flex tw:items-start tw:gap-2 tw:px-3.5 tw:py-2.5 tw:rounded-xl tw:bg-red-soft tw:text-red-softink tw:text-[13.5px]', SANGRIA)}>
+      <div className={cx('ag-msg err tw:flex tw:items-start tw:gap-2 tw:px-3.5 tw:py-2.5 tw:rounded-control tw:bg-red-soft tw:text-red-softink tw:text-[13.5px]', SANGRIA)}>
         <Icono nombre="alert" tam={14} /> <span>{m.text}</span>
       </div>
     );

@@ -1,10 +1,10 @@
 // Etapas del negocio (0.15): cada operación se ve en 3 etapas con sus pasos, y cada paso en uno de cuatro estados:
-//   ok (logrado) · pend (pendiente: te toca, o «esperando a» otro) · fail (no logrado: vencido o caído) · todo (por hacer).
+//   ok (logrado) · pend (pendiente: te toca, o esperando a otro —eso lo deduce Asset: firmas, confirmaciones—) · fail (no logrado: vencido o caído) · todo (por hacer).
 //  1. Captación (de la propiedad): datos, mandato firmado, fotos, publicada.
 //  2. Comercialización (del negocio): interesado, visita, orden de visita, acta de visita, negociación, carta oferta firmada.
 //  3. Postventa (lo que viene después de la carta oferta; así lo llama The Living): venta; en un arriendo se llama Postarriendo.
 // Los estados se deducen de lo que ya registra Asset (firmas, tareas, agenda, fotos, portales). El ejecutivo puede
-// además marcar a mano un paso como logrado, no logrado o «esperando a…»; eso queda en n.pasos (o p.pasos).
+// además marcar a mano un paso como logrado o no logrado (o volver a lo automático); eso queda en n.pasos (o p.pasos).
 const inmo = require('./inmo');
 
 // 0.16.14 · la ficha se pide en 5 bloques (ficha-campos.js): cada bloque es un paso de la captación
@@ -22,10 +22,10 @@ const CAPT = [
 const COM = [
   { id: 'interesado', t: 'Interesado registrado', a: 'Crear el negocio', tipo: 'negocio' },
   { id: 'visita', t: 'Visita agendada', a: 'Agendar visita', tipo: 'agente', pedir: (c) => `Agenda una visita${c.cliente ? ' con ' + c.cliente : ''} en ${c.codigo}` },
-  { id: 'orden', t: 'Orden de visita firmada', a: 'Enviar orden de visita', tipo: 'agente', pedir: (c) => `Hazme la orden de visita${c.cliente ? ' para ' + c.cliente : ''} en ${c.codigo}` },
+  { id: 'orden', t: 'Orden de visita', a: 'Enviar orden de visita', tipo: 'agente', pedir: (c) => `Hazme la orden de visita${c.cliente ? ' para ' + c.cliente : ''} en ${c.codigo}` },
   { id: 'acta', t: 'Acta de visita', a: 'Hacer el acta de visita', tipo: 'acta' },
   { id: 'negociacion', t: 'Negociación', a: 'Marcar como logrado', tipo: 'ok' },
-  { id: 'carta', t: 'Carta oferta firmada', a: 'Enviar carta oferta a firmar', tipo: 'firma', etapa: 'reserva' },
+  { id: 'carta', t: 'Carta oferta', a: 'Enviar carta oferta a firmar', tipo: 'firma', etapa: 'reserva' },
 ];
 const POST = {
   venta: [
@@ -39,17 +39,35 @@ const POST = {
     { id: 'comision', t: 'Comisión cobrada', a: 'Marcar como logrado', tipo: 'ok', tarea: ['entrega', 1] },
     { id: 'cierre', t: 'Cierre de la operación', a: 'Cerrar con éxito', tipo: 'cerrar' },
   ],
-  arriendo: [
-    { id: 'garantia', t: 'Garantía o reserva pagada', a: 'Marcar como logrado', tipo: 'ok', tarea: ['reserva', 0] },
-    { id: 'evaluacion', t: 'Evaluación del arrendatario', a: 'Solicitar documentación', tipo: 'evaluar', tareas: ['evaluacion', [0, 1, 2]] },
-    { id: 'documentos', t: 'Revisión de documentos', a: 'Marcar como logrado', tipo: 'ok' },
-    { id: 'contrato', t: 'Contrato de arriendo firmado', a: 'Enviar contrato a firmar', tipo: 'firma', etapa: 'contrato' },
-    { id: 'entrega', t: 'Entrega con acta', a: 'Enviar acta a firmar', tipo: 'firma', etapa: 'entrega' },
-    { id: 'comision', t: 'Comisión cobrada', a: 'Marcar como logrado', tipo: 'ok', tarea: ['entrega', 1] },
-    { id: 'cierre', t: 'Cierre de la operación', a: 'Cerrar con éxito', tipo: 'cerrar' },
-  ],
 };
+// ARRIENDO · 3 etapas (0.18.10): 1 Comercialización, 2 Cierre del arriendo y 3 Postarriendo. Los pasos de la etapa 3 los avisa Asset
+// cuando corresponden (reajuste, renovación, devolución de la garantía): no son «el siguiente paso» mientras no toquen.
+const COM_ARR = [
+  { id: 'interesado', t: 'Interesado registrado', a: 'Crear el negocio', tipo: 'negocio' },
+  { id: 'visita', t: 'Visita agendada', a: 'Agendar visita', tipo: 'agente', pedir: (c) => `Agenda una visita${c.cliente ? ' con ' + c.cliente : ''} en ${c.codigo}` },
+  { id: 'orden', t: 'Orden de visita', a: 'Enviar orden de visita', tipo: 'agente', pedir: (c) => `Hazme la orden de visita${c.cliente ? ' para ' + c.cliente : ''} en ${c.codigo}` },
+  { id: 'acta', t: 'Acta de visita', a: 'Hacer el acta de visita', tipo: 'acta' },
+  { id: 'carta', t: 'Carta oferta', a: 'Enviar carta oferta a firmar', tipo: 'firma', etapa: 'oferta' },   // 'oferta' no es una etapa del embudo: firmarla no mueve el negocio
+  { id: 'aceptacion', t: 'Aceptación del propietario', a: 'Registrar la respuesta', tipo: 'aceptacion' },
+];
+const CIERRE_ARR = [
+  { id: 'reserva_pago', t: 'Reserva pagada', a: 'Registrar el pago', tipo: 'pago', tarea: ['reserva', 0] },
+  { id: 'evaluacion', t: 'Evaluación del arrendatario', a: 'Solicitar documentación', tipo: 'evaluar', tareas: ['evaluacion', [0, 1, 2]] },
+  { id: 'revision', t: 'Revisión del contrato', a: 'Armar y revisar el contrato', tipo: 'revision' },
+  { id: 'contrato', t: 'Contrato firmado', a: 'Enviar contrato a firmar', tipo: 'firma', etapa: 'contrato' },
+  { id: 'garantia_mes', t: 'Garantía y primer mes recibidos', a: 'Registrar los pagos', tipo: 'pago', tarea: ['contrato', 0] },
+  { id: 'entrega', t: 'Entrega con acta e inventario', a: 'Hacer el acta de entrega', tipo: 'firma', etapa: 'entrega_acta' },   // fuera del embudo: al firmarse la propiedad queda «Arrendada»
+  { id: 'comision', t: 'Comisión facturada y cobrada', a: 'Facturar y registrar el pago', tipo: 'pago', tarea: ['entrega', 1] },
+];
+const POSTARR = [
+  { id: 'reajustes', t: 'Reajustes', a: 'Registrar el reajuste', tipo: 'post' },
+  { id: 'renovacion', t: 'Renovación o término', a: 'Decidir la renovación', tipo: 'post' },
+  { id: 'devolucion', t: 'Devolución de la garantía', a: 'Registrar la devolución', tipo: 'post' },
+];
 const NOMBRES = ['Captación', 'Comercialización', 'Postventa'];
+const NOMBRES_ARR = ['Captación', 'Comercialización', 'Cierre del arriendo', 'Postarriendo'];
+const IDS_ETAPA = ['captacion', 'comercializacion', 'postventa'];
+const IDS_ETAPA_ARR = ['captacion', 'comercializacion', 'cierre', 'postarriendo'];
 const now = () => new Date().toISOString();
 const hoy = () => require('./hora').hoy();
 const fdm = (f) => (f ? `${f.slice(8, 10)}/${f.slice(5, 7)}` : '');
@@ -58,12 +76,13 @@ const ORDEN_ETAPA = { venta: ['interes', 'visita', 'reserva', 'promesa', 'escrit
 function crear({ agenda = null, formatos = null } = {}) {
   const firmaProp = (p, re) => { const fs = (p?.firmas || []).filter((f) => re.test(f.plantilla || '')); return fs.find((f) => f.estado === 'firmado') || fs[0] || null; };
   const publicada = (p) => !!p && (p.publicada || Object.values(p.portales || {}).some((x) => Object.values(x || {}).some((a) => a && a.status === 'active')));
-  const visitas = (p, n) => { try { return agenda ? agenda.listar({ propId: p?.id, tipo: 'visita' }).filter((e) => !n?.clienteId || !(e.personaIds || []).length || e.personaIds.includes(n.clienteId) || e.negocioId === n.id) : []; } catch { return []; } };
+  // las visitas de ESTE negocio: las ligadas a él, o (viejas, sin negocio) las de su cliente en la misma propiedad
+  const visitas = (p, n) => { try { return agenda && p ? agenda.listar({ propId: p.id, tipo: 'visita' }).filter((e) => (n?.id && e.negocioId === n.id) || (!e.negocioId && n?.clienteId && (e.personaIds || []).includes(n.clienteId))) : []; } catch { return []; } };
 
   // estado automático de un paso según lo que ya hay en Asset → { e, f, d, q, quien } o null (sin evidencia)
   function auto(def, p, n) {
     const tarea = (et, i) => !!n?.tareas?.[et]?.[i];
-    const ord = n ? ORDEN_ETAPA[n.tipo]?.indexOf(n.etapa) ?? -1 : -1; const pasado = (et) => n && (n.estado === 'ganado' || ord > (ORDEN_ETAPA[n.tipo] || []).indexOf(et));
+    const ord = n ? ORDEN_ETAPA[n.tipo]?.indexOf(n.etapa) ?? -1 : -1; const pasado = (et) => n && (n.estado === 'ganado' || ((ORDEN_ETAPA[n.tipo] || []).indexOf(et) >= 0 && ord > (ORDEN_ETAPA[n.tipo] || []).indexOf(et)));
     switch (def.id) {
       case 'datos': case 'portal': case 'legal': case 'equip': case 'comovisitar': {
         if (!p) return null; const b = FC.avance(p).find((x) => x.id === def.bloque);
@@ -86,9 +105,68 @@ function crear({ agenda = null, formatos = null } = {}) {
       case 'fotos': return (p?.fotos || []).length ? { e: 'ok', f: null, d: `${p.fotos.length} fotos` } : null;
       case 'publicada': return publicada(p) ? { e: 'ok' } : null;
       case 'interesado': return n?.clienteId ? { e: 'ok', f: n.creado } : null;
-      case 'visita': { const v = visitas(p, n); return v.length || tarea('visita', 0) || pasado('visita') ? { e: 'ok', f: v[0] ? v[0].fecha : null, d: v[0] ? `Visita del ${fdm(v[0].fecha)}${v[0].hora ? ' a las ' + v[0].hora : ''}` : '' } : null; }
-      case 'orden': { const f = firmaProp(p, /orden de visita/i); return !f ? (pasado('reserva') ? { e: 'ok' } : null) : f.estado === 'firmado' ? { e: 'ok', f: f.firmado || f.fecha } : { e: 'pend', q: 'otro', quien: 'la firma del visitante', d: `Enviada el ${fdm(f.fecha)}${f.operacion ? ' · operación ' + f.operacion : ''}.` }; }
+      case 'visita': { // logrado solo cuando la visita ya se hizo; agendada a futuro queda «esperando»; pasada sin marcar o cancelada, no lograda
+        const vs = visitas(p, n); const h = hoy(); const ah = require('./hora').ahora(); const cuando = (e) => `${fdm(e.fecha)}${e.hora ? ' a las ' + e.hora : ''}`;
+        const hecha = vs.filter((e) => e.estado === 'hecho').pop();
+        if (hecha || tarea('visita', 1) || pasado('visita')) return { e: 'ok', f: hecha ? hecha.fecha : null, d: hecha ? `Visita realizada el ${cuando(hecha)}` : '' };
+        const prog = vs.filter((e) => e.estado === 'programado');
+        const futura = prog.find((e) => e.fecha > h || (e.fecha === h && (e.hora || '23:59') >= ah));
+        // el arrendatario respondió que sí a la plantilla de WhatsApp: el paso queda logrado
+        const conf = (e) => e.confirmacion?.estado;   // 'enviada' | 'confirmada' | 'cambio' (las confirmaciones manuales antiguas no traen estado)
+        const confirmada = prog.find((e) => conf(e) === 'confirmada' && (e.fecha > h || (e.fecha === h && (e.hora || '23:59') >= ah)));
+        if (confirmada) return { e: 'ok', f: confirmada.confirmacion.respondioEn || confirmada.fecha, d: `Visita del ${cuando(confirmada)} · confirmada por ${confirmada.confirmacion.nombre || 'el cliente'}` };
+        if (futura) {
+          const c = futura.confirmacion;
+          if (c?.estado === 'cambio') return { e: 'fail', d: `${c.nombre || 'El cliente'} pidió cambiar la visita del ${cuando(futura)}${c.respuesta ? ': «' + c.respuesta + '»' : ''}. Reprográmala.` };
+          return { e: 'pend', q: 'otro', quien: c?.estado === 'enviada' ? `la respuesta de ${c.nombre || 'el cliente'}` : 'la confirmación', vence: futura.fecha, d: `Visita agendada el ${cuando(futura)}${c?.estado === 'enviada' ? ' · confirmación enviada por WhatsApp' : ' · sin confirmar'}` };
+        }
+        if (prog.length) return { e: 'fail', d: `La visita del ${cuando(prog[prog.length - 1])} ya pasó: márcala como realizada o reprográmala.` };
+        if (vs.length) return { e: 'fail', d: `La visita del ${cuando(vs[vs.length - 1])} se canceló.` };
+        return null; }
+      case 'orden': case 'acta': { // la firma de ESTE negocio (ligada a él, o suelta pero del mismo cliente): firmada → logrado; enviada → esperando al visitante
+        const re = def.id === 'orden' ? /orden de visita/i : /^acta de visita/i;
+        const cli = n?.clienteId ? inmo.personaPorId(n.clienteId) : null; const rutC = cli?.rut ? inmo.fmtRut(cli.rut) : null;
+        const suyas = (p?.firmas || []).filter((x) => re.test(x.plantilla || '') && ((n?.id && x.negocioId === n.id) || (!x.negocioId && (x.firmantes || []).some((s) => (n?.clienteId && s.personaId === n.clienteId) || (rutC && s.rut && inmo.fmtRut(s.rut) === rutC)))));
+        const f = suyas.find((x) => x.estado === 'firmado') || suyas[0] || null;
+        if (!f) return def.id === 'orden' && pasado('reserva') ? { e: 'ok' } : null;   // el acta sin firma: la deja pendiente el servidor al cerrarla
+        return f.estado === 'firmado' ? { e: 'ok', f: f.firmado || f.fecha, d: `Firmada${f.operacion ? ' · operación ' + f.operacion : ''}` } : { e: 'pend', q: 'otro', quien: 'la firma del visitante', d: `Enviada el ${fdm(f.fecha)}${f.operacion ? ' · operación ' + f.operacion : ''}.` }; }
       case 'negociacion': return tarea('reserva', 0) && n.tipo === 'venta' || pasado('visita') && n?.firmas?.reserva ? { e: 'ok' } : null;
+      case 'aceptacion': { // la última ronda de la negociación: aceptada → logrado; rechazada → no logrado; contraoferta → falta la respuesta del interesado
+        const rs = n?.aceptacion?.rondas || []; const u = rs[rs.length - 1]; if (!u) return null;
+        if (u.tipo === 'aceptada') return { e: 'ok', f: u.fecha, d: 'Aceptada con las condiciones finales.' };
+        if (u.tipo === 'rechazada') return { e: 'fail', d: `${u.por === 'interesado' ? 'El interesado desistió' : 'El propietario rechazó la oferta'}${u.nota ? ': ' + u.nota : ''}.` };
+        if (u.tipo === 'contraoferta') return { e: 'pend', q: 'tu', d: 'El propietario hizo una contraoferta: falta la respuesta del interesado.' };
+        return { e: 'pend', q: 'otro', quien: 'la respuesta del propietario', d: 'Oferta presentada al propietario.' }; }
+      case 'reserva_pago': case 'garantia_mes': case 'comision': { // arriendo: pagos que se registran con monto, fecha y comprobante (n.ciclo: ojo, n.cierre es el registro del cierre ganado/perdido)
+        if (n?.tipo !== 'arriendo') break;
+        const c = n.ciclo || {}; const pg = c.pagos || {}; const mf = (x) => `${x.moneda === 'UF' ? 'UF ' : x.moneda === 'USD' ? 'US$ ' : '$'}${Number(x.monto).toLocaleString('es-CL')}`;
+        if (def.id === 'reserva_pago') return pg.reserva ? { e: 'ok', f: pg.reserva.fecha, d: `Pagada el ${fdm(pg.reserva.fecha)} · ${mf(pg.reserva)}` } : null;
+        if (def.id === 'garantia_mes') { if (pg.garantia && pg.primerMes) return { e: 'ok', f: [pg.garantia.fecha, pg.primerMes.fecha].sort().pop(), d: 'Garantía y primer mes recibidos' }; if (pg.garantia || pg.primerMes) return { e: 'pend', q: 'tu', d: `Falta registrar ${pg.garantia ? 'el primer mes' : 'la garantía'}.` }; return null; }
+        const co = c.comision || {}; if (co.pago) return { e: 'ok', f: co.pago.fecha, d: `Cobrada el ${fdm(co.pago.fecha)} · ${mf(co.pago)}` };
+        if (co.factura) return { e: 'pend', q: 'otro', quien: 'el pago de la comisión', d: `Factura ${co.factura.numero ? 'nº ' + co.factura.numero + ' ' : ''}emitida el ${fdm(co.factura.fecha)}.` };
+        return co.facturaFecha ? { e: 'pend', q: 'tu', vence: co.facturaFecha, d: `Facturar la comisión el ${fdm(co.facturaFecha)}.` } : null; }
+      case 'reajustes': case 'renovacion': case 'devolucion': { // postarriendo: avisos que salen de las condiciones del contrato (n.ciclo.contrato.datos) y de lo registrado en n.ciclo.postarriendo
+        if (n?.tipo !== 'arriendo') break;
+        const k = n.ciclo?.contrato?.datos; const po = n.ciclo?.postarriendo || {}; if (!k?.inicio || !k.plazoMeses) return null;
+        const mas = (f, m, d = 0) => { const x = new Date(f + 'T12:00:00'); x.setMonth(x.getMonth() + m); x.setDate(x.getDate() + d); return new Date(x.getTime() - x.getTimezoneOffset() * 6e4).toISOString().slice(0, 10); };
+        const extra = po.renovacion?.decision === 'renovar' ? Number(po.renovacion.meses) || 0 : 0; const termino = mas(k.inicio, Number(k.plazoMeses) + extra); const limite = mas(termino, 0, -(Number(k.avisoDias) || 0));
+        const h = hoy(); const en30 = mas(h, 0, 30); const estado = (vence, d) => vence < h ? { e: 'fail', q: 'tu', vence, d: d + ' · vencido' } : vence <= en30 ? { e: 'pend', q: 'tu', vence, d } : { e: 'todo', vence, d };
+        if (def.id === 'reajustes') {
+          const per = { ipc_semestral: 6, ipc_anual: 12 }[k.reajuste] || 0; if (!per) return { e: 'ok', d: 'El contrato no se reajusta por IPC.' };
+          const rs = po.reajustes || []; const prox = mas(rs.length ? rs[rs.length - 1].desde : k.inicio, per);
+          if (prox >= termino) return rs.length ? { e: 'ok', f: rs[rs.length - 1].registrado, d: `${rs.length} reajuste${rs.length === 1 ? '' : 's'} aplicado${rs.length === 1 ? '' : 's'}; no quedan en el plazo.` } : { e: 'ok', d: 'No hay reajustes dentro del plazo.' };
+          return estado(prox, `Reajuste por IPC el ${fdm(prox)}${rs.length ? ' · ' + rs.length + ' aplicado' + (rs.length === 1 ? '' : 's') : ''}.`); }
+        if (def.id === 'renovacion') {
+          if (po.renovacion) return { e: 'ok', f: po.renovacion.fecha, d: po.renovacion.decision === 'renovar' ? `Renovado por ${po.renovacion.meses} meses (hasta el ${fdm(termino)}).` : 'Término del contrato acordado.' };
+          return estado(limite, `El contrato termina el ${fdm(termino)}: avisar hasta el ${fdm(limite)}.`); }
+        if (po.devolucion) return { e: 'ok', f: po.devolucion.fechaDevolucion, d: `Garantía devuelta el ${fdm(po.devolucion.fechaDevolucion)}.` };
+        if (po.renovacion?.decision === 'termino' || h >= termino) return estado(mas(termino, 0, 30), `Devolver la garantía (el contrato termina el ${fdm(termino)}).`);
+        return { e: 'todo', d: `Al término del contrato (${fdm(termino)}).` }; }
+      case 'revision': { // arriendo: el texto del contrato lo aprueba CADA firmante (propietarios, arrendatario y codeudores): n.ciclo.contrato
+        const k = n?.ciclo?.contrato; const v = (k?.versiones || []).slice(-1)[0]; if (!v) return null; const fs = v.firmantes || []; const ap = k.aprobado || {};
+        const faltan = fs.filter((q) => !ap[q.personaId]);
+        if (fs.length && !faltan.length) return { e: 'ok', f: fs.map((q) => ap[q.personaId]).sort().pop(), d: `Texto final aprobado (V${v.n}) por todos los firmantes.` };
+        return { e: 'pend', q: 'tu', d: fs.length ? `V${v.n}: falta que aprueben ${faltan.map((q) => q.nombre).join(', ')}.` : `V${v.n}: sin firmantes registrados.` }; }
       case 'cierre': return n?.estado === 'ganado' ? { e: 'ok', f: n.cierre?.fecha || n.actualizado } : null;
       default: break;
     }
@@ -109,10 +187,12 @@ function crear({ agenda = null, formatos = null } = {}) {
     const ctx = { codigo: p?.codigo || '', cliente };
     const manual = { ...(p?.pasos || {}), ...(n?.pasos || {}) };
     let actual = null;
-    const defs = ambito === 'captacion' ? [[CAPT, 0]] : [[COM, 1], [POST[tipo] || POST.venta, 2]];
-    const etapas = defs.map(([lista, k]) => ({ id: ['captacion', 'comercializacion', 'postventa'][k], nombre: k === 2 && tipo === 'arriendo' ? 'Postarriendo' : NOMBRES[k], pasos: lista.map((def) => {
+    const defs = ambito === 'captacion' ? [[CAPT, 0]] : tipo === 'arriendo' ? [[COM_ARR, 1], [CIERRE_ARR, 2], [POSTARR, 3, true]] : [[COM, 1], [POST.venta, 2]];   // el 3.º: los avisa Asset
+    const etapas = defs.map(([lista, k, aviso]) => ({ id: (tipo === 'arriendo' ? IDS_ETAPA_ARR : IDS_ETAPA)[k], nombre: (tipo === 'arriendo' ? NOMBRES_ARR : NOMBRES)[k], aviso: !!aviso, pasos: lista.map((def) => {
       const a = auto(def, p, n); const m = manual[def.id];
       let x = { id: def.id, t: def.t, e: 'todo', f: null, d: '', q: 'tu', quien: '', vence: null, accion: def.a, tipo: def.tipo, etapaFirma: def.etapa || null, pedir: def.pedir ? def.pedir(ctx) : null, manual: !!m };
+      if (def.id === 'visita' && n) Object.assign(x, { accion: 'Agendar visita', tipo: 'visita', clienteId: n.clienteId || '' });   // se agenda, confirma y reprograma dentro del modal del paso
+    if (def.id === 'interesado' && n) Object.assign(x, { accion: n.clienteId ? (tipo === 'venta' ? 'Cambiar comprador' : 'Cambiar arrendatario') : (tipo === 'venta' ? 'Vincular comprador' : 'Vincular arrendatario'), tipo: 'cliente', clienteRol: tipo === 'venta' ? 'comprador' : 'arrendatario', clienteId: n.clienteId || '' });   // el negocio ya existe: falta el cliente, no otro negocio
       if (a?.e === 'ok') Object.assign(x, a, { e: 'ok' });
       else if (m?.e) Object.assign(x, { e: m.e, f: m.f || null, d: m.d || '', q: m.quien ? 'otro' : 'tu', quien: m.quien || '', vence: m.vence || null });
       else if (a) Object.assign(x, a);
@@ -120,7 +200,7 @@ function crear({ agenda = null, formatos = null } = {}) {
       return x;
     }) }));
     // el actual: el primer paso no logrado; los anteriores sin evidencia quedan como «saltados» (logrados si hay pasos posteriores logrados)
-    const plano = etapas.flatMap((e, ei) => e.pasos.map((x, pi) => ({ x, ei, pi })));
+    const plano = etapas.flatMap((e, ei) => (e.aviso ? [] : e.pasos.map((x, pi) => ({ x, ei, pi }))));
     let ultimoOk = -1; plano.forEach((y, i) => { if (y.x.e === 'ok') ultimoOk = i; });
     // en la captación cada paso es independiente (puede haber fotos sin mandato): no se da nada por cumplido
     if (ambito !== 'captacion') plano.forEach((y, i) => { if (i < ultimoOk && y.x.e === 'todo') { y.x.e = 'ok'; y.x.d = y.x.d || 'Sin registro (se dio por cumplido)'; y.x.implicito = true; } });
@@ -132,7 +212,8 @@ function crear({ agenda = null, formatos = null } = {}) {
       if (actual.e === 'pend' && actual.q === 'tu' && actual.vence && actual.vence < hoy()) { sig.x.e = actual.e = 'fail'; sig.x.d = actual.d = `${actual.d ? actual.d + ' · ' : ''}Venció el ${fdm(actual.vence)}.`; actual.vencido = sig.x.vencido = true; }
       if (n?.estado === 'perdido') { sig.x.e = actual.e = 'fail'; sig.x.d = actual.d = 'Negocio perdido' + (n.motivoPerdida ? ': ' + n.motivoPerdida : '') + '.'; actual.perdido = true; }
       if (actual.e === 'fail' && !actual.perdido) sig.x.accion = actual.accion = actual.vencido || actual.id === 'visita' ? 'Reprogramar' : 'Reintentar';
-      if (actual.e === 'pend' && actual.q === 'otro') { sig.x.accion = actual.accion = actual.tipo === 'firma' ? 'Revisar firmas' : 'Ver detalle'; sig.x.tipo = actual.tipo = actual.tipo === 'firma' ? 'revisar' : 'ver'; }
+      if (actual.e === 'pend' && actual.q === 'otro' && actual.id === 'visita') sig.x.accion = actual.accion = 'Ver visita';   // conserva su modal (confirmar, reprogramar, marcar realizada)
+      else if (actual.e === 'pend' && actual.q === 'otro') { sig.x.accion = actual.accion = actual.tipo === 'firma' ? 'Revisar firmas' : 'Ver detalle'; sig.x.tipo = actual.tipo = actual.tipo === 'firma' ? 'revisar' : 'ver'; }
     }
     for (const e of etapas) { e.ok = e.pasos.filter((x) => x.e === 'ok').length; e.total = e.pasos.length; e.fail = e.pasos.some((x) => x.e === 'fail'); e.completa = e.ok === e.total; e.actual = !!actual && etapas.indexOf(e) === actual.ei; }
     return { tipo, ambito, etapas, actual, cerrado: !actual, ctx };
@@ -143,7 +224,7 @@ function crear({ agenda = null, formatos = null } = {}) {
     const ok = ['ok', 'fail', 'pend', null].includes(estado); if (!ok) throw new Error('Estado no válido.');
     const tgt = negocioId ? inmo.negocios().find((x) => x.id === negocioId) : inmo.todas().find((x) => x.id === propId);
     if (!tgt) throw new Error(negocioId ? 'El negocio ya no existe.' : 'La propiedad ya no existe.');
-    const def = [...CAPT, ...COM, ...POST.venta, ...POST.arriendo].find((x) => x.id === paso); if (!def) throw new Error('Paso desconocido.');
+    const def = [...CAPT, ...COM, ...POST.venta, ...COM_ARR, ...CIERRE_ARR, ...POSTARR].find((x) => x.id === paso); if (!def) throw new Error('Paso desconocido.');
     tgt.pasos ||= {};
     if (estado == null) delete tgt.pasos[paso];
     else tgt.pasos[paso] = { e: estado, f: estado === 'ok' ? now() : null, d: String(d || '').slice(0, 240), quien: String(quien || '').slice(0, 80), vence: /^\d{4}-\d{2}-\d{2}$/.test(vence || '') ? vence : null };
@@ -168,10 +249,18 @@ function crear({ agenda = null, formatos = null } = {}) {
       const a = r.actual; const segs = r.etapas.map((e) => ({ ok: e.ok, total: e.total, pct: Math.round((e.ok / e.total) * 100), completa: e.completa, fail: e.fail, actual: e.actual }));
       const base = { ...o, etapa: a ? (o.captacion ? `Captación · ${a.t}` : `Etapa ${a.ei + 1} · ${a.etapa}`) : 'Cerrado', segs };
       lista.push({ ...base, estado: !a ? 'cerrado' : a.e === 'fail' ? 'atencion' : a.q === 'otro' ? 'esperando' : 'tetoca' });
-      if (a) items.push({ ...base, paso: a.t, pasoId: a.id, d: a.d, vence: a.vence, quien: a.quien, accion: a.accion, tipo: a.tipo, etapaFirma: a.etapaFirma, pedir: a.pedir, clase: a.e === 'fail' ? 'atencion' : a.q === 'otro' ? 'esperando' : 'tetoca', hoy: a.vence === hoy() });
+      if (a) items.push({ ...base, paso: a.t, pasoId: a.id, d: a.d, vence: a.vence, quien: a.quien, accion: a.accion, tipo: a.tipo, etapaFirma: a.etapaFirma, pedir: a.pedir, clienteId: a.clienteId, clienteRol: a.clienteRol, clase: a.e === 'fail' ? 'atencion' : a.q === 'otro' ? 'esperando' : 'tetoca', hoy: a.vence === hoy() });
     };
     for (const n of negs) { const p = props.find((x) => x.id === n.propId); const c = n.clienteId ? inmo.personaPorId(n.clienteId) : null;
       add({ negocioId: n.id, propId: p?.id || null, codigo: p?.codigo || '', titulo: p?.titulo || 'Negocio', cliente: c?.nombre || '', op: n.tipo === 'venta' ? 'Venta' : 'Arriendo' }, pasos({ n, p })); }
+    // el postarriendo: los avisos (reajuste, renovación o término, devolución de la garantía) de los arriendos ya ganados entran a «Hoy» cuando tocan o vencieron
+    for (const n of inmo.negocios().filter((x) => x.estado === 'ganado' && x.tipo === 'arriendo')) {
+      const p = props.find((x) => x.id === n.propId); const c = n.clienteId ? inmo.personaPorId(n.clienteId) : null; const r = pasos({ n, p });
+      const segs = r.etapas.map((e) => ({ ok: e.ok, total: e.total, pct: Math.round((e.ok / e.total) * 100), completa: e.completa, fail: e.fail, actual: e.aviso && e.pasos.some((y) => y.e === 'pend' || y.e === 'fail') }));
+      for (const e of r.etapas.filter((y) => y.aviso)) for (const a of e.pasos.filter((y) => y.e === 'pend' || y.e === 'fail')) {
+        items.push({ negocioId: n.id, propId: p?.id || null, codigo: p?.codigo || '', titulo: p?.titulo || 'Negocio', cliente: c?.nombre || '', op: 'Arriendo', etapa: 'Etapa 4 · Postarriendo', segs, paso: a.t, pasoId: a.id, d: a.d, vence: a.vence, quien: a.quien, accion: a.accion, tipo: a.tipo, clase: a.e === 'fail' ? 'atencion' : a.q === 'otro' ? 'esperando' : 'tetoca', hoy: a.vence === hoy(), aviso: true });
+      }
+    }
     for (const p of props) { const r = pasos({ p, ambito: 'captacion' }); if (!r.actual) continue; // la captación va aparte del negocio: solo las que no la completan
       add({ negocioId: null, propId: p.id, codigo: p.codigo, titulo: p.titulo, cliente: '', op: `Captación · ${p.venta && p.arriendo ? 'venta y arriendo' : p.venta ? 'venta' : 'arriendo'}`, captacion: true }, r); }
     const orden = (x) => (x.vence || '9999') + x.codigo;
@@ -186,4 +275,4 @@ function crear({ agenda = null, formatos = null } = {}) {
   return { pasos, marcar, resumenHoy, NOMBRES };
 }
 
-module.exports = { crear, CAPT, COM, POST };
+module.exports = { crear, CAPT, COM, POST, COM_ARR, CIERRE_ARR, POSTARR };

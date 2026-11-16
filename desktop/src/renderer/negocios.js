@@ -56,7 +56,7 @@ async function abrirNegocio(id) {
   const revisarYVolver = async () => { try { const r = await api('negFirmasRevisar', id); if (r.mensajes.length) toast(r.mensajes.join(' '), 6000); } catch (er) { toast(er.message, 5000); } await alDia(); };
   const acc = {
     volver: () => abrirNegocios(),
-    pasos: (el) => window.Etapas?.bloque(el, { negocioId: id, alCambiar: alDia }),
+    pasos: (el) => window.Etapas?.bloque(el, { negocioId: id, alCambiar: alDia, foco: true }),
     mover: (etapa) => ngMover(id, etapa, recargar),
     tarea: async (i, hecha) => { await api('negTarea', id, n.etapa, i, hecha); recargar(); },
     siguiente: () => {
@@ -74,7 +74,7 @@ async function abrirNegocio(id) {
     corredor: intentar(async (c) => { await api('negCorredor', id, c || null); toast('Negocio reasignado. Queda en su historial.'); }),
     proximaAccion: async (texto, fecha) => { await api('negGuardar', { id, proximaAccion: { texto, fecha } }); toast('Próxima acción guardada.'); await alDia(); },
     nota: async (t) => { await api('negNota', id, t); recargar(); },
-    condiciones: async (c) => { await api('negGuardar', { id, valor: { valor: c.valor, moneda: c.moneda }, comision: { tipo: c.tipoComision, valor: c.comision } }); toast('Condiciones guardadas.'); await alDia(); },
+    condiciones: async (c) => { await api('negGuardar', { id, valor: { valor: c.valor, moneda: c.moneda }, comision: { tipo: c.tipoComision, valor: c.comision }, cierreEstimado: c.cierreEstimado || null, ...(c.pagada !== undefined ? { comisionPagada: c.pagada ? { fecha: c.pagada } : null } : {}) }); toast('Condiciones guardadas.'); await alDia(); },
     enviarFirma: () => enviarDocumento(n),
     vincularFirma: () => window.Ventanas.abrir('negocios.vincularFirma', {
       firma: e.firma,

@@ -15,7 +15,7 @@ import { cx } from '../../../utils/cx';
 
 // lista de herramientas o de actividad: .ag-tl con un div por fila (las pruebas cuentan «.ag-tl > div»)
 const LISTA = 'ag-tl tw:flex tw:flex-col tw:gap-1.5 tw:m-0 tw:min-w-0';
-const FILA = 'tw:flex tw:flex-col tw:gap-0.5 tw:min-w-0 tw:py-2 tw:px-2.5 tw:rounded-[10px] tw:bg-bg';
+const FILA = 'tw:flex tw:flex-col tw:gap-0.5 tw:min-w-0 tw:py-2 tw:px-2.5 tw:rounded-control tw:bg-bg';
 const CODIGO = 'tw:text-[11px] tw:text-brand tw:break-all';
 const CHICO = 'tw:text-[11.5px] tw:text-muted tw:leading-snug tw:break-words';
 

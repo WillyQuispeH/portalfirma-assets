@@ -46,6 +46,9 @@ export interface INegocio {
   proximaAccion?: { texto: string; fecha: string | null } | null;
   siguiente?: string | null; // «¿qué sigue?» en la etapa actual (solo abiertos)
   vencida?: boolean; // la próxima acción ya pasó
+  cierreEstimado?: string | null; // 'YYYY-MM-DD': cuándo se espera cerrar (proyección del Panel)
+  comisionPagada?: { fecha: string } | null; // venta: cuándo se pagó la comisión
+  ciclo?: { comision?: { pago?: { fecha: string; monto?: number; moneda?: string } } }; // arriendo: la comisión se registra en su ciclo
   diasEnEtapa?: number;
   propId?: string | null;
   orden?: number; // posición de la etapa actual (desde 0)

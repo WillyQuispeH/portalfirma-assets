@@ -2,8 +2,8 @@
 // (SEMBRAR_ADMIN_*, que no se imprimen), carga la cartera desde la base y escribe a través de la API.
 // Revisa: ingresar; la cartera muestra las propiedades de la base; editar una desde «Datos básicos» (y que quede en la
 // base); un cambio puntual en segundo plano (parchear → PATCH encolado); la sincronización por cambios al volver a la
-// ventana; crear una persona y vincularla desde la ficha; la nota en el historial; importar desde Portalfirma (simulado)
-// hacia POST /propiedades/importar. Al final deshace todo lo que creó
+// ventana; crear una persona y vincularla desde la ficha; la nota en el historial (la importación desde Convecta se prueba en api/test/convecta-unit.js)
+// Al final deshace todo lo que creó
 // o cambió, con @prisma/client desde api/ (como api/test/cartera-e2e.js).
 // Requiere la API corriendo (start-dev.ps1 o `yarn dev` en api/): http://localhost:3000/v1/salud con db:true.
 // Uso: node test/cartera-api-e2e.js [url-de-la-api]
@@ -83,7 +83,7 @@ const req = async (metodo, ruta, cuerpo, token) => {
     let real = await db.propiedad.findUnique({ where: { id: prop.id } });
     ok(real.notasInternas === nota && real.version > antes.version, 'el cambio quedó en la base (y subió la versión)');
     ok(!!(await db.actividad.findFirst({ where: { entidadId: prop.id, usuarioId: admin.id, fecha: { gte: inicio }, texto: { startsWith: 'Ficha actualizada' } } })), 'el historial de la base registra quién lo cambió');
-    if (real.origenSistema) ok(real.editados.includes('notasInternas'), 'como viene de Portalfirma, la próxima importación respeta lo editado aquí');
+    if (real.origenSistema) ok(real.editados.includes('notasInternas'), 'como viene de un sistema de origen, la próxima importación respeta lo editado aquí');
 
     // 4) un cambio puntual en segundo plano (parchear): el interesado de un portal se envía solo a la API
     await call('pubAgregarInteresado', prop.id, { nombre: `E2E Interesado ${SUF}`, portal: 'otro', canal: 'manual', telefono: '+5699' + String(Date.now()).slice(-7) });
@@ -124,23 +124,8 @@ const req = async (metodo, ruta, cuerpo, token) => {
     const act = await call('inmoNota', per.id, `E2E nota ${SUF}`);
     ok(act.some((a) => a.texto === `E2E nota ${SUF}` && a.tipo === 'nota'), 'la nota queda en el historial de la persona, en la base');
     ok((await call('inmoActividad', prop.id)).some((a) => /vinculado como comprador/.test(a.texto)), 'el historial de la propiedad viene de la base');
-    // 8) «Importar desde Portalfirma» va a POST /v1/propiedades/importar (tandas de 100) y luego sincroniza.
-    // Portalfirma se simula en el proceso principal (callRaw de property_manage_tools) con una propiedad de prueba.
-    const rutDueno = rut(22000000 + (Date.now() % 900000));
-    const res = await app.evaluate(async (_e, [suf, rutD]) => {
-      const inmo = global.__inmo;
-      const x = { id: `e2e-${suf}`, code: `E2E-IMP-${suf}`, title: `E2E Importada ${suf}`, tipo: 'departamento', sale: true, price_sale: 4321, currency_sale: 'UF', address: 'Av. Prueba 123', districtName: 'Ñuñoa',
-        bedrooms: 2, bathrooms: 1, photos: ['https://ejemplo.cl/e2e.jpg'], owner_rut: rutD, owner_name: `E2E Dueña ${suf}`, owner_email: `duena-${suf}@prueba.cl` };
-      const pf = { callRaw: async (_n, a) => ({ isError: false, text: JSON.stringify(a.action === 'search' ? { items: [{ id: x.id }], total_pages: 1 } : x) }) };
-      return inmo.importarPF(pf);
-    }, [SUF, rutDueno]);
-    const imp = await db.propiedad.findFirst({ where: { corredoraId: admin.corredoraId, origenSistema: 'portalfirma', origenId: `e2e-${SUF}` }, include: { vinculos: true, fotos: true } });
-    if (imp) creadas.props.push(imp.id);
-    const duena = await db.persona.findFirst({ where: { corredoraId: admin.corredoraId, nombre: `E2E Dueña ${SUF}` } });
-    if (duena) creadas.personas.push(duena.id);
-    ok(res.nuevas === 1 && res.personas === 1 && imp && Number(imp.precioVenta) === 4321 && imp.fotos.length === 1, 'importar desde Portalfirma crea la propiedad en la base (por su id de origen)');
-    ok(duena && imp.vinculos.some((v) => v.personaId === duena.id && v.rol === 'propietario'), 'con su propietaria en el CRM, vinculada');
-    ok((await call('inmoListar')).propiedades.some((p) => p.id === imp.id && p.origen?.sistema === 'portalfirma'), 'y la cartera la trae al sincronizar');
+    // 8) «Importar desde Convecta» lo hace el servidor (POST /v1/propiedades/importar-convecta, con la clave de Convecta que solo él tiene):
+    //    se prueba sin red ni base en api/test/convecta-unit.js; aquí no se importa para no traer la cartera real a la base de pruebas.
     // 9) archivos en R2: lo local de antes se sube solo al iniciar sesión; agregar, abrir y quitar un documento; fotos
     const R2 = env.R2_DOMAIN.replace(/\/+$/, '');
     let migr = null;

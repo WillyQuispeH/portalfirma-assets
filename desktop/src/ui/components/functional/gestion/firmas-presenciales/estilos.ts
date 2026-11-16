@@ -4,7 +4,7 @@
 import { cx } from '../../../../utils/cx';
 
 // Tarjeta blanca con borde suave y sombra (la lista de trámites, el detalle, los archivos)
-export const PANEL = 'tw:bg-card tw:border tw:border-[color:var(--es-line)] tw:rounded-[var(--es-r)] tw:[box-shadow:var(--es-soft)]';
+export const PANEL = 'tw:bg-card tw:border tw:border-[color:var(--es-line)] tw:rounded-card tw:[box-shadow:var(--es-soft)]';
 
 // Encabezado del detalle: título y estado (o botón) a la derecha. La clase es-dh la usan las pruebas.
 export const ENCABEZADO = 'es-dh tw:flex tw:justify-between tw:items-start tw:gap-3.5 tw:mb-4 tw:[&_.muted]:leading-[1.5] tw:[&>button]:w-auto tw:[&>button]:m-0 tw:[&>button]:shrink-0';
@@ -24,10 +24,10 @@ export const MALO = 'tw:text-err tw:font-semibold';
 export const CAMPO = 'tw:w-full tw:min-w-[150px] tw:m-0 tw:py-[7px] tw:px-2.5 tw:text-[12.5px]';
 
 // Textarea de los formularios en ventana. El tamaño mínimo lo pone cada uno.
-export const AREA = 'tw:w-full tw:py-3 tw:px-3.5 tw:border tw:border-line tw:rounded-[12px] tw:resize-y tw:box-border';
+export const AREA = 'tw:w-full tw:py-3 tw:px-3.5 tw:border tw:border-line tw:rounded-control tw:resize-y tw:box-border';
 
 // Caja de personas (comparecientes, participantes, notaría, archivos)
-export const PERSONAS = 'tw:bg-card tw:rounded-[16px] tw:[box-shadow:inset_0_0_0_1px_var(--es-line)] tw:py-3 tw:px-3.5 tw:flex tw:flex-col tw:gap-2.5';
+export const PERSONAS = 'tw:bg-card tw:rounded-card tw:[box-shadow:inset_0_0_0_1px_var(--es-line)] tw:py-3 tw:px-3.5 tw:flex tw:flex-col tw:gap-2.5';
 export const PERSONAS_H = 'tw:flex tw:justify-between tw:items-baseline tw:[&>b]:font-semibold tw:[&>b]:text-[14px]';
 // Una persona; la primera (justo después del encabezado) va sin línea arriba
 export const persona = (primera: boolean) => cx('tw:flex tw:gap-[11px] tw:items-start', !primera && 'tw:pt-2.5 tw:border-t tw:border-[color:var(--es-line)]');
@@ -44,7 +44,7 @@ const TONO_AV: Record<TTonoAvatar, string> = {
 export const avatar = (tono: TTonoAvatar = 'ok') => cx('tw:size-[38px] tw:rounded-full tw:grid tw:place-items-center tw:shrink-0 tw:font-semibold tw:text-[13px] tw:tracking-[.02em]', TONO_AV[tono]);
 
 // Aviso de color (observaciones, errores del visor). El color va en --c.
-export const ALERTA = 'tw:flex tw:items-start tw:gap-3 tw:py-[11px] tw:px-3.5 tw:rounded-[14px] tw:bg-[color-mix(in_srgb,var(--c)_4%,var(--card))] tw:[box-shadow:inset_0_0_0_1px_color-mix(in_srgb,var(--c)_12%,transparent)] tw:text-[13px] tw:leading-[1.5]';
+export const ALERTA = 'tw:flex tw:items-start tw:gap-3 tw:py-[11px] tw:px-3.5 tw:rounded-card tw:bg-[color-mix(in_srgb,var(--c)_4%,var(--card))] tw:[box-shadow:inset_0_0_0_1px_color-mix(in_srgb,var(--c)_12%,transparent)] tw:text-[13px] tw:leading-[1.5]';
 export const COLOR_ALERTA: Record<string, string> = { error: 'tw:[--c:#c0362c] tw:text-err', warn: 'tw:[--c:#c27c00]', ok: 'tw:[--c:#13804b]', info: 'tw:[--c:#3f4fe6]' };
 
 // Interruptor (checkbox escondido + riel con su perilla)
@@ -56,7 +56,7 @@ export const SW_RIEL = "tw:absolute tw:inset-0 tw:rounded-full tw:bg-[color-mix(
 export const CASILLA = 'tw:flex tw:items-center tw:gap-2 tw:text-text tw:text-[13px] tw:m-0 tw:leading-[1.45] tw:[&_input]:w-auto tw:[&_input]:m-0 tw:[&_input]:accent-brand';
 
 // Caja del valor (columna derecha). El monto grande es el <b> hijo directo.
-export const PRECIO = 'tw:bg-[linear-gradient(160deg,color-mix(in_srgb,#3d9cf0_8%,var(--card)),color-mix(in_srgb,#6a2fe0_6%,var(--card)))] tw:rounded-[18px] tw:py-4 tw:px-[18px] tw:flex tw:flex-col tw:gap-1.5 tw:[box-shadow:inset_0_0_0_1px_color-mix(in_srgb,var(--brand)_12%,transparent)] tw:[&>b]:text-[26px] tw:[&>b]:font-[650] tw:[&>b]:tracking-[-.02em]';
+export const PRECIO = 'tw:bg-[linear-gradient(160deg,color-mix(in_srgb,#3d9cf0_8%,var(--card)),color-mix(in_srgb,#6a2fe0_6%,var(--card)))] tw:rounded-card tw:py-4 tw:px-[18px] tw:flex tw:flex-col tw:gap-1.5 tw:[box-shadow:inset_0_0_0_1px_color-mix(in_srgb,var(--brand)_12%,transparent)] tw:[&>b]:text-[26px] tw:[&>b]:font-[650] tw:[&>b]:tracking-[-.02em]';
 // Una línea de cobro: concepto (con detalle debajo) y monto. es-line la usan las pruebas.
 export const LINEA = 'es-line tw:flex tw:justify-between tw:gap-2.5 tw:[&_div]:flex tw:[&_div]:flex-col tw:[&_div]:gap-0.5 tw:[&_b]:font-[550] tw:[&_small]:text-[11.5px]';
 

@@ -2,4 +2,4 @@
 // que monta abrirIntegraciones() de src/renderer/app.js.
 export const abrirIntegraciones = () => window.abrirIntegraciones?.();
 /** Configuración (pestañas: general, whatsapp, integraciones) */
-export const abrirConfiguracion = (pestana?: 'general' | 'whatsapp' | 'integraciones') => window.abrirConfiguracion?.(pestana);
+export const abrirConfiguracion = (pestana?: 'general' | 'whatsapp' | 'usuarios' | 'integraciones') => window.abrirConfiguracion?.(pestana);

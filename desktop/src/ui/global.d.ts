@@ -17,7 +17,7 @@ declare global {
     Inmo: { // src/renderer/inmo.js
       inicio: () => void; abrirFicha: (id: string) => void; abrirPersona: (id: string) => void;
       formProp: (p?: object, o?: { despues?: () => void }) => void; formPersona: (c?: object | null, opt?: { rol?: string; pre?: object; despues?: (c: { id: string }) => void }) => void;
-      importar: () => void; portales: () => void; cartera: () => void; personas: () => void;
+      importar: () => void; portales: () => void; existentes: () => void; cartera: () => void; personas: () => void;
       publicarPI: (p: object, op: string) => void; cargar: () => Promise<void>;
     };
     Dictado: { abrir: () => void; mostrar: (r: object, texto?: string) => void }; // la instala components/functional/agente/dictado/controlador.tsx

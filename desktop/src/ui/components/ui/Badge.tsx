@@ -24,7 +24,7 @@ export default function Badge({ tono = 'gris', variante = 'suave', punto = false
     <span className={cx(
       'tw:inline-flex tw:items-center tw:gap-1.5 tw:px-2.5 tw:text-xs tw:font-semibold tw:align-middle',
       ajustar ? 'tw:min-h-6 tw:py-1 tw:leading-tight tw:text-left' : 'tw:h-6 tw:whitespace-nowrap',
-      variante === 'tactil' ? cx(RELLENO[tono], 'tw:rounded-md tw:border tw:border-solid tw:border-b-2') : cx(SUAVE[tono], ajustar ? 'tw:rounded-lg' : 'tw:rounded-full'),
+      variante === 'tactil' ? cx(RELLENO[tono], 'tw:rounded-control tw:border tw:border-solid tw:border-b-2') : cx(SUAVE[tono], ajustar ? 'tw:rounded-control' : 'tw:rounded-full'),
       className,
     )}>
       {punto && <span className={cx('tw:size-1.5 tw:rounded-full', PUNTO[tono])} aria-hidden="true" />}

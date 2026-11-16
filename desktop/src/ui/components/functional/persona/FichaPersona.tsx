@@ -41,7 +41,7 @@ function Documentos({ id }: { id: string }) {
                   const [t, c] = estadoFirma(d.estado);
                   return (
                     <ItemLista key={i} data-doc=""
-                      media={<span className="tw:grid tw:place-items-center tw:w-9 tw:h-9 tw:rounded-xl tw:bg-sunken tw:text-muted"><Icono nombre={d.origen === 'asset' ? 'filePlus' : 'sign'} tam={16} /></span>}
+                      media={<span className="tw:grid tw:place-items-center tw:w-9 tw:h-9 tw:rounded-icono tw:bg-sunken tw:text-muted"><Icono nombre={d.origen === 'asset' ? 'filePlus' : 'sign'} tam={16} /></span>}
                       titulo={d.titulo}
                       detalle={[fecha(d.fecha), d.propiedad?.codigo, d.operacion ? 'operación ' + d.operacion : ''].filter(Boolean).join(' · ')}
                       derecha={<>
@@ -125,7 +125,7 @@ export default function FichaPersona({ id, vez }: IFichaPersonaProps) {
                 ...(!empresa ? [['Estado civil', c.estadoCivil], ['Nacionalidad', c.nacionalidad]] as [string, string | undefined][] : []),
               ]} />
             </div>
-            {c.notas && <p className="tw:mt-4 tw:mb-0 tw:p-3 tw:rounded-xl tw:bg-sunken tw:text-sm tw:leading-relaxed tw:whitespace-pre-wrap">{c.notas}</p>}
+            {c.notas && <p className="tw:mt-4 tw:mb-0 tw:p-3 tw:rounded-control tw:bg-sunken tw:text-sm tw:leading-relaxed tw:whitespace-pre-wrap">{c.notas}</p>}
             {(c.leadId || c.telefono || c.email) && (
               <div className="tw:flex tw:flex-wrap tw:gap-2 tw:mt-4">
                 {c.leadId && <Boton id="pLead" variante="secundario" tamano="sm" icono="sparkle" onClick={() => abrirLead(c.leadId!)}>Ver en Leads</Boton>}

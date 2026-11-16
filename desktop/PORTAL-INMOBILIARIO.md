@@ -59,9 +59,9 @@ Los interesados llegan por WhatsApp, preguntas, llamadas, solicitudes de visita 
 
 ## Primer cliente: corredora que viene de Convecta
 
-Sus propiedades ya están en Portalfirma gracias a la sincronización con Convecta: 7 en la cuenta actual, con códigos CV-xxxx, fotos, rol y corredor asignado.
+Sus propiedades se leen directo de la API de Convecta (la importación ya no pasa por Portalfirma): con códigos CV-<id>, fotos, rol y el corredor de cada una.
 
-1. Desde el Inicio o la Cartera, usar **Importar desde Portalfirma**. Las propiedades que Convecta marca como inactivas llegan archivadas.
+1. Crear en Asset los usuarios de cada corredor **con el mismo correo que tienen en Convecta**. Desde el Inicio o la Cartera, el administrador usa **Importar desde Convecta**: cada propiedad queda a nombre de su corredor; las que no tengan usuario quedan sin captador (el resumen lista los correos; se crea el usuario y se vuelve a importar). Las que Convecta marca no visibles llegan archivadas.
 2. **Completar los propietarios.** Convecta no envía los datos del dueño (llegan vacíos), así que hay que vincularlos en cada ficha. Son necesarios para firmar el mandato.
 3. Entrar a **Portales**, guardar el contacto y conectar la misma cuenta de Mercado Libre que hoy usa Convecta.
 4. **Antes de publicar nada**, usar **Vincular avisos existentes** para asociar los avisos que Convecta ya publicó a sus fichas.

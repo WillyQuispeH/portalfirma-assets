@@ -17,8 +17,8 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
       global.__waMock = { enviados: [], usuarios: [{ id: 'u-ana', name: 'Ana Rivas', email: 'ana@thelivingchile.cl' }, { id: 'u-beto', name: 'Beto Soto', email: 'beto@thelivingchile.cl' }],
         convs: [{ id: 'ig1', contactId: 'c-ig1', fullName: 'Valentina Paz', lastMessageType: 'TYPE_INSTAGRAM', instagramUsername: 'vale.paz', assignedTo: 'u-ana' }],
         msgs: { ig1: [{ id: 'i1', direction: 'inbound', messageType: 'TYPE_INSTAGRAM', body: 'Hola, busco arrendar depto en Providencia para mi familia, hasta 800 lucas', dateAdded: t(30) }] } }; });
-    // los corredores son los usuarios de Asset (Leads › Usuarios), vinculados con wechatia por el correo
-    await w.click('#nav [data-view="leads"]'); await w.waitForSelector('#view-leads [data-mas]'); await w.click('#view-leads [data-mas]'); await w.click('#ldCorBtn'); await w.waitForSelector('#usrNuevo');
+    // los corredores son los usuarios de Asset (Configuración › Usuarios), vinculados con wechatia por el correo
+    await w.evaluate(() => window.abrirConfiguracion('usuarios')); await w.waitForSelector('#usrNuevo');
     for (const [n, c, e] of [['Ana Rivas', '+56 9 5555 0001', 'ana@thelivingchile.cl'], ['Beto Soto', '+56 9 5555 0002', 'beto@thelivingchile.cl']]) {
       await w.click('#usrNuevo'); await w.fill('#usrNombre', n); await w.fill('#usrTel', c); await w.fill('#usrEmail', e); await w.fill('#usrClave', 'clave-inicial-1'); await w.click('#usrGuardar'); await w.waitForSelector(`#usrLista li:has-text("${n}")`); }
     await shot('gl0-corredores.png'); await w.click('#mCancel');

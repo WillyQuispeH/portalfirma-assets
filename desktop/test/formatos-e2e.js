@@ -89,12 +89,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     ok(env.numero === 1 && (await call('fmtEstado')) && p3.firmas[0].plantilla === 'Orden de visita' && p3.firmas[0].firmantes.length === 1, `se envía la orden nº 1 (operación ${env.operacion}) y queda en la ficha`);
     ov = await call('fmtPreparar', { formatoId: 'orden_visita', propId: p.id, personaId: vis.id, op: 'venta' }); const hv2 = await call('fmtHtml', 'orden_visita', p.id, { personaId: vis.id, op: 'venta' });
     ok(/Orden de visita nº 2/.test(hv2), 'la siguiente orden lleva el número 2');
-    n = await decir(`Hazme la orden de visita en ${p.codigo} para mañana`); t = await respuesta(n);
-    ok(/falta: ¿Venta o arriendo\?/.test(t), `por chat, con el formato propio pide solo lo que falta: venta o arriendo (${t.slice(0, 120)})`);
-    const nc = (await w.$$('.ag-conf')).length; n = await decir(`Hazme la orden de visita en ${p.codigo} en venta para mañana`); await w.waitForFunction((k) => document.querySelectorAll('.ag-conf').length > k, nc, { timeout: 15000 });
-    const conf = (await w.$$('.ag-conf')).pop(); ok(/Formato: The Living/.test(await conf.textContent()), 'con la operación indicada pide confirmar el envío con el formato de The Living');
-    await (await conf.$('[data-si]')).click(); t = await respuesta(n);
-    ok(/Orden de visita nº 2 enviada a firmar a MARÍA JOSÉ SILVA|Orden de visita nº 2 enviada a firmar a María José Silva/i.test(t) && /agendada/.test(t), `la envía (nº 2) y agenda la visita (${t.slice(0, 120)})`);
+    // 0.18.10 · la orden por chat ya no usa este formato: la arma Asset en el servidor (plantilla HTML → PDF); la cubren agente-asset-e2e y agenda-e2e
     ok(!errs.length, 'sin errores de JavaScript' + (errs.length ? ': ' + errs.join(' | ') : ''));
     console.log('OK formatos');
   } catch (er) { console.error(er.message); console.error(await w.$$eval(".ag-msg", (x) => x.map((e) => e.className + ": " + e.textContent.slice(0, 300)).join("\n")).catch(() => "")); await w.screenshot({ path: path.resolve(__dirname, "formatos-error.png") }).catch(() => {}); process.exitCode = 1; } finally { await app.close(); }

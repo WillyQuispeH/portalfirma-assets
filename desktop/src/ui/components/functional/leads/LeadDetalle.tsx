@@ -13,6 +13,10 @@ import EstadoVacio from '../../ui/EstadoVacio';
 import { CANALES, ChipCanal, IconoCanal, canalDe, canalDeSalida, canalDelLead } from './canal';
 import { nombreDe } from './formato';
 import FichaLead from './FichaLead';
+import Divisor from './Divisor';
+import { EsqueletoChat, EsqueletoFicha } from './EsqueletoLeads';
+import { comandoEnTexto, correr, sugerencias, tokenEn, type IAccionTarjeta, type IContexto, type IPlantilla, type IToken, type ITarjeta } from './comandos';
+import { MenuComandos, Tarjeta } from './TarjetaComando';
 import type { ILeadDetalle, ILeadLista, IMensajeLead, TCanal } from '../../../store/interfaces/lead.interface';
 
 const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
@@ -46,7 +50,7 @@ function Burbuja({ m, l, verImagen }: { m: IMensajeLead; l: ILeadDetalle; verIma
   let adjunto = null;
   const chip = (icono: string, t: string) => <span className="tw:inline-flex tw:items-center tw:gap-1.5 tw:text-[12.5px] tw:text-muted"><Icono nombre={icono} tam={14} />{t}</span>;
   if (m.tipo === 'imagen') adjunto = m.url
-    ? <img src={m.url} alt="" loading="lazy" onClick={() => verImagen(m.url!)} className="tw:block tw:max-w-[240px] tw:max-h-[260px] tw:rounded-lg tw:cursor-zoom-in" />
+    ? <img src={m.url} alt="" loading="lazy" onClick={() => verImagen(m.url!)} className="tw:block tw:max-w-[240px] tw:max-h-[260px] tw:rounded-control tw:cursor-zoom-in" />
     : chip('image', 'Foto (no incluida en la exportación)');
   else if (m.tipo === 'audio') adjunto = <>{m.url ? <audio controls preload="none" src={m.url} className="tw:max-w-[260px]" /> : chip('mic', 'Audio (no incluido)')}
     {m.transcripcion && <span className="tw:text-[12.5px] tw:italic tw:text-muted">«{m.transcripcion}»</span>}</>;
@@ -55,7 +59,7 @@ function Burbuja({ m, l, verImagen }: { m: IMensajeLead; l: ILeadDetalle; verIma
   else if (m.tipo === 'omitido') adjunto = chip('file', 'Archivo no incluido en la exportación');
   return (
     <div className={cx(
-      'ld-m tw:relative tw:flex tw:flex-col tw:gap-1 tw:max-w-[78%] tw:px-3 tw:pt-1.5 tw:pb-1 tw:rounded-xl tw:text-[13.5px] tw:leading-snug tw:text-text tw:shadow-[0_1px_0.5px_rgba(0,0,0,.12)]',
+      'ld-m tw:relative tw:flex tw:flex-col tw:gap-1 tw:max-w-[78%] tw:px-3 tw:pt-1.5 tw:pb-1 tw:rounded-card tw:text-[13.5px] tw:leading-snug tw:text-text tw:shadow-[0_1px_0.5px_rgba(0,0,0,.12)]',
       entra ? 'in tw:self-start tw:bg-card tw:rounded-tl-sm' : 'out tw:self-end tw:rounded-tr-sm',
       !entra && (ia ? 'ld-ia tw:bg-lav-soft' : 'tw:bg-green-soft'),
       m.fallido && 'ld-nok tw:outline tw:outline-1 tw:outline-dashed tw:outline-red-edge',
@@ -85,7 +89,8 @@ interface ILeadDetalleProps {
 }
 
 const LLAVE_FICHA = 'pfLeadFicha';
-const leerFicha = () => { try { return localStorage.getItem(LLAVE_FICHA) !== '0'; } catch { return true; } };
+/** si la ficha del lead está a la vista (se recuerda); Leads la usa también para el esqueleto de la carga inicial */
+export const leerFicha = () => { try { return localStorage.getItem(LLAVE_FICHA) !== '0'; } catch { return true; } };
 
 export default function LeadDetalle({ id, datos, version, alCambiar }: ILeadDetalleProps) {
   const [l, setL] = useState<ILeadDetalle | null>(null);
@@ -93,6 +98,13 @@ export default function LeadDetalle({ id, datos, version, alCambiar }: ILeadDeta
   const [ficha, setFicha] = useState(leerFicha);
   const [texto, setTexto] = useState('');
   const [enviando, setEnviando] = useState(false);
+  // comandos «/»: tarjetas privadas del chat y las plantillas del usuario (viven en el servidor)
+  const [tarjetas, setTarjetas] = useState<ITarjeta[]>([]);
+  const [plantillas, setPlantillas] = useState<IPlantilla[]>([]);
+  const [idx, setIdx] = useState(0);
+  const [pos, setPos] = useState(0); // dónde está el cursor en la caja
+  const versionPl = useRef(0); const sigTarjeta = useRef(1);
+  const caja = useRef<HTMLTextAreaElement>(null);
   const cuerpo = useRef<HTMLDivElement>(null);
   const idRef = useRef(id); idRef.current = id;
 
@@ -100,14 +112,15 @@ export default function LeadDetalle({ id, datos, version, alCambiar }: ILeadDeta
     try { const x = await leadService.obtener(id); if (idRef.current === id) { setL(x); setError(''); } }
     catch (e) { if (idRef.current === id) setError((e as Error).message); }
   };
-  useEffect(() => { setL(null); setTexto(''); void cargar(); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setL(null); setTexto(''); setTarjetas([]); void cargar(); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { leadService.plantillas().then((r) => { setPlantillas(r.plantillas); versionPl.current = r.version; }).catch(() => { /* sin plantillas: los comandos igual funcionan */ }); }, []);
   useEffect(() => { if (l) void cargar(); }, [version]); // eslint-disable-line react-hooks/exhaustive-deps -- la lista se recargó
 
   // siempre abajo, en lo último (como WhatsApp); si una foto termina de cargar y crece, sigue abajo salvo que el
   // usuario haya subido a leer
   const nMsgs = l?.mensajesLista.length ?? 0;
   const pegado = useRef(true);
-  useLayoutEffect(() => { const b = cuerpo.current; if (b) { b.scrollTop = b.scrollHeight; pegado.current = true; } }, [id, nMsgs, !!l]); // eslint-disable-line react-hooks/exhaustive-deps
+  useLayoutEffect(() => { const b = cuerpo.current; if (b) { b.scrollTop = b.scrollHeight; pegado.current = true; } }, [id, nMsgs, tarjetas.length, !!l]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const b = cuerpo.current; if (!b) return;
     const alMover = () => { pegado.current = b.scrollHeight - b.scrollTop - b.clientHeight < 60; };
@@ -119,8 +132,8 @@ export default function LeadDetalle({ id, datos, version, alCambiar }: ILeadDeta
 
   const plegar = () => { const v = !ficha; setFicha(v); try { localStorage.setItem(LLAVE_FICHA, v ? '1' : '0'); } catch { /* sin almacenamiento */ } };
 
-  if (error && !l) return <div className="ld-chat tw:rounded-2xl" id="ldChat"><p role="alert" className="tw:m-4 tw:text-red-softink">{error}</p></div>;
-  if (!l) return <div className="ld-chat tw:rounded-2xl" id="ldChat"><p className="tw:m-4 tw:text-muted">Cargando…</p></div>;
+  if (error && !l) return <div className="ld-chat tw:rounded-card" id="ldChat"><p role="alert" className="tw:m-4 tw:text-red-softink">{error}</p></div>;
+  if (!l) return <><EsqueletoChat />{ficha && <><Divisor lado="ficha" /><EsqueletoFicha /></>}</>;
 
   const perfil = (window as unknown as { PERFIL?: { esAdmin?: boolean; usuarioId?: string | null } }).PERFIL;
   const esMio = !perfil || perfil.esAdmin || (!!l.corredorId && l.corredorId === perfil.usuarioId);
@@ -130,8 +143,78 @@ export default function LeadDetalle({ id, datos, version, alCambiar }: ILeadDeta
     ? 'Este lead lo atiende otro corredor: solo él o un administrador puede escribirle.'
     : !salida ? 'No hay por dónde escribirle: agrega su celular en la ficha (o espera a que escriba por Instagram o Messenger).' : '';
 
+  // ---- comandos ----
+  const guardarPlantillas = async (lista: IPlantilla[]) => {
+    let r;
+    try { r = await leadService.guardarPlantillas(lista, versionPl.current); }
+    catch { const a = await leadService.plantillas(); versionPl.current = a.version; r = await leadService.guardarPlantillas(lista, a.version); } // otro equipo la cambió: se reintenta una vez
+    setPlantillas(r.plantillas); versionPl.current = r.version;
+  };
+  const nota = async (t: string) => {
+    const f = new Date(); const p = (n: number) => String(n).padStart(2, '0');
+    const nuevo = `${l.notas ? l.notas + '\n' : ''}${p(f.getDate())}/${p(f.getMonth() + 1)} ${p(f.getHours())}:${p(f.getMinutes())} · ${t}`.slice(-2000);
+    await leadService.actualizar(l.id, { notas: nuevo });
+    await cargar(); alCambiar(); // la respuesta de actualizar no trae la conversación: se vuelve a leer el lead
+  };
+  const ctx: IContexto = { l, plantillas, guardarPlantillas, nota };
+  /** corre «/comando args»; `en` es el pedazo del texto donde se escribió (en medio de una frase): el comando sale de ahí y una plantilla se inserta en su lugar */
+  const correrComando = async (escrito: string, en?: { antes: string; despues: string }) => {
+    const r = await correr(escrito, ctx);
+    if ('poner' in r) { setTexto(en ? en.antes + r.poner + en.despues : r.poner); caja.current?.focus(); return; }
+    if (en) setTexto((en.antes + en.despues).replace(/ {2,}/g, ' ').replace(/^ +/, ''));
+    setTarjetas([{ id: sigTarjeta.current++, ...r.tarjeta }]); // solo hay un comando activo: el nuevo reemplaza al anterior
+  };
+  /** el formulario de una tarjeta se guardó: la tarjeta que devuelve ocupa su lugar */
+  const guardarForm = async (t: ITarjeta, valores: Record<string, string>) => {
+    const r = await t.form!.guardar(valores);
+    setTarjetas([{ id: sigTarjeta.current++, ...r }]);
+  };
+  const enviarPropiedad = async (propiedadId: string, operacion?: string) => {
+    if (enviando || bloqueo) { if (bloqueo) toast(bloqueo, 5000); return; }
+    setEnviando(true);
+    try {
+      const r = await leadService.enviarPropiedad(l.id, propiedadId, operacion);
+      setL(r); setTarjetas([]);
+      if (r.envio?.mensaje) toast(r.envio.mensaje.replace(/^[^\p{L}]+/u, ''), 5000);
+      alCambiar();
+    } catch (e) { toast((e as Error).message, 6000); }
+    finally { setEnviando(false); }
+  };
+  const accionTarjeta = (a: IAccionTarjeta) => {
+    if (a.enviar) void enviarPropiedad(a.enviar.propiedadId, a.enviar.operacion);
+    else if (a.poner != null) { setTexto(a.poner); caja.current?.focus(); }
+    else if (a.cmd) void correrComando(a.cmd);
+  };
+  // el comando se puede escribir donde sea: «hola, tengo esta propiedad /cartera»
+  const token = tokenEn(texto, pos);
+  const sug = token ? sugerencias('/' + token.nombre, plantillas) : [];
+  const act = Math.min(idx, Math.max(0, sug.length - 1));
+  /** ejecuta el comando de ese pedazo del texto (al principio se lleva lo que sigue como argumentos) */
+  const ejecutarEn = (t: { ini: number; fin: number }, nombre: string) => {
+    const antes = texto.slice(0, t.ini); const despues = texto.slice(t.fin);
+    setIdx(0);
+    if (t.ini === 0) { const args = despues.trim(); setTexto(''); void correrComando(`/${nombre}${args ? ' ' + args : ''}`); return; }
+    void correrComando(`/${nombre}`, { antes, despues });
+  };
+  /** completa «/car» como «/cartera » sin ejecutar */
+  const completar = (t: IToken, nombre: string) => {
+    const antes = texto.slice(0, t.ini); const despues = texto.slice(t.fin).replace(/^ +/, '');
+    const nuevo = `${antes}/${nombre} ${despues}`; const cursor = antes.length + nombre.length + 2;
+    setTexto(nuevo); setPos(cursor); setIdx(0);
+    setTimeout(() => { caja.current?.focus(); caja.current?.setSelectionRange(cursor, cursor); }, 0);
+  };
+  const elegir = (nombre: string, ejecutar: boolean) => {
+    if (!token) return;
+    if (!ejecutar) completar(token, nombre);
+    else ejecutarEn(token, nombre);
+  };
+
   const enviar = async () => {
     const t = texto.trim(); if (!t || enviando || bloqueo) return;
+    // un comando nunca se manda al cliente: si hay uno en el texto (al principio o en medio), se corre en vez de enviar
+    const cmd = comandoEnTexto(texto, plantillas);
+    if (cmd) { ejecutarEn(cmd, cmd.nombre); return; }
+    if (t.startsWith('/')) { setTexto(''); void correrComando(t); return; } // «/algo» que no existe: avisa y no se envía
     setEnviando(true);
     try {
       const r = await leadService.enviar(l.id, t);
@@ -143,6 +226,12 @@ export default function LeadDetalle({ id, datos, version, alCambiar }: ILeadDeta
     finally { setEnviando(false); }
   };
   const teclas = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (sug.length) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setIdx((act + 1) % sug.length); return; }
+      if (e.key === 'ArrowUp') { e.preventDefault(); setIdx((act - 1 + sug.length) % sug.length); return; }
+      if (e.key === 'Escape') { e.preventDefault(); setTexto(''); return; }
+      if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing)) { e.preventDefault(); elegir(sug[act].nombre, e.key === 'Enter'); return; }
+    }
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void enviar(); }
   };
 
@@ -150,7 +239,7 @@ export default function LeadDetalle({ id, datos, version, alCambiar }: ILeadDeta
   const verImagen = (src: string) => window.Ventanas?.abrir('leads.verImagen', { src }, { clave: 'modal-34' });
   return (
     <>
-      <div className="ld-chat tw:rounded-2xl tw:border-edge tw:border-b-[3px] tw:border-b-edge-b" id="ldChat">
+      <div className="ld-chat tw:rounded-card tw:border-edge tw:border-b-[3px] tw:border-b-edge-b" id="ldChat">
         {/* cabecera: quién es, por dónde escribe y su número corto para responder desde WhatsApp */}
         <div className="ld-ch-h tw:flex tw:items-center tw:gap-3 tw:px-4 tw:py-2.5 tw:border-0 tw:border-b tw:border-solid tw:border-edge tw:bg-card">
           <Avatar nombre={nombreDe(l)} tono={canalesUsados[0] === 'instagram' ? 'durazno' : undefined} />
@@ -174,13 +263,14 @@ export default function LeadDetalle({ id, datos, version, alCambiar }: ILeadDeta
             const d = m.fecha.slice(0, 10); const nuevoDia = d !== diaAnt; diaAnt = d;
             return (
               <Fragment key={m.k || i}>
-                {nuevoDia && <div className="ld-dia tw:self-center tw:my-2"><span className="tw:inline-block tw:px-3 tw:py-1 tw:rounded-lg tw:bg-card tw:text-[11.5px] tw:font-semibold tw:text-muted tw:shadow-[0_1px_0.5px_rgba(0,0,0,.1)]">{dia(m.fecha)}</span></div>}
+                {nuevoDia && <div className="ld-dia tw:self-center tw:my-2"><span className="tw:inline-block tw:px-3 tw:py-1 tw:rounded-card tw:bg-card tw:text-[11.5px] tw:font-semibold tw:text-muted tw:shadow-[0_1px_0.5px_rgba(0,0,0,.1)]">{dia(m.fecha)}</span></div>}
                 <Burbuja m={m} l={l} verImagen={verImagen} />
               </Fragment>
             );
           })}
+          {tarjetas.map((t) => <Tarjeta key={t.id} t={t} alAccion={accionTarjeta} alGuardar={(v) => guardarForm(t, v)} alCerrar={() => setTarjetas((x) => x.filter((y) => y.id !== t.id))} />)}
           {l.pendiente?.texto && (
-            <div className="ld-m out ld-pend tw:self-end tw:flex tw:max-w-[78%] tw:flex-col tw:gap-1 tw:rounded-xl tw:rounded-tr-sm tw:border tw:border-dashed tw:border-yellow-edge tw:bg-yellow-soft tw:px-3 tw:pt-1.5 tw:pb-1 tw:text-[13.5px]">
+            <div className="ld-m out ld-pend tw:self-end tw:flex tw:max-w-[78%] tw:flex-col tw:gap-1 tw:rounded-control tw:rounded-tr-sm tw:border tw:border-dashed tw:border-yellow-edge tw:bg-yellow-soft tw:px-3 tw:pt-1.5 tw:pb-1 tw:text-[13.5px]">
               <span className="tw:flex tw:items-center tw:gap-1.5 tw:text-[11.5px] tw:font-bold tw:text-yellow-softink"><Icono nombre="clock" tam={12} /> Pendiente · {l.pendiente.corredor}</span>
               <span className="tw:whitespace-pre-wrap">{l.pendiente.texto}</span>
               <small className="tw:text-[10.5px] tw:text-yellow-softink">Se le mandó la plantilla de primer contacto: este mensaje sale solo cuando responda.</small>
@@ -193,21 +283,24 @@ export default function LeadDetalle({ id, datos, version, alCambiar }: ILeadDeta
           {bloqueo
             ? <p className="tw:m-0 tw:flex tw:items-center tw:gap-2 tw:px-1 tw:py-1.5 tw:text-[12.5px] tw:text-muted"><Icono nombre="lock" tam={13} /> {bloqueo}</p>
             : <>
-              <div className="tw:flex tw:items-end tw:gap-2">
-                <textarea id="ldRespTx" rows={1} value={texto} onChange={(e) => setTexto(e.target.value)} onKeyDown={teclas} disabled={enviando}
-                  placeholder={`Escríbele a ${nombreDe(l)}…`}
-                  className="tw:flex-1 tw:min-h-10 tw:max-h-40 tw:m-0 tw:px-3.5 tw:py-2.5 tw:rounded-2xl tw:border tw:border-solid tw:border-edge tw:bg-sunken tw:text-[13.5px] tw:leading-snug tw:text-text tw:font-[inherit] tw:resize-none tw:field-sizing-content tw:focus:outline-none tw:focus:border-lav-edge" />
-                <Boton id="ldRespOk" icono={salida ? CANALES[salida].icono : 'arrowR'} cargando={enviando} disabled={!texto.trim()} onClick={() => void enviar()}>Enviar</Boton>
+              <MenuComandos items={sug} activo={act} alElegir={(n) => elegir(n, false)} />
+              {/* la misma caja que la del Agente: el texto arriba, grande, y el botón de enviar abajo a la derecha */}
+              <div className="tw:flex tw:flex-col tw:gap-1 tw:px-2 tw:pt-2 tw:pb-2 tw:rounded-card tw:border tw:border-solid tw:border-edge tw:border-b-[3px] tw:border-b-edge-b tw:bg-card tw:transition-[border-color,box-shadow] tw:focus-within:border-lav-edge tw:focus-within:ring-[3px] tw:focus-within:ring-lav/60">
+                <textarea id="ldRespTx" ref={caja} rows={2} value={texto} onChange={(e) => { setTexto(e.target.value); setPos(e.target.selectionStart); setIdx(0); }} onSelect={(e) => setPos(e.currentTarget.selectionStart)} onKeyDown={teclas} disabled={enviando}
+                  placeholder={`Escríbele a ${nombreDe(l)}… (/ para comandos)`} aria-label={`Mensaje para ${nombreDe(l)}`}
+                  className="tw:block tw:w-full tw:min-h-16 tw:max-h-52 tw:m-0 tw:px-2 tw:py-1.5 tw:border-0 tw:bg-transparent tw:text-[15px] tw:leading-relaxed tw:text-text tw:placeholder:text-muted tw:font-[inherit] tw:resize-none tw:field-sizing-content tw:focus:outline-none tw:focus:ring-0 tw:focus:shadow-none" />
+                <div className="tw:flex tw:items-center tw:justify-end tw:gap-1.5">
+                  <Boton id="ldRespOk" tamano="sm" icono={salida ? CANALES[salida].icono : 'arrowR'} cargando={enviando} disabled={!texto.trim()} onClick={() => void enviar()}
+                    title={[salida ? `Sale por ${CANALES[salida].nombre}` : '', fuera24 ? 'No ha escrito por WhatsApp en 24 h: saldrá la plantilla de primer contacto y tu mensaje quedará pendiente hasta que responda.' : ''].filter(Boolean).join(' · ') || undefined}>Enviar</Boton>
+                </div>
               </div>
-              <span className="tw:flex tw:flex-wrap tw:items-center tw:gap-1.5 tw:px-1 tw:text-[11.5px] tw:text-muted">
-                {salida && <>Sale por <ChipCanal canal={salida} /></>}
-                {fuera24 && <span className="tw:text-yellow-softink">· No ha escrito por WhatsApp en 24 h: saldrá la plantilla de primer contacto y tu mensaje quedará pendiente hasta que responda.</span>}
-                <span className="tw:ml-auto">Enter envía · Mayús+Enter, nueva línea</span>
-              </span>
             </>}
         </div>
       </div>
-      {ficha && <FichaLead l={l} datos={datos} alCambiar={() => { void cargar(); alCambiar(); }} alPlegar={plegar} />}
+      {ficha && <>
+        <Divisor lado="ficha" />
+        <FichaLead l={l} datos={datos} alCambiar={() => { void cargar(); alCambiar(); }} alPlegar={plegar} />
+      </>}
     </>
   );
 }

@@ -27,7 +27,7 @@ export default function LineaTiempo({ items, vacio = 'Sin movimientos todavía.'
             <span className={cx('tw:mt-1.5 tw:w-2.5 tw:h-2.5 tw:rounded-full tw:border-2 tw:border-solid', a.destacado ? 'tw:bg-lav tw:border-lav-edge' : 'tw:bg-card tw:border-edge-b')} />
             {i < items.length - 1 && <span className="tw:absolute tw:top-5 tw:-bottom-1.5 tw:w-px tw:bg-edge" />}
           </span>
-          <span className={cx('tw:min-w-0 tw:flex-1 tw:text-sm tw:leading-snug', a.destacado && 'tw:px-3 tw:py-2 tw:-mt-1 tw:rounded-xl tw:bg-lav-soft tw:text-lav-ink')}>
+          <span className={cx('tw:min-w-0 tw:flex-1 tw:text-sm tw:leading-snug', a.destacado && 'tw:px-3 tw:py-2 tw:-mt-1 tw:rounded-control tw:bg-lav-soft tw:text-lav-ink')}>
             {a.texto}
             {a.fecha && <small className={cx('tw:block tw:mt-0.5 tw:text-xs', a.destacado ? 'tw:text-lav-softink' : 'tw:text-muted')}>{a.fecha}</small>}
           </span>

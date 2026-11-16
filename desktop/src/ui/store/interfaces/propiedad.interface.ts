@@ -41,6 +41,7 @@ export interface IPropiedad {
   vinculos?: IVinculo[];
   captadorId?: string | null;
   captador: { id: string; nombre: string } | null;
+  creado?: string; // ISO, cuándo entró a la cartera (captaciones del mes en el Panel de brokers)
   duenoVisible?: boolean;
   portales?: { pi?: Partial<Record<TOperacion, IAvisoPortal>>; [portal: string]: Partial<Record<TOperacion, IAvisoPortal>> | undefined };
   tituloPortal?: string; // título para los portales (máximo 60)
@@ -130,6 +131,7 @@ export interface ICaptacion {
   completa: boolean;
   falta: string[];
   actual: { t: string; e: string } | null;
+  mandato?: string | null; // 'YYYY-MM-DD' en que se firmó el mandato (la captación del Panel de Negocios cuenta desde ahí)
 }
 export type TCaptaciones = Record<string, ICaptacion>;
 

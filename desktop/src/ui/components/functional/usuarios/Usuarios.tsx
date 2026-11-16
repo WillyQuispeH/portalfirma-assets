@@ -1,21 +1,20 @@
-// Usuarios de la corredora (reemplaza a «Corredores» y a «¿Quién usa este equipo?»). Va en el modal de la app (ancho).
+// Usuarios de la corredora (reemplaza a «Corredores» y a «¿Quién usa este equipo?»). Es una pestaña de Configuración.
 //  · Administrador: lista completa, agregar usuario con clave inicial, editar nombre, rol, teléfono y si está activo,
 //    asignar una clave nueva, vincular cada uno con su usuario de wechatia (o traerlos y vincular por correo) y ver
 //    sus conversaciones con el Agente y lo que el Agente hizo (ConversacionesUsuario, solo lectura).
 //  · Corredor: ve el equipo (nombre, contacto y rol), sin editar.
-// Con el kit: las partes de la ventana (VentanaCabecera, VentanaCuerpo y VentanaPie), Boton, Input, Select, Switch,
-// Badge, Avatar y EstadoVacio. Cada vista (la lista, agregar, editar y la clave nueva) tiene sus tres partes; los
-// formularios se envían desde el pie con <Boton form="usrForm">.
+// Con el kit: Card, Boton, Input, Select, Switch, Badge, Avatar y EstadoVacio. Cada vista (la lista, agregar, editar y la
+// clave nueva) es una tarjeta; los formularios se envían desde el pie con <Boton form="usrForm">, siempre a la derecha.
 // WhatsApp: cada uno vincula su celular con su equipo (Pedro, Juanita, Diego, Fernanda) desde Configuración; aquí se ve
 // quién lo tiene ([data-usr-wa]) y el administrador le puede pedir que lo vincule ([data-usr-pedir]: le llega un aviso).
 // Los id (#usrPanel, #usrNuevo, #usrForm, #usrNombre…, [data-usr], [data-usr-ed], [data-usr-clave], [data-usr-conv]) los usan las pruebas.
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import Boton from '../../ui/Boton';
 import Input from '../../ui/Input';
 import Select from '../../ui/Select';
 import Badge from '../../ui/Badge';
 import Switch from '../../ui/Switch';
-import { VentanaCabecera, VentanaCuerpo, VentanaPie } from '../../ui/Ventana';
+import Card from '../../ui/Card';
 import Avatar from '../../ui/Avatar';
 import EstadoVacio from '../../ui/EstadoVacio';
 import ConversacionesUsuario from './ConversacionesUsuario';
@@ -24,7 +23,6 @@ import { useAcceso } from '../../../store/hooks/useAcceso.hook';
 import { usePerfil } from '../../../store/hooks/usePerfil.hook';
 import type { IUsuario } from '../../../store/interfaces/usuario.interface';
 import type { RolAsset } from '../../../store/interfaces/acceso.interface';
-import { cerrarModal } from '../../../utils/modal';
 import { toast } from '../../../utils/app';
 import { api } from '../../../utils/api';
 import { fechaHora } from '../../../utils/formato';
@@ -59,21 +57,17 @@ export default function Usuarios() {
 
   const listo = () => { setModo(null); perfilGet(); };
   const titulo = `${admin ? 'Usuarios' : 'Equipo'} de ${cuenta?.corredora?.nombre || 'la corredora'}`;
-  if (!listoPerfil) return <>
-    <VentanaCabecera icono="users" titulo={cuenta?.corredora?.nombre || 'Usuarios'} />
-    <VentanaCuerpo><div id="usrPanel" className="usr"><EstadoVacio compacto texto="Cargando…" /></div></VentanaCuerpo>
-    <VentanaPie><Boton id="mCancel" variante="secundario" onClick={() => cerrarModal()}>Cerrar</Boton></VentanaPie>
-  </>;
+  if (!listoPerfil) return <Card titulo={cuenta?.corredora?.nombre || 'Usuarios'}><div id="usrPanel" className="usr"><EstadoVacio compacto texto="Cargando…" /></div></Card>;
 
-  // agregar, editar o asignar clave: cada formulario es una vista de la ventana; al terminar o cancelar vuelve a la lista
+  // agregar, editar o asignar clave: cada formulario reemplaza a la lista; al terminar o cancelar vuelve a ella
   if (admin && modo?.tipo === 'nuevo') return <FormNuevo onListo={() => { listo(); toast('Usuario agregado. Ya puede entrar con su correo y la clave inicial.'); }} onCancelar={() => setModo(null)} />;
   if (admin && modo?.tipo === 'editar') return <FormEditar key={modo.u.id} u={modo.u} yo={yo.id} onListo={() => { listo(); toast('Usuario guardado.'); }} onCancelar={() => setModo(null)} />;
   if (admin && modo?.tipo === 'clave') return <FormClave key={modo.u.id} u={modo.u} onListo={() => { setModo(null); toast(`Clave nueva asignada a ${modo.u.nombre}. Sus sesiones abiertas se cerraron.`); }} onCancelar={() => setModo(null)} />;
 
-  return <>
-    <VentanaCabecera icono="users" titulo={titulo}
-      descripcion="Cada persona entra con su correo y su clave. El administrador ve y hace todo; el corredor ve toda la cartera, pero los datos del propietario solo en las propiedades que captó, y solo sus leads y negocios." />
-    <VentanaCuerpo>
+  return (
+    <Card titulo={titulo}
+      subtitulo="Cada persona entra con su correo y su clave. El administrador ve y hace todo; el corredor ve toda la cartera, pero los datos del propietario solo en las propiedades que captó, y solo sus leads y negocios."
+      accion={admin && <Boton id="usrNuevo" icono="plus" onClick={() => setModo({ tipo: 'nuevo' })}>Agregar usuario</Boton>}>
       <div id="usrPanel" className="usr tw:flex tw:flex-col tw:gap-4 tw:min-w-0">
         {error && <p role="alert" className="tw:m-0 tw:text-red-softink tw:text-sm" id="usrErrLista">{error}</p>}
         <ul className="tw:list-none tw:m-0 tw:p-0 tw:flex tw:flex-col tw:gap-2" id="usrLista">
@@ -86,17 +80,13 @@ export default function Usuarios() {
 
         {!admin && <p className={NOTA}>Agregar o editar usuarios lo hace el administrador.</p>}
       </div>
-    </VentanaCuerpo>
-    <VentanaPie>
-      <Boton id="mCancel" variante="secundario" onClick={() => cerrarModal()}>Cerrar</Boton>
-      {admin && <Boton id="usrNuevo" icono="plus" onClick={() => setModo({ tipo: 'nuevo' })}>Agregar usuario</Boton>}
-    </VentanaPie>
-  </>;
+    </Card>
+  );
 }
 
 function Fila({ u, yo, admin, onEditar, onClave, onAgente, wa, onPedir }: { u: IUsuario; yo: string; admin: boolean; onEditar: () => void; onClave: () => void; onAgente: () => void; wa: string; onPedir: () => void }) {
   return (
-    <li data-usr={u.id} className={`tw:flex tw:items-center tw:gap-3 tw:p-3 tw:rounded-xl tw:border tw:border-solid tw:border-edge tw:border-b-2 tw:border-b-edge-b tw:bg-card ${u.activo ? '' : 'tw:opacity-60'}`}>
+    <li data-usr={u.id} className={`tw:flex tw:items-center tw:gap-3 tw:p-3 tw:rounded-card tw:border tw:border-solid tw:border-edge tw:border-b-2 tw:border-b-edge-b tw:bg-card ${u.activo ? '' : 'tw:opacity-60'}`}>
       <Avatar nombre={u.nombre} />
       <div className="tw:min-w-0 tw:flex-1">
         <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
@@ -126,13 +116,16 @@ function Fila({ u, yo, admin, onEditar, onClave, onAgente, wa, onPedir }: { u: I
 const CAJA_FORM = 'tw:flex tw:flex-col tw:gap-3';
 const GRILLA = 'tw:grid tw:grid-cols-1 tw:sm:grid-cols-2 tw:gap-3';
 
-// el pie de los formularios: Cancelar (#mCancel: la X y Esc también vuelven a la lista) y enviar el formulario #usrForm
-function Acciones({ enviando, texto, onCancelar }: { enviando: boolean; texto: string; onCancelar: () => void }) {
+// un formulario: una tarjeta con sus botones a la derecha (Cancelar y enviar el formulario #usrForm)
+function Formulario({ titulo, descripcion, enviando, texto, onCancelar, children }: { titulo: string; descripcion?: string; enviando: boolean; texto: string; onCancelar: () => void; children: ReactNode }) {
   return (
-    <VentanaPie>
-      <Boton id="mCancel" variante="secundario" onClick={onCancelar}>Cancelar</Boton>
-      <Boton type="submit" form="usrForm" id="usrGuardar" cargando={enviando}>{texto}</Boton>
-    </VentanaPie>
+    <Card titulo={titulo} subtitulo={descripcion}
+      pie={<div className="tw:flex tw:items-center tw:justify-end tw:gap-2">
+        <Boton id="mCancel" variante="secundario" onClick={onCancelar}>Cancelar</Boton>
+        <Boton type="submit" form="usrForm" id="usrGuardar" cargando={enviando}>{texto}</Boton>
+      </div>}>
+      {children}
+    </Card>
   );
 }
 
@@ -145,9 +138,8 @@ function FormNuevo({ onListo, onCancelar }: { onListo: () => void; onCancelar: (
     const r = await usuarioCrear(d); setEnviando(false);
     if (r) setErr(r); else onListo();
   };
-  return <>
-    <VentanaCabecera icono="user" titulo="Nuevo usuario" descripcion="Entra con su correo y la clave inicial que le asignes." />
-    <VentanaCuerpo>
+  return (
+    <Formulario titulo="Nuevo usuario" descripcion="Entra con su correo y la clave inicial que le asignes." enviando={enviando} texto="Agregar" onCancelar={onCancelar}>
     <form id="usrForm" className={CAJA_FORM} onSubmit={enviar}>
       <div className={GRILLA}>
         <Input id="usrNombre" etiqueta="Nombre" value={d.nombre} onChange={(e) => setD({ ...d, nombre: e.target.value })} autoFocus />
@@ -158,9 +150,8 @@ function FormNuevo({ onListo, onCancelar }: { onListo: () => void; onCancelar: (
       </div>
       {err && <p role="alert" className={ERROR} id="usrErr">{err}</p>}
     </form>
-    </VentanaCuerpo>
-    <Acciones enviando={enviando} texto="Agregar" onCancelar={onCancelar} />
-  </>;
+    </Formulario>
+  );
 }
 
 function FormEditar({ u, yo, onListo, onCancelar }: { u: IUsuario; yo: string; onListo: () => void; onCancelar: () => void }) {
@@ -175,9 +166,8 @@ function FormEditar({ u, yo, onListo, onCancelar }: { u: IUsuario; yo: string; o
     setEnviando(false);
     if (r) setErr(r); else onListo();
   };
-  return <>
-    <VentanaCabecera icono="edit" titulo={`Editar a ${u.nombre}`} descripcion={u.email} />
-    <VentanaCuerpo>
+  return (
+    <Formulario titulo={`Editar a ${u.nombre}`} descripcion={u.email} enviando={enviando} texto="Guardar" onCancelar={onCancelar}>
     <form id="usrForm" className={CAJA_FORM} onSubmit={enviar}>
       <div className={GRILLA}>
         <Input id="usrNombre" etiqueta="Nombre" value={d.nombre} onChange={(e) => setD({ ...d, nombre: e.target.value })} />
@@ -190,9 +180,8 @@ function FormEditar({ u, yo, onListo, onCancelar }: { u: IUsuario; yo: string; o
         descripcion={soyYo ? 'No puedes desactivarte.' : 'Desactivado no puede entrar y se cierran sus sesiones abiertas.'} />
       {err && <p role="alert" className={ERROR} id="usrErr">{err}</p>}
     </form>
-    </VentanaCuerpo>
-    <Acciones enviando={enviando} texto="Guardar" onCancelar={onCancelar} />
-  </>;
+    </Formulario>
+  );
 }
 
 function FormClave({ u, onListo, onCancelar }: { u: IUsuario; onListo: () => void; onCancelar: () => void }) {
@@ -203,15 +192,13 @@ function FormClave({ u, onListo, onCancelar }: { u: IUsuario; onListo: () => voi
     const r = await usuarioClave(u.id, clave); setEnviando(false);
     if (r) setErr(r); else onListo();
   };
-  return <>
-    <VentanaCabecera icono="key" titulo={`Clave nueva para ${u.nombre}`} descripcion={u.email} />
-    <VentanaCuerpo>
+  return (
+    <Formulario titulo={`Clave nueva para ${u.nombre}`} descripcion={u.email} enviando={enviando} texto="Asignar clave" onCancelar={onCancelar}>
     <form id="usrForm" className={CAJA_FORM} onSubmit={enviar}>
       <Input id="usrClaveNueva" etiqueta="Clave nueva" type="password" autoComplete="new-password" value={clave} onChange={(e) => setClave(e.target.value)} autoFocus
         ayuda="Al menos 8 caracteres. Se cierran sus sesiones abiertas: entra de nuevo con esta clave." />
       {err && <p role="alert" className={ERROR} id="usrErr">{err}</p>}
     </form>
-    </VentanaCuerpo>
-    <Acciones enviando={enviando} texto="Asignar clave" onCancelar={onCancelar} />
-  </>;
+    </Formulario>
+  );
 }

@@ -8,6 +8,11 @@ export const leadService = {
   actualizar: (id: string, cambios: ILeadCambios) => api<ILeadDetalle>('leadsActualizar', id, cambios),
   asignar: (id: string, corredorId: string | null) => api<unknown>('leadsAsignar', id, corredorId),
   reanalizar: (id: string) => api<unknown>('leadsReanalizar', id),
+  // plantillas de texto del usuario (comandos del chat): viven en el servidor, siguen con él a otro equipo
+  plantillas: () => api<{ plantillas: { nombre: string; texto: string }[]; version: number }>('cmdCargar'),
+  guardarPlantillas: (l: { nombre: string; texto: string }[], version: number) => api<{ plantillas: { nombre: string; texto: string }[]; version: number }>('cmdGuardar', l, version),
+  // una propiedad de la cartera: foto, datos y enlace del aviso en el portal (POST /leads/:id/enviar-propiedad)
+  enviarPropiedad: (id: string, propiedadId: string, operacion?: string) => api<ILeadDetalle & { envio?: IResultadoEnvio }>('leadsEnviarPropiedad', id, propiedadId, operacion),
   // le escribe al interesado por el número de la empresa (o Instagram / Facebook): mismas reglas que el puente del servidor
   enviar: (id: string, texto: string) => api<ILeadDetalle & { envio?: IResultadoEnvio }>('leadsResponder', id, texto),
 };

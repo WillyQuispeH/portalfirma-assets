@@ -55,7 +55,7 @@ export default function ConversacionesUsuario({ u, onCerrar }: { u: IUsuario; on
               {lista?.map((c) => (
                 <li key={c.id}>
                   <button type="button" data-cvu={c.id} onClick={() => abrir(c.id)}
-                    className={`tw:w-full tw:text-left tw:p-2 tw:rounded-lg tw:border tw:border-solid tw:cursor-pointer ${sel?.id === c.id ? 'tw:border-lav tw:bg-lav-soft' : 'tw:border-edge tw:bg-card'}`}>
+                    className={`tw:w-full tw:text-left tw:p-2 tw:rounded-control tw:border tw:border-solid tw:cursor-pointer ${sel?.id === c.id ? 'tw:border-lav tw:bg-lav-soft' : 'tw:border-edge tw:bg-card'}`}>
                     <span className="tw:flex tw:items-center tw:gap-1 tw:text-sm tw:font-semibold tw:truncate">
                       {c.fijada && <Icono nombre="pin" tam={12} />}{c.id === 'whatsapp' && <Badge tono="verde">WhatsApp</Badge>}{c.titulo || 'Sin título'}
                     </span>
@@ -64,13 +64,13 @@ export default function ConversacionesUsuario({ u, onCerrar }: { u: IUsuario; on
                 </li>
               ))}
             </ul>
-            <div id="cvuChat" className="tw:rounded-xl tw:border tw:border-solid tw:border-edge tw:bg-sunken tw:p-3 tw:max-h-[60vh] tw:overflow-auto tw:flex tw:flex-col tw:gap-2">
+            <div id="cvuChat" className="tw:rounded-control tw:border tw:border-solid tw:border-edge tw:bg-sunken tw:p-3 tw:max-h-[60vh] tw:overflow-auto tw:flex tw:flex-col tw:gap-2">
               {!sel && !cargandoSel && <EstadoVacio compacto texto="Elige una conversación para verla." />}
               {cargandoSel && <EstadoVacio compacto texto="Cargando…" />}
               {sel && !cargandoSel && (sel.items || []).filter((i) => i.text).map((i, n) => {
                 const de = TEXTO_DE(i.k);
                 return (
-                  <div key={n} data-cvu-de={de} className={`tw:max-w-[85%] tw:text-sm tw:whitespace-pre-wrap tw:rounded-xl tw:px-3 tw:py-2 ${de === 'usuario' ? 'tw:self-end tw:bg-lav-soft tw:text-lav-softink' : de === 'agente' ? 'tw:self-start tw:bg-card tw:border tw:border-solid tw:border-edge' : 'tw:self-center tw:text-xs tw:text-muted'}`}>
+                  <div key={n} data-cvu-de={de} className={`tw:max-w-[85%] tw:text-sm tw:whitespace-pre-wrap tw:rounded-control tw:px-3 tw:py-2 ${de === 'usuario' ? 'tw:self-end tw:bg-lav-soft tw:text-lav-softink' : de === 'agente' ? 'tw:self-start tw:bg-card tw:border tw:border-solid tw:border-edge' : 'tw:self-center tw:text-xs tw:text-muted'}`}>
                     {String(i.text)}
                   </div>
                 );
@@ -84,7 +84,7 @@ export default function ConversacionesUsuario({ u, onCerrar }: { u: IUsuario; on
             {acciones === null && <li><EstadoVacio compacto texto="Cargando…" /></li>}
             {acciones?.length === 0 && <li><EstadoVacio compacto texto="El Agente todavía no ha hecho nada por esta persona." /></li>}
             {acciones?.map((a, n) => (
-              <li key={n} className="tw:flex tw:items-center tw:gap-2 tw:p-2 tw:rounded-lg tw:border tw:border-solid tw:border-edge tw:bg-card tw:text-sm">
+              <li key={n} className="tw:flex tw:items-center tw:gap-2 tw:p-2 tw:rounded-card tw:border tw:border-solid tw:border-edge tw:bg-card tw:text-sm">
                 <Badge tono={a.ok ? 'verde' : 'rojo'} punto>{a.ok ? 'Hecho' : 'No se hizo'}</Badge>
                 <span className="tw:flex-1 tw:min-w-0 tw:truncate">{a.resumen || a.tool}</span>
                 {a.canal === 'whatsapp' && <Badge tono="verde">WhatsApp</Badge>}

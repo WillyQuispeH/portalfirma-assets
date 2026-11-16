@@ -164,7 +164,7 @@ Está construida sobre el código de PortalFirma Studio. Lo inmobiliario es lo p
 - **Sincronía con la ficha:** el aviso se actualiza solo cuando cambia el precio, las fotos o la descripción. Si la propiedad pasa a reservada, vendida o arrendada, el aviso se pausa.
 - **Interesados del portal:** llegan a la ficha y al CRM.
 - **Migración desde Convecta:** «Vincular avisos existentes» asocia los avisos que ya están publicados, sin duplicarlos.
-- **Importación desde Convecta:** reintenta las propiedades que fallan, archiva las inactivas y limpia el HTML de las descripciones.
+- **Importación desde Convecta:** ver «Importar desde Convecta» más abajo (la hace el servidor).
 - **Configuración:** ver `PORTAL-INMOBILIARIO.md`. Pruebas: `test/portal-e2e.js`.
 
 ## Qué incluye la 0.1 (etapas 0 y 1)
@@ -173,7 +173,7 @@ Está construida sobre el código de PortalFirma Studio. Lo inmobiliario es lo p
 - **Cartera:**
   - Fichas de propiedad con búsqueda (incluye el RUT del propietario) y filtros por operación, tipo, estado y comuna.
   - Galería, características, comercialización con cambio de estado, personas vinculadas, documentos (arrastrar y soltar, se abren en el editor para enviarlos a firmar) e historial con notas.
-  - «Importar desde Portalfirma» lee la tool `property_manage_tools` del MCP, incluidas las propiedades sincronizadas desde Convecta. Los datos editados en la app se respetan al volver a importar.
+  - «Importar desde Convecta» (único origen; solo el administrador): el servidor lee la cartera de la API de Convecta (`POST /v1/propiedades/importar-convecta`; la clave `CONVECTA_SUBSCRIPTION_KEY` vive solo en el servidor) y asigna cada propiedad como captación al usuario de Asset con el mismo correo (sin distinguir mayúsculas); las que no tienen usuario quedan sin captador y el resumen lista esos correos. Reimportar no duplica ni pisa lo editado en Asset; lo que antes vino de Portalfirma con el mismo código CV-… se adopta. Prueba: `api/test/convecta-unit.js`.
 - **Personas:** CRM con un RUT único validado. Roles: propietario, arrendatario, comprador, codeudor, interesado y proveedor. Cada persona tiene sus propiedades e historial. No se puede borrar una persona que está vinculada.
 - **Negocios, Arriendos y Finanzas:** pantallas de las etapas 2 a 4, con acceso a lo que ya existe en Gestión documental.
 - **Gestión documental:** todo Studio (editor PDF, envío a firma, Notaría virtual, firmas presenciales, plazos, expedientes, flujos, carga masiva, Drive y agente).

@@ -27,7 +27,7 @@ export default function BibliotecaPlantillas() {
     <div className="tw:flex tw:flex-col tw:gap-0.5 tw:p-1.5">
       {lista.length ? lista.map((x) => (
         <ItemLista key={x.file} className="tpl-item tw:cursor-pointer tw:hover:bg-hover" data-file={x.file} onClick={() => openTemplateFile(x.file, 'fill')}
-          media={<span className="tw:grid tw:place-items-center tw:w-9 tw:h-9 tw:rounded-xl tw:bg-lav-soft tw:text-lav-softink"><Icono nombre="template" tam={18} /></span>}
+          media={<span className="tw:grid tw:place-items-center tw:w-9 tw:h-9 tw:rounded-icono tw:bg-lav-soft tw:text-lav-softink"><Icono nombre="template" tam={18} /></span>}
           titulo={x.name}
           detalle={<>{x.fields} campo(s){x.signers?.length ? ' · firmantes: ' + x.signers.join(', ') : ''}{x.updated ? ' · ' + fmtD(x.updated) : ''}</>}
           derecha={

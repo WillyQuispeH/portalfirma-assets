@@ -22,7 +22,7 @@ export default function BarraCaptador({ elegidas, enLista, corredores, alElegirT
 
   return (
     <div className={'im-bulk tw:sticky tw:top-[calc(56px+var(--cab-visible,0px)+8px)] tw:z-[3] tw:flex tw:flex-wrap tw:items-center tw:gap-2.5 tw:px-4 tw:py-2.5 '
-      + 'tw:rounded-2xl tw:border tw:border-solid tw:border-lav-edge/50 tw:border-b-[3px] tw:border-b-lav-edge tw:bg-lav-soft tw:text-text tw:shadow-[0_10px_24px_-14px_rgb(20_35_90/0.35)]'}>
+      + 'tw:rounded-card tw:border tw:border-solid tw:border-lav-edge/50 tw:border-b-[3px] tw:border-b-lav-edge tw:bg-lav-soft tw:text-text tw:shadow-[0_10px_24px_-14px_rgb(20_35_90/0.35)]'}>
       <b id="imBulkN" className="tw:text-lav-softink">{elegidas} seleccionada{elegidas === 1 ? '' : 's'}</b>
       <Boton id="imBulkAll" variante="fantasma" tamano="sm" onClick={alElegirTodas}>Seleccionar las {enLista} de la lista</Boton>
       <Boton id="imBulkNone" variante="fantasma" tamano="sm" onClick={alElegirNinguna}>Ninguna</Boton>

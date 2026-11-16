@@ -43,7 +43,7 @@ function createWindow() {
   win = new BrowserWindow({
     width: 1360, height: 880, minWidth: 980, minHeight: 640,
     title: APP_NAME,
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#12141a' : '#f6f7fb',
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#12141a' : '#F9F6F0',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     // Windows/Linux: la barra de menú (Archivo, Edición…) queda oculta; aparece con Alt. Los atajos siguen funcionando.
     autoHideMenuBar: true,
@@ -769,10 +769,12 @@ function findUrl(obj) {
 
 // ---- PortalFirma Asset: cartera, personas y actividad (base local) ----
 const inmo = require('./inmo');
+if (process.env.PF_MOCK === '1') global.__pfInmo = inmo;   // solo pruebas: las e2e registran firmas de mentira
 global.__inmo = inmo; // las pruebas e2e lo usan desde el proceso principal (app.evaluate)
 inmo.configurar({ historialLocal: () => store.get('history') || [], avisar: (texto) => toUI('agent:event', { type: 'aviso', texto }), cambio: (que) => toUI('agent:event', { type: 'datos', que: que || 'propiedades' }), nombreUsuario: (id) => equipo.nombre(id) });
 const ml = require('./portales/mercadolibre');
 const negocios = require('./negocios');
+if (process.env.PF_MOCK === '1') global.__pfNeg = negocios;   // solo pruebas: las e2e marcan firmas como firmadas
 // Un cambio en la ficha (desde un botón, un negocio o el agente) mantiene al día el aviso del portal
 const cambiarPropiedad = async (id, cambios) => {
   const antes = JSON.parse(JSON.stringify(inmo.obtener(id))); const p = await propietarioPendiente(await inmo.guardarPropiedad({ id, ...cambios }));
@@ -807,6 +809,10 @@ const avisosServidor = require('./avisos').crear({
     firmas: async (a) => { try { await inmo.sincronizar(); } catch {} avisarFirmas(a.texto); },
     // la firma de la etapa actual de un negocio: con el negocio ya sincronizado, avanza (lo hace la app: las etapas viven aquí)
     // un cliente escribió: el lead se recarga al instante (aviso silencioso del servidor)
+    // el arrendatario respondió a la confirmación de su visita: se recarga la agenda y el paso «Visita agendada» se actualiza solo
+    // el acta se cerró (en la app o por «listo» de WhatsApp): el servidor ya marcó el paso del negocio; se trae y se recarga
+    acta_cerrada: async (a) => { try { await inmo.sincronizar(); } catch {} toUI('agent:event', { type: 'aviso', texto: a.texto }); toUI('agent:event', { type: 'datos', que: 'negocios' }); },
+    visita_confirmacion: async (a) => { try { await inmo.sincronizar(); } catch {} toUI('agent:event', { type: 'aviso', texto: a.texto }); toUI('agent:event', { type: 'datos', que: 'agenda' }); toUI('agent:event', { type: 'datos', que: 'negocios' }); },
     lead_msg: async (a) => { try { await inmo.recargarLead(a.datos?.leadId); } catch {} toUI('agent:event', { type: 'datos', que: 'leads', id: a.datos?.leadId }); },
     firma_negocio: async (a) => {
       try { await inmo.sincronizar(); } catch {}
@@ -829,6 +835,7 @@ async function htmlAPdf(html, { cabecera = '' } = {}) {
 }
 // 0.16.15 · formatos propios de la corredora (mandatos de The Living…): se llenan con la ficha y se firman en Portalfirma
 const formatos = require('./formatos').crear({ inmo, pf, firmas, negocios, mock: !!process.env.PF_MOCK, pagador: () => inmo.ajusteCorredora('payerEmail') || (process.env.PF_MOCK ? 'demo@portalfirma.cl' : ''), renderPdf: htmlAPdf, cambiarPropiedad, dir: () => { const d = process.env.PF_INMO_DIR || path.join(app.getPath('userData'), 'inmo'); fs.mkdirSync(d, { recursive: true }); return d; } });
+handle('uf:hoy', () => formatos.ufHoy()); // valor de la UF del día (Panel de brokers); null si no se pudo leer
 handle('fmt:estado', () => formatos.estado());
 handle('fmt:configurar', (o) => formatos.configurar(o || {}));
 handle('fmt:deHito', (propId, hito) => formatos.deHito(inmo.obtener(propId), hito));
@@ -889,7 +896,7 @@ handle('pv:chats', () => postventa.chats());
 const TEMAS = ['system', 'light', 'dark'];
 try { const t = require('./store').get('tema'); if (TEMAS.includes(t)) nativeTheme.themeSource = t; } catch {}
 handle('tema:get', () => ({ tema: nativeTheme.themeSource, oscuro: nativeTheme.shouldUseDarkColors }));
-handle('tema:set', (t) => { if (!TEMAS.includes(t)) throw new Error('Tema no válido.'); nativeTheme.themeSource = t; require('./store').set('tema', t); win?.setBackgroundColor(nativeTheme.shouldUseDarkColors ? '#12141a' : '#f6f7fb'); return { tema: t, oscuro: nativeTheme.shouldUseDarkColors }; });
+handle('tema:set', (t) => { if (!TEMAS.includes(t)) throw new Error('Tema no válido.'); nativeTheme.themeSource = t; require('./store').set('tema', t); win?.setBackgroundColor(nativeTheme.shouldUseDarkColors ? '#12141a' : '#F9F6F0'); return { tema: t, oscuro: nativeTheme.shouldUseDarkColors }; });
 handle('pv:muestra', (o) => postventa.muestra(o || {}));
 handle('pv:probarEstilo', (o) => postventa.probarEstilo(o || {}));
 handle('pv:revisar', () => waSrv.enApi() ? { activo: true, procesados: 0, enServidor: true } : postventa.revisarWhatsApp({ forzar: true, excluir: [(store.get('waAgente') || {}).telefono] }).then(pvAviso));
@@ -1203,6 +1210,26 @@ handle('leads:borrar', (id) => leads.borrar(id));
 // 0.16.9 · Leads: el corredor toma (o devuelve a Sofía) la conversación de WhatsApp y le responde desde Asset
 handle('leads:atencion', (id, quien) => leads.atencion(id, quien));
 handle('leads:reanudar', async (id) => { const l = leads.obtener(id, { marcarLeido: false }); if (l?.telefono) { if (waSrv.enApi()) await waSrv.asistentes.reanudar(l.telefono); else clientesWa.reanudar(l.telefono); } if (l?.atiende === 'corredor') leads.atencion(id, 'agente'); return true; });
+// plantillas de texto del chat de Leads (/plantilla): son del usuario y viven en el servidor (siguen con él a otro equipo)
+const regComandos = () => `/registros/comandos/comandos-${inmo.usuario().id}`;
+handle('cmd:cargar', async () => {
+  if (!(inmo.API && inmo.usuario()?.id)) return { plantillas: store.get('cmdPlantillas') || [], version: 0 };
+  try { const r = await asset.llamar('GET', regComandos()); return { plantillas: Array.isArray(r.plantillas) ? r.plantillas : [], version: r.version || 0 }; }
+  catch (e) { if (e.status === 404) return { plantillas: [], version: 0 }; throw e; }
+});
+handle('cmd:guardar', async (plantillas, version) => {
+  const l = (Array.isArray(plantillas) ? plantillas : []).slice(0, 60).map((p) => ({ nombre: String(p.nombre || '').toLowerCase().replace(/[^a-z0-9áéíóúñ_-]/g, '').slice(0, 30), texto: String(p.texto || '').slice(0, 1500) })).filter((p) => p.nombre && p.texto);
+  if (!(inmo.API && inmo.usuario()?.id)) { store.set('cmdPlantillas', l); return { plantillas: l, version: 0 }; }
+  const r = await asset.llamar('PUT', regComandos(), { plantillas: l, ...(version ? { version } : {}) });
+  return { plantillas: r.plantillas || l, version: r.version || 0 };
+});
+// /enviar del chat de Leads: una propiedad de la cartera (foto, datos y enlace del portal) por el mismo camino que responder
+handle('leads:enviarPropiedad', async (id, propiedadId, operacion) => {
+  if (!waSrv.enApi()) throw new Error('Para enviar una propiedad entra con tu cuenta de Asset.');
+  const envio = await asset.llamar('POST', `/leads/${encodeURIComponent(id)}/enviar-propiedad`, { propiedadId, ...(operacion ? { operacion } : {}) });
+  try { await leads.traerMensajes(id); } catch {}
+  return { ...leads.obtener(id), envio };
+});
 handle('leads:responder', async (id, texto) => {
   const l = leads.obtener(id, { marcarLeido: false }); const t = String(texto || '').trim(); if (!t) throw new Error('Escribe el mensaje.');
   // con cuenta de Asset lo envía el servidor (POST /leads/:id/enviar): solo el corredor a cargo o un administrador, por el
@@ -1324,19 +1351,28 @@ handle('agenda:obtener', (id) => agenda.obtener(id));
 handle('agenda:crear', async (o) => { const e = agenda.crear(o); const hito = await est.alAgendar(e); return hito ? { ...e, hito } : e; });
 handle('agenda:actualizar', (id, o) => agenda.actualizar(id, o));
 handle('agenda:borrar', (id) => agenda.borrar(id));
+// confirmar la visita: el servidor manda la plantilla al WhatsApp del arrendatario; su respuesta confirma el paso (aviso «visita_confirmacion»)
+handle('visita:confirmar', async (id) => { const r = await require('./asset').llamar('POST', `/visitas/${encodeURIComponent(String(id || ''))}/confirmar`, {}); try { await inmo.sincronizar(); } catch {} return r; });
 handle('asset:preparar', (name, args) => agente.prepararLocal(name, args || {}));
 handle('asset:ejecutar', (name, args) => agente.ejecutarLocal(name, args || {}));
 // Etapas (0.15): captación → comercialización → postventa, con pasos logrados / pendientes / no logrados
 const etapas = require('./etapas').crear({ agenda, formatos });
 handle('et:pasos', (o) => { const n = o?.negocioId ? inmo.negocios().find((x) => x.id === o.negocioId) : null; const p = o?.propId ? inmo.todas().find((x) => x.id === o.propId) : null; if (!n && !p) throw new Error('No encontré el negocio.'); return etapas.pasos({ n, p: n ? null : p, ambito: o?.ambito || (n ? 'negocio' : 'captacion') }); });
-handle('et:marcar', (o) => etapas.marcar(o || {}));
+handle('et:marcar', async (o) => {
+  const r = etapas.marcar(o || {});
+  // arriendo: con la comisión cobrada el negocio se cierra como ganado y parte el postarriendo
+  if (o?.paso === 'comision' && o?.estado === 'ok' && o?.negocioId) { const n = inmo.negocios().find((x) => x.id === o.negocioId); if (n?.tipo === 'arriendo' && n.estado === 'abierto') { try { await negocios.cerrar(n.id, 'ganado'); } catch (e) { console.warn('[etapas] cerrar al cobrar la comisión:', e.message); } } }
+  return r;
+});
 // Evaluación del arrendatario y avales por WhatsApp (servidor): solicitar documentos, ver el análisis, decidir
 const evaluacion = require('./evaluacion');
 handle('ev:ver', (id) => evaluacion.ver(id));
 handle('ev:solicitar', (o) => evaluacion.solicitar(o || {}));
 handle('ev:recalcular', (id) => evaluacion.recalcular(id));
-handle('ev:decidir', async (o) => { const r = await evaluacion.decidir(o || {}); if (o?.decision === 'aprobada') { try { etapas.marcar({ negocioId: o.negocioId, paso: 'evaluacion', estado: 'ok', d: 'Aprobada por el corredor' }); } catch {} } return r; });
+handle('ev:decidir', async (o) => { const r = await evaluacion.decidir(o || {}); if (r?.decision?.estado === 'aprobada') { try { etapas.marcar({ negocioId: o.negocioId, paso: 'evaluacion', estado: 'ok', d: o?.personaId ? 'Aprobada: el arrendatario y los avales fueron aprobados' : 'Aprobada por el corredor' }); } catch {} } return r; });   // la aprobación es por persona; el paso queda logrado cuando todos están aprobados
 handle('ev:archivo', (o) => evaluacion.archivo(o || {}));
+handle('ev:clase', (o) => evaluacion.clase(o || {}));
+handle('ev:archivoBytes', (o) => evaluacion.archivoBytes(o || {}));
 const actaVisita = require('./acta-visita');
 handle('acta:listar', (id) => actaVisita.listar(id));
 handle('acta:crear', (o) => actaVisita.crear(o || {}));
@@ -1347,11 +1383,40 @@ handle('acta:resumir', (id) => actaVisita.resumir(id));
 handle('acta:whatsapp', (id) => actaVisita.whatsapp(id));
 handle('acta:archivo', (o) => actaVisita.archivo(o || {}));
 handle('acta:eliminar', (id) => actaVisita.eliminar(id));
+// carta oferta: Asset arma el PDF en el servidor y lo envía a firmar (vista previa antes de enviar)
+const cartaOferta = require('./carta-oferta').crear({ inmo, negocios });
+handle('carta:vistaPrevia', (o) => cartaOferta.vistaPrevia(o || {}));
+handle('carta:enviar', (o) => cartaOferta.enviar(o || {}));
+const contratoArriendo = require('./contrato-arriendo').crear({ inmo, negocios, reservas, abrir: (u) => shell.openExternal(u) });   // contrato de arriendo: PDF del servidor y envío a firmar
+handle('contrato:vistaPrevia', (o) => contratoArriendo.vistaPrevia(o || {}));
+handle('contrato:enviar', (o) => contratoArriendo.enviar(o || {}));
+handle('contrato:version', (o) => contratoArriendo.versionPdf(o || {}));
+handle('contrato:firmantes', (o) => contratoArriendo.firmantes(o || {}));   // el PDF de una versión guardada
+handle('contrato:versionGuardar', (o) => contratoArriendo.versionGuardar(o || {}));
+handle('contrato:revisionPreparar', (o) => contratoArriendo.revisionPreparar(o || {}));
+handle('contrato:revisionEnviar', (o) => contratoArriendo.revisionEnviar(o || {}));
+handle('entrega:vistaPrevia', (o) => contratoArriendo.entregaVistaPrevia(o || {}));   // acta de entrega e inventario (mismo molde que el contrato)
+handle('entrega:enviar', (o) => contratoArriendo.entregaEnviar(o || {}));
+// aceptación del propietario: los detalles de la oferta vigente por WhatsApp (el mensaje se puede editar antes de enviarlo)
+const ofertaWsp = require('./oferta-wsp').crear({ inmo, negocios, reservas, abrir: (u) => shell.openExternal(u) });
+// archivos de un negocio (comprobantes de pago, versiones del contrato): R2, colección «archivos_negocio»
+handle('neg:archivoSubir', async (o) => { if (!inmo.API) throw new Error('Los archivos se guardan solo con la cuenta de Asset.'); const buf = Buffer.from(o?.bytes || []); if (!buf.length || buf.length > 25 * 1024 * 1024) throw new Error('El archivo está vacío o pesa más de 25 MB.'); const clave = await inmo.subirArchivoRegistro('archivos_negocio', o.negocioId, o.nombre || 'archivo', buf, o.mime || undefined); return { clave, nombre: String(o.nombre || 'archivo').slice(0, 200), tipo: o.mime || '', bytes: buf.length, fecha: new Date().toISOString() }; });
+handle('neg:archivoAbrir', async (o) => { const { url } = await require('./asset').llamar('GET', `/registros/archivos_negocio/${encodeURIComponent(o.negocioId)}/archivos/descarga?clave=${encodeURIComponent(o.clave)}&nombre=${encodeURIComponent(o.nombre || 'archivo')}`); if (process.env.PF_MOCK !== '1') shell.openExternal(url); return { ok: true }; });
+handle('neg:wspPreparar', (negocioId) => ofertaWsp.preparar(negocioId));
+handle('neg:wspEnviar', (o) => ofertaWsp.enviar(o || {}));
+const avisoWsp = require('./aviso-wsp').crear({ inmo, negocios, reservas, abrir: (u) => shell.openExternal(u) });   // avisos del postarriendo por WhatsApp (el corredor los revisa y los envía)
+handle('neg:avisoPreparar', (o) => avisoWsp.preparar(o || {}));
+handle('neg:avisoEnviar', (o) => avisoWsp.enviar(o || {}));
+handle('acta:borrarArchivo', (o) => actaVisita.borrarArchivo(o || {}));
 // al cerrar el acta, el paso «Acta de visita» del negocio queda logrado
-handle('acta:cerrar', async (o) => { const r = await actaVisita.cerrar(o?.actaId); if (o?.negocioId) { try { etapas.marcar({ negocioId: o.negocioId, paso: 'acta', estado: 'ok', d: 'Acta de visita cerrada' }); } catch {} } return r; });
+// cerrar el acta: el paso «Acta de visita» queda pendiente (falta enviarla a firmar al visitante); el servidor lo marca y avisa a la app
+handle('acta:cerrar', (o) => actaVisita.cerrar(o?.actaId));
+handle('acta:firmaVistaPrevia', (id) => actaVisita.firmaVistaPrevia(id));
+handle('acta:firmaAjustes', (o) => actaVisita.firmaAjustes(o || {}));
+handle('acta:firmaEnviar', async (id) => { const r = await actaVisita.firmaEnviar(id); try { await inmo.sincronizar(); } catch { /* se trae en la próxima sincronización */ } return r; });
 // 0.16.11 · Cartera: el avance de captación de cada propiedad (lo logrado y lo que falta)
 handle('et:captaciones', () => Object.fromEntries(inmo.todas().filter((p) => !p.archivada).map((p) => { const r = etapas.pasos({ p, ambito: 'captacion' }); const e = r.etapas[0];
-  return [p.id, { ok: e.ok, total: e.total, completa: !r.actual, falta: e.pasos.filter((x) => x.e !== 'ok').map((x) => x.t), actual: r.actual ? { t: r.actual.t, e: r.actual.e } : null }]; })));
+  return [p.id, { ok: e.ok, total: e.total, completa: !r.actual, falta: e.pasos.filter((x) => x.e !== 'ok').map((x) => x.t), actual: r.actual ? { t: r.actual.t, e: r.actual.e } : null, mandato: (() => { const m = e.pasos.find((x) => x.id === 'mandato'); return m?.e === 'ok' && m.f ? String(m.f).slice(0, 10) : null; })() }]; })));
 handle('et:hoy', () => etapas.resumenHoy());
 // 0.16 · «La oficina»: lo de hoy repartido entre el equipo (Pedro · Captación, Juanita · Documentos, Diego · Seguimiento,
 // Fernanda · Leads), las firmas en curso (la sala de reuniones) y cómo hablarles por WhatsApp
@@ -1380,6 +1445,9 @@ handle('neg:obtener', async (id) => { const n = await negocios.obtener(id); if (
 handle('neg:corredor', async (id, corredorId) => { const n = await negocios.obtener(id); const c = corredorId ? equipo.porId(corredorId) : null; if (corredorId && !c) throw new Error('Ese usuario no es de tu corredora.');
   const antes = n.corredorId ? equipo.nombre(n.corredorId) : null; negocios.guardar({ id, corredorId: c?.id || null, corredor: c?.nombre || '' });
   try { await negocios.nota(id, c ? (antes ? `Pasó de ${antes} a ${c.nombre}` : `Asignado a ${c.nombre}`) : 'Quedó sin corredor'); } catch {} return negocios.obtener(id); });
+// metas mensuales por corredor (las define el administrador): { [usuarioId]: { facturacion, captacion } }, guardadas en la configuración de la corredora
+handle('metas:get', () => inmo.config().metasNegocios || {});
+handle('metas:set', (m) => { permisos.soloAdmin('Definir las metas'); const l = {}; for (const [id, v] of Object.entries(m || {})) l[String(id)] = { facturacion: Math.max(0, Math.round(Number(v?.facturacion) || 0)), captacion: Math.max(0, Math.round(Number(v?.captacion) || 0)) }; inmo.guardarConfig({ metasNegocios: l }); return l; });
 handle('neg:guardar', (o) => { if (o?.id) { if (!permisos.verNegocio(negocios.ver(o.id))) throw new Error('Ese negocio es de otro corredor.'); const { corredorId, ...resto } = o; return negocios.guardar(resto); }
   // nuevo: del corredor que lo abre; si lo abre el administrador, del corredor dueño del lead del cliente
   let cid = permisos.corredorActual(); if (!cid && o?.clienteId) { const per = inmo.personaPorId(o.clienteId); const l = per?.leadId ? leads._db().leads.find((x) => x.id === per.leadId) : null; cid = l?.corredorId || null; }
@@ -1459,4 +1527,4 @@ handle('inmo:docElegir', async (id) => {
 handle('inmo:docQuitar', (id, d) => inmo.quitarDocumento(id, d));
 handle('inmo:docAbrir', async (id, d) => { const p = await inmo.docPath(id, d); if (/\.(pdf|docx?|xlsx?|jpe?g|png|webp)$/i.test(p)) openInEditor([p]); else shell.openPath(p); return true; });
 handle('inmo:docCarpeta', (id) => inmo.mostrarCarpeta(id));
-handle('inmo:importar', () => inmo.importarPF(pf, (x) => toUI('inmo:progreso', x)));
+handle('inmo:importar', () => inmo.importarConvecta(pf, (x) => toUI('inmo:progreso', x)));

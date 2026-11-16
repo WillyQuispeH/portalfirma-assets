@@ -18,7 +18,7 @@ function Firmante({ s, i, total }: { s: IFirmante; i: number; total: number }) {
   const { analisis, requeridos, envioCampo, envioSalirCampo, envioQuitar, envioMover } = useEnvio();
   const err = erroresFirmante(s, requeridos);
   return (
-    <div className="signer tw:border tw:border-line tw:rounded-[10px] tw:p-3 tw:mb-2.5">
+    <div className="signer tw:border tw:border-line tw:rounded-control tw:p-3 tw:mb-2.5">
       <div className="tw:flex tw:items-center tw:gap-2 tw:mb-2"><span className="order">{i + 1}</span><strong>{s.fullName || 'Nuevo firmante'}</strong>
         <span className="spacer" />
         <button className="ghost small" data-act="up" data-i={i} disabled={i === 0} title="Subir" onClick={() => envioMover(i, -1)}><Icono nombre="chevU" tam={15} /></button>

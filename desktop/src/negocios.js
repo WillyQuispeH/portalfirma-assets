@@ -19,8 +19,8 @@ const ETAPAS = {
     { id: 'visita', t: 'Visita', d: 'El cliente conoce la propiedad.', tareas: ['Agendar la visita', 'Registrar cómo le fue'] },
     { id: 'reserva', t: 'Reserva', d: 'El cliente reserva mientras se evalúa.', tareas: ['Recibir el dinero de la reserva'], firma: 'Reserva de arriendo', estado: 'reservada' },
     { id: 'evaluacion', t: 'Evaluación', d: 'Antecedentes del arrendatario y del codeudor.', tareas: ['Liquidaciones de sueldo o renta', 'Informe comercial', 'Codeudor o seguro de arriendo'] },
-    { id: 'contrato', t: 'Contrato', d: 'Firma del contrato de arriendo.', tareas: ['Recibir garantía y primer mes'], firma: 'Contrato de arriendo', estado: 'arrendada' },
-    { id: 'entrega', t: 'Entrega', d: 'Entrega con inventario y cobro de la comisión.', tareas: ['Entregar llaves', 'Cobrar la comisión'], firma: 'Acta de entrega e inventario', final: true },
+    { id: 'contrato', t: 'Contrato', d: 'Firma del contrato de arriendo.', tareas: ['Recibir garantía y primer mes'], firma: 'Contrato de arriendo' },
+    { id: 'entrega', t: 'Entrega', d: 'Entrega con inventario y cobro de la comisión.', tareas: ['Entregar llaves', 'Cobrar la comisión'], final: true },   // el acta de entrega es la firma «entrega_acta» (fuera del embudo): al firmarse la propiedad queda arrendada; el negocio lo cierra el cobro de la comisión
   ],
 };
 const now = () => new Date().toISOString();
@@ -28,6 +28,8 @@ const uid = () => 'n' + Date.now().toString(36) + Math.random().toString(36).sli
 const err = (m) => new Error(m);
 const etapas = (tipo) => ETAPAS[tipo] || ETAPAS.venta;
 const etapa = (tipo, id) => etapas(tipo).find((e) => e.id === id);
+// firmas que no son una etapa del embudo: firmarlas no mueve el negocio
+const FIRMAS_FUERA = { oferta: { firma: 'Carta oferta' }, entrega_acta: { firma: 'Acta de entrega e inventario' } };
 const lista = () => inmo.negocios();
 const neg = (id) => { const n = lista().find((x) => x.id === id); if (!n) throw err('El negocio ya no existe.'); return n; };
 let alCambiarPropiedad = async () => [];
@@ -66,6 +68,15 @@ function guardar(o) {
   if ('clienteId' in o) datos.clienteId = o.clienteId || null;
   if ('valor' in o) datos.valor = o.valor && o.valor.valor !== '' && o.valor.valor != null ? { valor: Number(o.valor.valor), moneda: ['UF', 'CLP', 'USD'].includes(o.valor.moneda) ? o.valor.moneda : 'UF' } : null;
   if ('comision' in o) datos.comision = o.comision && o.comision.valor !== '' && o.comision.valor != null ? { tipo: o.comision.tipo === 'monto' ? 'monto' : '%', valor: Number(o.comision.valor) } : null;
+  if ('oferta' in o) { const q = o.oferta || {}; datos.oferta = o.oferta ? { garantia: String(q.garantia || '').trim().slice(0, 120), plazo: String(q.plazo || '').trim().slice(0, 80), vigencia: String(q.vigencia || '').replace(/\D/g, '').slice(0, 3), condiciones: String(q.condiciones || '').trim().slice(0, 800) } : null; }   // la carta oferta lee estos datos
+  if ('aceptacion' in o) { // la negociación con el propietario: oferta, contraofertas y la respuesta final
+    const T = ['oferta', 'contraoferta', 'aceptada', 'rechazada']; const txt = (v, m) => String(v || '').trim().slice(0, m);
+    datos.aceptacion = o.aceptacion ? { rondas: (o.aceptacion.rondas || []).slice(-40).map((r) => ({ fecha: r.fecha || now(), tipo: T.includes(r.tipo) ? r.tipo : 'oferta', por: r.por === 'interesado' ? 'interesado' : 'propietario', monto: r.monto === '' || r.monto == null ? null : Number(r.monto) || null, moneda: ['UF', 'CLP', 'USD'].includes(r.moneda) ? r.moneda : 'UF', garantia: txt(r.garantia, 120), plazo: txt(r.plazo, 80), condiciones: txt(r.condiciones, 800), nota: txt(r.nota, 400) })) } : null;
+  }
+  if ('ciclo' in o) { if (o.ciclo && JSON.stringify(o.ciclo).length > 90000) throw err('Los datos del cierre del arriendo son demasiado grandes.'); datos.ciclo = o.ciclo ? JSON.parse(JSON.stringify(o.ciclo)) : null; }   // pagos, revisión del contrato, entrega y comisión del arriendo
+  const dia = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? String(v) : null);
+  if ('cierreEstimado' in o) datos.cierreEstimado = dia(o.cierreEstimado); // día en que se espera cerrar (Panel de brokers: proyección del mes)
+  if ('comisionPagada' in o) datos.comisionPagada = dia(o.comisionPagada?.fecha) ? { fecha: dia(o.comisionPagada.fecha) } : null; // venta: cuándo se pagó la comisión (en arriendo es n.ciclo.comision.pago)
   if ('proximaAccion' in o) datos.proximaAccion = o.proximaAccion?.texto ? { texto: String(o.proximaAccion.texto).trim().slice(0, 160), fecha: o.proximaAccion.fecha || null } : null;
   if ('corredor' in o) datos.corredor = String(o.corredor || '').trim();
   if ('corredorId' in o) datos.corredorId = o.corredorId || null;
@@ -102,7 +113,7 @@ async function aplicarEstado(n, msgs) {
     const idx = etapas(x.tipo).findIndex((e) => e.id === x.etapa);
     const marcas = etapas(x.tipo).slice(0, idx + 1).filter((e) => e.estado).map((e) => e.estado);
     if (x.estado === 'ganado' && x.tipo === 'venta') marcas.push('vendida');
-    if (x.estado === 'ganado' && x.tipo === 'arriendo') marcas.push('arrendada');
+    if (x.estado === 'ganado' && x.tipo === 'arriendo' || x.tipo === 'arriendo' && x.firmas?.entrega_acta?.estado === 'firmado') marcas.push('arrendada');
     const ult = marcas.pop(); if (ult && (!objetivo || rango(ult) > rango(objetivo))) objetivo = ult;
   }
   if (!objetivo && ['reservada'].includes(p[campo])) objetivo = 'disponible'; // se cayó el negocio: vuelve a estar disponible
@@ -148,7 +159,7 @@ function borrar(id) { const n = neg(id); const l = lista(); l.splice(l.indexOf(n
 
 // ---------- firmas: cada etapa con documento queda ligada a su operación de Portalfirma ----------
 function vincularFirma(id, etapaId, operacion) {
-  const n = neg(id); const e = etapa(n.tipo, etapaId); if (!e?.firma) throw err('Esta etapa no requiere firma.');
+  const n = neg(id); const e = etapa(n.tipo, etapaId) || FIRMAS_FUERA[etapaId] || null; if (!e?.firma) throw err('Esta etapa no requiere firma.');
   const op = Number(String(operacion).replace(/\D/g, '')); if (!op) throw err('Indica un número de operación válido.');
   n.firmas ||= {}; n.firmas[etapaId] = { operacion: op, estado: 'en_firma', firmados: 0, total: 0, revisado: null };
   inmo.registrar(n.id, `${e.firma}: operación ${op} vinculada`, { ref2: n.propId }); inmo.guardar();
@@ -171,11 +182,12 @@ async function revisarFirmas(pf, id) {
     let d; try { d = await pf.processDetail(f.operacion); } catch (e) { if (e.code === 'NEEDS_LOGIN' || /NEEDS_LOGIN/.test(e.message)) throw e; f.error = e.message; continue; }
     const sig = d.signatories || []; f.firmados = sig.filter((s) => s.signed).length; f.total = sig.length; f.revisado = now(); f.error = null;
     if (d.status === 'finalized') {
-      f.estado = 'firmado'; f.firmado = now(); const e = etapa(n.tipo, etId);
+      f.estado = 'firmado'; f.firmado = now(); const e = etapa(n.tipo, etId) || FIRMAS_FUERA[etId] || { firma: 'Documento' };   // «oferta» y «entrega_acta»: no son del embudo, no mueven el negocio
       inmo.registrar(n.id, `${e.firma} firmado (operación ${f.operacion})`, { ref2: n.propId });
       mensajes.push(`${titulo(n)}: ${e.firma.toLowerCase()} firmado.`);
+      if (etId === 'entrega_acta') mensajes.push(...await aplicarEstado(n));   // la propiedad queda arrendada
       const lst = etapas(n.tipo); const idx = lst.findIndex((x) => x.id === etId);
-      if (n.estado === 'abierto' && n.etapa === etId) { // la firma completa la etapa: el negocio avanza solo
+      if (idx >= 0 && n.estado === 'abierto' && n.etapa === etId) { // la firma completa la etapa: el negocio avanza solo
         if (e.final) { const r = await cerrar(n.id, 'ganado'); mensajes.push(...r.mensajes); }
         else { const r = await mover(n.id, lst[idx + 1].id, 'Avanzó solo al firmarse el documento'); mensajes.push(...r.mensajes); }
       }
@@ -192,6 +204,7 @@ async function avanzarPorFirma(id, etId) {
   const n = lista().find((x) => x.id === id); const f = n?.firmas?.[etId];
   if (!f?.avanzar) return { mensajes: [] };
   delete f.avanzar;
+  if (etId === 'entrega_acta') { const m = [`${titulo(n)}: acta de entrega firmada.`, ...await aplicarEstado(n)]; inmo.guardar(); return { mensajes: m }; }   // fuera del embudo: la propiedad queda arrendada y el negocio sigue abierto hasta cobrar la comisión
   if (n.estado !== 'abierto' || n.etapa !== etId || f.estado !== 'firmado') { inmo.guardar(); return { mensajes: [] }; }
   const e = etapa(n.tipo, etId); const lst = etapas(n.tipo); const idx = lst.findIndex((x) => x.id === etId);
   const mensajes = [`${titulo(n)}: ${(e?.firma || 'documento').toLowerCase()} firmado.`];
@@ -200,4 +213,6 @@ async function avanzarPorFirma(id, etId) {
   return { mensajes };
 }
 
-module.exports = { ETAPAS, configurar, listar, obtener, ver, guardar, mover, tarea, cerrar, reabrir, nota, borrar, vincularFirma, quitarFirma, firmaFuera, revisarFirmas, avanzarPorFirma };
+// guarda solo los datos del ciclo del arriendo (sin dejar «Condiciones actualizadas» en el historial): lo usan los avisos por WhatsApp
+function guardarCiclo(id, ciclo) { const n = neg(id); n.ciclo = JSON.parse(JSON.stringify(ciclo || {})); n.actualizado = now(); inmo.guardar(); }
+module.exports = { ETAPAS, guardarCiclo, configurar, listar, obtener, ver, guardar, mover, tarea, cerrar, reabrir, nota, borrar, vincularFirma, quitarFirma, firmaFuera, revisarFirmas, avanzarPorFirma };

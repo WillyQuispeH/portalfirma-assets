@@ -7,6 +7,9 @@ import type { IEtapa, INegocio, TNegocioTipo } from '../interfaces/negocio.inter
 export interface IFiltrosNegocios {
   tipo: TNegocioTipo;
   ver: 'abiertos' | 'cerrados';
+  vista: 'tablero' | 'panel'; // el tablero por etapas o el Panel de brokers
+  pMes: string; // Panel: mes elegido ('YYYY-MM'; '' = el actual)
+  pTipo: 'todos' | TNegocioTipo; // Panel: tipo de negocio
   q: string;
 }
 
@@ -31,7 +34,7 @@ export const useNegocioStore = create<INegocioState>((set, get) => ({
   cargado: false,
   cargando: false,
   error: null,
-  filtros: { tipo: 'venta', ver: 'abiertos', q: '' },
+  filtros: { tipo: 'venta', ver: 'abiertos', q: '', vista: 'tablero', pMes: '', pTipo: 'todos' },
   tipoManual: false,
 
   negocioGetAll: async () => {

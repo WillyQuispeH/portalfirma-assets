@@ -62,7 +62,7 @@ function Entrada({ x, valor, alCambiar }: { x: IFalta; valor: string; alCambiar:
 // lo que falta para enviarlo (queda guardado en la ficha)
 function Faltan({ faltan, valores, alCambiar, alGuardar }: { faltan: IFalta[]; valores: Record<string, string>; alCambiar: (id: string, v: string) => void; alGuardar: () => void }) {
   return (
-    <div className="tw:mb-3 tw:p-3 tw:rounded-[10px] tw:border tw:border-red-edge tw:bg-red/40">
+    <div className="tw:mb-3 tw:p-3 tw:rounded-control tw:border tw:border-red-edge tw:bg-red/40">
       <h4 className="tw:mt-0 tw:mb-2.5 tw:text-[13.5px] tw:font-bold">Falta para enviarlo <small className="tw:font-normal tw:text-muted">(queda guardado en la ficha: no se vuelve a pedir)</small></h4>
       <div className="tw:grid tw:grid-cols-[repeat(auto-fill,minmax(230px,1fr))] tw:items-end tw:gap-x-3.5 tw:gap-y-2.5">
         {faltan.map((x) => <Entrada key={x.id} x={x} valor={valores[x.id] ?? ''} alCambiar={(v) => alCambiar(x.id, v)} />)}

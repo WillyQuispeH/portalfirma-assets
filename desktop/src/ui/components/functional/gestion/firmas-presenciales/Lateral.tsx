@@ -82,7 +82,7 @@ export function Contacto() {
       )) : <p className="muted small">No se identifican participantes.</p>}
     </div>
     {red && (
-      <div className={cx('tw:rounded-[14px] tw:py-3 tw:px-3.5 tw:mt-2.5', info.firmas.hay ? 'tw:[box-shadow:inset_0_0_0_1px_var(--es-line)]' : 'tw:bg-[color-mix(in_srgb,#fff6e0_60%,var(--card))] tw:[box-shadow:inset_0_0_0_1px_color-mix(in_srgb,#d08a00_25%,transparent)]')}>
+      <div className={cx('tw:rounded-card tw:py-3 tw:px-3.5 tw:mt-2.5', info.firmas.hay ? 'tw:[box-shadow:inset_0_0_0_1px_var(--es-line)]' : 'tw:bg-[color-mix(in_srgb,#fff6e0_60%,var(--card))] tw:[box-shadow:inset_0_0_0_1px_color-mix(in_srgb,#d08a00_25%,transparent)]')}>
         {!info.firmas.hay && <p className="small tw:mt-0 tw:mx-0 tw:mb-2 tw:text-[#7a4d00] tw:flex tw:gap-1.5 tw:items-center"><Icono nombre="alert" tam={13} /> No detectamos firmas: solo se puede reducir un documento ya firmado.</p>}
         <label className="chk tw:flex tw:gap-2.5 tw:items-start tw:text-[13px] tw:text-text tw:m-0 tw:leading-[1.5] tw:[&>span]:flex-1"><input type="checkbox" className="tw:w-auto tw:mt-[3px] tw:mx-0 tw:mb-0 tw:accent-brand" id="esDecl" checked={d.declara} onChange={(e) => S.escrituraDato('declara', e.target.checked)} /><span>Declaro que el documento es real, está firmado y llevaré el <b>original firmado</b> a la notaría.</span></label>
       </div>

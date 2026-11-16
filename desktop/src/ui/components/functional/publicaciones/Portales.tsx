@@ -66,7 +66,7 @@ export default function Portales() {
     <>
       <Card>
         <div className="tw:flex tw:items-center tw:gap-3 tw:text-sm">
-          <span className="tw:grid tw:place-items-center tw:flex-none tw:size-9 tw:rounded-xl tw:bg-lav-soft tw:text-lav-softink"><Icono nombre="phone" tam={16} /></span>
+          <span className="tw:grid tw:place-items-center tw:flex-none tw:size-9 tw:rounded-icono tw:bg-lav-soft tw:text-lav-softink"><Icono nombre="phone" tam={16} /></span>
           <span className="tw:flex-1 tw:min-w-0"><b>Contacto de los avisos:</b> {[c.nombre, c.email, c.whatsapp ? 'WhatsApp ' + c.whatsapp : 'sin WhatsApp'].filter(Boolean).join(' · ') || 'sin configurar'}</span>
           <Boton variante="secundario" tamano="sm" icono="edit" id="pbCt" onClick={() => editarContactoAvisos(c)}>Editar</Boton>
         </div>

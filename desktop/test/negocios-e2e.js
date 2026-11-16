@@ -26,7 +26,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     await w.waitForSelector('#nnCli'); ok((await w.$eval('#nnCli', (s) => s.selectedOptions[0].textContent)).includes('Ana Rojas'), 'crea al comprador sin salir del formulario');
     ok((await w.inputValue('#nnProp')) !== '', 'conserva la propiedad elegida');
     await w.fill('#nnVal', '18000'); await w.fill('#nnAcc', 'Llamar a Ana para agendar visita'); await w.click('#mOk');
-    await w.waitForSelector('#ngEt .et-cards');
+    await w.waitForSelector('#ngEt .et-col');
     ok(/Etapa actual: Interesado/.test(await txt('.ng-etapa')) && await w.isChecked('[data-task="0"]'), 'abre el negocio en «Interesado» con el cliente ya registrado');
     ok(/UF 360/.test(await txt('#view-negocios')), 'calcula la comisión (2% de UF 18.000)');
     await w.check('[data-task="1"]'); await w.waitForTimeout(400);
@@ -82,7 +82,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     // La ficha de la propiedad muestra sus negocios
     await w.evaluate(() => window.Inmo.cartera({ especial: '', op: 'todas' })); await w.click('.im-card:has-text("CV-9001")'); await w.waitForSelector('.im-ftabs'); await w.evaluate(() => window.Inmo.fichaTab('negocios')); await w.waitForSelector('[data-neg]');
     ok(/Ana Rojas Díaz\s*Venta/.test(await txt('#view-cartera')) && /Comprador/.test(await txt('#view-cartera')), 'la ficha lista el negocio y vincula al comprador');
-    await w.click('[data-neg]'); await w.waitForSelector('#ngEt .et-cards'); ok(/Escritura de compraventa/.test(await txt('#view-negocios')), 'desde la ficha se abre el negocio');
+    await w.click('[data-neg]'); await w.waitForSelector('#ngEt .et-col'); ok(/Escritura de compraventa/.test(await txt('#view-negocios')), 'desde la ficha se abre el negocio');
     ok(!errs.length, 'sin errores de JavaScript' + (errs.length ? ': ' + errs.join(' | ') : ''));
     console.log('OK negocios');
   } catch (e) { console.error(e.message); await shot('ng-error.png').catch(() => {}); process.exitCode = 1; } finally { await app.close(); }

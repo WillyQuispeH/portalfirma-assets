@@ -42,7 +42,7 @@ export default function Buscador({ id, valor, alCambiar, placeholder, clase = 'i
         value={texto} onChange={(e) => setTexto(e.target.value)} onKeyDown={(e) => { if (e.key === 'Escape' && texto) { e.stopPropagation(); setTexto(''); } }}
         sufijo={texto ? (
           <button type="button" aria-label="Limpiar búsqueda" onClick={() => setTexto('')}
-            className="tw:pointer-events-auto tw:grid tw:place-items-center tw:w-6 tw:h-6 tw:p-0 tw:rounded-md tw:border-0 tw:bg-transparent tw:text-muted tw:cursor-pointer tw:hover:bg-hover tw:hover:text-text">
+            className="tw:pointer-events-auto tw:grid tw:place-items-center tw:w-6 tw:h-6 tw:p-0 tw:rounded-icono tw:border-0 tw:bg-transparent tw:text-muted tw:cursor-pointer tw:hover:bg-hover tw:hover:text-text">
             <Icono nombre="x" tam={13} />
           </button>
         ) : undefined} />

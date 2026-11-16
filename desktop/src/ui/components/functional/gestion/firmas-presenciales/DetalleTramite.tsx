@@ -29,7 +29,7 @@ export default function DetalleTramite({ o }: { o: ITramiteEnviado }) {
     <Seguimiento actual={paso} tramite={o.tramite} fin={o.status === 'cotizacion' ? 'Esperando cotización' : 'La notaría toma el caso'} />
     <div className={TRABAJO}>
       <div className={IZQUIERDA}><div className={BARRA}><b className="small">Lo que recibió la notaría</b></div>
-        <div className="tw:rounded-[18px] tw:overflow-hidden"><Hojas id="esVn" cargar={cargar} clave={o.operation + (principal?.name || '')} espera="Cargando…" /></div></div>
+        <div className="tw:rounded-card tw:overflow-hidden"><Hojas id="esVn" cargar={cargar} clave={o.operation + (principal?.name || '')} espera="Cargando…" /></div></div>
       <aside className={DERECHA}>
         <div className={PRECIO}><small className="muted">{o.status === 'cotizacion' ? 'Valor' : 'Pagado'}</small><b>{clp(o.total)}</b></div>
         {o.notaria && (

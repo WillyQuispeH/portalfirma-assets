@@ -19,7 +19,7 @@ import { toast } from '../../../utils/app';
 // mensaje de error bajo el formulario (vacío no ocupa lugar)
 export const ERROR = 'tw:m-0 tw:text-[13px] tw:text-red-ink tw:empty:hidden';
 // recuadro gris (pasos, avisos, cuentas)
-const CAJITA = 'tw:rounded-xl tw:border tw:border-solid tw:border-line tw:bg-bg tw:px-3 tw:py-2.5';
+const CAJITA = 'tw:rounded-control tw:border tw:border-solid tw:border-line tw:bg-bg tw:px-3 tw:py-2.5';
 const Cerrar = ({ texto = 'Cerrar', principal = false }: { texto?: string; principal?: boolean }) =>
   <Boton id="mCancel" variante={principal ? 'principal' : 'secundario'} onClick={cerrarModal}>{texto}</Boton>;
 const mensajeDe = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -129,7 +129,7 @@ export function ImportarChat({ total, rango, medios, existente, cliente: cliente
     <VentanaCabecera icono="whatsapp" tonoIcono="verde" titulo="Importar conversación" />
     <VentanaCuerpo className={cx('ld-imp', FORM)}>
       <p className="tw:m-0 tw:leading-relaxed"><b>{total} mensajes</b> {rango}{medios ? ` · ${medios}` : ''}.</p>
-      {existente && <p className="tw:m-0 tw:flex tw:items-start tw:gap-2 tw:rounded-xl tw:bg-green-soft tw:text-green-softink tw:px-3 tw:py-2 tw:text-[13px]">
+      {existente && <p className="tw:m-0 tw:flex tw:items-start tw:gap-2 tw:rounded-control tw:bg-green-soft tw:text-green-softink tw:px-3 tw:py-2 tw:text-[13px]">
         <Icono nombre="check" tam={14} /><span>Ya tienes este chat con <b>{existente.nombre || cliente0}</b>: se agregan solo los <b>{existente.nuevos}</b> mensajes nuevos.</span></p>}
       <div>
         <p className="tw:mt-0 tw:mb-2 tw:font-semibold tw:text-sm">¿Quién es el cliente?</p>
@@ -182,7 +182,7 @@ interface ICuentasProps {
 }
 function Cuenta({ icono, clase, titulo, texto, children, id, className }: { icono: string; clase: string; titulo: string; texto: string; children: ReactNode; id?: string; className?: string }) {
   return (
-    <div id={id} className={cx(className, "tw:flex tw:items-center tw:gap-3 tw:rounded-xl tw:border tw:border-solid tw:border-line tw:bg-bg tw:p-3")}>
+    <div id={id} className={cx(className, "tw:flex tw:items-center tw:gap-3 tw:rounded-control tw:border tw:border-solid tw:border-line tw:bg-bg tw:p-3")}>
       <span className={cx('ld-cta-i', clase)}><Icono nombre={icono} tam={20} /></span>
       <div className="tw:min-w-0 tw:flex-1 tw:flex tw:flex-col tw:gap-0.5"><b className="tw:text-sm">{titulo}</b><small className="tw:text-[12.5px] tw:text-muted tw:leading-snug">{texto}</small></div>
       {children}
@@ -323,7 +323,7 @@ export function ImportarInstagram({ conversaciones: conv, dueno: dueno0, partici
           <Boton id="ldIgTodas" tamano="sm" variante="fantasma" onClick={() => setMarcadas(conv.map((c) => c.id))}>Todas</Boton>
           <Boton id="ldIgNinguna" tamano="sm" variante="fantasma" onClick={() => setMarcadas([])}>Ninguna</Boton>
         </div>
-        <div className="tw:max-h-[300px] tw:overflow-auto tw:rounded-xl tw:border tw:border-solid tw:border-line">
+        <div className="tw:max-h-[300px] tw:overflow-auto tw:rounded-control tw:border tw:border-solid tw:border-line">
           {conv.map((c) => (
             <label key={c.id} className="tw:flex tw:items-center tw:gap-2.5 tw:m-0 tw:px-3 tw:py-2 tw:border-0 tw:border-b tw:border-solid tw:border-line tw:last:border-b-0 tw:cursor-pointer tw:hover:bg-hover">
               <input type="checkbox" className="tw:size-4 tw:m-0 tw:flex-none" data-hilo={c.id} checked={marcadas.includes(c.id)} onChange={(e) => marcar(c.id, e.target.checked)} />

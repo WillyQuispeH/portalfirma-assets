@@ -12,6 +12,10 @@ export function useCartera() {
     error: s.error,
     filtros: s.filtros,
     seleccion: s.seleccion,
+    vista: s.vista,
+    ordenTabla: s.ordenTabla,
+    carteraSetVista: s.carteraSetVista,
+    carteraSetOrden: s.carteraSetOrden,
     carteraGetAll: s.carteraGetAll,
     carteraSetFiltros: s.carteraSetFiltros,
     seleccionIniciar: s.seleccionIniciar,
@@ -22,4 +26,4 @@ export function useCartera() {
   })));
 }
 
-export type { IFiltrosCartera, TFiltroEspecial } from '../zustand/cartera.store';
+export type { IFiltrosCartera, TFiltroEspecial, TVistaCartera } from '../zustand/cartera.store';

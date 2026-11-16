@@ -29,14 +29,31 @@ function nuevoEvento(pre = {}, despues) {
 async function ordenVisita(e, despues) {
   if (!e.prop) return toast('La visita no tiene propiedad.');
   if (!e.personas.length) return toast('Agrega al visitante: la orden la firma él.', 4000);
-  const args = { propiedad: e.prop.id, visitante: e.personas[0].id, fecha: e.fecha, hora: e.hora || undefined };
+  const args = { propiedad: e.prop.id, visitante: e.personas[0].id, ...(e.fecha ? { fecha: e.fecha } : {}), hora: e.hora || undefined, ...(e.negocioId ? { negocio: e.negocioId } : {}), ...(e.operacion ? { operacion: e.operacion } : {}) };
   window.members(async () => {
     window.Ventanas.abrir('negocios.agendaPreparandoOrden', {}, { clave: 'modal-2' });
     let d; try { d = await api('assetPreparar', 'asset_orden_visita', args); } catch (er) { closeModal(); return toast(er.message, 6000); }
+    // los datos de la orden se pueden editar en la ventana: se guardan en su origen (la persona del CRM y la visita de la agenda) y el PDF se vuelve a armar
+    const per = (IM.data.personas || []).find((x) => x.id === e.personas[0].id) || e.personas[0];
+    const propiedad = (IM.data.propiedades || []).find((x) => x.id === e.prop.id) || e.prop;
+    const visita = { fecha: e.fecha || '', hora: e.hora || '' };
     window.Ventanas.abrir('negocios.agendaOrdenVisita', {
-      titulo: d.titulo, detalle: d.detalle, aviso: d.aviso || '',
-      alConfirmar: async () => { try { const r = await api('assetEjecutar', 'asset_orden_visita', args); closeModal(); toast(`Orden de visita enviada a firmar: operación ${r.operacion}.`, 5000); despues ? despues(r) : abrirAgenda(); } catch (er) { closeModal(); toast(er.message, 6000); } },
-    }, { clave: 'modal-3' });
+      titulo: d.titulo, aviso: d.aviso || '', pdf: d.pdf || '',
+      visitante: { nombre: per.nombre || '', rut: per.rut || '', email: per.email || '', telefono: per.telefono || '' },
+      visita: { ...visita },
+      propiedades: [{ codigo: propiedad.codigo, titulo: propiedad.titulo, direccion: [propiedad.direccion, propiedad.unidad ? 'depto. ' + propiedad.unidad : '', propiedad.comuna].filter(Boolean).join(', ') }],
+      alGuardar: async (v) => {
+        const cambioPersona = ['nombre', 'rut', 'email', 'telefono'].some((k) => (v[k] || '') !== (per[k] || ''));
+        if (cambioPersona) { await api('inmoPerGuardar', { ...per, nombre: v.nombre, rut: v.rut, email: v.email, telefono: v.telefono }); Object.assign(per, { nombre: v.nombre, rut: v.rut, email: v.email, telefono: v.telefono }); }
+        if (e.id && v.fecha && (v.fecha !== visita.fecha || (v.hora || '') !== visita.hora)) { await api('agendaActualizar', e.id, { fecha: v.fecha, hora: v.hora || '' }); visita.fecha = v.fecha; visita.hora = v.hora || ''; }
+        if (v.fecha) args.fecha = v.fecha; else delete args.fecha; if (v.hora) args.hora = v.hora; else delete args.hora;
+        const n = await api('assetPreparar', 'asset_orden_visita', args);   // el servidor lee lo ya guardado
+        try { await cargar(); } catch {}
+        return { pdf: n.pdf || '' };
+      },
+      // si falla, la ventana muestra el error y sigue abierta
+      alConfirmar: async () => { const r = await api('assetEjecutar', 'asset_orden_visita', args); closeModal(); toast(`Orden de visita enviada a firmar: operación ${r.operacion}.`, 5000); despues ? despues(r) : abrirAgenda(); },
+    }, { clave: 'modal-3', ancho: true });
   }, 'Para generar la orden de visita, inicia sesión con tu cuenta de Portalfirma.');
 }
 

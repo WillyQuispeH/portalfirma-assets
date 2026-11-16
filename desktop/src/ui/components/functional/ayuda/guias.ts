@@ -70,7 +70,7 @@ const RECORRIDOS_BASE: Record<string, TPasoRecorrido[]> = {
     ['.hub-card[data-act="ops"]', 'Mis operaciones', 'El estado de cada firma y los documentos firmados, listos para descargar.'],
     ['.tool-chips', 'Herramientas de PDF', 'Editar, reconocer texto, dividir, comprimir y más, siempre a mano.'],
     ['.hub-col:last-child .lvl-h', 'Para ahorrar tiempo y avanzado', 'Cuando ya envías documentos seguido: plantillas, asistente con IA, plazos, expedientes y flujos masivos.'],
-    ['#helpFab', '¿Dudas? Aquí', 'Este botón abre las guías paso a paso, el buscador de dudas y el contacto con soporte, en cualquier pantalla.'],
+    ['#account', '¿Dudas? Aquí', 'En tu cuenta, «Ayuda y guías» abre las guías paso a paso, el buscador de dudas y el contacto con soporte, en cualquier pantalla.'],
   ],
   editor: [
     ['.tool[data-tool="select"]', 'Seleccionar', 'Clic en un objeto para moverlo; arrastra en un espacio vacío para elegir un área completa.'],

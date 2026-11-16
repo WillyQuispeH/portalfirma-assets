@@ -7,7 +7,6 @@ import { useState } from 'react';
 import Boton from '../../ui/Boton';
 import Input from '../../ui/Input';
 import Select from '../../ui/Select';
-import ListaDatos from '../../ui/ListaDatos';
 import { VentanaCabecera, VentanaCuerpo, VentanaPie } from '../../ui/Ventana';
 import { NOTA, FORM, DOS } from '../gestion/editor-pdf/Modales';
 import { ErrorVentana } from '../negocios/VentanasAntiguas';
@@ -59,34 +58,14 @@ export function NuevoEvento({ tipos, propiedades, personas, alGuardar, ...pre }:
 }
 
 // ---------- modal-2: preparando la orden de visita (no se puede cortar) ----------
-export function PreparandoOrden() {
+export function PreparandoOrden({ titulo = 'Orden de visita', texto = 'Preparando la orden de visita…' }: { titulo?: string; texto?: string }) {
   return <>
-    <VentanaCabecera icono="key" titulo="Orden de visita" cerrable={false} />
+    <VentanaCabecera icono="key" titulo={titulo} cerrable={false} />
     <VentanaCuerpo>
-      <p className={NOTA}><i className="bk-spin" /> Preparando la orden de visita…</p>
+      <p className={NOTA}><i className="bk-spin" /> {texto}</p>
     </VentanaCuerpo>
   </>;
 }
 
-// ---------- modal-3: lo que se enviará y confirmar ----------
-interface IConfirmarOrdenProps {
-  titulo: string;
-  detalle: string[]; // «Dato: valor»
-  aviso?: string;
-  alConfirmar: () => Promise<void>;
-}
-export function ConfirmarOrden({ titulo, detalle, aviso, alConfirmar }: IConfirmarOrdenProps) {
-  const [enviando, setEnviando] = useState(false);
-  const datos = detalle.map((x): [string, string] => { const [k, ...v] = x.split(': '); return [k, v.join(': ')]; });
-  return <>
-    <VentanaCabecera icono="key" titulo={titulo} cerrable={!enviando} />
-    <VentanaCuerpo className={FORM}>
-      <ListaDatos datos={datos} />
-      {aviso && <p className={NOTA}>{aviso}</p>}
-    </VentanaCuerpo>
-    <VentanaPie>
-      <Boton id="mCancel" variante="secundario" onClick={cerrarModal}>Cancelar</Boton>
-      <Boton id="mOk" disabled={enviando} onClick={async () => { setEnviando(true); await alConfirmar(); }}>{enviando ? 'Enviando…' : 'Generar y enviar a firmar'}</Boton>
-    </VentanaPie>
-  </>;
-}
+// ---------- modal-3: la orden de visita (revisar, editar y enviar a firmar): ver OrdenVisita.tsx ----------
+export { ConfirmarOrden } from './OrdenVisita';

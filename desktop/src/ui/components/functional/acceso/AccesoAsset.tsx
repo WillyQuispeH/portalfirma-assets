@@ -4,7 +4,7 @@
 import { useState, type FormEvent } from 'react';
 import { useAcceso } from '../../../store/hooks/useAcceso.hook';
 
-const CAMPO = 'tw:w-full tw:mt-1.5 tw:px-3 tw:py-2.5 tw:rounded-[10px] tw:border tw:border-line tw:bg-bg tw:text-text tw:text-[15px] tw:outline-none tw:focus:border-brand';
+const CAMPO = 'tw:w-full tw:mt-1.5 tw:px-3 tw:py-2.5 tw:rounded-control tw:border tw:border-line tw:bg-bg tw:text-text tw:text-[15px] tw:outline-none tw:focus:border-brand';
 
 export default function AccesoAsset() {
   const { estado, error, enviando, accesoIngresar, accesoRestaurar } = useAcceso();
@@ -24,7 +24,7 @@ export default function AccesoAsset() {
       {estado === 'cargando' ? (
         <img src="assets/logo.png" alt="PortalFirma Asset" className="login-logo tw:opacity-80" />
       ) : (
-        <form onSubmit={entrar} className="tw:w-full tw:max-w-[400px] tw:bg-card tw:border tw:border-line tw:rounded-2xl tw:p-8 tw:shadow-[0_10px_40px_rgba(0,0,0,.08)]">
+        <form onSubmit={entrar} className="tw:w-full tw:max-w-[400px] tw:bg-card tw:border tw:border-line tw:rounded-card tw:p-8 tw:shadow-[0_10px_40px_rgba(0,0,0,.08)]">
           <img src="assets/logo.png" alt="PortalFirma Asset" className="login-logo" />
           <h1 className="tw:text-center tw:text-[22px] tw:font-bold tw:mt-2 tw:mb-1">Ingresa a PortalFirma Asset</h1>
           <p className="tw:text-center tw:text-muted tw:text-sm tw:mb-5">Con el email y la clave que te dio el administrador de tu corredora.</p>

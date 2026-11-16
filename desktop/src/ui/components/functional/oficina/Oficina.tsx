@@ -28,7 +28,7 @@ import type { IOficina, ITareaOficina, TMiembro, TTareaEstado } from '../../../s
 
 const pendientes = (d: IOficina, id: TMiembro) => (d.tareas[id] || []).filter((x) => x.e !== 'esp');
 // tarjeta del kit, translúcida para leerse sobre la escena
-const VIDRIO = 'tw:bg-card/85 tw:backdrop-blur-xl tw:backdrop-saturate-150 tw:rounded-2xl tw:border tw:border-solid tw:border-edge tw:border-b-[3px] tw:border-b-edge-b tw:shadow-lg tw:text-text';
+const VIDRIO = 'tw:bg-card/85 tw:backdrop-blur-xl tw:backdrop-saturate-150 tw:rounded-card tw:border tw:border-solid tw:border-edge tw:border-b-[3px] tw:border-b-edge-b tw:shadow-lg tw:text-text';
 const TONO_TAREA: Record<TTareaEstado, TTono> = { fail: 'rojo', pend: 'amarillo', esp: 'gris' };
 const PUNTO: Record<string, string> = { fail: 'tw:bg-red-edge', pend: 'tw:bg-yellow-edge', ok: 'tw:bg-green-edge' };
 const Punto = ({ e }: { e: string }) => <span aria-hidden className={cx('tw:inline-block tw:flex-none tw:w-2.5 tw:h-2.5 tw:rounded-full', PUNTO[e])} />;
@@ -118,7 +118,7 @@ const Vacio = ({ children }: { children: ReactNode }) => <p className="tw:m-0 tw
 const ICONO_TAREA: Record<TTareaEstado, string> = { fail: 'alert', pend: 'clock', esp: 'dots' };
 function Tarea({ e, texto, sub, accion }: { e: TTareaEstado; texto: string; sub?: string; accion?: ReactNode }) {
   return (
-    <div className="of-tar tw:flex tw:items-start tw:gap-2.5 tw:p-2.5 tw:rounded-xl tw:bg-sunken tw:border tw:border-solid tw:border-edge">
+    <div className="of-tar tw:flex tw:items-start tw:gap-2.5 tw:p-2.5 tw:rounded-control tw:bg-sunken tw:border tw:border-solid tw:border-edge">
       <span className={cx('tw:grid tw:flex-none tw:place-items-center tw:w-7 tw:h-7 tw:rounded-full', SUAVE[TONO_TAREA[e]])} title={ESTXT[e][1]}><Icono nombre={ICONO_TAREA[e]} tam={14} /></span>
       <span className="tw:flex tw:min-w-0 tw:flex-1 tw:flex-col tw:gap-2">
         <span className="tw:flex tw:flex-col"><b className="tw:text-[13.5px] tw:font-semibold">{texto}</b>{sub && <small className="tw:text-xs tw:text-muted">{sub}</small>}</span>
@@ -160,7 +160,7 @@ function Panel({ d, sel, cerrar, alTerminar }: { d: IOficina; sel: TSeleccion; c
     <aside className={caja(p.id === 'diego')}>
       <CabPanel img={<img className="tw:flex-none tw:w-14 tw:h-14 tw:rounded-full tw:object-cover tw:border-2 tw:border-solid tw:border-white tw:shadow" src={`${IMG}ava_${p.id}.png`} alt="" style={{ background: p.suave }} />}
         titulo={p.nombre} sub={`${p.area} · ${p.rol}`} cerrar={cerrar} />
-      <div className="tw:p-3 tw:rounded-xl tw:border tw:border-solid tw:border-edge" style={{ background: p.suave, color: '#1b1f2a' }}>
+      <div className="tw:p-3 tw:rounded-control tw:border tw:border-solid tw:border-edge" style={{ background: p.suave, color: '#1b1f2a' }}>
         <Rotulo color={p.color}>Ahora</Rotulo>
         <div className="tw:mt-0.5 tw:font-semibold">{pr ? (pr.e === 'esp' ? `Esperando ${pr.quien ? 'a ' + pr.quien : 'a otros'}: ${pr.texto}` : pr.texto) : 'Todo al día por mi lado.'}</div>
       </div>
@@ -171,7 +171,7 @@ function Panel({ d, sel, cerrar, alTerminar }: { d: IOficina; sel: TSeleccion; c
             : x.accion && x.e !== 'esp' ? <Boton variante={x.e === 'fail' ? 'peligro' : 'principal'} tamano="sm" data-t={i} onClick={() => tocar(x)}>{x.accion}</Boton>
               : <Badge tono={TONO_TAREA[x.e]} className="tw:flex-none">{ESTXT[x.e][1]}</Badge>} />
       )) : <Vacio>Nada pendiente en mi área. ¡Bien!</Vacio>}
-      <div className="tw:p-3 tw:rounded-xl tw:bg-green-soft tw:text-green-softink tw:text-[13px]">
+      <div className="tw:p-3 tw:rounded-control tw:bg-green-soft tw:text-green-softink tw:text-[13px]">
         {d.wa.activo
           ? <>Por WhatsApp: escribe «<b>{p.nombre}</b>» al {d.wa.numeroEmpresa} y te atiende {p.nombre === 'Juanita' || p.nombre === 'Fernanda' ? 'ella' : 'él'}; tu conversación con cada uno no se mezcla.</>
           : 'Vincula tu celular (Agente › WhatsApp) y podrás hablarle escribiendo su nombre.'}
@@ -186,7 +186,7 @@ function Panel({ d, sel, cerrar, alTerminar }: { d: IOficina; sel: TSeleccion; c
 
 // el equipo, arriba al centro: tocar a alguien abre su panel; «Pedir algo» abre tu mesa
 function Dock({ d, sel, elegir }: { d: IOficina; sel: TSeleccion; elegir: (s: TSeleccion) => void }) {
-  const boton = 'of-dk tw:relative tw:flex tw:flex-col tw:items-center tw:gap-0.5 tw:min-w-[60px] tw:m-0 tw:px-1.5 tw:py-1 tw:rounded-xl tw:border-0 tw:bg-transparent tw:cursor-pointer tw:font-[inherit] tw:text-[11.5px] tw:font-semibold tw:text-text tw:hover:bg-hover tw:focus-visible:outline-2 tw:focus-visible:outline-lav-edge';
+  const boton = 'of-dk tw:relative tw:flex tw:flex-col tw:items-center tw:gap-0.5 tw:min-w-[60px] tw:m-0 tw:px-1.5 tw:py-1 tw:rounded-control tw:border-0 tw:bg-transparent tw:cursor-pointer tw:font-[inherit] tw:text-[11.5px] tw:font-semibold tw:text-text tw:hover:bg-hover tw:focus-visible:outline-2 tw:focus-visible:outline-lav-edge';
   const on = 'on tw:bg-lav-soft tw:hover:bg-lav-soft';
   return (
     <nav className={cx('of-dock tw:pointer-events-auto tw:flex tw:items-center tw:gap-1 tw:p-1.5', VIDRIO)} aria-label="Tu equipo">

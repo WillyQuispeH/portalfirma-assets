@@ -9,9 +9,9 @@ import { cx } from '../../../../utils/cx';
 import { ENCABEZADO, ENCABEZADO_H3, PANEL } from './estilos';
 
 // Tarjeta de cada trámite (es-card la usan las pruebas)
-const TARJETA = 'es-card tw:w-auto tw:m-0 tw:text-left tw:bg-card tw:border tw:border-[color:var(--es-line)] tw:rounded-[22px]! tw:p-[22px] tw:flex tw:flex-col tw:gap-2.5 tw:items-start tw:text-text tw:[box-shadow:var(--es-soft)] tw:[transition:transform_.18s,box-shadow_.18s,border-color_.18s] tw:hover:[transform:translateY(-2px)] tw:hover:border-[color-mix(in_srgb,var(--brand)_22%,var(--line))] tw:hover:[box-shadow:0_2px_4px_rgba(16,24,64,.04),0_18px_40px_-16px_rgba(47,73,224,.25)]';
-const TARJETA_IC = 'tw:size-12 tw:rounded-[15px] tw:grid tw:place-items-center tw:bg-[linear-gradient(135deg,color-mix(in_srgb,#3d9cf0_16%,var(--card)),color-mix(in_srgb,#6a2fe0_14%,var(--card)))] tw:text-brand';
-const SOLTAR = 'tw:mt-1 tw:bg-card tw:rounded-[var(--es-r)] tw:[box-shadow:var(--es-soft)] tw:border-[1.5px] tw:border-dashed tw:border-[color-mix(in_srgb,var(--brand)_22%,var(--line))] tw:py-[52px] tw:px-[30px] tw:flex tw:flex-col tw:items-center tw:gap-3.5 tw:text-center tw:text-muted tw:bg-[linear-gradient(180deg,color-mix(in_srgb,var(--brand)_3%,var(--card)),var(--card))] tw:[&>svg]:text-[color-mix(in_srgb,var(--brand)_70%,var(--card))]';
+const TARJETA = 'es-card tw:w-auto tw:m-0 tw:text-left tw:bg-card tw:border tw:border-[color:var(--es-line)] tw:rounded-card! tw:p-[22px] tw:flex tw:flex-col tw:gap-2.5 tw:items-start tw:text-text tw:[box-shadow:var(--es-soft)] tw:[transition:transform_.18s,box-shadow_.18s,border-color_.18s] tw:hover:[transform:translateY(-2px)] tw:hover:border-[color-mix(in_srgb,var(--brand)_22%,var(--line))] tw:hover:[box-shadow:0_2px_4px_rgba(16,24,64,.04),0_18px_40px_-16px_rgba(47,73,224,.25)]';
+const TARJETA_IC = 'tw:size-12 tw:rounded-icono tw:grid tw:place-items-center tw:bg-[linear-gradient(135deg,color-mix(in_srgb,#3d9cf0_16%,var(--card)),color-mix(in_srgb,#6a2fe0_14%,var(--card)))] tw:text-brand';
+const SOLTAR = 'tw:mt-1 tw:bg-card tw:rounded-card tw:[box-shadow:var(--es-soft)] tw:border-[1.5px] tw:border-dashed tw:border-[color-mix(in_srgb,var(--brand)_22%,var(--line))] tw:py-[52px] tw:px-[30px] tw:flex tw:flex-col tw:items-center tw:gap-3.5 tw:text-center tw:text-muted tw:bg-[linear-gradient(180deg,color-mix(in_srgb,var(--brand)_3%,var(--card)),var(--card))] tw:[&>svg]:text-[color-mix(in_srgb,var(--brand)_70%,var(--card))]';
 
 export function ElegirTramite() {
   const { escrituraElegir } = useEscritura();

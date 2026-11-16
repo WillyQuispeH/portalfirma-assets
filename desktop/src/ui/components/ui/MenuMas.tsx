@@ -95,11 +95,11 @@ export default function MenuMas({ opciones, etiqueta = 'Más acciones', id, cont
       </Boton>
       {abierto && createPortal(
         <div ref={menu} role="menu" data-menu-mas aria-label={etiqueta} onKeyDown={tecladoMenu} style={{ top: pos.top, right: pos.right }}
-          className="tw:fixed tw:z-[90] tw:min-w-[220px] tw:max-w-[320px] tw:p-1.5 tw:rounded-xl tw:border tw:border-solid tw:border-edge tw:border-b-[3px] tw:border-b-edge-b tw:bg-card tw:shadow-[0_16px_40px_-12px_rgb(16_24_64/.28)] tw:origin-top-right tw:animate-[menu-entra_.16s_cubic-bezier(.25,1,.5,1)]">
+          className="tw:fixed tw:z-[90] tw:min-w-[220px] tw:max-w-[320px] tw:p-1.5 tw:rounded-card tw:border tw:border-solid tw:border-edge tw:border-b-[3px] tw:border-b-edge-b tw:bg-card tw:shadow-[0_16px_40px_-12px_rgb(16_24_64/.28)] tw:origin-top-right tw:animate-[menu-entra_.16s_cubic-bezier(.25,1,.5,1)]">
           {opciones.map((o, k) => (
             <button key={o.id ?? k} type="button" role="menuitem" id={o.id} title={o.title} disabled={o.disabled} tabIndex={-1}
               onClick={(e) => { cerrar(); o.alTocar?.(e); }}
-              className="tw:flex tw:w-full tw:items-center tw:gap-2.5 tw:m-0 tw:h-9 tw:px-2.5 tw:rounded-lg tw:border-0 tw:bg-transparent tw:text-left tw:text-sm tw:font-medium tw:text-text tw:cursor-pointer tw:hover:bg-hover tw:focus-visible:bg-hover tw:focus-visible:outline-none tw:disabled:cursor-default tw:disabled:opacity-55">
+              className="tw:flex tw:w-full tw:items-center tw:gap-2.5 tw:m-0 tw:h-9 tw:px-2.5 tw:rounded-control tw:border-0 tw:bg-transparent tw:text-left tw:text-sm tw:font-medium tw:text-text tw:cursor-pointer tw:hover:bg-hover tw:focus-visible:bg-hover tw:focus-visible:outline-none tw:disabled:cursor-default tw:disabled:opacity-55">
               {o.icono ? <span className="tw:text-muted"><Icono nombre={o.icono} tam={16} /></span> : conIconos && <span className="tw:w-4 tw:shrink-0" />}
               <span className="tw:truncate">{o.texto}</span>
             </button>

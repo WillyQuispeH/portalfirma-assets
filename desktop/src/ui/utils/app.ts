@@ -61,6 +61,7 @@ export const nuevaPropiedad = () => window.Inmo.formProp();
 export const nuevaPersona = () => window.Inmo.formPersona();
 export const importarCartera = () => window.Inmo.importar();
 export const abrirPortales = () => window.Inmo.portales();
+export const vincularAvisosExistentes = () => window.Inmo.existentes();
 export async function dictarPropiedad() { await window.Agente.open(); window.Dictado.abrir(); }
 
 // Pide confirmar en una ventana del kit (VentanaConfirmar: botones #mOk y #mCancel). En `texto` y `nota`, lo que va

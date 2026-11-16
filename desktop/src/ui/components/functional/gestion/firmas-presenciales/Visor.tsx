@@ -24,7 +24,7 @@ export function Seguimiento({ actual, tramite, fin }: { actual: number; tramite:
   const pasos = ['Recibido', 'Revisión', 'Notaría', 'Pago', 'En notaría', tramite === 'protocolizacion' ? 'Protocolizado' : 'Firma en notaría'];
   return (
     // es-track y es-tk.on los usan las pruebas
-    <div className="es-track tw:flex tw:items-start tw:bg-[color-mix(in_srgb,var(--bg)_70%,var(--card))] tw:rounded-[16px] tw:py-4 tw:px-5 tw:mb-[18px]">
+    <div className="es-track tw:flex tw:items-start tw:bg-[color-mix(in_srgb,var(--bg)_70%,var(--card))] tw:rounded-card tw:py-4 tw:px-5 tw:mb-[18px]">
       {pasos.map((t, i) => {
         const estado = i < actual ? 'ok' : i === actual ? 'on' : 'no';
         return (
@@ -61,5 +61,5 @@ export function Hojas({ id, cargar, clave, escala = 1, espera = 'Preparando…',
     })();
     return () => { vivo = false; };
   }, [clave, escala, espera, vacio]);
-  return <div className={cx('tw:flex tw:flex-col tw:items-center tw:bg-[linear-gradient(180deg,#eef1f7,#e7eaf2)] tw:rounded-[18px] tw:max-h-[640px] tw:overflow-auto', dos ? 'tw:p-3.5 tw:gap-3' : 'tw:p-[22px] tw:gap-[18px]')} id={id} ref={caja} />;
+  return <div className={cx('tw:flex tw:flex-col tw:items-center tw:bg-[linear-gradient(180deg,#eef1f7,#e7eaf2)] tw:rounded-card tw:max-h-[640px] tw:overflow-auto', dos ? 'tw:p-3.5 tw:gap-3' : 'tw:p-[22px] tw:gap-[18px]')} id={id} ref={caja} />;
 }

@@ -130,7 +130,7 @@ export default function FichaLead({ l, datos, alCambiar, alPlegar }: IFichaLeadP
   const venc = !!l.vencida;
   const indicador = estadoGuardado === 'guardando' ? 'Guardando…' : estadoGuardado === 'guardado' ? 'Guardado' : estadoGuardado === 'error' ? 'No se guardó' : '';
   return (
-    <div className="ld-ficha tw:rounded-2xl tw:border-edge tw:border-b-[3px] tw:border-b-edge-b" id="ldFicha">
+    <div className="ld-ficha tw:rounded-card tw:border-edge tw:border-b-[3px] tw:border-b-edge-b" id="ldFicha">
       <div className="tw:sticky tw:top-0 tw:z-[1] tw:flex tw:items-center tw:gap-2 tw:px-4 tw:py-2.5 tw:border-0 tw:border-b tw:border-solid tw:border-edge tw:bg-card">
         <b className="tw:flex-1 tw:text-[13.5px]">Ficha</b>
         {indicador && <small className={cx('tw:text-[11.5px]', estadoGuardado === 'error' ? 'tw:text-red-softink' : 'tw:text-muted')}>{estadoGuardado === 'guardado' && <Icono nombre="check" tam={11} />} {indicador}</small>}
@@ -160,10 +160,10 @@ export default function FichaLead({ l, datos, alCambiar, alPlegar }: IFichaLeadP
           opciones={datos.estados} />
         {f.estado === 'perdido' && <Input etiqueta="Motivo" placeholder="Encontró otra, ya no busca…" {...txt('motivo')} />}
 
-        {l.resumen && <p className="ld-res tw:m-0 tw:rounded-xl tw:bg-lav-soft tw:px-3 tw:py-2.5 tw:text-[13px] tw:leading-relaxed"><Icono nombre="sparkle" tam={13} /> {l.resumen}</p>}
+        {l.resumen && <p className="ld-res tw:m-0 tw:rounded-control tw:bg-lav-soft tw:px-3 tw:py-2.5 tw:text-[13px] tw:leading-relaxed"><Icono nombre="sparkle" tam={13} /> {l.resumen}</p>}
         {l.perfil && <p className="tw:m-0 tw:text-[13px] tw:leading-relaxed"><b className="tw:block tw:text-[11.5px] tw:uppercase tw:tracking-wide tw:text-muted">Perfil</b>{l.perfil}</p>}
 
-        <div className={cx('tw:flex tw:flex-col tw:gap-2 tw:rounded-xl tw:p-2.5', venc ? 'tw:bg-red-soft' : 'tw:bg-yellow-soft')}>
+        <div className={cx('tw:flex tw:flex-col tw:gap-2 tw:rounded-control tw:p-2.5', venc ? 'tw:bg-red-soft' : 'tw:bg-yellow-soft')}>
           <span className={cx('tw:flex tw:items-center tw:gap-1.5 tw:text-[12.5px] tw:font-bold', venc ? 'tw:text-red-softink' : 'tw:text-yellow-softink')}><Icono nombre="clock" tam={13} /> Próxima acción{venc && ' (vencida)'}</span>
           <div className="tw:grid tw:grid-cols-[1fr_132px] tw:gap-1.5">
             <Input aria-label="Próxima acción" placeholder="Ej.: enviarle 3 opciones" {...txt('pa_texto')} />
@@ -213,8 +213,8 @@ export default function FichaLead({ l, datos, alCambiar, alPlegar }: IFichaLeadP
             <div className="tw:flex tw:flex-col tw:gap-1.5">
               {l.propiedadesInfo.map((p) => (
                 <button key={p.id} type="button" data-prop={p.id} onClick={() => abrirFicha(p.id)}
-                  className="tw:grid tw:grid-cols-[44px_1fr] tw:items-center tw:gap-x-2.5 tw:m-0 tw:p-1.5 tw:rounded-lg tw:border tw:border-solid tw:border-edge tw:bg-card tw:text-left tw:cursor-pointer tw:hover:bg-hover">
-                  {p.foto ? <img src={p.foto} alt="" className="tw:row-span-2 tw:h-9 tw:w-11 tw:rounded-md tw:object-cover" /> : <span className="tw:row-span-2 tw:grid tw:h-9 tw:w-11 tw:place-items-center tw:rounded-md tw:bg-sunken"><Icono nombre="house" tam={16} /></span>}
+                  className="tw:grid tw:grid-cols-[44px_1fr] tw:items-center tw:gap-x-2.5 tw:m-0 tw:p-1.5 tw:rounded-card tw:border tw:border-solid tw:border-edge tw:bg-card tw:text-left tw:cursor-pointer tw:hover:bg-hover">
+                  {p.foto ? <img src={p.foto} alt="" className="tw:row-span-2 tw:h-9 tw:w-11 tw:rounded-icono tw:object-cover" /> : <span className="tw:row-span-2 tw:grid tw:h-9 tw:w-11 tw:place-items-center tw:rounded-icono tw:bg-sunken"><Icono nombre="house" tam={16} /></span>}
                   <b className="tw:text-[12.5px]">{p.codigo}</b><small className="tw:truncate tw:text-[11.5px] tw:text-muted">{p.titulo}</small>
                 </button>
               ))}

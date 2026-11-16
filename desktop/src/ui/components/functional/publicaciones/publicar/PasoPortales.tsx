@@ -28,7 +28,7 @@ function TarjetaPortal({ x }: { x: IPortal }) {
     : x.via === 'feed' && !x.listo ? 'Queda en espera y sale apenas el portal active la integración.' : '';
   return (
     <div data-pc={x.id} className={cx('pb-pc', on && 'on', !puede && 'off',
-      'tw:flex tw:flex-col tw:gap-3 tw:rounded-2xl tw:border tw:border-solid tw:border-b-[3px] tw:p-4 tw:transition-colors tw:duration-100',
+      'tw:flex tw:flex-col tw:gap-3 tw:rounded-card tw:border tw:border-solid tw:border-b-[3px] tw:p-4 tw:transition-colors tw:duration-100',
       on ? 'tw:bg-lav-soft tw:border-lav-edge tw:border-b-lav-edge' : 'tw:bg-card tw:border-edge tw:border-b-edge-b',
       !puede && 'tw:opacity-60')}>
       <label className={cx('tw:m-0 tw:flex tw:items-center tw:gap-3', puede ? 'tw:cursor-pointer' : 'tw:cursor-not-allowed')}>

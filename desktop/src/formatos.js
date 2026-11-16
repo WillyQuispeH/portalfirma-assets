@@ -274,7 +274,7 @@ function crear({ inmo, pf, renderPdf, dir, cambiarPropiedad, firmas = null, nego
   function estado() { const P = paquete(); return { paquete: P ? P.id : null, nombre: P?.nombre || null, disponibles: Object.keys(PAQUETES).map((k) => ({ id: k, nombre: PAQUETES[k]().nombre })),
     empresa: P ? empresa() : null, formatos: P ? P.FORMATOS.map((f) => ({ id: f.id, titulo: f.titulo, hito: f.hito, op: f.op, descripcion: f.descripcion, firma: firmaDe(f) })) : [], tiposFirma: TIPOS_FIRMA, tramites: TRAMITES }; }
 
-  return { activo: () => !!paquete(), estado, configurar, deHito: (p, h) => deHito(p, h).map((f) => ({ id: f.id, titulo: f.titulo, op: f.op })), estadoHito, preparar, completar, vistaPrevia, enviar, html: (id, propId, o = {}) => html(formato(id), inmo.obtener(propId), o || {}), tiene: (id) => !!paquete()?.FORMATOS.some((f) => f.id === id), VARS };
+  return { ufHoy, activo: () => !!paquete(), estado, configurar, deHito: (p, h) => deHito(p, h).map((f) => ({ id: f.id, titulo: f.titulo, op: f.op })), estadoHito, preparar, completar, vistaPrevia, enviar, html: (id, propId, o = {}) => html(formato(id), inmo.obtener(propId), o || {}), tiene: (id) => !!paquete()?.FORMATOS.some((f) => f.id === id), VARS };
 }
 
 module.exports = { crear, VARS };

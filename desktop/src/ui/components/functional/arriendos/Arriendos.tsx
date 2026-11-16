@@ -18,7 +18,7 @@ export default function Arriendos() {
     >
       <Card titulo="Mientras tanto, desde Gestión documental">
         <ItemLista data-act="plazos" alTocar={abrirPlazos} flecha className="tw:-mx-3"
-          media={<span className="tw:grid tw:place-items-center tw:size-10 tw:rounded-xl tw:bg-lav-soft tw:text-lav-softink"><Icono nombre="calendar" tam={18} /></span>}
+          media={<span className="tw:grid tw:place-items-center tw:size-10 tw:rounded-icono tw:bg-lav-soft tw:text-lav-softink"><Icono nombre="calendar" tam={18} /></span>}
           titulo="Plazos y vencimientos" detalle="Tus contratos ordenados por vencimiento" />
       </Card>
     </Layout>

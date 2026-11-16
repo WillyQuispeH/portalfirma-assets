@@ -10,12 +10,16 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import Boton from '../../ui/Boton';
 import Badge from '../../ui/Badge';
+import Card from '../../ui/Card';
 import Textarea from '../../ui/Textarea';
 import { ModalConfirmar } from '../../ui/Modal';
-import InputArchivo from '../../ui/InputArchivo';
+import MenuMas from '../../ui/MenuMas';
+import Icono from '../../ui/Icono';
 import VisorArchivo, { type IArchivoVisor } from './VisorArchivo';
+import { ActaFirma } from './ActaFirma';
 import { actaVisitaService } from '../../../store/services/acta-visita.service';
 import { api } from '../../../utils/api';
+import { abrirModal, cerrarModal } from '../../../utils/modal';
 import { toast } from '../../../utils/app';
 import type { IActaVisita } from '../../../store/interfaces/acta-visita.interface';
 
@@ -24,7 +28,7 @@ const fmtT = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, 
 const fdm = (f: string) => `${f.slice(8, 10)}/${f.slice(5, 7)}`;
 const fhora = (iso: string) => new Date(iso).toLocaleString('es-CL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 const mensaje = (e: unknown) => (e instanceof Error ? e.message : String(e));
-const CAJA = 'tw:rounded-xl tw:border tw:border-solid tw:border-edge tw:p-3 tw:flex tw:flex-col tw:gap-2';
+const CAJA = 'tw:flex tw:flex-col tw:gap-5';   // sin caja ni borde: las secciones se separan por espacio
 const INTERES = { alto: ['verde', 'Interés alto'], medio: ['amarillo', 'Interés medio'], bajo: ['rojo', 'Interés bajo'], sin_datos: ['gris', 'Sin datos de interés'] } as const;
 const ORIGEN = { app: 'grabado en Asset', archivo: 'archivo subido', whatsapp: 'por WhatsApp' } as const;
 
@@ -55,11 +59,27 @@ function useGrabadoraActa(alAudio: (bytes: Uint8Array, mime: string) => void, al
   return { grabando, seg, alternar };
 }
 
-/** un bloque ordenado del acta: título con su cuenta y el contenido debajo */
-function Seccion({ titulo, cuenta, children }: { titulo: string; cuenta?: number; children: ReactNode }) {
+/** una foto del acta como miniatura (se toca para verla grande); el «⋯» de eliminar va en la esquina */
+function Miniatura({ url, titulo, n, alAbrir, menu }: { url?: string; titulo: string; n: number; alAbrir: () => void; menu?: ReactNode }) {
   return (
-    <div className="tw:flex tw:flex-col tw:gap-2 tw:pt-2 tw:border-0 tw:border-t tw:border-solid tw:border-edge">
-      <h4 className="tw:m-0 tw:text-[13px] tw:font-bold">{titulo}{cuenta ? <span className="tw:ml-1.5 tw:font-semibold tw:text-muted">({cuenta})</span> : null}</h4>
+    <li className="tw:relative tw:size-24 tw:flex-none">
+      <button type="button" data-acta-foto={n} title={titulo} aria-label={titulo} onClick={alAbrir}
+        className="tw:size-full tw:p-0 tw:m-0 tw:border-0 tw:rounded-control tw:overflow-hidden tw:bg-sunken tw:cursor-pointer tw:grid tw:place-items-center tw:text-muted">
+        {url ? <img src={url} alt={titulo} loading="lazy" className="tw:size-full tw:object-cover" /> : <Icono nombre="image" tam={22} />}
+      </button>
+      {menu && <span className="tw:absolute tw:top-1 tw:right-1">{menu}</span>}
+    </li>
+  );
+}
+
+/** un bloque ordenado del acta: título con su cuenta y, a la derecha y en la misma fila, sus acciones */
+function Seccion({ titulo, cuenta, acciones, children }: { titulo: string; cuenta?: number; acciones?: ReactNode; children: ReactNode }) {
+  return (
+    <div className="tw:flex tw:flex-col tw:gap-2.5">
+      <div className="tw:flex tw:items-center tw:gap-2 tw:flex-nowrap">
+        <h4 className="tw:m-0 tw:flex-1 tw:text-[13px] tw:font-bold">{titulo}{cuenta ? <span className="tw:ml-1.5 tw:font-semibold tw:text-muted">({cuenta})</span> : null}</h4>
+        {acciones && <div className="tw:flex tw:flex-none tw:items-center tw:gap-2">{acciones}</div>}
+      </div>
       {children}
     </div>
   );
@@ -72,6 +92,10 @@ export default function ActaVisita({ negocioId, alCerrada }: { negocioId: string
   const [notas, setNotas] = useState<Record<string, string>>({});
   const [visor, setVisor] = useState<IArchivoVisor | null>(null);
   const [aEliminar, setAEliminar] = useState<IActaVisita | null>(null);
+  const entradaAudio = useRef<HTMLInputElement>(null);
+  const entradaFotos = useRef<HTMLInputElement>(null);
+  const [minis, setMinis] = useState<Record<string, string>>({});   // miniaturas: enlaces firmados de las fotos, por «acta:n»
+  const [aBorrar, setABorrar] = useState<{ acta: IActaVisita; tipo: 'audio' | 'foto'; n: number } | null>(null);
 
   const cargar = useCallback(async () => {
     try { setActas((await actaVisitaService.listar(negocioId)).items); setError(''); } catch (e) { setError(mensaje(e)); setActas([]); }
@@ -85,6 +109,14 @@ export default function ActaVisita({ negocioId, alCerrada }: { negocioId: string
     return () => clearInterval(t);
   }, [hayAbierta, trabajando, cargar]);
 
+  useEffect(() => {
+    (actas ?? []).forEach((a) => a.fotos.forEach((f) => {
+      const k = `${a.id}:${f.n}`;
+      if (minis[k] !== undefined) return;
+      setMinis((m) => ({ ...m, [k]: '' }));
+      actaVisitaService.archivo(a.id, 'foto', f.n).then((r) => setMinis((m) => ({ ...m, [k]: r.url }))).catch(() => null);
+    }));
+  }, [actas, minis]);
   const abierta = actas?.find((a) => a.estado === 'abierta') ?? null;
   const cerradas = (actas ?? []).filter((a) => a.estado === 'cerrada');
 
@@ -118,6 +150,26 @@ export default function ActaVisita({ negocioId, alCerrada }: { negocioId: string
     const r = await actaVisitaService.whatsapp(a.id);
     toast(`Te escribí por WhatsApp${r.telefono ? ' al ' + r.telefono : ''}: manda el audio y las fotos, y escribe «listo» al terminar.`, 7000);
   });
+  const borrarArchivo = async (x: { acta: IActaVisita; tipo: 'audio' | 'foto'; n: number }) => { poner(await actaVisitaService.borrarArchivo(x.acta.id, x.tipo, x.n)); toast(x.tipo === 'audio' ? 'Audio eliminado.' : 'Foto eliminada.'); };
+  // el acta cerrada se envía a firmar al visitante: ventana con el PDF, editable y guardado en su origen (persona del CRM y acta)
+  const abrirFirma = (a: IActaVisita) => hacer('firma', async () => {
+    const r = await actaVisitaService.firmaVistaPrevia(a.id);
+    if (!r.visitante) throw new Error(r.error || 'No pude preparar el acta para firmar.');
+    abrirModal(<ActaFirma pdf={r.pdf} errorInicial={r.pdf ? '' : r.error} orden={r.orden} propiedad={r.propiedad}
+      datos={{ nombre: r.visitante.nombre, rut: r.visitante.rut, email: r.visitante.email, telefono: r.visitante.telefono, interes: r.interes, observaciones: r.observaciones }}
+      alGuardar={async (d) => {
+        await actaVisitaService.firmaAjustes(a.id, { observaciones: d.observaciones, interes: d.interes, visitante: { nombre: d.nombre, rut: d.rut, email: d.email, telefono: d.telefono } });
+        const n = await actaVisitaService.firmaVistaPrevia(a.id);
+        if (!n.pdf) throw new Error(n.error || 'No pude armar el PDF.');
+        try { await (window as unknown as { cargar?: () => Promise<void> }).cargar?.(); } catch { /* la cartera se refresca después */ }
+        return { pdf: n.pdf };
+      }}
+      alConfirmar={async () => { const e = await actaVisitaService.firmaEnviar(a.id); cerrarModal(); toast(`Acta de visita enviada a firmar: operación ${e.operacion}.`, 5000); alCerrada?.(); }} />, { ancho: true, clave: 'modal-126' });
+  });
+  // el visitante no quedó interesado: se cierra el negocio como perdido, con el motivo
+  const noInteresado = () => (window as unknown as { Ventanas: { abrir: (n: string, p: object, o: object) => void } }).Ventanas.abrir('negocios.perdido', {
+    alGuardar: async (m: string) => { await api('negCerrar', negocioId, 'perdido', m); cerrarModal(); toast('Negocio marcado como perdido.'); alCerrada?.(); },
+  }, { clave: 'modal-46' });
   const guardarNotas = async (a: IActaVisita) => { if (notas[a.id] != null && notas[a.id] !== a.notas) await actaVisitaService.notas(a.id, notas[a.id]); };
   const eliminar = async (a: IActaVisita) => {
     await actaVisitaService.eliminar(a.id);
@@ -134,36 +186,41 @@ export default function ActaVisita({ negocioId, alCerrada }: { negocioId: string
   if (actas === null) return <p className="tw:m-0 tw:text-[13px] tw:text-muted">Cargando las actas…</p>;
 
   const ver = (a: IActaVisita, editable: boolean) => (
-    <section key={a.id} className={CAJA} data-acta={a.id}>
-      <div className="tw:flex tw:items-center tw:gap-2 tw:flex-wrap">
-        <h3 className="tw:m-0 tw:text-sm tw:font-bold tw:flex-1">Visita del {fdm(a.fecha)}</h3>
-        <Badge tono={a.estado === 'cerrada' ? 'verde' : 'amarillo'} punto>{a.estado === 'cerrada' ? 'Cerrada' : 'Abierta'}</Badge>
-        {a.resumen && <Badge tono={INTERES[a.resumen.interes][0]}>{INTERES[a.resumen.interes][1]}</Badge>}
-      </div>
-
-      <Seccion titulo="Audio de la visita" cuenta={a.audios.length}>
-        {editable && (
-          <>
-            <div className="tw:flex tw:flex-wrap tw:justify-end tw:gap-2" id="actaAgregar">
-              <Boton id="actaGrabar" variante={grab.grabando ? 'peligro' : 'principal'} icono={grab.grabando ? undefined : 'mic'} cargando={trabajando === 'audio'} disabled={!!trabajando} onClick={grab.alternar}>
-                {grab.grabando ? <><i className="tw:block tw:size-2.5 tw:rounded-full tw:bg-current tw:animate-pulse" />Detener · {fmtT(grab.seg)}</> : trabajando === 'audio' ? 'Transcribiendo…' : 'Grabar la visita'}
-              </Boton>
-              <Boton id="actaWa" variante="secundario" icono="whatsapp" cargando={trabajando === 'wa'} disabled={!!trabajando || grab.grabando} onClick={() => porWhatsapp(a)}>Mandar por WhatsApp</Boton>
-            </div>
-            <InputArchivo id="actaSubir" etiqueta="Subir un audio ya grabado" ayuda="Arrastra el archivo o pulsa aquí · MP3, M4A, OGG, WAV (hasta 25 MB)" icono="upload" accept="audio/*,.m4a,.opus,.ogg,.mp3,.wav,.amr,.aac,.webm" multiple
-              cargando={trabajando === 'audio'} disabled={!!trabajando || grab.grabando} onArchivos={subirAudios} />
-            <p className="tw:m-0 tw:text-xs tw:text-muted">Por WhatsApp también puedes mandarle el audio a la empresa y decir «guárdalo en el acta de visita»: se transcribe y se resume solo.</p>
-          </>
-        )}
+    <div key={a.id} data-acta={a.id}>
+      <Card titulo={`Visita del ${fdm(a.fecha)}`} accion={
+        <div className="tw:flex tw:items-center tw:gap-2 tw:flex-nowrap">
+          <Badge tono={a.estado === 'cerrada' ? 'verde' : 'amarillo'} punto>{a.estado === 'cerrada' ? 'Cerrada' : 'Abierta'}</Badge>
+          {a.resumen && <Badge tono={INTERES[a.resumen.interes][0]}>{INTERES[a.resumen.interes][1]}</Badge>}
+          {a.firma && <Badge tono={a.firma.estado === 'firmado' ? 'verde' : 'amarillo'} icono={a.firma.estado === 'firmado' ? 'check' : 'clock'}>{a.firma.estado === 'firmado' ? 'Firmada' : 'En firma'}</Badge>}
+          <MenuMas tamano="sm" etiqueta="Más acciones del acta" opciones={[
+            ...(a.estado === 'cerrada' && !a.firma ? [{ id: 'actaNoInteresado', texto: 'El visitante no quedó interesado…', icono: 'x', disabled: !!trabajando, alTocar: noInteresado }] : []),
+            { id: 'actaEliminar', texto: 'Eliminar acta', icono: 'trash', disabled: !!trabajando || grab.grabando, alTocar: () => setAEliminar(a) },
+          ]} />
+        </div>}>
+      <div className={CAJA}>
+      <Seccion titulo="Audio de la visita" cuenta={a.audios.length} acciones={editable ? <>
+        <Boton id="actaGrabar" variante={grab.grabando ? 'peligro' : 'principal'} icono={grab.grabando ? undefined : 'mic'} cargando={trabajando === 'audio'} disabled={!!trabajando} onClick={grab.alternar}>
+          {grab.grabando ? <><i className="tw:block tw:size-2.5 tw:rounded-full tw:bg-current tw:animate-pulse" />Detener · {fmtT(grab.seg)}</> : trabajando === 'audio' ? 'Transcribiendo…' : 'Grabar la visita'}
+        </Boton>
+        <MenuMas tamano="md" etiqueta="Otras formas de sumar el audio" opciones={[
+          { id: 'actaSubirItem', texto: 'Subir un audio ya grabado', icono: 'upload', disabled: !!trabajando || grab.grabando, alTocar: () => entradaAudio.current?.click() },
+          { id: 'actaWa', texto: 'Mandar el audio por WhatsApp', icono: 'whatsapp', disabled: !!trabajando || grab.grabando, alTocar: () => porWhatsapp(a) },
+        ]} />
+      </> : undefined}>
+        {editable && a.audios.length === 0 && <p className="tw:m-0 tw:text-xs tw:text-muted">Graba la visita aquí, o súbela / mándala por WhatsApp desde el menú «⋯»: se transcribe y se resume sola.</p>}
         {a.audios.length > 0 && (
-          <ul className="tw:list-none tw:m-0 tw:p-0 tw:flex tw:flex-col tw:gap-1.5">
+          <ul className="tw:list-none tw:m-0 tw:p-0 tw:flex tw:flex-col tw:gap-1">
             {a.audios.map((x) => (
-              <li key={x.n} data-acta-audio={x.n} className="tw:flex tw:items-center tw:gap-2 tw:rounded-lg tw:border tw:border-solid tw:border-edge tw:px-2.5 tw:py-1.5">
-                <div className="tw:flex tw:flex-col tw:min-w-0 tw:flex-1">
-                  <b className="tw:text-[13px]">Audio {x.n}</b>
-                  <small className="tw:text-xs tw:text-muted tw:truncate">{ORIGEN[x.origen]} · {fhora(x.recibido)} · {(x.bytes / 1048576).toFixed(1)} MB{x.error ? ' · sin transcripción' : ''}</small>
-                </div>
-                <Boton tamano="sm" variante="secundario" icono="mic" onClick={() => abrirAudio(a, x)}>Escuchar y leer</Boton>
+              <li key={x.n} data-acta-audio={x.n} className="tw:flex tw:items-center tw:gap-1 tw:flex-nowrap">
+                <button type="button" title="Escuchar y leer la transcripción" onClick={() => abrirAudio(a, x)}
+                  className="tw:flex tw:min-w-0 tw:flex-1 tw:items-center tw:gap-3 tw:p-1.5 tw:m-0 tw:border-0 tw:rounded-control tw:bg-transparent tw:text-left tw:font-[inherit] tw:text-text tw:cursor-pointer tw:hover:bg-hover">
+                  <span className="tw:grid tw:size-9 tw:flex-none tw:place-items-center tw:rounded-full tw:bg-lav-soft tw:text-lav-softink"><Icono nombre="mic" tam={16} /></span>
+                  <span className="tw:flex tw:min-w-0 tw:flex-col">
+                    <b className="tw:text-[13px]">Audio {x.n}</b>
+                    <small className="tw:text-xs tw:text-muted tw:truncate">{ORIGEN[x.origen]} · {fhora(x.recibido)} · {(x.bytes / 1048576).toFixed(1)} MB{x.error ? ' · sin transcripción' : ''}</small>
+                  </span>
+                </button>
+                {editable && <MenuMas tamano="sm" etiqueta="Más acciones del audio" opciones={[{ texto: 'Eliminar audio', icono: 'trash', disabled: !!trabajando, alTocar: () => setABorrar({ acta: a, tipo: 'audio', n: x.n }) }]} />}
               </li>
             ))}
           </ul>
@@ -172,13 +229,22 @@ export default function ActaVisita({ negocioId, alCerrada }: { negocioId: string
       </Seccion>
 
       <Seccion titulo="Fotos de la visita" cuenta={a.fotos.length}>
-        {editable && <InputArchivo id="actaFotos" etiqueta="Agregar fotos" ayuda="Arrastra las fotos o pulsa aquí · JPG, PNG, HEIC" icono="image" accept="image/*,.heic,.heif" multiple
-          cargando={trabajando === 'foto'} disabled={!!trabajando || grab.grabando} onArchivos={subirFotos} />}
-        {a.fotos.length > 0
-          ? <div className="tw:grid tw:grid-cols-[repeat(auto-fill,minmax(110px,1fr))] tw:gap-1.5">
-            {a.fotos.map((x) => <Boton key={x.n} variante="secundario" icono="image" bloque data-acta-foto={x.n} onClick={() => abrirFoto(a, x)}>Foto {x.n}</Boton>)}
-          </div>
-          : !editable && <p className="tw:m-0 tw:text-[13px] tw:text-muted">Sin fotos.</p>}
+        {a.fotos.length > 0 || editable
+          ? <ul className="tw:list-none tw:m-0 tw:p-0 tw:flex tw:flex-wrap tw:gap-2">
+            {a.fotos.map((x) => (
+              <Miniatura key={x.n} n={x.n} titulo={`Foto ${x.n}`} url={minis[`${a.id}:${x.n}`] || undefined} alAbrir={() => abrirFoto(a, x)}
+                menu={editable ? <MenuMas tamano="sm" etiqueta="Más acciones de la foto" opciones={[{ texto: 'Eliminar foto', icono: 'trash', disabled: !!trabajando, alTocar: () => setABorrar({ acta: a, tipo: 'foto', n: x.n }) }]} /> : undefined} />
+            ))}
+            {editable && (
+              <li className="tw:size-24 tw:flex-none">
+                <button type="button" id="actaFotosBtn" title="Agregar fotos" aria-label="Agregar fotos" disabled={!!trabajando || grab.grabando} onClick={() => entradaFotos.current?.click()}
+                  className="tw:size-full tw:p-0 tw:m-0 tw:border-0 tw:rounded-control tw:bg-sunken tw:text-muted tw:grid tw:place-items-center tw:cursor-pointer tw:hover:bg-hover tw:disabled:opacity-50">
+                  {trabajando === 'foto' ? <div className="spinner" /> : <Icono nombre="plus" tam={24} />}
+                </button>
+              </li>
+            )}
+          </ul>
+          : <p className="tw:m-0 tw:text-[13px] tw:text-muted">Sin fotos.</p>}
       </Seccion>
 
       {editable
@@ -186,7 +252,7 @@ export default function ActaVisita({ negocioId, alCerrada }: { negocioId: string
         : a.notas && <p className="tw:m-0 tw:text-[13px]"><b>Notas:</b> {a.notas}</p>}
 
       {a.resumen && (
-        <div className="tw:flex tw:flex-col tw:gap-1.5 tw:rounded-lg tw:bg-lav-soft tw:p-2.5" data-acta-resumen>
+        <div className="tw:flex tw:flex-col tw:gap-1.5 tw:rounded-control tw:bg-lav-soft tw:p-3" data-acta-resumen>
           <h4 className="tw:m-0 tw:text-[13px] tw:font-bold">Resumen de la visita</h4>
           <p className="tw:m-0 tw:text-[13px] tw:whitespace-pre-wrap">{a.resumen.resumen}</p>
           {([['Lo que comentó el interesado', a.resumen.interesado], ['Lo que comentó el corredor', a.resumen.corredor], ['Objeciones', a.resumen.objeciones], ['Acuerdos', a.resumen.acuerdos], ['Próximos pasos', a.resumen.proximosPasos]] as const)
@@ -196,9 +262,14 @@ export default function ActaVisita({ negocioId, alCerrada }: { negocioId: string
         </div>
       )}
 
+      {!editable && !a.firma && (
+        <div className="tw:flex tw:items-center tw:justify-end tw:gap-2 tw:flex-nowrap">
+          <span className="tw:mr-auto tw:text-xs tw:text-muted">El paso se logra cuando el visitante firma el acta.</span>
+          <Boton id="actaFirmar" icono="sign" cargando={trabajando === 'firma'} disabled={!!trabajando} onClick={() => abrirFirma(a)}>Enviar el acta a firmar</Boton>
+        </div>
+      )}
       {editable && (
-        <div className="tw:flex tw:flex-wrap tw:justify-end tw:gap-2">
-          <Boton id="actaEliminar" variante="peligro" icono="trash" disabled={!!trabajando || grab.grabando} onClick={() => setAEliminar(a)}>Eliminar acta</Boton>
+        <div className="tw:flex tw:items-center tw:justify-end tw:gap-2 tw:flex-nowrap">
           <Boton id="actaResumir" variante="secundario" icono="sparkle" cargando={trabajando === 'resumir'} disabled={!!trabajando || grab.grabando || (!a.audios.length && !(notas[a.id] ?? a.notas).trim())}
             onClick={() => hacer('resumir', async () => { await guardarNotas(a); return actaVisitaService.resumir(a.id); })}>
             {a.resumen ? 'Rehacer el resumen' : 'Generar el resumen'}
@@ -206,29 +277,25 @@ export default function ActaVisita({ negocioId, alCerrada }: { negocioId: string
           <Boton id="actaCerrar" icono="check" cargando={trabajando === 'cerrar'} disabled={!!trabajando || grab.grabando} onClick={() => cerrar(a)}>Cerrar el acta</Boton>
         </div>
       )}
-      {!editable && (
-        <div className="tw:flex tw:flex-wrap tw:justify-end tw:gap-2">
-          <Boton id="actaEliminar" variante="peligro" icono="trash" disabled={!!trabajando} onClick={() => setAEliminar(a)}>Eliminar acta</Boton>
-        </div>
-      )}
-    </section>
+      </div>
+      </Card>
+    </div>
   );
 
   return (
     <div className="tw:flex tw:flex-col tw:gap-3" id="actaPanel">
+      <input ref={entradaAudio} id="actaSubir" type="file" style={{ display: 'none' }} accept="audio/*,.m4a,.opus,.ogg,.mp3,.wav,.amr,.aac,.webm" multiple onChange={(e) => { const l = Array.from(e.target.files ?? []); e.target.value = ''; subirAudios(l); }} />
+      <input ref={entradaFotos} id="actaFotos" type="file" style={{ display: 'none' }} accept="image/*,.heic,.heif" multiple onChange={(e) => { const l = Array.from(e.target.files ?? []); e.target.value = ''; subirFotos(l); }} />
       <VisorArchivo archivo={visor} alCerrar={() => setVisor(null)} />
       <ModalConfirmar abierto={!!aEliminar} onCerrar={() => setAEliminar(null)} titulo="¿Eliminar el acta de la visita?" peligro textoConfirmar="Eliminar"
         mensaje={`Se borran sus ${aEliminar?.audios.length ?? 0} audio(s), ${aEliminar?.fotos.length ?? 0} foto(s), notas y resumen. No se puede deshacer.`}
         onConfirmar={async () => { if (aEliminar) await eliminar(aEliminar); setAEliminar(null); }} />
+      <ModalConfirmar abierto={!!aBorrar} onCerrar={() => setABorrar(null)} titulo={aBorrar?.tipo === 'audio' ? '¿Eliminar este audio?' : '¿Eliminar esta foto?'} peligro textoConfirmar="Eliminar"
+        mensaje="Se borra del acta y de los archivos. El resumen ya armado no cambia: puedes rehacerlo. No se puede deshacer."
+        onConfirmar={async () => { if (aBorrar) { try { await borrarArchivo(aBorrar); } catch (e) { setError(mensaje(e)); } } setABorrar(null); }} />
       {error && <p className="error tw:m-0 tw:text-[13px]" id="actaError">{error}</p>}
       {abierta ? ver(abierta, true) : (
-        <section className={CAJA}>
-          <div>
-            <h3 className="tw:m-0 tw:text-sm tw:font-bold">Acta de la visita</h3>
-            <p className="tw:mt-1 tw:mb-0 tw:text-[13px] tw:text-muted">Graba el audio de la visita (aquí o por WhatsApp), suma fotos y obtén un resumen de lo que comentó el interesado y de lo que comentaste tú.</p>
-          </div>
-          <div className="tw:flex tw:justify-end"><Boton id="actaNueva" icono="plus" cargando={trabajando === 'nueva'} disabled={!!trabajando} onClick={() => hacer('nueva', () => actaVisitaService.crear(negocioId))}>{cerradas.length ? 'Nueva acta de otra visita' : 'Hacer el acta de la visita'}</Boton></div>
-        </section>
+        <div className="tw:flex tw:justify-end"><Boton id="actaNueva" icono="plus" cargando={trabajando === 'nueva'} disabled={!!trabajando} onClick={() => hacer('nueva', () => actaVisitaService.crear(negocioId))}>{cerradas.length ? 'Nueva acta de otra visita' : 'Hacer el acta de la visita'}</Boton></div>
       )}
       {cerradas.map((a) => ver(a, false))}
     </div>

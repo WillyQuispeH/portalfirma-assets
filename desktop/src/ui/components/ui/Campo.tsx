@@ -5,7 +5,7 @@ import { cx } from '../../utils/cx';
 // caja del campo: fondo hundido, borde inferior un poco más marcado y anillo lavanda al enfocar.
 // tw:focus:* gana a la regla input:focus de styles.css (más específica que un selector de elemento).
 export const CAJA = 'tw:block tw:w-full tw:m-0 tw:h-10 tw:py-0 tw:px-3 tw:text-sm tw:text-text tw:bg-field '
-  + 'tw:rounded-[10px] tw:border tw:border-solid tw:border-edge tw:border-b-2 tw:border-b-edge-b '
+  + 'tw:rounded-control tw:border tw:border-solid tw:border-edge tw:border-b-2 tw:border-b-edge-b '
   + 'tw:shadow-[inset_0_1px_2px_rgb(0_0_0/0.05)] tw:transition-[border-color,box-shadow] tw:duration-100 '
   + 'tw:placeholder:text-muted tw:focus:outline-none tw:focus:border-lav-edge tw:focus:ring-[3px] tw:focus:ring-lav/60 '
   + 'tw:disabled:opacity-60 tw:disabled:cursor-not-allowed';

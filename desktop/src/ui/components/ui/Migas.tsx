@@ -28,7 +28,7 @@ export default function Migas({ migas, className }: { migas: IMiga[]; className?
                 {m.alTocar && !ultima
                   ? (
                     <button type="button" id={m.id} onClick={m.alTocar}
-                      className="tw:inline-flex tw:min-w-0 tw:items-center tw:gap-1 tw:-mx-1 tw:px-1 tw:py-0.5 tw:rounded-md tw:border-0 tw:bg-transparent tw:font-semibold tw:text-muted tw:cursor-pointer tw:hover:text-brand tw:hover:bg-hover">
+                      className="tw:inline-flex tw:min-w-0 tw:items-center tw:gap-1 tw:-mx-1 tw:px-1 tw:py-0.5 tw:rounded-control tw:border-0 tw:bg-transparent tw:font-semibold tw:text-muted tw:cursor-pointer tw:hover:text-brand tw:hover:bg-hover">
                       {contenido}
                     </button>
                   )

@@ -43,12 +43,12 @@ export default function EventoCard({ evento: e, alActualizar, alPedirOrden }: IE
 
   return (
     <div data-ev={e.id} className={cx(
-      'ag-ev tw:flex tw:items-center tw:gap-3.5 tw:mb-2 tw:px-3.5 tw:py-3 tw:rounded-2xl tw:bg-card',
+      'ag-ev tw:flex tw:items-center tw:gap-3.5 tw:mb-2 tw:px-3.5 tw:py-3 tw:rounded-card tw:bg-card',
       'tw:border tw:border-solid tw:border-edge tw:border-b-[3px] tw:border-b-edge-b',
       !programado && 'tw:opacity-[.62]',
     )}>
       <span className="tw:w-[52px] tw:flex-none tw:text-center tw:text-[15px] tw:font-bold tw:tabular-nums tw:text-text">{e.hora || '—'}</span>
-      <span className={cx('tw:grid tw:place-items-center tw:flex-none tw:w-9 tw:h-9 tw:rounded-xl', SUAVE[TONO_TIPO[e.tipo] ?? 'azul'])}>
+      <span className={cx('tw:grid tw:place-items-center tw:flex-none tw:w-9 tw:h-9 tw:rounded-icono', SUAVE[TONO_TIPO[e.tipo] ?? 'azul'])}>
         <Icono nombre={ic} tam={16} />
       </span>
 

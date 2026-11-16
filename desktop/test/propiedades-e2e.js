@@ -15,7 +15,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     ok(/Asset/.test(await txt('.brand')) && (await w.title()) === 'PortalFirma Asset', 'marca PortalFirma Asset');
     await shot('pr0-vacio.png');
 
-    // Importar desde Portalfirma (MCP property_manage_tools)
+    // Importar desde Convecta (en modo de prueba, los datos de mock.js)
     await w.click('#view-inicio [data-do="importar"]'); await w.waitForSelector('text=Cartera actualizada', { timeout: 15000 });
     const res = await txt('#modalCard'); ok(/Propiedadesleídas4/.test(res.replace(/\s/g, '')) && /Nuevas4/.test(res.replace(/\s/g, '')) && /CRM2/.test(res.replace(/\s/g, '')), 'importa 4 propiedades y crea 2 propietarios en el CRM');
     await w.click('#mOk'); await w.waitForSelector('.im-card');

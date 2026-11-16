@@ -33,7 +33,7 @@ export default function InputArchivo({ etiqueta, ayuda, icono = 'upload', accept
     <div
       id={idCampo}
       className={cx(
-        'tw:flex tw:items-center tw:gap-3 tw:rounded-xl tw:border-2 tw:border-dashed tw:px-3 tw:py-2.5 tw:transition-colors tw:duration-100',
+        'tw:flex tw:items-center tw:gap-3 tw:rounded-control tw:border-2 tw:border-dashed tw:px-3 tw:py-2.5 tw:transition-colors tw:duration-100',
         encima ? 'tw:border-brand tw:bg-lav-soft' : 'tw:border-edge tw:bg-transparent',
         bloqueado ? 'tw:opacity-55' : 'tw:cursor-pointer tw:hover:bg-hover',
         className,
@@ -43,7 +43,7 @@ export default function InputArchivo({ etiqueta, ayuda, icono = 'upload', accept
       onDragLeave={() => setEncima(false)}
       onDrop={soltar}
     >
-      <span className="tw:grid tw:place-items-center tw:size-9 tw:shrink-0 tw:rounded-lg tw:bg-lav-soft tw:text-lav-softink">
+      <span className="tw:grid tw:place-items-center tw:size-9 tw:shrink-0 tw:rounded-icono tw:bg-lav-soft tw:text-lav-softink">
         {cargando ? <span className="spinner sm" /> : <Icono nombre={icono} tam={18} />}
       </span>
       <label className="tw:flex tw:flex-col tw:gap-0.5 tw:min-w-0 tw:flex-1 tw:cursor-[inherit]">

@@ -2,18 +2,21 @@
 // ventana (modal-13, ventanas/inmo/Etapas.tsx › MenuPaso). El corredor:
 //  1. elige a quién pedirle la documentación (el arrendatario y/o avales) o registra un aval nuevo con nombre, RUT y
 //     celular, y la solicita por WhatsApp (plantilla aprobada);
-//  2. ve, por persona, lo que adjuntó (cada archivo se abre) y lo que la IA leyó de cada documento;
-//  3. ve el resumen y el porcentaje de aprobación global y DECIDE (aprobar o rechazar). El porcentaje es una ayuda.
+//  2. ve, por persona, lo que adjuntó: cada documento es una card con su vista previa (al pasar el mouse se agranda; al hacer clic se abre en
+//     un modal, sin salir de la app), el resumen que leyó la IA y su tipo, que puede cambiar;
+//  3. ve el resumen y el porcentaje global y DECIDE por persona: el arrendatario y cada aval tienen sus botones Rechazar / Aprobar. La evaluación
+//     se aprueba cuando todos están aprobados y se rechaza si se rechaza al arrendatario. El porcentaje es una ayuda.
 // El servidor hace todo el trabajo (api/src/whatsapp/evaluacion.ts); esto pide, muestra y deja decidir.
-// Los id (#evPanel, #evSolicitar, #evAprobar, #evRechazar, #evAvalNombre/#evAvalRut/#evAvalTel/#evAvalAgregar,
+// Los id (#evPanel, #evSolicitar, #evActualizar, [data-ev-aprobar], [data-ev-rechazar], #evAvalNombre/#evAvalRut/#evAvalTel/#evAvalAgregar,
 // [data-ev-dest], [data-ev-persona]) los usan las pruebas.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Boton from '../../ui/Boton';
 import Badge from '../../ui/Badge';
 import Checkbox from '../../ui/Checkbox';
 import Input from '../../ui/Input';
-import Textarea from '../../ui/Textarea';
+import MenuMas from '../../ui/MenuMas';
 import EstadoVacio from '../../ui/EstadoVacio';
+import { TarjetaDocumento, VisorDocumento } from './TarjetaDocumento';
 import { evaluacionService } from '../../../store/services/evaluacion.service';
 import { propiedadService } from '../../../store/services/propiedad.service';
 import { personaService } from '../../../store/services/persona.service';
@@ -24,12 +27,10 @@ import type { IPersona } from '../../../store/interfaces/persona.interface';
 
 const TONO = { alto: 'verde', medio: 'amarillo', bajo: 'rojo' } as const;
 const NIVEL = { alto: 'Alto', medio: 'Medio', bajo: 'Bajo' } as const;
-const CLASE: Record<string, string> = {
-  contrato_trabajo: 'Contrato de trabajo', cedula_frente: 'Cédula (frente)', cedula_reverso: 'Cédula (reverso)', cedula_ambas: 'Cédula',
-  liquidacion: 'Liquidación', afp: 'Certificado AFP', dicom: 'Informe Dicom', otro: 'No reconocido',
-};
+// los tipos que se pueden asignar a un documento recibido (el orden es el de la lista)
+const TIPOS_DOC: [string, string][] = [['contrato_trabajo', 'Contrato de trabajo'], ['cedula_frente', 'Cédula (frente)'], ['cedula_reverso', 'Cédula (reverso)'], ['cedula_ambas', 'Cédula (ambos lados)'], ['liquidacion', 'Liquidación de sueldo'], ['afp', 'Certificado de AFP'], ['dicom', 'Informe Dicom'], ['otro', 'Otro / no corresponde']];
 const mensaje = (e: unknown) => (e instanceof Error ? e.message : String(e));
-const CAJA = 'tw:rounded-xl tw:border tw:border-solid tw:border-edge tw:p-3 tw:flex tw:flex-col tw:gap-2';
+const CAJA = 'tw:rounded-control tw:border tw:border-solid tw:border-edge tw:p-3 tw:flex tw:flex-col tw:gap-2';
 
 export default function PanelEvaluacion({ negocioId }: { negocioId: string }) {
   const [ev, setEv] = useState<TEvaluacionRespuesta | null>(null);
@@ -37,7 +38,7 @@ export default function PanelEvaluacion({ negocioId }: { negocioId: string }) {
   const [titularId, setTitularId] = useState<string | null>(null);
   const [conTitular, setConTitular] = useState(true);
   const [avales, setAvales] = useState<string[]>([]);
-  const [nota, setNota] = useState('');
+  const [visor, setVisor] = useState<{ personaId: string; n: number } | null>(null);
   const [error, setError] = useState('');
   const [trabajando, setTrabajando] = useState('');
   const [nuevo, setNuevo] = useState({ nombre: '', rut: '', telefono: '' });
@@ -71,10 +72,8 @@ export default function PanelEvaluacion({ negocioId }: { negocioId: string }) {
     setAvales([]);
     return r;
   });
-  const decidir = (d: 'aprobada' | 'rechazada') => hacer(d, () => evaluacionService.decidir(negocioId, d, nota));
-  const verArchivo = async (personaId: string, n: number) => {
-    try { const r = await evaluacionService.archivo(negocioId, personaId, n); window.open(r.url, '_blank'); } catch (e) { setError(mensaje(e)); }
-  };
+  const decidirPersona = (personaId: string, d: 'aprobada' | 'rechazada' | 'pendiente') => hacer('decision-' + personaId, () => evaluacionService.decidirPersona(negocioId, personaId, d));
+  const cambiarClase = (personaId: string, n: number, clase: string) => hacer('clase', () => evaluacionService.clase(negocioId, personaId, n, clase));
 
   const registrarAval = async () => {
     setErrorAval('');
@@ -102,13 +101,8 @@ export default function PanelEvaluacion({ negocioId }: { negocioId: string }) {
   const alternarAval = (id: string, on: boolean) => setAvales((a) => (on ? [...a, id] : a.filter((x) => x !== id)));
 
   const solicitarUi = !abierta?.decision && (
-    <section className={CAJA}>
-      <div>
-        <h3 className="tw:m-0 tw:text-sm tw:font-bold">{abierta ? 'Pedir documentación a otra persona' : 'Solicitar documentación por WhatsApp'}</h3>
-        <p className="tw:mt-1 tw:mb-0 tw:text-[13px] tw:text-muted">
-          Reciben el mensaje y mandan por el mismo chat: contrato de trabajo, cédula por ambos lados, últimas 3 liquidaciones, AFP de 6 meses y Dicom.
-        </p>
-      </div>
+    <section className="tw:flex tw:flex-col tw:gap-2">
+      {abierta && <h3 className="tw:m-0 tw:text-sm tw:font-bold">Pedir documentación a otra persona</h3>}
       <div className="tw:flex tw:flex-col tw:gap-2">
         {titularId && titular && (
           <FilaDestino id="arrendatario" persona={titular} rol="Arrendatario" tono="azul" marcado={titularPedido || conTitular}
@@ -122,24 +116,24 @@ export default function PanelEvaluacion({ negocioId }: { negocioId: string }) {
       </div>
 
       {!verForm ? (
-        <div><Boton id="evAvalNuevo" variante="secundario" icono="plus" tamano="sm" onClick={() => setVerForm(true)}>Registrar un aval</Boton></div>
+        <div className="tw:flex tw:justify-end"><Boton id="evAvalNuevo" variante="secundario" icono="plus" tamano="sm" onClick={() => setVerForm(true)}>Registrar un aval</Boton></div>
       ) : (
-        <div id="evAvalForm" className="tw:rounded-lg tw:bg-lav-soft tw:p-2 tw:flex tw:flex-col tw:gap-2">
+        <div id="evAvalForm" className="tw:rounded-control tw:bg-lav-soft tw:p-2 tw:flex tw:flex-col tw:gap-2">
           <div className="tw:flex tw:flex-wrap tw:gap-2">
             <Input id="evAvalNombre" etiqueta="Nombre completo" clasesCampo="tw:flex-[2_1_200px]" value={nuevo.nombre} onChange={(e) => setNuevo({ ...nuevo, nombre: e.target.value })} />
             <Input id="evAvalRut" etiqueta="RUT" clasesCampo="tw:flex-[1_1_130px]" placeholder="12.345.678-5" value={nuevo.rut} onChange={(e) => setNuevo({ ...nuevo, rut: e.target.value })} />
             <Input id="evAvalTel" etiqueta="Celular" clasesCampo="tw:flex-[1_1_140px]" placeholder="+56 9 1234 5678" inputMode="tel" value={nuevo.telefono} onChange={(e) => setNuevo({ ...nuevo, telefono: e.target.value })} />
           </div>
           {errorAval && <p role="alert" id="evAvalError" className="tw:m-0 tw:text-[13px] tw:font-semibold tw:text-red-softink">{errorAval}</p>}
-          <div className="tw:flex tw:gap-2">
+          <div className="tw:flex tw:items-center tw:justify-end tw:gap-2 tw:flex-nowrap">
+            <Boton variante="secundario" tamano="sm" onClick={() => { setVerForm(false); setErrorAval(''); }}>Cancelar</Boton>
             <Boton id="evAvalAgregar" tamano="sm" cargando={trabajando === 'aval'} disabled={!!trabajando} onClick={registrarAval}>Registrar y seleccionar</Boton>
-            <Boton variante="fantasma" tamano="sm" onClick={() => { setVerForm(false); setErrorAval(''); }}>Cancelar</Boton>
           </div>
           <p className="tw:m-0 tw:text-xs tw:text-muted">Queda guardado en Personas como aval; el resto de sus datos se completa después.</p>
         </div>
       )}
 
-      <div>
+      <div className="tw:flex tw:justify-end">
         <Boton id="evSolicitar" icono="whatsapp" cargando={trabajando === 'solicitar'} disabled={!!trabajando || destinatarios === 0} onClick={solicitar}>
           {destinatarios ? `Enviar solicitud por WhatsApp (${destinatarios} ${destinatarios === 1 ? 'persona' : 'personas'})` : 'Elige a quién enviarla'}
         </Boton>
@@ -153,6 +147,14 @@ export default function PanelEvaluacion({ negocioId }: { negocioId: string }) {
       {ev === null && <EstadoVacio compacto texto="Cargando…" />}
 
       {!abierta && solicitarUi}
+
+      {/* Actualizar siempre a la vista (llegan documentos por WhatsApp en cualquier momento) */}
+      {abierta && (
+        <div className="tw:flex tw:items-center tw:justify-end tw:gap-2 tw:flex-nowrap">
+          <MenuMas tamano="md" etiqueta="Más acciones" opciones={[{ texto: 'Recalcular el puntaje', icono: 'refresh', disabled: !!trabajando, alTocar: () => hacer('recalcular', () => evaluacionService.recalcular(negocioId)) }]} />
+          <Boton id="evActualizar" variante="secundario" icono="refresh" cargando={trabajando === 'actualizar'} disabled={!!trabajando} onClick={async () => { setTrabajando('actualizar'); await cargar(); setTrabajando(''); }}>Actualizar</Boton>
+        </div>
+      )}
 
       {/* 2. resumen y porcentaje */}
       {abierta?.analisis && (
@@ -175,35 +177,26 @@ export default function PanelEvaluacion({ negocioId }: { negocioId: string }) {
       )}
 
       {/* 3. lo que mandó cada uno */}
-      {abierta?.personas.map((p) => <TarjetaPersona key={p.personaId} p={p} verArchivo={verArchivo} />)}
+      {abierta?.personas.map((p) => <TarjetaPersona key={p.personaId} negocioId={negocioId} p={p} abrir={(n) => setVisor({ personaId: p.personaId, n })} cambiarClase={cambiarClase} decidir={decidirPersona} trabajando={trabajando} decidida={!!abierta.decision} />)}
       {abierta && pendientes.length > 0 && !abierta.decision && (
         <p className="tw:m-0 tw:text-[13px] tw:text-muted" id="evFaltan">Todavía falta documentación de: {pendientes.map((p) => p.nombre).join(', ')}. Puedes decidir igual, pero el puntaje está incompleto.</p>
       )}
 
-      {/* 4. la decisión */}
-      {abierta && !abierta.decision && (
-        <section className={CAJA}>
-          <h3 className="tw:m-0 tw:text-sm tw:font-bold">Tu decisión</h3>
-          <Textarea aria-label="Nota de la decisión" id="evNota" rows={2} placeholder="Nota (opcional): por qué apruebas o rechazas" value={nota} onChange={(e) => setNota(e.target.value)} />
-          <div className="tw:flex tw:gap-2 tw:flex-wrap">
-            <Boton id="evAprobar" variante="exito" icono="check" cargando={trabajando === 'aprobada'} disabled={!!trabajando} onClick={() => decidir('aprobada')}>Aprobar arrendatario</Boton>
-            <Boton id="evRechazar" variante="peligro" icono="x" cargando={trabajando === 'rechazada'} disabled={!!trabajando} onClick={() => decidir('rechazada')}>Rechazar</Boton>
-            <Boton id="evRecalcular" variante="fantasma" icono="refresh" cargando={trabajando === 'recalcular'} disabled={!!trabajando}
-              onClick={() => hacer('recalcular', () => evaluacionService.recalcular(negocioId))}>Recalcular</Boton>
-            <Boton id="evActualizar" variante="fantasma" disabled={!!trabajando} onClick={cargar}>Actualizar</Boton>
-          </div>
-          <p className="tw:m-0 tw:text-xs tw:text-muted">Al aprobar, el paso «Evaluación del arrendatario» queda logrado.</p>
-        </section>
-      )}
+      <p className="tw:m-0 tw:text-xs tw:text-muted">{abierta && !abierta.decision ? 'Aprueba o rechaza a cada persona. Cuando el arrendatario y todos los avales estén aprobados, el paso «Evaluación del arrendatario» queda logrado; si se rechaza al arrendatario, queda rechazada.' : ''}</p>
       {abierta && solicitarUi}
       {abierta?.decision?.nota && <p className="tw:m-0 tw:text-sm"><b>Nota:</b> {abierta.decision.nota}</p>}
+      {visor && abierta && (() => { const per = abierta.personas.find((q) => q.personaId === visor.personaId); const a = per?.archivos.find((x) => x.n === visor.n); return per && a ? <VisorDocumento negocioId={negocioId} personaId={per.personaId} n={a.n} titulo={`${TIPOS_DOC.find(([id]) => id === a.clase)?.[1] ?? 'Documento'} · ${per.nombre}`} resumen={a.legible ? [a.resumen, ...a.alertas.map((x) => '⚠ ' + x)].filter(Boolean).join('\n') : 'No se lee bien: se le pidió de nuevo.'} alCerrar={() => setVisor(null)} /> : null; })()}
     </div>
   );
 }
 
-function TarjetaPersona({ p, verArchivo }: { p: IEvalPersona; verArchivo: (personaId: string, n: number) => void }) {
+function TarjetaPersona({ negocioId, p, abrir, cambiarClase, decidir, trabajando, decidida }: {
+  negocioId: string; p: IEvalPersona; abrir: (n: number) => void; cambiarClase: (personaId: string, n: number, clase: string) => void;
+  decidir: (personaId: string, d: 'aprobada' | 'rechazada' | 'pendiente') => void; trabajando: string; decidida: boolean;
+}) {
+  const ocupado = !!trabajando; const mia = trabajando === 'decision-' + p.personaId;
   return (
-    <section data-ev-persona={p.personaId} className={CAJA}>
+    <section data-ev-persona={p.personaId} className="tw:flex tw:flex-col tw:gap-3">
       <div className="tw:flex tw:items-center tw:gap-2 tw:flex-wrap">
         <strong className="tw:text-sm">{p.nombre}</strong>
         <Badge tono={p.rol === 'aval' ? 'lavanda' : 'azul'}>{p.rol === 'aval' ? 'Aval' : 'Arrendatario'}</Badge>
@@ -218,19 +211,13 @@ function TarjetaPersona({ p, verArchivo }: { p: IEvalPersona; verArchivo: (perso
         ))}
       </ul>
       {p.archivos.length > 0 && (
-        <details open>
-          <summary className="tw:cursor-pointer tw:text-[13px] tw:font-semibold">Adjuntos ({p.archivos.length}) y lo que Asset leyó</summary>
-          <ul className="tw:list-none tw:m-0 tw:mt-1 tw:p-0 tw:flex tw:flex-col tw:gap-1">
-            {p.archivos.map((a) => (
-              <li key={a.n} className="tw:text-[13px] tw:flex tw:gap-2 tw:items-start">
-                <button type="button" data-ev-archivo={a.n} className="tw:bg-transparent tw:border-0 tw:p-0 tw:text-lav-ink tw:underline tw:cursor-pointer tw:text-[13px] tw:shrink-0" onClick={() => verArchivo(p.personaId, a.n)}>
-                  {CLASE[a.clase] ?? 'Documento'}
-                </button>
-                <span className="tw:text-muted">{a.legible ? a.resumen : 'No se lee bien: se le pidió de nuevo.'}{a.alertas.length ? ` ⚠ ${a.alertas.join(' · ')}` : ''}</span>
-              </li>
-            ))}
-          </ul>
-        </details>
+        <div className="tw:flex tw:flex-col tw:gap-2">
+          <h4 className="tw:m-0 tw:text-[13px] tw:font-semibold">Documentos recibidos ({p.archivos.length})</h4>
+          {p.archivos.map((a) => (
+            <TarjetaDocumento key={a.n} negocioId={negocioId} personaId={p.personaId} a={a} opciones={TIPOS_DOC} bloqueado={ocupado || decidida}
+              alCambiarClase={(clase) => cambiarClase(p.personaId, a.n, clase)} alAbrir={() => abrir(a.n)} />
+          ))}
+        </div>
       )}
       {p.analisis && (
         <details>
@@ -242,6 +229,20 @@ function TarjetaPersona({ p, verArchivo }: { p: IEvalPersona; verArchivo: (perso
           </ul>
         </details>
       )}
+      {/* la decisión de ESTA persona: a la derecha, Rechazar y al final Aprobar */}
+      <div className="tw:flex tw:items-center tw:justify-end tw:gap-2 tw:flex-nowrap" data-ev-decision={p.personaId}>
+        {p.decision ? (
+          <>
+            <Badge tono={p.decision.estado === 'aprobada' ? 'verde' : 'rojo'} icono={p.decision.estado === 'aprobada' ? 'check' : 'x'}>{p.decision.estado === 'aprobada' ? 'Aprobado' : 'Rechazado'} por {p.decision.por}</Badge>
+            {!decidida && <MenuMas tamano="md" etiqueta="Más acciones" opciones={[{ texto: 'Deshacer la decisión', icono: 'x', disabled: ocupado, alTocar: () => decidir(p.personaId, 'pendiente') }]} />}
+          </>
+        ) : (
+          <>
+            <Boton data-ev-rechazar={p.personaId} variante="peligro" icono="x" cargando={mia} disabled={ocupado || decidida} onClick={() => decidir(p.personaId, 'rechazada')}>Rechazar</Boton>
+            <Boton data-ev-aprobar={p.personaId} variante="exito" icono="check" cargando={mia} disabled={ocupado || decidida} onClick={() => decidir(p.personaId, 'aprobada')}>Aprobar</Boton>
+          </>
+        )}
+      </div>
     </section>
   );
 }
@@ -264,7 +265,7 @@ function FilaDestino({ id, persona, rol, tono, marcado, nota, bloqueado, alMarca
     setGuardando(false);
   };
   return (
-    <div data-ev-dest={id} className="tw:rounded-lg tw:border tw:border-solid tw:border-edge tw:p-2.5 tw:flex tw:flex-wrap tw:items-center tw:gap-x-4 tw:gap-y-2">
+    <div data-ev-dest={id} className="tw:rounded-control tw:border tw:border-solid tw:border-edge tw:p-2.5 tw:flex tw:flex-wrap tw:items-center tw:gap-x-4 tw:gap-y-2">
       <Checkbox className="tw:flex-[1_1_220px]" marcado={marcado} alCambiar={alMarcar} deshabilitado={bloqueado || !persona.telefono || cambio}
         etiqueta={<span className="tw:flex tw:items-center tw:gap-2 tw:flex-wrap">{persona.nombre}<Badge tono={tono}>{rol}</Badge></span>}
         descripcion={nota ?? (!persona.telefono ? 'Sin celular: escríbelo para poder enviarle el mensaje' : cambio ? 'Guarda el celular para poder elegirlo' : undefined)} />

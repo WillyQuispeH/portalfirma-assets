@@ -52,8 +52,8 @@ async function inicio() {
   liberar($('#view-inicio')).innerHTML = `<div class="im-wrap">
     <div class="im-hero"><div><small>${esc(new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' }))}</small><h1>${saludo}</h1><p>Tu cartera, tus clientes y cada documento firmado, en un solo lugar.</p></div>
       <form class="hub-agent im-ag" id="inAg"><span class="ha-ic">${icon('sparkle', 16)}</span><input id="inAgQ" placeholder="Pregúntale al Agente: «¿qué departamentos tengo en arriendo en Providencia?»" autocomplete="off" /><button class="primary small" type="submit">Preguntar</button></form></div>
-    ${vacio ? `<div class="im-empty"><span class="im-eic">${icon('house', 40)}</span><h2>Trae tu cartera</h2><p>Importa las propiedades que ya tienes en Portalfirma (incluidas las que vienen de Convecta) o crea la primera.</p>
-      <div class="row" style="justify-content:center"><button class="primary" data-do="importar">${icon('download', 15)} Importar desde Portalfirma</button><button class="secondary" data-do="nuevaProp">${icon('plus', 15)} Nueva propiedad</button><button class="ghost" data-do="aprende">${icon('compass', 15)} Aprende a usarla</button></div></div>` : `
+    ${vacio ? `<div class="im-empty"><span class="im-eic">${icon('house', 40)}</span><h2>Trae tu cartera</h2><p>Importa tus propiedades desde Convecta (cada una queda a nombre del corredor con el mismo correo) o crea la primera.</p>
+      <div class="row" style="justify-content:center"><button class="primary" data-do="importar">${icon('download', 15)} Importar desde Convecta</button><button class="secondary" data-do="nuevaProp">${icon('plus', 15)} Nueva propiedad</button><button class="ghost" data-do="aprende">${icon('compass', 15)} Aprende a usarla</button></div></div>` : `
     <div class="im-kpis">
       ${kpi('todas', 'house', r.propiedades, 'propiedades activas')}
       ${kpi('venta', 'tag', r.venta.disponible, 'en venta disponibles', r.venta.reservada ? r.venta.reservada + ' reservadas' : '')}
@@ -149,18 +149,16 @@ async function abrirPersona(id) {
 // porque la llaman Leads, Negocios y «Gestionar una propiedad».
 function formPersona(c, opt = {}) { window.__formPersona(c || null, opt); }
 
-// ---------- Importar desde Portalfirma ----------
-function importar() {
-  members(async () => {
-    const espera = (texto) => window.Ventanas.abrir('inmo.espera', { titulo: 'Importando tu cartera', texto, idTexto: 'impTx', icono: 'download' }, { clave: 'modal-27' });
-    espera('Leyendo propiedades de Portalfirma…');
-    const off = (x) => { if ($('#modalCard').dataset.clave === 'modal-27') espera(`Propiedad ${x.i} de ${x.total}…`); }; IM._prog = off;
-    try {
-      const r = await api('inmoImportar');
-      window.Ventanas.abrir('inmo.importada', { r, alVerCartera: () => { closeModal(); cartera({ op: 'todas', especial: '' }); } }, { clave: 'modal-28' });
-    } catch (e) { closeModal(); if (e.message !== 'NEEDS_LOGIN') toast('No se pudo importar: ' + e.message, 5000); }
-    finally { IM._prog = null; }
-  }, 'Para importar tus propiedades, inicia sesión con tu cuenta de Portalfirma.');
+// ---------- Importar desde Convecta (único origen; lo hace el servidor) ----------
+async function importar() {
+  const espera = (texto) => window.Ventanas.abrir('inmo.espera', { titulo: 'Importando tu cartera', texto, idTexto: 'impTx', icono: 'download' }, { clave: 'modal-27' });
+  espera('Leyendo propiedades de Convecta…');
+  const off = (x) => { if (x.i && $('#modalCard').dataset.clave === 'modal-27') espera(`Propiedad ${x.i} de ${x.total}…`); }; IM._prog = off;
+  try {
+    const r = await api('inmoImportar');
+    window.Ventanas.abrir('inmo.importada', { r, alVerCartera: () => { closeModal(); cartera({ op: 'todas', especial: '' }); } }, { clave: 'modal-28' });
+  } catch (e) { closeModal(); toast('No se pudo importar: ' + e.message, 5000); }
+  finally { IM._prog = null; }
 }
 pf.onInmoProgreso((x) => IM._prog?.(x));
 
@@ -181,44 +179,12 @@ async function publicarModal(p, op, opts = {}) {
   }, { clave: 'modal-30', ancho: true });
 }
 
-// Pantalla «Portales»: conexión de la cuenta, datos de contacto del aviso, sincronización y migración
+// Pantalla «Portales»: está en React (src/ui/components/functional/cartera/PortalesCartera.tsx), en el mismo contenedor de la lista
 async function portales() {
-  IM.ficha = null; const tok = ir('cartera'); await cargar();
-  const host = liberar($('#view-cartera')); if (tok === IM.tok) host.innerHTML = '<div class="im-wrap"><p class="muted">Cargando…</p></div>';
-  const e = await api('mlEstado'); IM.ml = e; const c = e.contacto || {};
-  let paq = null; if (e.conectada) paq = await api('mlPaquetes').catch(() => null);
-  if (tok !== IM.tok) return;
-  const avisos = IM.data.propiedades.flatMap((p) => ['venta', 'arriendo'].map((op) => p.portales?.pi?.[op]).filter((a) => a?.itemId));
-  const cuenta = (k) => avisos.filter((a) => a.status === k).length;
-  host.innerHTML = `<div class="im-wrap">
-    <div class="im-fh"><button class="ghost" id="poBack">${icon('chevL', 16)} Cartera</button></div>
-    <div class="im-head fx-portales"><div><h1>Portales</h1><p class="muted">Publica la cartera desde la ficha. Cada cambio de precio, fotos o estado se refleja solo en el aviso.</p></div></div>
-    <div class="im-cols">
-      <div class="im-box"><div class="im-bh"><h3 class="im-pih"><span class="im-pilogo">PI</span>Portal Inmobiliario</h3>${e.conectada ? '<span class="im-st ok">Conectado</span>' : '<span class="im-st">Sin conectar</span>'}</div>
-        ${!e.configurada ? `<div class="im-msg warn"><b>Falta registrar la app de PortalFirma en Mercado Libre.</b> Lo hace PortalFirma una sola vez (ver PORTAL-INMOBILIARIO.md); después cada corredora solo conecta su cuenta.</div>` : ''}
-        ${e.conectada ? `<dl class="im-pidl"><dt>Cuenta</dt><dd>${esc(e.cuenta.nickname)}${e.cuenta.email ? ' · ' + esc(e.cuenta.email) : ''}</dd>
-          <dt>Avisos</dt><dd>${cuenta('active')} activos · ${cuenta('paused')} pausados · ${cuenta('closed')} finalizados</dd>
-          ${paq ? `<dt>Paquetes</dt><dd>${Object.entries(TIPO_AVISO).map(([k, v]) => `${v}: ${paq[k] == null ? '—' : paq[k]}`).join(' · ')}</dd>` : ''}
-          <dt>Última sincronización</dt><dd>${e.ultimaSync ? fecha(e.ultimaSync, true) : 'Nunca'}</dd></dl>
-          <div class="im-quick"><button class="primary" id="poSync">${icon('rotateR', 15)} Sincronizar avisos e interesados</button><button class="secondary" id="poExist">${icon('link', 15)} Vincular avisos existentes</button></div>
-          <p class="muted small">¿La corredora ya publicaba con Convecta u otro sistema? «Vincular avisos existentes» asocia esos avisos a sus fichas por código, para no duplicarlos.</p>
-          <button class="ghost small" id="poOut">Desconectar cuenta</button>`
-        : `<p>Cada corredora conecta su propia cuenta de Mercado Libre. Ahí debe estar activada como inmobiliaria y tener un paquete de publicación contratado.</p><button class="primary" id="poCon" ${e.configurada ? '' : 'disabled'}>${icon('link', 15)} Conectar cuenta de la corredora</button>`}
-      </div>
-      <div class="im-box"><h3>Contacto que aparece en los avisos</h3>
-        <div class="im-fg2"><label>Nombre de la corredora<input id="coNom" value="${esc(c.nombre || '')}" /></label><label>Correo para consultas<input id="coMail" type="email" value="${esc(c.email || '')}" /></label>
-          <label>WhatsApp (obligatorio)<input id="coWa" value="${esc(c.whatsapp || '')}" placeholder="+56 9 1234 5678" /></label><label>Teléfono<input id="coTel" value="${esc(c.telefono || '')}" /></label>
-          <label>Sitio web<input id="coWeb" value="${esc(c.web || '')}" placeholder="https://" /></label><label>Tipo de aviso por defecto<select id="coTipo">${Object.entries(TIPO_AVISO).map(([k, v]) => `<option value="${k}" ${e.tipoAviso === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label></div>
-        <p class="error" id="coErr"></p><div class="actions"><button class="secondary" id="coSave">Guardar contacto</button></div></div>
-    </div>
-    <div class="im-box"><h3>Otros portales</h3><p class="muted small">Se conectan cuando PortalFirma firme el acuerdo de integrador con cada uno. Toman la cartera desde la misma ficha.</p>
-      <div class="im-otros">${[['TOCTOC', 'Integra con sistemas de cartera reconocidos (Convecta, Ofinet, Wasi)'], ['Chilepropiedades', 'Lee la cartera una vez al día, sin costo si es factible'], ['Yapo', 'Integración con CRM vía su ejecutivo comercial'], ['Goplaceit', 'Vía Goplaceit Pro']].map(([n, d]) => `<div class="im-otro"><b>${n}</b><small>${d}</small><span class="im-st">Requiere acuerdo</span></div>`).join('')}</div></div></div>`;
-  $('#poBack').onclick = () => cartera(); window.Ayuda?.onView('portales');
-  $('#coSave').onclick = async () => { try { await api('mlContacto', { nombre: $('#coNom').value, email: $('#coMail').value, whatsapp: $('#coWa').value, telefono: $('#coTel').value, web: $('#coWeb').value }, $('#coTipo').value); $('#coErr').textContent = ''; toast('Contacto guardado.'); } catch (er) { $('#coErr').textContent = er.message; } };
-  if ($('#poCon')) $('#poCon').onclick = async () => { const b = $('#poCon'); b.disabled = true; b.textContent = 'Esperando la autorización en Mercado Libre…'; try { await api('mlConectar'); toast('Cuenta conectada.'); } catch (er) { if (!/cerró la ventana/.test(er.message)) toast(er.message, 6000); } portales(); };
-  if ($('#poOut')) $('#poOut').onclick = async () => { await api('mlDesconectar'); toast('Cuenta desconectada. Los avisos siguen publicados.'); portales(); };
-  if ($('#poSync')) $('#poSync').onclick = async () => { const b = $('#poSync'); b.disabled = true; b.textContent = 'Sincronizando…'; try { const r = await api('mlSincronizar'); await portales(); toast(`${r.avisos} ${r.avisos === 1 ? 'aviso revisado' : 'avisos revisados'} · ${r.leads} ${r.leads === 1 ? 'interesado nuevo' : 'interesados nuevos'}.`, 4000); } catch (er) { toast(er.message, 6000); portales(); } };
-  if ($('#poExist')) $('#poExist').onclick = () => existentesModal();
+  IM.ficha = null; ir('cartera');
+  const el = liberar($('#view-cartera')); window.ReactUI.montar('PortalesCartera', el);
+  window.Ayuda?.onView('portales');
+  try { await cargar(); } catch {}
 }
 async function existentesModal() {
   window.Ventanas.abrir('inmo.espera', { titulo: 'Avisos existentes en Portal Inmobiliario', texto: 'Buscando los avisos activos de la cuenta…', icono: 'link' }, { clave: 'modal-31' });
@@ -232,4 +198,4 @@ async function existentesModal() {
 }
 pf.onInmoPortal((m) => { toast(m.join(' '), 5000); if (IM.ficha && !$('#view-cartera').classList.contains('hidden')) cargar().then(renderFicha); });
 
-window.Inmo = { fichaTab: (k) => { if (IM.ficha) window.__ficha?.tab(IM.ficha, k); }, portales, publicarPI: publicarModal, cargar, inicio, cartera, personas, abrirFicha, abrirPersona, dropFiles, importar, formProp, formPersona, VIEWS: INMO_VIEWS, _IM: IM, fichaAbierta: () => !!IM.ficha && !$('#view-cartera').classList.contains('hidden') };
+window.Inmo = { existentes: existentesModal, fichaTab: (k) => { if (IM.ficha) window.__ficha?.tab(IM.ficha, k); }, portales, publicarPI: publicarModal, cargar, inicio, cartera, personas, abrirFicha, abrirPersona, dropFiles, importar, formProp, formPersona, VIEWS: INMO_VIEWS, _IM: IM, fichaAbierta: () => !!IM.ficha && !$('#view-cartera').classList.contains('hidden') };

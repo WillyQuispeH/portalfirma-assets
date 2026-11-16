@@ -9,15 +9,25 @@ import { ESTADO, TIPO, TONO_ESTADO } from './catalogos';
 import { direccion } from './filtrar';
 import type { ICaptacion, IPropiedad, TPropiedadEstado } from '../../../store/interfaces/propiedad.interface';
 
-const num = (n: number) => n.toLocaleString('es-CL', { maximumFractionDigits: 2 });
+export const num = (n: number) => n.toLocaleString('es-CL', { maximumFractionDigits: 2 });
 
-function Estado({ estado, op }: { estado?: TPropiedadEstado; op: string }) {
+export function Estado({ estado, op }: { estado?: TPropiedadEstado; op: string }) {
   if (!estado) return null;
   const [t, c] = ESTADO[estado] || [estado, ''];
   return <Badge tono={TONO_ESTADO[c] ?? 'gris'} punto>{op && <span className="tw:opacity-60">{op}</span>}{t}</Badge>;
 }
 
-function Captacion({ c }: { c?: ICaptacion }) {
+export const publicadaEnPI = (p: IPropiedad) => (['venta', 'arriendo'] as const).some((o) => p.portales?.pi?.[o]?.status === 'active');
+
+// el sello amarillo de Portal Inmobiliario
+export function ChipPI({ chico = false }: { chico?: boolean }) {
+  return (
+    <i title="Publicada en Portal Inmobiliario" className={cx('pi tw:not-italic tw:inline-flex tw:items-center tw:rounded-control tw:border tw:border-solid tw:border-b-2 tw:border-[#c9b400] tw:bg-[#ffe600] tw:font-extrabold tw:text-[#2d3277]',
+      chico ? 'tw:h-5 tw:px-1.5 tw:text-[10.5px]' : 'tw:h-6 tw:px-2 tw:text-xs')}>PI</i>
+  );
+}
+
+export function Captacion({ c }: { c?: ICaptacion }) {
   if (!c) return null;
   if (c.completa) return <span className="im-capt ok tw:inline-flex tw:items-center tw:gap-1.5 tw:text-xs tw:font-semibold tw:text-green-softink" title="Captación completa"><Icono nombre="check" tam={13} /> Captación completa</span>;
   const primera = (c.falta[0] || '').toLowerCase();
@@ -44,20 +54,20 @@ interface IPropiedadCardProps {
 export default function PropiedadCard({ p, captacion, verCaptador, modoSeleccion, seleccionada, alTocar }: IPropiedadCardProps) {
   const [sinFoto, setSinFoto] = useState(false); // la foto no cargó (sin conexión o URL vencida)
   const foto = p.fotos?.[0];
-  const enPI = (['venta', 'arriendo'] as const).some((o) => p.portales?.pi?.[o]?.status === 'active');
+  const enPI = publicadaEnPI(p);
   const interesados = (p.leads || []).some((l) => !l.visto);
   const sup = p.supUtil || p.supTotal;
 
   return (
     <button type="button" data-id={p.id} onClick={alTocar} className={cx(
       'im-card tw:group tw:relative tw:flex tw:flex-col tw:items-stretch tw:justify-start tw:overflow-hidden tw:m-0 tw:p-0 tw:text-left tw:font-[inherit] tw:cursor-pointer',
-      'tw:rounded-2xl tw:border tw:border-solid tw:border-edge tw:border-b-[3px] tw:border-b-edge-b tw:bg-card tw:text-text',
+      'tw:rounded-card tw:border tw:border-solid tw:border-edge tw:border-b-[3px] tw:border-b-edge-b tw:bg-card tw:text-text',
       'tw:transition-[transform,box-shadow] tw:duration-200 tw:hover:-translate-y-0.5 tw:hover:shadow-[0_16px_32px_-14px_rgb(20_35_90/0.3)]',
       'tw:focus-visible:outline-2 tw:focus-visible:outline-offset-2 tw:focus-visible:outline-lav-edge',
       seleccionada && 'tw:outline-2 tw:outline-offset-2 tw:outline-lav-edge',
     )}>
       {modoSeleccion && (
-        <span className={cx('im-check tw:absolute tw:right-2.5 tw:top-2.5 tw:z-[2] tw:grid tw:size-6 tw:place-items-center tw:rounded-lg tw:border-2 tw:border-solid tw:border-lav-edge',
+        <span className={cx('im-check tw:absolute tw:right-2.5 tw:top-2.5 tw:z-[2] tw:grid tw:size-6 tw:place-items-center tw:rounded-icono tw:border-2 tw:border-solid tw:border-lav-edge',
           seleccionada ? 'tw:bg-lav-edge tw:text-white' : 'tw:bg-card tw:text-lav-edge')}>
           {seleccionada && <Icono nombre="check" tam={14} />}
         </span>
@@ -69,8 +79,7 @@ export default function PropiedadCard({ p, captacion, verCaptador, modoSeleccion
         <span className="im-ops tw:absolute tw:left-2.5 tw:top-2.5 tw:flex tw:flex-wrap tw:gap-1.5">
           {p.venta && <Badge tono="azul" variante="tactil">Venta</Badge>}
           {p.arriendo && <Badge tono="durazno" variante="tactil">Arriendo</Badge>}
-          {enPI && <i className="pi tw:not-italic tw:inline-flex tw:h-6 tw:items-center tw:rounded-md tw:border tw:border-solid tw:border-b-2 tw:border-[#c9b400] tw:bg-[#ffe600] tw:px-2 tw:text-xs tw:font-extrabold tw:text-[#2d3277]"
-            title="Publicada en Portal Inmobiliario">PI</i>}
+          {enPI && <ChipPI />}
           {interesados && <Badge tono="verde" variante="tactil" icono="users">Interesados</Badge>}
         </span>
       </span>

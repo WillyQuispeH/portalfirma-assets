@@ -15,7 +15,7 @@ const LOGO: Record<string, [string, TTono]> = { pi: ['PI', 'amarillo'], chilepro
 
 export function LogoPortal({ id, nombre }: { id: string; nombre: string }) {
   const [sigla, tono] = LOGO[id] || [nombre.slice(0, 2).toUpperCase(), 'gris' as TTono];
-  return <span aria-hidden="true" className={cx('tw:grid tw:size-10 tw:flex-none tw:place-items-center tw:rounded-xl tw:text-[13px] tw:font-extrabold tw:tracking-tight', SUAVE[tono])}>{sigla}</span>;
+  return <span aria-hidden="true" className={cx('tw:grid tw:size-10 tw:flex-none tw:place-items-center tw:rounded-icono tw:text-[13px] tw:font-extrabold tw:tracking-tight', SUAVE[tono])}>{sigla}</span>;
 }
 
 // la fila de abajo de cada paso: a la izquierda «Volver» o un aviso, a la derecha la acción principal
@@ -30,7 +30,7 @@ export function PieNav({ izquierda, derecha }: { izquierda?: ReactNode; derecha:
 
 export function Aviso({ tono, icono, children }: { tono: TTono; icono: string; children: ReactNode }) {
   return (
-    <p role={tono === 'rojo' ? 'alert' : undefined} className={cx('tw:m-0 tw:flex tw:items-start tw:gap-2 tw:rounded-xl tw:px-3 tw:py-2 tw:text-[13px]', SUAVE[tono])}>
+    <p role={tono === 'rojo' ? 'alert' : undefined} className={cx('tw:m-0 tw:flex tw:items-start tw:gap-2 tw:rounded-control tw:px-3 tw:py-2 tw:text-[13px]', SUAVE[tono])}>
       <span className="tw:mt-px tw:flex-none"><Icono nombre={icono} tam={15} /></span><span>{children}</span>
     </p>
   );

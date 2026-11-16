@@ -23,7 +23,7 @@ interface IBotonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const BASE = 'tw:relative tw:inline-flex tw:items-center tw:justify-center tw:gap-2 tw:m-0 tw:font-semibold tw:leading-none tw:whitespace-nowrap '
-  + 'tw:rounded-[10px] tw:border tw:border-solid tw:select-none tw:cursor-pointer tw:transition-[transform,filter,border-width] tw:duration-100 '
+  + 'tw:rounded-control tw:border tw:border-solid tw:select-none tw:cursor-pointer tw:transition-[transform,filter,border-width] tw:duration-100 '
   + 'tw:focus-visible:outline-2 tw:focus-visible:outline-offset-2 tw:focus-visible:outline-lav-edge '
   + 'tw:disabled:cursor-default tw:disabled:opacity-55';
 

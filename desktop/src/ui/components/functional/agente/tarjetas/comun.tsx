@@ -59,7 +59,7 @@ export const useTarjeta = () => useContext(Ctx)!;
 /** Línea de una tarjeta terminada (también la usan las conversaciones reabiertas, en Mensaje.tsx) */
 export function LineaHecha({ children, accion }: { children: ReactNode; accion?: ReactNode }) {
   return (
-    <div className="tw:flex tw:items-center tw:gap-2.5 tw:px-3.5 tw:py-2 tw:rounded-xl tw:border tw:border-dashed tw:border-edge tw:bg-sunken tw:text-[13px] tw:text-muted tw:[&_b]:text-text">
+    <div className="tw:flex tw:items-center tw:gap-2.5 tw:px-3.5 tw:py-2 tw:rounded-control tw:border tw:border-dashed tw:border-edge tw:bg-sunken tw:text-[13px] tw:text-muted tw:[&_b]:text-text">
       <span className="ga-ok tw:grid tw:place-items-center tw:flex-none tw:size-5 tw:rounded-full tw:bg-green-soft tw:text-green-softink"><Icono nombre="check" tam={12} /></span>
       <span className="tw:flex-1 tw:min-w-0">{children}</span>
       {accion}
@@ -107,7 +107,7 @@ export function Tarjeta({ n, icono, titulo, sub, pie, falta, cerrable = true, ch
   return (
     <Card
       titulo={<span className="ga-h tw:flex tw:items-center tw:gap-2.5">
-        {(n || icono) && <span className="ga-n tw:grid tw:place-items-center tw:flex-none tw:size-7 tw:rounded-lg tw:bg-lav-soft tw:text-lav-softink tw:text-[13px] tw:font-bold">{n || <Icono nombre={icono!} tam={15} />}</span>}
+        {(n || icono) && <span className="ga-n tw:grid tw:place-items-center tw:flex-none tw:size-7 tw:rounded-icono tw:bg-lav-soft tw:text-lav-softink tw:text-[13px] tw:font-bold">{n || <Icono nombre={icono!} tam={15} />}</span>}
         <span className="tw:min-w-0">{titulo}</span>
       </span>}
       subtitulo={sub}
@@ -141,7 +141,7 @@ export function ErrorTexto({ texto }: { texto: string }) {
 /** aviso destacado dentro de una tarjeta */
 export function Nota({ children, icono = 'alert', tono = 'amarillo', className }: { children: ReactNode; icono?: string; tono?: 'amarillo' | 'azul' | 'verde'; className?: string }) {
   const c = { amarillo: 'tw:bg-yellow-soft tw:text-yellow-softink', azul: 'tw:bg-blue-soft tw:text-blue-softink', verde: 'tw:bg-green-soft tw:text-green-softink' }[tono];
-  return <p className={cx('ga-nota tw:flex tw:items-start tw:gap-2 tw:m-0 tw:px-3 tw:py-2.5 tw:rounded-xl tw:text-[13px] tw:leading-snug', c, className)}><Icono nombre={icono} tam={14} /><span>{children}</span></p>;
+  return <p className={cx('ga-nota tw:flex tw:items-start tw:gap-2 tw:m-0 tw:px-3 tw:py-2.5 tw:rounded-control tw:text-[13px] tw:leading-snug', c, className)}><Icono nombre={icono} tam={14} /><span>{children}</span></p>;
 }
 export function Muted({ children, className }: { children: ReactNode; className?: string }) {
   return <p className={cx('tw:m-0 tw:text-[13px] tw:text-muted tw:leading-snug', className)}>{children}</p>;
@@ -173,7 +173,7 @@ export function Campos({ children, className }: { children: ReactNode; className
 /** grupo de campos con título (un firmante, «Datos»…) */
 export function Grupo({ titulo, extra, children, className, ...resto }: { titulo: ReactNode; extra?: ReactNode; children: ReactNode; className?: string } & Record<string, unknown>) {
   return (
-    <section {...resto} className={cx('ga-g tw:flex tw:flex-col tw:gap-3 tw:p-4 tw:rounded-xl tw:bg-sunken', className)}>
+    <section {...resto} className={cx('ga-g tw:flex tw:flex-col tw:gap-3 tw:p-4 tw:rounded-control tw:bg-sunken', className)}>
       <h4 className="tw:flex tw:items-center tw:gap-2 tw:m-0 tw:text-[13px] tw:font-bold">{titulo}{extra && <Badge tono="lavanda">{extra}</Badge>}</h4>
       {children}
     </section>
@@ -199,7 +199,7 @@ export function Seccion({ icono, titulo, derecha, children, className }: { icono
 }
 /** lista con borde (para ItemLista) */
 export function Lista({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={cx('tw:flex tw:flex-col tw:p-1 tw:rounded-xl tw:border tw:border-solid tw:border-edge tw:divide-y tw:divide-edge', className)}>{children}</div>;
+  return <div className={cx('tw:flex tw:flex-col tw:p-1 tw:rounded-control tw:border tw:border-solid tw:border-edge tw:divide-y tw:divide-edge', className)}>{children}</div>;
 }
 
 /** puntos de las etapas de un negocio: hechas (h), la actual (a) y las que faltan */
