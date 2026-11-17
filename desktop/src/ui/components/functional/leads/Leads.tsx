@@ -9,7 +9,7 @@
 // ldCuentas, ldImp2, ldIg2 y la clase .ld-vacio los usan las pruebas y leads.js.
 import { useEffect, useRef, type ReactNode } from 'react';
 import { useLead } from '../../../store/hooks/useLead.hook';
-import { leadsComoExportar, leadsComoInstagram, leadsCuentas, leadsImportar, mostrarLead, rutaDe } from '../../../utils/app';
+import { leadsComoExportar, leadsComoInstagram, leadsImportar, mostrarLead, rutaDe } from '../../../utils/app';
 import { cx } from '../../../utils/cx';
 import Layout from '../../ui/Layout';
 import Boton from '../../ui/Boton';
@@ -95,7 +95,6 @@ export default function Leads({ sel: selInicial, filtro: filtroInicial }: ILeads
       subtitulo="Tus conversaciones con clientes por WhatsApp, Instagram y correo: qué buscan, en qué quedaron y qué sigue."
       acciones={<>
         <Boton id="ldImp" icono="upload" onClick={() => archivo.current?.click()}>Importar chat</Boton>
-        <Boton variante="secundario" id="ldCuentas" icono="link" onClick={leadsCuentas}>Cuentas e historial</Boton>
         <Boton variante="secundario" id="ldComo" icono="help" onClick={leadsComoExportar}>Cómo exportar un chat</Boton>
         <input ref={archivo} type="file" id="ldFile" accept=".txt,.zip,text/plain,application/zip" className="hidden" onChange={(e) => importar(e.target)} />
         <input ref={archivoIg} type="file" id="ldFileIg" accept=".zip,application/zip" className="hidden" onChange={(e) => importar(e.target, 'instagram')} />

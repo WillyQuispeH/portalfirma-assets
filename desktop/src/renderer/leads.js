@@ -61,17 +61,6 @@ async function importarRuta(ruta, canal) {
 }
 function modalError(msg, como = comoExportar) { window.Ventanas.abrir('leads.errorImportar', { mensaje: msg, instagram: como === comoInstagram, alVerComo: como }, { clave: 'modal-38' }); }
 
-// ---------- 0.16.21 · cuentas e historial: Instagram (archivo de «Descargar tu información»), WhatsApp, correo ----------
-async function cuentas() {
-  const cons = await api('leadsConsentimientos').catch(() => []);
-  // el panel «En vivo desde wechatia» (Instagram, Facebook y correo) se dibuja en la ventana con el estado de obsEstado
-  window.Ventanas.abrir('leads.cuentas', { consentimientos: cons, fechaCorta, alInstagram: comoInstagram, alWhatsApp: comoExportar,
-    alCargarObs: () => api('obsEstado').catch(() => null),
-    alConfigurar: (cfg) => api('obsConfigurar', cfg),
-    alRevisar: async () => { const r = await api('obsRevisar');
-      toast(r.error ? r.error : r.mensajes ? `${r.mensajes} mensajes nuevos${r.nuevos ? ` · ${r.nuevos} lead${r.nuevos === 1 ? '' : 's'} nuevo${r.nuevos === 1 ? '' : 's'}` : ''}.` : 'No hay mensajes nuevos.', 5000); lista();
-      return r.estado; } }, { clave: 'modal-39' });
-}
 function comoInstagram() { window.Ventanas.abrir('leads.comoInstagram', { alElegir: () => { closeModal(); $('#ldFileIg').click(); } }, { clave: 'modal-40' }); }
 function importarInstagram(a) {
   const partes = [...new Set(a.conversaciones.flatMap((c) => c.participantes))];
@@ -87,5 +76,5 @@ function importarInstagram(a) {
 function dropFiles(paths) { const p = (paths || []).find((x) => /\.(txt|zip)$/i.test(x)); if (!p) return modalError('Arrastra el archivo .txt o .zip que genera WhatsApp al exportar un chat.'); importarRuta(p); }
 
 pf.onAgentEvent?.((e) => { if (e?.type === 'datos' && e.que === 'leads' && !$('#view-leads').classList.contains('hidden')) lista(); });
-window.Leads = { abrir, mostrar, dropFiles, importarRuta, cuentas, comoExportar, comoInstagram, derivar, eliminar, agregarMensajes, _LD: LD };
+window.Leads = { abrir, mostrar, dropFiles, importarRuta, comoExportar, comoInstagram, derivar, eliminar, agregarMensajes, _LD: LD };
 })();

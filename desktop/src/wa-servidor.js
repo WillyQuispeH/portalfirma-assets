@@ -28,6 +28,8 @@ function conectado() {
   if (Date.now() - conexionEn > 60_000) refrescarConexion();
   return !!conexion?.conectado;
 }
+/** la cuenta de wechatia que tiene el SERVIDOR para esta corredora (no la que haya guardada en este equipo) */
+const locationIdServidor = () => conexion?.locationId || null;
 
 // ---------------------------------------------------------------- envíos
 async function enviar({ telefono, nombre = '', texto, revisar24 = true }) {
@@ -82,4 +84,4 @@ async function canales() {
   return api('GET', '/whatsapp/canales');
 }
 
-module.exports = { enApi, refrescarConexion, conectado, canales, enviar, plantilla, contacto, estadoMensaje, ejecutivo: ej, asistentes: at, observador: obs };
+module.exports = { enApi, refrescarConexion, conectado, locationIdServidor, canales, enviar, plantilla, contacto, estadoMensaje, ejecutivo: ej, asistentes: at, observador: obs };

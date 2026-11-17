@@ -75,7 +75,6 @@ export function confirmar({ titulo, texto, nota = '', boton, clave, peligro = fa
 
 // Leads (src/renderer/leads.js): la conversación y la ficha del lead, y los asistentes de importación
 export const mostrarLead = (sel: string | null, datos: ILeadLista, filtro: string) => window.Leads.mostrar(sel, datos, filtro);
-export const leadsCuentas = () => window.Leads.cuentas();
 export const leadsComoExportar = () => window.Leads.comoExportar();
 export const leadsComoInstagram = () => window.Leads.comoInstagram();
 export const leadsImportar = (ruta: string, canal?: string) => window.Leads.importarRuta(ruta, canal);

@@ -2,9 +2,9 @@
 // Hechas con el kit (VentanaCabecera, VentanaCuerpo, VentanaPie, Boton, Input, Select…). La lógica (llamadas a la API,
 // toasts, qué se recarga) sigue en leads.js: llega en las funciones de las props.
 // Los id (#mOk, #mCancel, #ldTel, #ldTx, #ldIgDueno, #ldIgCuenta, #ldIgIA, #ldIgAut, #ldIgN, #ldErr2, #ldCtaIg, #ldObs…),
-// los data-hilo, el name="ldCli" y las clases .ld-imp, .ld-igimp, .ld-cuentas, .ld-ol, .ld-cons, .ld-obs y .ld-pre
+// los data-hilo, el name="ldCli" y las clases .ld-imp, .ld-igimp, .ld-cuentas, .ld-ol y .ld-pre
 // los usan las pruebas (leads, instagram, observador y gestor-leads).
-import { useEffect, useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import Boton from '../../ui/Boton';
 import Input from '../../ui/Input';
 import Select from '../../ui/Select';
@@ -14,7 +14,6 @@ import { VentanaCabecera, VentanaCuerpo, VentanaPie } from '../../ui/Ventana';
 import { Opcion, P, NOTA, FORM, DOS } from '../gestion/editor-pdf/Modales';
 import { cerrarModal } from '../../../utils/modal';
 import { cx } from '../../../utils/cx';
-import { toast } from '../../../utils/app';
 
 // mensaje de error bajo el formulario (vacío no ocupa lugar)
 export const ERROR = 'tw:m-0 tw:text-[13px] tw:text-red-ink tw:empty:hidden';
@@ -161,103 +160,6 @@ export function ErrorImportar({ mensaje, instagram, alVerComo }: { mensaje: stri
       <Cerrar principal />
     </VentanaPie>
   </>;
-}
-
-// ---------- modal-39 · cuentas e historial (Instagram, WhatsApp y en vivo desde wechatia) ----------
-export interface IObsEstado {
-  activo: boolean; ia: boolean; canales: Record<string, boolean>; canalesTxt: Record<string, string>; porCanal?: Record<string, number>;
-  ultima?: string | null; leads?: number; ultimo?: { mensajes?: number } | null; diasInicio: number; error?: string | null;
-}
-interface ICuentasProps {
-  consentimientos: { canal: string; cuenta?: string; autorizadoPor?: string; fecha: string; conversaciones: number }[];
-  /** obsEstado: el panel «En vivo» se dibuja cuando llega */
-  alCargarObs: () => Promise<IObsEstado | null>;
-  fechaCorta: (f: string) => string;
-  alInstagram: () => void;
-  alWhatsApp: () => void;
-  /** obsConfigurar: devuelve el estado nuevo */
-  alConfigurar: (cfg: { canales: Record<string, boolean>; ia: boolean; activo?: boolean; autorizado?: boolean }) => Promise<IObsEstado>;
-  /** obsRevisar (con su toast y la recarga de la lista): devuelve el estado nuevo */
-  alRevisar: () => Promise<IObsEstado>;
-}
-function Cuenta({ icono, clase, titulo, texto, children, id, className }: { icono: string; clase: string; titulo: string; texto: string; children: ReactNode; id?: string; className?: string }) {
-  return (
-    <div id={id} className={cx(className, "tw:flex tw:items-center tw:gap-3 tw:rounded-control tw:border tw:border-solid tw:border-line tw:bg-bg tw:p-3")}>
-      <span className={cx('ld-cta-i', clase)}><Icono nombre={icono} tam={20} /></span>
-      <div className="tw:min-w-0 tw:flex-1 tw:flex tw:flex-col tw:gap-0.5"><b className="tw:text-sm">{titulo}</b><small className="tw:text-[12.5px] tw:text-muted tw:leading-snug">{texto}</small></div>
-      {children}
-    </div>
-  );
-}
-export function Cuentas({ consentimientos, alCargarObs, fechaCorta, alInstagram, alWhatsApp, alConfigurar, alRevisar }: ICuentasProps) {
-  return <>
-    <VentanaCabecera icono="link" titulo="Cuentas e historial" descripcion="Trae a Leads las conversaciones que la corredora ya tuvo con clientes. Asset solo lee: no responde ni publica nada en esas cuentas." />
-    <VentanaCuerpo className="ld-cuentas tw:flex tw:flex-col tw:gap-2">
-      <Cuenta icono="instagram" clase="ig" titulo="Instagram · historial de mensajes" texto="El dueño de la cuenta descarga sus mensajes desde Instagram y sube aquí el archivo. Cada conversación queda como un lead con su perfil y su historial.">
-        <Boton id="ldCtaIg" tamano="sm" onClick={alInstagram}>Importar</Boton>
-      </Cuenta>
-      <Cuenta icono="whatsapp" clase="wa" titulo="WhatsApp · chat exportado" texto="Un chat a la vez, exportado desde el teléfono del corredor.">
-        <Boton id="ldCtaWa" tamano="sm" variante="secundario" onClick={alWhatsApp}>Importar</Boton>
-      </Cuenta>
-      <Observador alCargarObs={alCargarObs} fechaCorta={fechaCorta} alConfigurar={alConfigurar} alRevisar={alRevisar} />
-      {consentimientos.length > 0 && <>
-        <h4 className="tw:mt-2 tw:mb-0 tw:text-[13px] tw:font-semibold">Autorizaciones registradas</h4>
-        <ul className="ld-cons tw:m-0">{consentimientos.slice(0, 8).map((c, i) => (
-          <li key={i} className="tw:flex tw:items-center tw:gap-1.5"><Icono nombre={c.canal === 'instagram' ? 'instagram' : 'whatsapp'} tam={12} />
-            <span><b>{c.cuenta || '—'}</b> · autorizó {c.autorizadoPor || '—'} · {fechaCorta(c.fecha)} {c.fecha.slice(0, 4)} · {c.conversaciones} conversaciones</span></li>))}
-        </ul>
-      </>}
-    </VentanaCuerpo>
-    <VentanaPie><Cerrar /></VentanaPie>
-  </>;
-}
-// «En vivo desde wechatia»: el panel se vuelve a dibujar con el estado que devuelve cada cambio
-function Observador({ alCargarObs, fechaCorta, alConfigurar, alRevisar }: Pick<ICuentasProps, 'alCargarObs' | 'fechaCorta' | 'alConfigurar' | 'alRevisar'>) {
-  const [o, setO] = useState<IObsEstado | null>(null);
-  const [canales, setCanales] = useState<Record<string, boolean>>({}); const [ia, setIa] = useState(false); const [aut, setAut] = useState(false);
-  const [error, setError] = useState(''); const [revisando, setRevisando] = useState(false);
-  useEffect(() => { let vivo = true; alCargarObs().then((x) => { if (vivo) setO(x); }); return () => { vivo = false; }; }, [alCargarObs]);
-  useEffect(() => { if (!o) return; setCanales({ ...o.canales }); setIa(!!o.ia); setAut(false); setError(''); }, [o]);
-  const cfg = async (extra: { activo?: boolean; autorizado?: boolean } = {}, c = canales, i = ia) => {
-    try { setO(await alConfigurar({ canales: c, ia: i, ...extra })); return true; } catch (e) { setError(mensajeDe(e)); return false; }
-  };
-  const hace = (f?: string | null) => { if (!f) return 'nunca'; const m = Math.round((Date.now() - new Date(f).getTime()) / 6e4); return m < 1 ? 'recién' : m < 60 ? `hace ${m} min` : fechaCorta(f); };
-  const cambiarCanal = (k: string, v: boolean) => { const c = { ...canales, [k]: v }; setCanales(c); if (o?.activo) cfg({}, c); };
-  const cambiarIa = (v: boolean) => { setIa(v); if (o?.activo) cfg({}, canales, v); };
-  const activar = () => { if (!aut) { setError('Confirma la autorización de la corredora.'); return; } cfg({ activo: true, autorizado: true }).then((ok) => ok && toast('Leads en vivo activado: Asset revisa wechatia cada 2 minutos.', 5000)); };
-  const revisar = async () => { setRevisando(true); try { setO(await alRevisar()); } catch (e) { setError(mensajeDe(e)); } finally { setRevisando(false); } };
-  // al conectar wechatia el observador queda activo solo: la tarjeta únicamente aparece si está apagado o con error
-  if (!o) return null; // mientras carga no se muestra la tarjeta (casi siempre queda activo y no hace falta)
-  if (o.activo && !o.error) return <p className={NOTA} id="ldObs">
-    Instagram, Facebook y correo llegan solos desde wechatia{o.leads ? ` · ${o.leads} lead${o.leads === 1 ? '' : 's'} en seguimiento` : ''} · última revisión {hace(o.ultima)}.
-  </p>;
-  return <div>
-    <Cuenta id="ldObs"className={o ? 'tw:rounded-b-none' : undefined} icono="sparkle" clase="vivo" titulo="En vivo desde wechatia · Instagram, Facebook y correo" texto="Cada 2 minutos Asset lee los mensajes nuevos de las cuentas conectadas en wechatia y los anota en Leads. Solo lee: nunca responde por esos canales.">
-      <span className={cx('ld-pronto', o?.activo && 'on')}>{!o ? '…' : o.activo ? 'Activo' : 'Apagado'}</span>
-    </Cuenta>
-    {o && <div className="ld-obs">
-      <div className="ld-obs-can">
-        {Object.entries(o.canalesTxt).map(([k, t]) => (
-          <Opcion key={k} type="checkbox" data-can={k} checked={!!canales[k]} onChange={(e) => cambiarCanal(k, e.target.checked)}>
-            {t}{o.porCanal?.[k] ? <small className="tw:text-muted"> · {o.porCanal[k]}</small> : null}
-          </Opcion>))}
-        <Opcion type="checkbox" id="ldObsIA" checked={ia} onChange={(e) => cambiarIa(e.target.checked)}>Leer con IA (perfil, qué busca, contacto)</Opcion>
-      </div>
-      {o.activo
-        ? <p className={NOTA}>Última revisión: {hace(o.ultima)}{o.leads ? ` · ${o.leads} lead${o.leads === 1 ? '' : 's'} en seguimiento` : ''}{o.ultimo?.mensajes ? ` · ${o.ultimo.mensajes} mensajes nuevos en la última` : ''}.</p>
-        : <>
-          <p className={NOTA}>Al activarlo se traen las conversaciones de los últimos {o.diasInicio} días y desde ahí, lo nuevo.</p>
-          <Opcion type="checkbox" id="ldObsAut" className={CAJITA} checked={aut} onChange={(e) => setAut(e.target.checked)}>La corredora es dueña de estas cuentas y autoriza que Asset lea y guarde sus conversaciones.</Opcion>
-        </>}
-      {o.error && <p className={ERROR}>{o.error}</p>}
-      <p className={ERROR} id="ldObsErr">{error}</p>
-      <div className="row">{o.activo
-        ? <><Boton id="ldObsYa" tamano="sm" variante="secundario" cargando={revisando} onClick={revisar}>{revisando ? 'Revisando…' : 'Revisar ahora'}</Boton>
-          <Boton id="ldObsOff" tamano="sm" variante="fantasma" onClick={() => cfg({ activo: false })}>Apagar</Boton></>
-        : <Boton id="ldObsOn" tamano="sm" onClick={activar}>Activar</Boton>}
-      </div>
-    </div>}
-  </div>;
 }
 
 // ---------- modal-40 · cómo descargar el historial de Instagram ----------
