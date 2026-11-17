@@ -47,10 +47,30 @@ interface Contacto {
   telefono?: string;
 }
 type AvisoPortal = { status?: string; destacado?: boolean };
-type PropiedadFeed = Prisma.PropiedadGetPayload<{ include: { fotos: true } }>;
+type PropiedadFeed = Prisma.PropiedadGetPayload<{ include: { fotos: true } }> & {
+  captador?: { nombre: string; email: string; telefono: string | null } | null;
+};
+/** La corredora que figura como agencia de los avisos (Chilepropiedades la usa para reconocer corredoras y agentes). */
+export interface Agencia {
+  id?: string;
+  nombre?: string;
+}
+
+const esMovil = (t: string) => /^(\+?56)?9\d{8}$/.test(t.replace(/[\s().-]/g, ''));
+
+/**
+ * El contacto de un aviso: el corredor que captó la propiedad (así cada corredor es un agente del portal y sus contactos le
+ * llegan a él) y, si no tiene captador, el contacto general de la corredora.
+ */
+function contactoDe(p: PropiedadFeed, general: Contacto): Contacto {
+  const k = p.captador;
+  if (!k?.email) return general;
+  const tel = k.telefono?.trim() || '';
+  return { nombre: k.nombre, email: k.email, whatsapp: tel && esMovil(tel) ? tel : '', telefono: tel && !esMovil(tel) ? tel : '' };
+}
 
 /** El XML del feed: una propiedad por operación publicada en ese portal. Exportada para probarla sin base de datos. */
-export function construirFeed(portal: string, propiedades: PropiedadFeed[], c: Contacto = {}) {
+export function construirFeed(portal: string, propiedades: PropiedadFeed[], general: Contacto = {}, agencia: Agencia = {}) {
   const lista: string[] = [];
   for (const p of propiedades) {
     for (const op of ['venta', 'arriendo'] as const) {
@@ -62,19 +82,26 @@ export function construirFeed(portal: string, propiedades: PropiedadFeed[], c: C
       const precio = op === 'venta' ? num(p.precioVenta) : num(p.precioArriendo);
       const moneda = op === 'venta' ? p.monedaVenta : p.monedaArriendo;
       if (!precio || !TIPO_FEED[p.tipo] || !p.comuna) continue;
+      const c = contactoDe(p, general);
       const fotos = p.fotos.map((f) => f.url).filter((u) => /^https:\/\//.test(u));
       const area = (tag: string, v: unknown) => (num(v) != null ? `<${tag} unit="m2">${cd(num(v))}</${tag}>` : '');
+      const entero = (tag: string, v: unknown) => (Number.isInteger(num(v)) && Number(v) > 0 ? `<${tag}>${cd(num(v))}</${tag}>` : '');
+      const ficha = (p.ficha ?? {}) as Record<string, unknown>;
+      // Asset: supUtil = construida/útil y supTotal = terreno/total. Chilepropiedades muestra la construida en unos tipos
+      // (floorArea) y la útil en otros (usableFloorArea), y el terreno siempre en plotArea.
+      const tipoFeed = TIPO_FEED[p.tipo];
+      const usaConstruida = ['Casa', 'Local Comercial', 'Parcela'].includes(tipoFeed);
       const gc = num(p.gastosComunes);
       const titulo = String(p.tituloPortal || p.titulo || '').slice(0, MAX_TITULO[portal] ?? 65);
       lista.push(`<listing>
 <referenceId>${cd(`${p.codigo}-${op === 'venta' ? 'V' : 'A'}`)}</referenceId>
-<contact><name>${cd(c.nombre)}</name><email>${cd(c.email)}</email><phones>${c.whatsapp ? `<phone whatsapp="true">${cd(c.whatsapp)}</phone>` : ''}${c.telefono && c.telefono !== c.whatsapp ? `<phone whatsapp="false">${cd(c.telefono)}</phone>` : ''}</phones><agencyName>${cd(c.nombre)}</agencyName></contact>
+<contact><name>${cd(c.nombre)}</name><email>${cd(c.email)}</email><phones>${c.whatsapp ? `<phone whatsapp="true">${cd(c.whatsapp)}</phone>` : ''}${c.telefono && c.telefono !== c.whatsapp ? `<phone whatsapp="false">${cd(c.telefono)}</phone>` : ''}</phones><agencyName>${cd(agencia.nombre ?? general.nombre)}</agencyName>${agencia.id ? `<agencyId>${cd(agencia.id)}</agencyId>` : ''}</contact>
 <address>${cd([p.direccion, p.unidad].filter(Boolean).join(' '))}</address><commune>${cd(p.comuna)}</commune>
 <title>${cd(titulo)}</title><description>${cd(p.descripcion)}</description>
 <prices><price currency="${MONEDA_FEED[moneda ?? 'UF'] ?? 'CLF'}" operation="${op === 'venta' ? 'Venta' : 'Arriendo'}">${cd(precio)}</price></prices>
 ${gc != null ? `<communityFeesPrice>${cd(Math.round(gc))}</communityFeesPrice>` : ''}<propertyType>${cd(TIPO_FEED[p.tipo])}</propertyType>
 ${p.lat != null && p.lng != null ? `<coordinates><latitude>${cd(p.lat)}</latitude><longitude>${cd(p.lng)}</longitude></coordinates>` : ''}${p.dormitorios != null ? `<bedrooms>${cd(p.dormitorios)}</bedrooms>` : ''}${p.banos != null ? `<bathrooms>${cd(p.banos)}</bathrooms>` : ''}
-${area('floorArea', p.supTotal)}${area('usableFloorArea', p.supUtil)}${p.estacionamientos != null ? `<parkingLots>${cd(p.estacionamientos)}</parkingLots>` : ''}<furnished>${cd(p.amoblado ? 'true' : 'false')}</furnished><featured>${cd(a.destacado ? 'true' : 'false')}</featured>
+${usaConstruida ? area('floorArea', p.supUtil) : area('usableFloorArea', p.supUtil)}${area('plotArea', p.supTotal)}${entero('constructionYear', ficha.anio)}${entero('floorNumber', ficha.pisoUnidad)}${entero('levels', ficha.pisos)}${p.estacionamientos != null ? `<parkingLots>${cd(p.estacionamientos)}</parkingLots>` : ''}<furnished>${cd(p.amoblado ? 'true' : 'false')}</furnished><featured>${cd(a.destacado ? 'true' : 'false')}</featured>
 <pictures>${fotos.map((u) => `<picture><url>${cd(u)}</url></picture>`).join('')}</pictures>
 </listing>`);
     }
@@ -109,7 +136,7 @@ export class FeedsController {
   private async propiedadesConAvisos(corredoraId: string, portal: string) {
     return this.db.propiedad.findMany({
       where: { corredoraId, eliminadoEn: null, archivada: false },
-      include: { fotos: { orderBy: { orden: 'asc' } } },
+      include: { fotos: { orderBy: { orden: 'asc' } }, captador: { select: { nombre: true, email: true, telefono: true } } },
       orderBy: { codigo: 'asc' },
     }).then((l) => l.filter((p) => Object.keys((p.portales as Record<string, unknown>)?.[portal] ?? {}).length));
   }
@@ -117,11 +144,17 @@ export class FeedsController {
   private async resumen(corredoraId: string, token: string) {
     const feeds: Record<string, { url: string; avisos: number }> = {};
     const contacto = await this.contacto(corredoraId);
+    const agencia = await this.agencia(corredoraId);
     for (const portal of PORTALES_FEED) {
-      const { avisos } = construirFeed(portal, await this.propiedadesConAvisos(corredoraId, portal), contacto);
+      const { avisos } = construirFeed(portal, await this.propiedadesConAvisos(corredoraId, portal), contacto, agencia);
       feeds[portal] = { url: `${this.base}/feeds/${token}/${portal}.xml`, avisos };
     }
     return { feeds };
+  }
+
+  private async agencia(corredoraId: string): Promise<Agencia> {
+    const c = await this.db.corredora.findUnique({ where: { id: corredoraId }, select: { nombre: true } });
+    return { id: corredoraId, nombre: c?.nombre };
   }
 
   private async contacto(corredoraId: string): Promise<Contacto> {
@@ -156,7 +189,12 @@ export class FeedsController {
       select: { corredoraId: true },
     });
     if (!fila) throw new NotFoundException();
-    const { xml } = construirFeed(portal, await this.propiedadesConAvisos(fila.corredoraId, portal), await this.contacto(fila.corredoraId));
+    const { xml } = construirFeed(
+      portal,
+      await this.propiedadesConAvisos(fila.corredoraId, portal),
+      await this.contacto(fila.corredoraId),
+      await this.agencia(fila.corredoraId),
+    );
     return xml;
   }
 }

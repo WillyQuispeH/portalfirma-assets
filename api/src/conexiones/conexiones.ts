@@ -44,10 +44,30 @@ export interface DuenoConexion {
 }
 
 const escapar = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
-const pagina = (titulo: string, texto: string, ok: boolean) =>
-  `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${escapar(titulo)}</title></head>` +
-  `<body style="font-family:-apple-system,Segoe UI,sans-serif;text-align:center;padding:64px;color:#1f2430">` +
-  `<h2 style="color:${ok ? '#1a7f4b' : '#b42318'}">${escapar(titulo)}</h2><p>${escapar(texto)}</p></body></html>`;
+/** Página que ve la persona al volver del proveedor (Mercado Libre, Google, Portalfirma): tarjeta centrada, clara u oscura. */
+const pagina = (titulo: string, texto: string, ok: boolean) => {
+  const icono = ok
+    ? '<path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>'
+    : '<path d="M7 7l10 10M17 7L7 17" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>';
+  const css =
+    ':root{--fondo:#f4f6fb;--tarjeta:#fff;--texto:#1f2430;--suave:#5b6475;--borde:#e3e7ef;--ok:#1a7f4b;--okfondo:#e4f5ec;--mal:#b42318;--malfondo:#fdecea}' +
+    '@media(prefers-color-scheme:dark){:root{--fondo:#12151c;--tarjeta:#1b202a;--texto:#eef1f6;--suave:#a3acbd;--borde:#2a3140;--ok:#4cc38a;--okfondo:#17332a;--mal:#f97066;--malfondo:#3a1d1b}}' +
+    '*{box-sizing:border-box}body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:var(--fondo);color:var(--texto);font-family:-apple-system,"Segoe UI",Roboto,sans-serif}' +
+    '.t{width:100%;max-width:420px;text-align:center;background:var(--tarjeta);border:1px solid var(--borde);border-radius:16px;padding:40px 32px;box-shadow:0 8px 30px rgba(20,30,60,.08)}' +
+    '.i{width:64px;height:64px;margin:0 auto 20px;border-radius:50%;display:flex;align-items:center;justify-content:center}.i svg{width:30px;height:30px}' +
+    'h1{margin:0 0 8px;font-size:20px;font-weight:650}p{margin:0;line-height:1.5;color:var(--suave);font-size:15px}' +
+    '.c{margin-top:24px;font-size:13px}.m{margin-top:28px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--suave);opacity:.75}';
+  const color = ok ? 'var(--ok)' : 'var(--mal)';
+  const fondo = ok ? 'var(--okfondo)' : 'var(--malfondo)';
+  return (
+    `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">` +
+    `<meta name="color-scheme" content="light dark"><title>${escapar(titulo)} · Asset</title><style>${css}</style></head>` +
+    `<body><main class="t"><div class="i" style="background:${fondo};color:${color}"><svg viewBox="0 0 24 24" aria-hidden="true">${icono}</svg></div>` +
+    `<h1>${escapar(titulo)}</h1><p>${escapar(texto)}</p>` +
+    `<p class="c">${ok ? 'Ya puedes cerrar esta ventana y volver a Asset.' : 'Cierra esta ventana y vuelve a Asset.'}</p>` +
+    `<div class="m">PortalFirma Asset</div></main></body></html>`
+  );
+};
 
 @Injectable()
 export class ConexionesService {

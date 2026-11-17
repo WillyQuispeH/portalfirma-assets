@@ -21,6 +21,15 @@ const contacto = { nombre: 'Corredora Demo', email: 'ventas@demo.cl', whatsapp: 
   ok(/<picture><url><!\[CDATA\[ https:\/\/f\.test\/1\.jpg/.test(a.xml) && !/inseguro/.test(a.xml), 'solo fotos https');
   ok(/<featured><!\[CDATA\[ true/.test(a.xml) && /<communityFeesPrice><!\[CDATA\[ 90000 /.test(a.xml), 'destacado y gastos comunes redondeados');
   ok(!/SECRETO|Dueño Secreto|1-9/.test(a.xml), 'nunca salen las notas internas ni los datos del propietario');
+  ok(/<usableFloorArea unit="m2"><!\[CDATA\[ 70 /.test(a.xml) && /<plotArea unit="m2"><!\[CDATA\[ 80 /.test(a.xml) && !/<floorArea/.test(a.xml), 'depto: la superficie útil va en usableFloorArea y el total en plotArea (no como construida)');
+  const conK = construirFeed('chilepropiedades', [prop({ captador: { nombre: 'Ana Pérez', email: 'ana@demo.cl', telefono: '+56 9 1111 2222' } })], contacto).xml;
+  ok(/<contact><name><!\[CDATA\[ Ana Pérez/.test(conK) && /<email><!\[CDATA\[ ana@demo\.cl/.test(conK) && /<phone whatsapp="true"><!\[CDATA\[ \+56 9 1111 2222/.test(conK) && !/ventas@demo\.cl/.test(conK), 'el contacto del aviso es el corredor que captó la propiedad (celular = WhatsApp)');
+  ok(/<contact><name><!\[CDATA\[ Corredora Demo/.test(a.xml) && /ventas@demo\.cl/.test(a.xml), 'sin captador, el contacto es el de la corredora');
+  const casa = construirFeed('chilepropiedades', [prop({ tipo: 'casa', ficha: { anio: 2005, pisos: 2, pisoUnidad: 3 } })], contacto).xml;
+  ok(/<floorArea unit="m2"><!\[CDATA\[ 70 /.test(casa) && !/<usableFloorArea/.test(casa), 'casa: la superficie construida va en floorArea');
+  ok(/<constructionYear><!\[CDATA\[ 2005 /.test(casa) && /<levels><!\[CDATA\[ 2 /.test(casa) && /<floorNumber><!\[CDATA\[ 3 /.test(casa), 'año de construcción, niveles y piso salen como enteros');
+  const sitio = construirFeed('chilepropiedades', [prop({ tipo: 'sitio', supUtil: null })], contacto).xml;
+  ok(/<plotArea unit="m2"><!\[CDATA\[ 80 /.test(sitio) && !/FloorArea/.test(sitio), 'sitio: el terreno va en plotArea');
   ok(/Luminoso \]\]\]\]><!\[CDATA\[> y céntrico/.test(a.xml), 'el texto con «]]>» queda escapado (el XML no se rompe)');
   ok(construirFeed('broku', [prop()], contacto).avisos === 0, 'una publicación pausada no está en el feed');
   ok(construirFeed('toctoc', [prop()], contacto).avisos === 0, 'lo publicado en otro portal no entra a este');
@@ -40,6 +49,7 @@ const contacto = { nombre: 'Corredora Demo', email: 'ventas@demo.cl', whatsapp: 
       findFirst: async ({ where }) => [...filas.values()].find((f) => f.datos.token === where.datos.equals) || null,
     },
     propiedad: { findMany: async () => props },
+    corredora: { findUnique: async () => ({ nombre: 'Corredora Demo SpA' }) },
   };
   const c = new FeedsController(db, { get: () => 'https://api.test/v1' });
   const u = { sub: 'adm', corredoraId: 'c1', rol: 'ADMIN', sid: 's' };
@@ -50,6 +60,7 @@ const contacto = { nombre: 'Corredora Demo', email: 'ventas@demo.cl', whatsapp: 
   const clave = url.split('/')[5];
   const xml = await c.leer(clave, 'chilepropiedades.xml');
   ok(/<listings>/.test(xml) && /CV-1-V/.test(xml), 'el portal lee el XML con la clave, sin sesión');
+  ok(/<agencyName><!\[CDATA\[ Corredora Demo SpA \]\]><\/agencyName><agencyId><!\[CDATA\[ c1 \]\]>/.test(xml), 'la agencia lleva el nombre de la corredora y su id');
   const mala = await c.leer('x'.repeat(30), 'chilepropiedades.xml').then(() => null, (e) => e.status || e.getStatus?.());
   const otro = await c.leer(clave, 'desconocido.xml').then(() => null, (e) => e.status || e.getStatus?.());
   const corta = await c.leer('corta', 'chilepropiedades.xml').then(() => null, (e) => e.status || e.getStatus?.());
