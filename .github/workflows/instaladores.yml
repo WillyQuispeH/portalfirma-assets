@@ -104,21 +104,35 @@ jobs:
         run: |
           # sin RELEASES_TOKEN solo se arma (queda como artefacto de esta ejecución)
           if [ -n "$GH_TOKEN" ]; then CMD="release:mac"; else CMD="dist:mac"; fi
-          if [ -n "$MAC_CERT" ]; then
-            # con certificado: firma y notariza (la app de Mac se actualiza sola)
-            export CSC_LINK="$MAC_CERT"
-            yarn $CMD -c.mac.notarize=true
-          else
-            # sin certificado: sale sin firmar (en Mac se instala a mano; la app avisa cuando hay versión nueva)
-            export CSC_IDENTITY_AUTO_DISCOVERY=false
-            # hdiutil a veces no alcanza a desmontar el volumen del DMG en el equipo de GitHub: se reintenta
+          # hdiutil a veces no alcanza a desmontar el volumen del DMG en el equipo de GitHub: se reintenta
+          construir() {
             for i in 1 2 3; do
-              yarn $CMD && break
-              [ "$i" = 3 ] && exit 1
+              yarn $CMD "$@" && return 0
+              [ "$i" = 3 ] && return 1
               echo "Falló el intento $i; se desmontan los volúmenes y se repite"
               for v in /Volumes/PortalFirma*; do [ -d "$v" ] && hdiutil detach -force "$v" || true; done
               sleep 10
             done
+          }
+          if [ -n "$MAC_CERT" ]; then
+            # con certificado: firma y notariza (la app de Mac se actualiza sola). Si falta algo, se detiene: una app
+            # firmada a medias o sin notarizar la bloquea macOS y el proceso saldría «verde» igual.
+            faltan=""
+            for v in APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID CSC_KEY_PASSWORD; do
+              [ -n "${!v}" ] || faltan="$faltan $v"
+            done
+            [ -z "$faltan" ] || { echo "::error::Hay certificado de Mac pero faltan los secretos:$faltan"; exit 1; }
+            export CSC_LINK="$MAC_CERT"
+            construir -c.mac.notarize=true
+            # el certificado debe ser «Developer ID Application»; con otro, electron-builder deja la app sin firmar
+            app=$(ls -d dist/mac*/*.app | head -n 1)
+            codesign -dvv "$app" 2>&1 | tee /tmp/firma.txt
+            grep -q "Authority=Developer ID Application" /tmp/firma.txt || { echo "::error::La app de Mac no quedó firmada con un certificado «Developer ID Application»"; exit 1; }
+            xcrun stapler validate "$app" || { echo "::error::La app de Mac no quedó notarizada"; exit 1; }
+          else
+            # sin certificado: sale sin firmar (en Mac se instala a mano; la app avisa cuando hay versión nueva)
+            export CSC_IDENTITY_AUTO_DISCOVERY=false
+            construir
           fi
       - uses: actions/upload-artifact@v4
         with:
