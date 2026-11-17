@@ -1204,6 +1204,14 @@ const observador = require('./observador').crear({ res: reservas, leads, store, 
 // con la cuenta de Asset lo corre el servidor (cada 2 min, aunque la app esté cerrada); aquí solo se configura y se mira
 handle('obs:estado', () => (waSrv.enApi() ? waSrv.observador.estado() : observador.estado()));
 handle('obs:configurar', (o) => { if (waSrv.enApi()) return waSrv.observador.configurar({ autorizadoPor: miNombre(), ...(o || {}) }); const r = observador.configurar({ autorizadoPor: miNombre(), ...(o || {}) }); if (r.activo) observador.revisar().catch(() => {}); return r; });
+// «Sincronizar» de Leads: revisa ya Instagram, Facebook y correo en wechatia (WhatsApp llega solo, lo lee el servidor
+// cada pocos segundos) y trae de la base lo último de la corredora.
+handle('leads:sincronizar', async () => {
+  let obs = null;
+  if (waSrv.enApi()) { try { obs = await waSrv.observador.revisar(); } catch (e) { obs = { error: e.message }; } }
+  try { await inmo.sincronizar(); } catch {}
+  return { mensajes: obs?.mensajes || 0, nuevos: obs?.nuevos || 0, error: obs?.error || null };
+});
 handle('obs:revisar', async () => { if (waSrv.enApi()) return waSrv.observador.revisar(); const r = await observador.revisar({ forzar: true }); return { ...r, estado: observador.estado() }; });
 const obsLocal = () => { if (WA_LOCAL && !waSrv.enApi()) observador.revisar().catch(() => {}); };
 setTimeout(obsLocal, 20000); setInterval(obsLocal, 2 * 60000);

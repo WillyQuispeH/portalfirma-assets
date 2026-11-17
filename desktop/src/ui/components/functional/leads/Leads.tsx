@@ -7,9 +7,10 @@
 //  - leads.js → React: el evento «pf:leads» (al importar, eliminar, llegar mensajes…) pide recargar la lista.
 // Los id ldQ, ldFiltro, ldChips, ldItems, ldOrigen, ldBroker, ldFile, ldFileIg, ldCorBtn,
 // ldCuentas, ldImp2, ldIg2 y la clase .ld-vacio los usan las pruebas y leads.js.
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useLead } from '../../../store/hooks/useLead.hook';
-import { leadsComoExportar, leadsComoInstagram, leadsImportar, mostrarLead, rutaDe } from '../../../utils/app';
+import { leadsComoExportar, leadsComoInstagram, leadsImportar, mostrarLead, rutaDe, toast } from '../../../utils/app';
+import { api } from '../../../utils/api';
 import { cx } from '../../../utils/cx';
 import Layout from '../../ui/Layout';
 import Boton from '../../ui/Boton';
@@ -38,6 +39,7 @@ export default function Leads({ sel: selInicial, filtro: filtroInicial }: ILeads
   const { datos, sel, cargado, error, filtros: f, leadGetAll, leadSetFiltros, leadSeleccionar } = useLead();
   const archivo = useRef<HTMLInputElement>(null);
   const archivoIg = useRef<HTMLInputElement>(null);
+  const [sincronizando, setSincronizando] = useState(false);
   const columnas = useRef<HTMLDivElement>(null);
   useAnchosGuardados(columnas);
   // el filtro actual, para el listener (vive mientras la pantalla esté montada y no debe ver un valor viejo)
@@ -67,6 +69,16 @@ export default function Leads({ sel: selInicial, filtro: filtroInicial }: ILeads
     if (hayLeads && datos) mostrarLead(sel, datos, f.filtro);
   }, [hayLeads, datos, sel]); // eslint-disable-line react-hooks/exhaustive-deps -- el filtro va con los datos
 
+  // revisa ya Instagram, Facebook y correo y trae lo último de la base (WhatsApp llega solo)
+  const sincronizar = async () => {
+    setSincronizando(true);
+    try {
+      const r = await api<{ mensajes: number; nuevos: number; error: string | null }>('leadsSincronizar');
+      await leadGetAll();
+      toast(r.error ? r.error : r.mensajes ? `${r.mensajes} mensajes nuevos${r.nuevos ? ` · ${r.nuevos} lead${r.nuevos === 1 ? '' : 's'} nuevo${r.nuevos === 1 ? '' : 's'}` : ''}.` : 'Todo al día: no hay mensajes nuevos.');
+    } catch (e) { toast((e as Error).message || 'No se pudo sincronizar.'); } finally { setSincronizando(false); }
+  };
+
   const importar = (input: HTMLInputElement | null, canal?: string) => {
     const a = input?.files?.[0]; if (input) input.value = '';
     if (a) leadsImportar(rutaDe(a), canal);
@@ -94,6 +106,7 @@ export default function Leads({ sel: selInicial, filtro: filtroInicial }: ILeads
       ilustracion={{ imagen: 'img/formas/personas.svg', tinte: '#13a35b' }}
       subtitulo="Tus conversaciones con clientes por WhatsApp, Instagram y correo: qué buscan, en qué quedaron y qué sigue."
       acciones={<>
+        <Boton id="ldSync" variante="secundario" icono="refresh" cargando={sincronizando} onClick={sincronizar}>Sincronizar</Boton>
         <Boton id="ldImp" icono="upload" onClick={() => archivo.current?.click()}>Importar chat</Boton>
         <Boton variante="secundario" id="ldComo" icono="help" onClick={leadsComoExportar}>Cómo exportar un chat</Boton>
         <input ref={archivo} type="file" id="ldFile" accept=".txt,.zip,text/plain,application/zip" className="hidden" onChange={(e) => importar(e.target)} />
