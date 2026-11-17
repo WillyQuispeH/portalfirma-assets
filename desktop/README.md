@@ -165,6 +165,7 @@ Está construida sobre el código de PortalFirma Studio. Lo inmobiliario es lo p
 - **Interesados del portal:** llegan a la ficha y al CRM.
 - **Migración desde Convecta:** «Vincular avisos existentes» asocia los avisos que ya están publicados, sin duplicarlos.
 - **Importación desde Convecta:** ver «Importar desde Convecta» más abajo (la hace el servidor).
+- **Portales y CRUD de avisos:** cada aviso se puede publicar, actualizar, pausar, reactivar, retirar y eliminar en cada portal (`pubAccion`, menú «⋯» de cada portal en Publicaciones › Avisos). Portal Inmobiliario va por la API de Mercado Libre. Chilepropiedades (no tiene API para publicar ni borrar: lee un feed), Broku (integración en trámite), TOCTOC y Yapo leen el feed XML que sirve la API del servidor en una dirección secreta por corredora (`GET /v1/feeds/<clave>/<portal>.xml`; la ve y la cambia el administrador en Publicaciones › Portales). Publicar = entrar al feed; pausar o retirar = salir. Pruebas: `api/test/feeds-unit.js` y `test/portales-crud-e2e.js`.
 - **Configuración:** ver `PORTAL-INMOBILIARIO.md`. Pruebas: `test/portal-e2e.js`.
 
 ## Qué incluye la 0.1 (etapas 0 y 1)

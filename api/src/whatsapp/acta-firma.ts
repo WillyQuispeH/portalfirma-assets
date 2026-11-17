@@ -242,6 +242,8 @@ export class ActaFirmaService {
     const r = await this.envio.enviar({
       corredoraId: u.corredoraId,
       pagadorRespaldo: x.usuario.email,
+      usuarioId: u.sub,
+      drive: { tipo: 'Actas de visita', propiedadId: x.prop.id, negocioId: x.n.id },
       bytes,
       nombreArchivo: `${nombre} - ${x.prop.codigo}.pdf`,
       firmantes: [

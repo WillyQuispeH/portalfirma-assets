@@ -52,7 +52,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     await w.waitForSelector('text=ya estaba cargada', { timeout: 15000 });
     ok(true, '«Cambiar cuenta» reconecta Google (eligiendo la cuenta) y sigue con las fotos');
     await w.evaluate(() => window.Drive.cuenta()); await w.waitForSelector('#drvCambiar'); ok(/Cuenta de Google Drive/.test(await txt('#modalCard')), 'en tu cuenta › Google Drive se ve la cuenta conectada, con «Cambiar cuenta» y «Desconectar»'); await w.click('#mCancel');
-    await w.click('#nav [data-view="agente"]'); await w.waitForSelector('#view-agente .ag.ag-full');
+    await w.evaluate(() => window.Agente.vista()); await w.waitForSelector('#view-agente .ag.ag-full');
     // 4. dictado incompleto: dice qué falta
     await w.evaluate(() => window.Dictado.abrir()); await w.waitForSelector('.ga-dc:last-of-type [data-txt]');
     await w.fill('.ga-dc [data-txt]', 'Casa en venta en Calle Los Olmos 55, Lo Barnechea'); await w.click('.ga-dc [data-ok]'); await w.waitForSelector('.ga-dc .dc-g');

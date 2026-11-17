@@ -19,6 +19,7 @@ import { PdfService } from '../documentos/pdf.service';
 import { EnvioFirmaService } from '../documentos/envio-firma';
 import { cargarPlantilla, llenar } from '../documentos/plantilla';
 import { hoy } from '../whatsapp/comun';
+import { describir, dominioDe, perfilDe, unir } from '../documentos/comparecientes';
 
 const SERIE = 'carta_oferta';
 /** la firma del negocio a la que se liga la carta: en la venta es la etapa «Oferta y reserva» (al firmarse, el negocio avanza solo); en el arriendo es «oferta», que no es una etapa del embudo: firmarla no mueve el negocio (la reserva se paga después) */
@@ -30,7 +31,26 @@ interface OfertaDatos {
   plazo?: string;
   vigencia?: string | number;
   condiciones?: string;
+  // condiciones de la compraventa (si no se escriben, rigen las del modelo de la corredora)
+  piePct?: number | string;
+  promesaDias?: number | string;
+  escrituraDias?: number | string;
+  seriedadUF?: number | string;
+  comisionPct?: number | string;
 }
+/** el modelo «Carta oferta y aceptación de compraventa» de la corredora */
+const MODELO = { piePct: 20, promesaDias: 7, escrituraDias: 90, seriedadUF: 50, comisionPct: 2, vigenciaDias: 3 };
+const num = (v: unknown, base: number, min = 0, max = 100_000) => {
+  const n = Number(String(v ?? '').replace(',', '.'));
+  return Number.isFinite(n) && n > min && n <= max ? n : base;
+};
+const fmt = (n: number) => n.toLocaleString('es-CL', { maximumFractionDigits: 2 });
+const largo = (v: number, moneda: string) =>
+  moneda === 'UF'
+    ? `${fmt(v)} Unidades de Fomento`
+    : moneda === 'USD'
+      ? `${fmt(v)} dólares de los Estados Unidos de América`
+      : `$${fmt(v)} (pesos chilenos)`;
 
 const fechaLarga = (f: string) =>
   new Date(`${f}T12:00:00Z`).toLocaleDateString('es-CL', {
@@ -65,7 +85,7 @@ export class CartaOfertaService {
   ) {}
 
   /** valida y junta todo lo que lleva la carta; { error } si falta algo */
-  private async armar(u: UsuarioToken, negocioId: string) {
+  private async armar(u: UsuarioToken, negocioId: string, conPropietario = false) {
     const n = await buscarVisible(this.db.negocio, u, negocioId, 'El negocio');
     const venta = n.tipo === 'venta';
     const quien = venta ? 'comprador' : 'arrendatario';
@@ -89,16 +109,50 @@ export class CartaOfertaService {
     if (!v || v <= 0) return { error: 'Falta el monto de la oferta: escríbelo en las condiciones del negocio.' };
     const moneda = datos.valor?.moneda || 'UF';
     const of = datos.oferta ?? {};
-    const dias = Math.max(1, Math.min(120, Number(String(of.vigencia ?? '').replace(/\D/g, '')) || 5));
+    const dias = Math.max(1, Math.min(120, Number(String(of.vigencia ?? '').replace(/\D/g, '')) || MODELO.vigenciaDias));
     const duenos = await this.db.propiedadPersona.findMany({
       where: { propiedadId: prop.id, rol: 'propietario' },
-      include: { persona: { select: { nombre: true } } },
+      include: { persona: true },
     });
-    const propietario = duenos.map((d) => d.persona.nombre).join(' y ') || 'el propietario';
+    const propietario = unir(duenos.map((d) => d.persona.nombre)) || 'el propietario';
+    const piePct = Math.min(100, num(of.piePct, MODELO.piePct));
     const precioLista = venta ? prop.precioVenta : prop.precioArriendo;
     const monedaLista = venta ? prop.monedaVenta : prop.monedaArriendo;
+    // quién más firma: el propietario acepta la carta con su firma (opcional: sin esto firma solo el oferente)
+    if (conPropietario) {
+      if (!duenos.length) return { error: 'La propiedad no tiene propietario en su ficha: vincúlalo o envía la carta solo al oferente.' };
+      for (const d of duenos) {
+        const r = d.persona.rutFormato || d.persona.rut || '';
+        if (!r) return { error: `${d.persona.nombre} no tiene RUT en su ficha: agrégalo o envía la carta solo al oferente.` };
+        if (!d.persona.email || !emailOk(d.persona.email))
+          return { error: `Falta el correo de ${d.persona.nombre}: agrégalo o envía la carta solo al oferente.` };
+      }
+    }
+    const firmantes = [
+      {
+        rut,
+        nombre: persona.nombre,
+        email: persona.email,
+        telefono: persona.telefono ?? '',
+        alias: venta ? 'comprador' : 'arrendatario',
+        rol: venta ? 'Comprador' : 'Arrendatario',
+        personaId: persona.id,
+      },
+      ...(conPropietario
+        ? duenos.map((d) => ({
+            rut: d.persona.rutFormato || d.persona.rut || '',
+            nombre: d.persona.nombre,
+            email: d.persona.email ?? '',
+            telefono: d.persona.telefono ?? '',
+            alias: venta ? 'vendedor' : 'arrendador',
+            rol: venta ? 'Vendedor' : 'Arrendador',
+            personaId: d.persona.id,
+          }))
+        : []),
+    ];
     return {
       n,
+      firmantes,
       persona: { id: persona.id, nombre: persona.nombre, rut, email: persona.email, telefono: persona.telefono ?? '' },
       prop,
       usuario,
@@ -107,9 +161,15 @@ export class CartaOfertaService {
       vars: (numero: number) => ({
         numero: numero.toLocaleString('es-CL'),
         fechaEmision: fechaLarga(hoy()),
+        ciudad: prop.comuna || 'Santiago',
         operacionVerbo: venta ? 'comprar' : 'arrendar',
         operacionTxt: venta ? 'Venta' : 'Arriendo',
         contrato: venta ? 'compraventa' : 'arrendamiento',
+        esVenta: venta,
+        esArriendo: !venta,
+        rol: venta
+          ? { oferente: 'Comprador', contraparte: 'Vendedor' }
+          : { oferente: 'Arrendatario', contraparte: 'Arrendador' },
         corredora: { nombre: corredora?.nombre ?? 'la corredora', rut: corredora?.rut ?? '' },
         corredor: { nombre: usuario.nombre, email: usuario.email, telefono: usuario.telefono ?? '' },
         oferente: {
@@ -118,23 +178,43 @@ export class CartaOfertaService {
           email: persona.email,
           telefono: persona.telefono ?? '',
           calidad: quien,
+          perfil: perfilDe(persona),
+          domicilio: persona.direccion ?? '',
+        },
+        contraparte: {
+          nombre: propietario,
+          firma: propietario,
+          texto: duenos.length ? unir(duenos.map((d) => describir(d.persona))) : propietario,
         },
         propietario,
         propiedad: {
           codigo: prop.codigo,
           tipo: mayus(String(prop.tipo || '').replace(/_/g, ' ')),
-          direccion: [prop.direccion, prop.unidad ? `depto. ${prop.unidad}` : '', prop.comuna]
+          direccion: [prop.direccion, prop.unidad ? `depto. ${prop.unidad}` : '', prop.comuna, prop.region]
             .filter(Boolean)
             .join(', '),
           precioLista: precioLista && Number(precioLista) ? monto(Number(precioLista), monedaLista ?? 'UF') : '',
+          rol: prop.rol ?? '',
+          dominio: dominioDe(prop.ficha),
         },
         oferta: {
           monto: monto(v, moneda),
+          montoLargo: largo(v, moneda),
           garantia: String(of.garantia ?? '').trim(),
           plazo: String(of.plazo ?? '').trim(),
           vigencia: `${dias} día${dias === 1 ? '' : 's'}`,
           vence: fechaLarga(sumarDias(hoy(), dias)),
           condiciones: String(of.condiciones ?? '').trim(),
+        },
+        venta: {
+          piePct: fmt(piePct),
+          pie: largo((v * piePct) / 100, moneda),
+          saldoPct: fmt(100 - piePct),
+          saldo: largo((v * (100 - piePct)) / 100, moneda),
+          promesaDias: String(num(of.promesaDias, MODELO.promesaDias)),
+          escrituraDias: String(num(of.escrituraDias, MODELO.escrituraDias)),
+          seriedad: largo(num(of.seriedadUF, MODELO.seriedadUF), 'UF'),
+          comisionPct: fmt(num(of.comisionPct, MODELO.comisionPct, 0, 20)),
         },
       }),
     };
@@ -170,26 +250,26 @@ export class CartaOfertaService {
   }
 
   /** genera el PDF, lo envía a firmar (cobra del saldo de Portalfirma) y lo registra */
-  async enviar(u: UsuarioToken, negocioId: string): Promise<Record<string, unknown>> {
-    const x = await this.armar(u, negocioId);
+  async enviar(u: UsuarioToken, negocioId: string, conPropietario = false): Promise<Record<string, unknown>> {
+    const x = await this.armar(u, negocioId, conPropietario);
     if ('error' in x) return { error: x.error };
     const numero = await this.tomarNumero(u.corredoraId);
     const bytes = await this.pdfs.pdf(llenar(cargarPlantilla('carta-oferta'), x.vars(numero)));
     const r = await this.envio.enviar({
       corredoraId: u.corredoraId,
       pagadorRespaldo: x.usuario.email,
+      usuarioId: u.sub,
+      drive: { tipo: 'Cartas oferta', propiedadId: x.prop.id, negocioId: x.n.id },
       bytes,
       nombreArchivo: `Carta oferta nº ${numero} - ${x.prop.codigo}.pdf`,
-      firmantes: [
-        {
-          rut: x.persona.rut,
-          fullName: x.persona.nombre,
-          email: x.persona.email,
-          phone: x.persona.telefono || undefined,
-          alias: x.venta ? 'comprador' : 'arrendatario',
-          typeSign: 'simple',
-        },
-      ],
+      firmantes: x.firmantes.map((f) => ({
+        rut: f.rut,
+        fullName: f.nombre,
+        email: f.email,
+        phone: f.telefono || undefined,
+        alias: f.alias,
+        typeSign: 'simple' as const,
+      })),
     });
     if ('error' in r) return { error: r.error };
     const operacion = r.operacion;
@@ -206,18 +286,16 @@ export class CartaOfertaService {
           propiedadIds: [x.prop.id],
           negocioId: x.n.id,
           enviadoPorId: u.sub,
-          total: 1,
-          firmantes: [
-            {
-              nombre: x.persona.nombre,
-              rut: x.persona.rut,
-              rol: x.venta ? 'Comprador' : 'Arrendatario',
-              personaId: x.persona.id,
-              email: x.persona.email,
-              telefono: x.persona.telefono,
-              firmo: false,
-            },
-          ] as Prisma.InputJsonValue,
+          total: x.firmantes.length,
+          firmantes: x.firmantes.map((f) => ({
+            nombre: f.nombre,
+            rut: f.rut,
+            rol: f.rol,
+            personaId: f.personaId,
+            email: f.email,
+            telefono: f.telefono,
+            firmo: false,
+          })) as Prisma.InputJsonValue,
           datos: { formato: 'carta_oferta', hito: 'carta', numero, tipoFirma: 'simple', tramite: 'none' },
         },
         update: {},
@@ -225,7 +303,7 @@ export class CartaOfertaService {
       // la firma de la etapa del negocio: así la revisión de firmas lo sigue y, al firmarse, el negocio avanza solo
       const datos = { ...((x.n.datos as Record<string, unknown>) ?? {}) };
       const firmas = { ...((datos.firmas as Record<string, unknown>) ?? {}) };
-      firmas[x.venta ? ETAPA_VENTA : ETAPA_ARRIENDO] = { operacion, estado: 'en_firma', firmados: 0, total: 1, revisado: null, error: null };
+      firmas[x.venta ? ETAPA_VENTA : ETAPA_ARRIENDO] = { operacion, estado: 'en_firma', firmados: 0, total: x.firmantes.length, revisado: null, error: null };
       await this.db.negocio.update({
         where: { id: x.n.id },
         data: { datos: { ...datos, firmas } as Prisma.InputJsonValue, version: { increment: 1 } },
@@ -272,7 +350,11 @@ export class CartaOfertaService {
   }
 }
 
-const pedidoEsquema = z.object({ negocioId: z.string().trim().min(1).max(80) });
+const pedidoEsquema = z.object({
+  negocioId: z.string().trim().min(1).max(80),
+  /** también firma el propietario (acepta la carta). Opcional: por defecto firma solo el oferente */
+  conPropietario: z.boolean().optional(),
+});
 
 @Controller('cartas-oferta')
 export class CartaOfertaController {
@@ -287,6 +369,6 @@ export class CartaOfertaController {
   @Post('enviar')
   @HttpCode(200)
   enviar(@UsuarioActual() u: UsuarioToken, @Body(new ZodPipe(pedidoEsquema)) b: z.infer<typeof pedidoEsquema>) {
-    return this.s.enviar(u, b.negocioId);
+    return this.s.enviar(u, b.negocioId, b.conPropietario === true);
   }
 }

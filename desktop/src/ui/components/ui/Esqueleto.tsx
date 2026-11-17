@@ -46,7 +46,7 @@ export default function Esqueleto({ forma = 'linea', ancho, alto, className, sty
 /** un párrafo: líneas de ancho completo y la última más corta */
 export function EsqueletoTexto({ lineas = 3, ultima = '60%', alto = 10, className }: { lineas?: number; ultima?: TMedida; alto?: TMedida; className?: string }) {
   return (
-    <span aria-hidden="true" className={cx('tw:flex tw:flex-col tw:gap-2', className)}>
+    <span aria-hidden="true" className={cx('tw:flex tw:flex-col tw:gap-ui', className)}>
       {Array.from({ length: lineas }, (_, i) => <Esqueleto key={i} alto={alto} ancho={i === lineas - 1 && lineas > 1 ? ultima : '100%'} />)}
     </span>
   );

@@ -6,11 +6,12 @@ const { PdfService } = require('../dist/documentos/pdf.service');
 const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  ✔ ' + m); };
 (async () => {
   const base = {
-    numero: '3', fechaEmision: 'viernes, 13 de noviembre de 2026', operacionVerbo: 'arrendar', operacionTxt: 'Arriendo', contrato: 'arrendamiento',
+    numero: '3', fechaEmision: 'viernes, 13 de noviembre de 2026', ciudad: 'Las Condes', operacionVerbo: 'arrendar', operacionTxt: 'Arriendo', contrato: 'arrendamiento', esVenta: false, esArriendo: true, rol: { oferente: 'Arrendatario', contraparte: 'Arrendador' },
     corredora: { nombre: 'Inmobiliaria <Ejemplo>', rut: '76.123.456-7' }, corredor: { nombre: 'Ana Pérez', email: 'ana@ejemplo.cl', telefono: '' },
-    oferente: { nombre: 'Matías Serrano', rut: '7.654.321-6', email: 'matias@mail.cl', telefono: '+56 9 1111 2222', calidad: 'arrendatario' },
-    propietario: 'Rosa Propietaria', propiedad: { codigo: 'PF-1001', tipo: 'Departamento', direccion: 'Av. Apoquindo 3000, depto. 504, Las Condes', precioLista: '$700.000' },
-    oferta: { monto: '$650.000', garantia: '1 mes de renta', plazo: '12 meses', vigencia: '7 días', vence: 'viernes, 20 de noviembre de 2026', condiciones: 'Entrega con pintura reciente.\nMascota pequeña.' },
+    oferente: { nombre: 'Matías Serrano', rut: '7.654.321-6', email: 'matias@mail.cl', telefono: '+56 9 1111 2222', calidad: 'arrendatario', perfil: 'chileno, soltero', domicilio: 'Los Leones 567, Providencia' },
+    contraparte: { nombre: 'Rosa Propietaria', firma: 'Rosa Propietaria', texto: 'Rosa Propietaria, chilena, casada, cédula de identidad número 1-9' },
+    propietario: 'Rosa Propietaria', propiedad: { codigo: 'PF-1001', tipo: 'Departamento', direccion: 'Av. Apoquindo 3000, depto. 504, Las Condes', precioLista: '$700.000', rol: '', dominio: '' },
+    oferta: { monto: '$650.000', montoLargo: '$650.000 (pesos chilenos)', garantia: '1 mes de renta', plazo: '12 meses', vigencia: '7 días', vence: 'viernes, 20 de noviembre de 2026', condiciones: 'Entrega con pintura reciente.\nMascota pequeña.' },
   };
   const html = llenar(cargarPlantilla('carta-oferta'), base);
   ok(!/\{\{|\}\}/.test(html), 'no queda ninguna variable sin reemplazar');

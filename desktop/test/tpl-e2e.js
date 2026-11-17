@@ -19,7 +19,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     await w.click('#tplCats [data-cat="Vehículos"]'); await w.waitForSelector('#tplCats .chip.active[data-cat="Vehículos"]'); await w.waitForSelector('.tpl-card');
     await w.click('.tpl-card [data-use]'); await w.waitForSelector('#tplSend');
     await w.click('#tplSend'); await w.waitForTimeout(200);
-    const inv0 = await w.$$eval('#view-tpl .invalid', (n) => n.length);
+    const inv0 = await w.$$eval('#view-tpl [aria-invalid="true"]', (n) => n.length);
     console.log('   validación:', await w.textContent('#tplError'), '| campos marcados:', inv0);
     ok(/Revisa los campos marcados/.test(await w.textContent('#tplError') || '') && inv0 > 0, 'sin datos no deja enviar y marca los obligatorios');
     await shot('t2-form-errors.png', true);
@@ -30,7 +30,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     await fill('estado-civil_mandante_signer', 'Soltero(a)'); await fill('direccion_mandante_signer', 'Av. Siempre Viva 123, Santiago');
     await fill('placa-patente_datos-del-vehiculo_nosigner', 'ABCD12');
     // el resto de los obligatorios con un texto cualquiera (depende del trámite del simulador)
-    for (const id of await w.$$eval('#view-tpl .invalid', (l) => l.map((i) => i.dataset.f).filter(Boolean))) {
+    for (const id of await w.$$eval('#view-tpl [aria-invalid="true"]', (l) => l.map((i) => i.dataset.f).filter(Boolean))) {
       const t = await w.$eval(`[data-f="${id}"]`, (i) => i.type);
       await fill(id, t === 'email' ? 'otro@correo.cl' : t === 'tel' ? '987654321' : /rut/.test(id) ? '22222222-2' : 'Dato de prueba');
     }

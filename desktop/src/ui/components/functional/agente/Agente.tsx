@@ -190,8 +190,7 @@ export default function Agente() {
           <div className={cx(ancho, 'tw:flex tw:flex-col tw:gap-3.5 tw:px-4 tw:py-4')}>
             {vacio ? (
               <div className="ag-empty tw:flex tw:flex-col tw:items-center tw:text-center tw:gap-3 tw:py-8">
-                <LogoAgente tam={completo ? 60 : 48} />
-                <h1 className={cx('ag-hola tw:m-0 tw:font-bold tw:tracking-tight tw:text-text', completo ? 'tw:text-[34px]' : 'tw:text-2xl')}>{nombre ? `Hola, ${nombre}` : 'Hola'}</h1>
+                <h1 className={cx('ag-hola tw:m-0 tw:w-fit tw:max-w-full tw:font-bold tw:tracking-tight tw:bg-[image:var(--ui-logo-grad)] tw:bg-clip-text tw:text-transparent', completo ? 'tw:text-[34px]' : 'tw:text-2xl')}>{nombre ? `Hola, ${nombre}` : 'Hola'}</h1>
                 <p className="tw:m-0 tw:max-w-[420px] tw:text-[15px] tw:text-muted">Pídemelo en tus palabras o con un audio. También puedes empezar con una de estas acciones:</p>
                 <div className="tw:flex tw:flex-wrap tw:justify-center tw:gap-2">
                   {RAPIDAS.slice(0, 4).map(([id, ic, t, fn]) => <Boton key={id} variante="secundario" tamano="sm" icono={ic} data-inicio={id} onClick={() => { if (!ocupado()) fn(); }}>{t}</Boton>)}

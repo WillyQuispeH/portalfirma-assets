@@ -1,0 +1,110 @@
+<!doctype html>
+<!--
+  MANDATO DE GESTIÓN DE ARRIENDO de PortalFirma Asset. HTML normal: se edita el texto y el estilo aquí (el estilo común está en _base.css).
+  El contenido legal sigue el modelo «Mandato de gestión de arriendo» de la corredora. Las cláusulas con class="cl n" se numeran solas.
+  Variables entre llaves dobles (se reemplazan solas al generar el PDF):
+
+    {{numero}} {{fechaEmision}} {{ciudad}}
+    {{corredora.nombre}} {{corredora.rut}} {{corredora.representante}} (texto: «don Fulano, cédula de identidad número …»)
+    {{mandante.nombre}} {{mandante.texto}} (con RUT, perfil y domicilio) {{mandante.rut}} {{mandante.email}} {{mandante.telefono}}
+    {{propiedad.codigo}} {{propiedad.tipo}} {{propiedad.direccion}} {{propiedad.comuna}} {{propiedad.supTotal}} {{propiedad.supUtil}} {{propiedad.rol}} {{propiedad.canon}}
+    {{#publicar.si}}…{{/publicar.si}} {{#publicar.no}}…{{/publicar.no}}   {{#exclusividad.si}}…{{/exclusividad.si}} {{#exclusividad.no}}…{{/exclusividad.no}}
+    {{condiciones.mascotas}}  {{condiciones.garantiaMeses}}  {{condiciones.otras}}
+  Un bloque  {{#algo}} … {{/algo}}  solo aparece si «algo» tiene valor.
+  Este documento NO lleva cajas de firma: Portalfirma agrega su propia hoja de firma al enviarlo.
+  Este texto debe revisarlo el notario: al cambiarlo, cambia lo que firma el mandante.
+-->
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Mandato de gestión de arriendo nº {{numero}}</title>
+<style>
+/*@base*/
+</style>
+</head>
+<body>
+
+<div class="enc">
+  <div class="marca">{{corredora.nombre}}<small>{{#corredora.rut}}RUT {{corredora.rut}}{{/corredora.rut}}</small></div>
+  <div class="meta"><b>Mandato Nº {{numero}}</b><br>{{ciudad}}, {{fechaEmision}}</div>
+</div>
+<div class="filete"></div>
+<h1>Mandato de gestión de arriendo</h1>
+<div class="subtitulo">{{propiedad.tipo}} · {{propiedad.direccion}}</div>
+
+<div class="resumen">
+  <h3>Descripción del inmueble</h3>
+  <div class="grid">
+    <div class="dato"><span>Ubicación</span><b>{{propiedad.direccion}}</b></div>
+    <div class="dato"><span>Comuna</span><b>{{propiedad.comuna}}</b></div>
+    <div class="dato"><span>Superficie total</span><b>{{propiedad.supTotal}}</b></div>
+    <div class="dato"><span>Superficie útil</span><b>{{propiedad.supUtil}}</b></div>
+    <div class="dato"><span>Rol</span><b>{{propiedad.rol}}</b></div>
+    <div class="dato"><span>Canon de arriendo referencial</span><b class="grande">{{propiedad.canon}}</b></div>
+  </div>
+</div>
+
+<p class="comparecencia">Don/doña <b>{{mandante.texto}}</b>, teléfono {{mandante.telefono}}, correo electrónico {{mandante.email}}, en adelante el <b>MANDANTE</b>, encarga a <b>{{corredora.nombre}}</b>, sociedad del giro de corretaje de propiedades{{#corredora.rut}}, RUT {{corredora.rut}}{{/corredora.rut}}{{#corredora.representante}}, representada por {{corredora.representante}}{{/corredora.representante}}, en adelante el <b>CORREDOR</b>, el arrendamiento del inmueble descrito arriba (el «Inmueble»).</p>
+
+<section class="cl n"><h2>Declaraciones del mandante</h2>
+  <p>En este acto vengo en declarar y obligarme a lo siguiente:</p>
+  <ul class="sub">
+    <li><b>1)</b>Declaro ser dueño/a del Inmueble objeto de este encargo y no tener impedimento legal para celebrar actos y contratos al respecto.</li>
+    <li><b>2)</b>Declaro que toda la información entregada al CORREDOR es verdadera.</li>
+    <li><b>3)</b>Me obligo a proporcionar todos los antecedentes relativos al Inmueble que se requieran y autorizo al CORREDOR para solicitar los mismos por su propia cuenta.</li>
+    <li><b>4)</b>Autorizo al CORREDOR a tomar y publicar imágenes del Inmueble en los distintos portales y redes sociales, coordinar visitas, promocionar y realizar todas las gestiones necesarias para materializar el arriendo.</li>
+    <li><b>5)</b>El MANDANTE libera al CORREDOR de toda responsabilidad ante siniestro, mantención o cuidado del Inmueble.</li>
+    <li><b>6)</b>El MANDANTE será responsable de solicitar asesoramiento legal, tributario y contable.</li>
+  </ul>
+</section>
+
+<section class="cl n"><h2>Comisión</h2>
+  <ul class="sub">
+    <li><b>A)</b>Para arriendos residenciales cuya duración sea inferior a 24 meses, el MANDANTE pagará al CORREDOR una comisión de corretaje del 50 % del valor de un mes de arrendamiento más IVA.</li>
+    <li><b>B)</b>En caso de ser un contrato de igual o superior a 24 meses, la comisión será de 2 % más IVA sobre el monto total del contrato, con una comisión mínima de una renta promedio mensual más IVA.</li>
+    <li><b>C)</b>Para arriendos comerciales, el MANDANTE pagará al CORREDOR una comisión de corretaje del 2,0 % más IVA, calculado sobre el monto total del contrato, con una comisión mínima de una renta promedio mensual más IVA.</li>
+    <li><b>D)</b>En caso de que la negociación derive en un contrato distinto, tales como compraventa, leasing, arriendo con opción u otro similar, el MANDANTE pagará al CORREDOR una comisión de corretaje del 2,0 % más IVA, calculado sobre el monto total del contrato.</li>
+  </ul>
+  <p>El pago correspondiente se realizará al momento de la suscripción del contrato de arriendo. El retraso en el pago por más de 20 días corridos devengará un interés por cada día de retraso equivalente al máximo convencional que permita la ley. El CORREDOR se reserva el derecho a cobrar comisión al respectivo arrendatario o a hacer canje con otros corredores.</p>
+</section>
+
+<section class="cl n"><h2>Responsabilidades</h2>
+  <p>La intermediación por servicio de corretaje de propiedades implica la toma de imágenes y la publicación de la propiedad en los distintos portales, la coordinación de las visitas a la propiedad, transmitir los antecedentes entregados por el arrendatario al arrendador, coordinar la firma del contrato de arrendamiento y la entrega material del inmueble. El CORREDOR no administrará el contrato de arrendamiento ni responderá de algún eventual daño oculto o incumplimiento de cualquiera de las partes. El MANDANTE es responsable de la elección del arrendatario, de la revisión de sus antecedentes y de indicar por escrito e incorporar en el contrato las restricciones que pueda tener el arriendo. Del mismo modo, el arrendatario es responsable de la veracidad de los antecedentes que entregue al arrendador para su evaluación.</p>
+</section>
+
+<section class="cl n"><h2>Intermediación exclusiva con sus clientes</h2>
+  <p>El MANDANTE se obliga a no entenderse ni a arrendar la propiedad de forma directa a clientes del CORREDOR sin su intermediación y, en caso de que lo hiciera, pagará a título de indemnización el doble de la comisión acordada. Son CLIENTES del CORREDOR las personas naturales o jurídicas que hayan firmado una orden de visita emitida por {{corredora.nombre}}, asimismo los terceros relacionados con las referidas personas naturales o jurídicas, aun cuando esta orden de arrendamiento no esté vigente al momento del cierre del negocio.</p>
+</section>
+
+<section class="cl n"><h2>Vigencia</h2>
+  <p>La presente orden de arrendamiento tendrá una vigencia de 90 días, renovándose automática y sucesivamente por períodos iguales y sucesivos de 90 días cada uno, salvo que cualquiera de las partes manifieste por correo electrónico a la otra su voluntad de ponerle término. Estando en trámite una oferta por la propiedad no se podrá poner término a esta orden. Si alguno de los CLIENTES del CORREDOR o sus relacionados, dentro de los 180 días siguientes al término del contrato, cerraren con el MANDANTE alguno de los negocios descritos en el presente instrumento, el MANDANTE pagará al CORREDOR la totalidad de la comisión correspondiente.</p>
+</section>
+
+<section class="cl n"><h2>Publicidad y difusión</h2>
+  <p>El MANDANTE autoriza expresamente al CORREDOR a publicar y difundir la propiedad objeto del presente mandato en sus plataformas digitales y redes sociales, tales como Instagram, Facebook, TikTok, página web de {{corredora.nombre}}, entre otras que estime pertinentes, bajo su propia <b>línea editorial</b>, estética y criterios comunicacionales, sin que ello implique obligación de su parte de ajustarse a indicaciones específicas del MANDANTE respecto del contenido o estilo de las publicaciones.</p>
+  <p>La publicación se realizará en los plazos y momentos que {{corredora.nombre}} estime adecuados, considerando criterios técnicos y estratégicos, tales como el nivel de demanda del mercado, disponibilidad de contenidos y calendario de publicaciones. Asimismo, se deja expresa constancia de que las propiedades entregadas en mandato con exclusividad tendrán prioridad en el orden de publicación, promoción y difusión, por sobre aquellas en modalidad de no exclusividad, sin perjuicio de la buena fe y diligencia que igualmente aplicará {{corredora.nombre}} a todas las gestiones encomendadas.</p>
+  <p><b>Exclusividad:</b> en caso de exclusividad, durante el período de 6 meses, el/la propietario/a se compromete a no solicitar los servicios de otra empresa de corretaje ni a realizar gestiones de venta o arriendo directa o indirecta del inmueble mencionado, ya sea personalmente o a través de terceros. Cualquier oferta de compra recibida será canalizada exclusivamente a través de {{corredora.nombre}}. En caso de incumplir este acuerdo, el propietario/a deberá abonar una penalización equivalente al doble de los honorarios acordados, más IVA.</p>
+
+  <table class="tabla">
+    <tr><th style="width:62%">Quiero que se publique en portales inmobiliarios y redes sociales</th><td><span class="caja-marca {{#publicar.si}}si{{/publicar.si}}"></span>SÍ &nbsp;&nbsp; <span class="caja-marca {{#publicar.no}}si{{/publicar.no}}"></span>NO</td></tr>
+    <tr><th style="width:62%">Quiero exclusividad</th><td><span class="caja-marca {{#exclusividad.si}}si{{/exclusividad.si}}"></span>SÍ &nbsp;&nbsp; <span class="caja-marca {{#exclusividad.no}}si{{/exclusividad.no}}"></span>NO</td></tr>
+  </table>
+  <p class="dest"><i>Nota: el MANDANTE entiende que, al no ser publicada la propiedad en los portales inmobiliarios, se hace más difícil encontrar al arrendatario.</i></p>
+</section>
+
+<section class="cl n"><h2>Domicilio y jurisdicción</h2>
+  <p>Para todos los efectos derivados del presente contrato, las partes fijan su domicilio en la ciudad de Santiago y se someten a la jurisdicción de sus tribunales ordinarios.</p>
+</section>
+
+<section class="cl"><h2>Condiciones especiales</h2>
+  <table class="tabla">
+    <tr><th>Se aceptan mascotas</th><td>{{condiciones.mascotas}}</td></tr>
+    <tr><th>Meses de garantía que se solicitarán</th><td>{{condiciones.garantiaMeses}}</td></tr>
+    {{#condiciones.otras}}<tr><th>Otras condiciones</th><td class="pre">{{condiciones.otras}}</td></tr>{{/condiciones.otras}}
+  </table>
+</section>
+
+<div class="pie-legal">Documento emitido por {{corredora.nombre}}{{#corredora.rut}}, RUT {{corredora.rut}}{{/corredora.rut}}. Se firma electrónicamente con Portalfirma y queda disponible para su verificación.</div>
+
+</body>
+</html>

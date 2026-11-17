@@ -85,11 +85,11 @@ const AND = `16/10/26, 12:20 - Los mensajes y las llamadas están cifrados de ex
     // 7. estado y filtros
     await w.selectOption('#ldFicha [data-k="estado"]', 'perdido'); await w.waitForSelector('#ldFicha [data-k="motivo"]');
     await w.fill('#ldFicha [data-k="motivo"]', 'Compró con otra corredora'); await w.waitForTimeout(1600); // se guarda sola
-    await w.click('#ldChips [data-f="abiertos"]'); await w.waitForTimeout(300);
+    await w.selectOption('#ldFiltro', 'abiertos'); await w.waitForTimeout(300);
     ok((await w.$$('#ldItems .ld-it')).length === 1, 'un lead perdido sale de «Abiertos»');
-    await w.click('#ldChips [data-f="perdido"]'); await w.waitForTimeout(300);
+    await w.selectOption('#ldFiltro', 'perdido'); await w.waitForTimeout(300);
     ok((await w.$$('#ldItems .ld-it')).length === 1 && /Perdido/.test(await txt('#ldItems')), 'y aparece en «Perdidos»');
-    await w.fill('#ldQ', 'reina'); await w.click('#ldChips [data-f="todos"]'); await w.waitForTimeout(500);
+    await w.fill('#ldQ', 'reina'); await w.selectOption('#ldFiltro', 'todos'); await w.waitForTimeout(500);
     ok((await w.$$('#ldItems .ld-it')).length === 1, 'el buscador encuentra por comuna (La Reina)');
     await w.fill('#ldQ', ''); await w.waitForTimeout(400);
     // 8. pasar a cliente
@@ -98,7 +98,7 @@ const AND = `16/10/26, 12:20 - Los mensajes y las llamadas están cifrados de ex
     ok(per && per.roles.includes('interesado') && per.email === 'matias.serrano@gmail.com' && !per.rut, '0.16.23 · el lead ya queda en Personas (interesado, con su correo) aunque no tenga RUT');
     // 9. por WhatsApp: el broker le manda el chat exportado al Agente
     await app.evaluate(() => { global.__waMock = { convs: [{ id: 'c9', contactId: 'k9', phone: '+56987276858', fullName: 'Fran' }], msgs: { c9: [] }, enviados: [] }; });
-    await w.click('#nav [data-view="agente"]'); await w.waitForSelector('#agWa'); await w.click('#agWa'); await w.waitForSelector('#waKey');
+    await w.evaluate(() => window.Agente.vista()); await w.waitForSelector('#agWa'); await w.click('#agWa'); await w.waitForSelector('#waKey');
     await w.fill('#waKey', 'pit-f0e1d2c3f0e1d2c3f0e1d2c3'); await w.fill('#waLoc', 'PlPVNYvbNWr6nrRB9VHG'); await w.click('#waKeyOk'); await w.waitForSelector('#waVin:not([disabled])');
     await w.click('#waVin'); await w.waitForSelector('.wa-cod b'); const cod = (await txt('.wa-cod b')).trim();
     await escribe(cod); await esperaEnvio(/^k9\|Listo, este celular quedó conectado/, 0); await w.click('#mCancel');

@@ -4,11 +4,11 @@
 // La dirección usa el campo inteligente de src/renderer/direcciones.js (window.Direcciones.conectar), que envuelve el input.
 import { useEffect, useRef, useState } from 'react';
 import Boton from '../../../ui/Boton';
+import Checkbox from '../../../ui/Checkbox';
 import Input from '../../../ui/Input';
 import Select from '../../../ui/Select';
 import Textarea from '../../../ui/Textarea';
 import { VentanaCabecera, VentanaCuerpo, VentanaPie } from '../../../ui/Ventana';
-import { Opcion } from '../../gestion/editor-pdf/Modales';
 import { cerrarModal } from '../../../../utils/modal';
 
 const MONEDAS: [string, string][] = [['UF', 'UF'], ['CLP', 'CLP'], ['USD', 'USD']];
@@ -66,9 +66,9 @@ export function Propiedad({ p, nuevo, tipos, alGuardar }: { p: TProp; nuevo: boo
         <Input etiqueta="Título" clasesCampo="tw:col-span-2" placeholder="Departamento en Providencia" autoFocus {...campo('titulo')} />
         <Select etiqueta="Tipo" opciones={Object.entries(tipos)} {...campo('tipo')} />
         <Input etiqueta="Código" placeholder={nuevo ? 'Automático' : ''} {...campo('codigo')} />
-        <div className="tw:col-span-2 tw:sm:col-span-4 tw:flex tw:flex-wrap tw:gap-5">
-          <Opcion type="checkbox" id="pf_venta" checked={ck.venta} onChange={(e) => setCk({ ...ck, venta: e.target.checked })}>En venta</Opcion>
-          <Opcion type="checkbox" id="pf_arriendo" checked={ck.arriendo} onChange={(e) => setCk({ ...ck, arriendo: e.target.checked })}>En arriendo</Opcion>
+        <div className="tw:col-span-2 tw:sm:col-span-4 tw:flex tw:flex-wrap tw:gap-ui">
+          <Checkbox id="pf_venta" marcado={ck.venta} alCambiar={(venta) => setCk({ ...ck, venta })} etiqueta="En venta" />
+          <Checkbox id="pf_arriendo" marcado={ck.arriendo} alCambiar={(arriendo) => setCk({ ...ck, arriendo })} etiqueta="En arriendo" />
         </div>
         <Input etiqueta="Precio de venta" type="number" step="any" {...campo('precioVenta')} />
         <Select etiqueta="Moneda" opciones={MONEDAS} {...campo('precioVentaM')} />
@@ -86,9 +86,7 @@ export function Propiedad({ p, nuevo, tipos, alGuardar }: { p: TProp; nuevo: boo
         <Input etiqueta="Estacionamientos" type="number" {...campo('estacionamientos')} />
         <Input etiqueta="Bodegas" type="number" {...campo('bodegas')} />
         <Input etiqueta="Gastos comunes ($)" type="number" {...campo('gastosComunes')} />
-        <div className="tw:flex tw:items-end tw:pb-2.5">
-          <Opcion type="checkbox" id="pf_amoblado" checked={ck.amoblado} onChange={(e) => setCk({ ...ck, amoblado: e.target.checked })}>Amoblado</Opcion>
-        </div>
+        <Checkbox id="pf_amoblado" className="tw:min-h-14 tw:[&>label]:min-h-14" marcado={ck.amoblado} alCambiar={(amoblado) => setCk({ ...ck, amoblado })} etiqueta="Amoblado" />
         <Textarea etiqueta="Descripción (pública)" rows={4} clasesCampo="tw:col-span-2 tw:sm:col-span-4" {...campo('descripcion')} />
         <Textarea etiqueta="Notas internas (solo tu equipo)" rows={2} clasesCampo="tw:col-span-2 tw:sm:col-span-4" {...campo('notasInternas')} />
       </div>

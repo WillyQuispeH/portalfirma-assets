@@ -3,7 +3,7 @@
 import { create } from 'zustand';
 import { publicacionService } from '../services/publicacion.service';
 import { abrirUrl } from '../../utils/app';
-import type { IInteresados, IPanelPublicaciones, IPortales, TInteresadoEstado, TPubTab } from '../interfaces/publicacion.interface';
+import type { IInteresados, IPanelPublicaciones, IPortales, TAccionAviso, TInteresadoEstado, TPubOperacion, TPubTab } from '../interfaces/publicacion.interface';
 
 type TResultado = { mensaje?: string; error?: string };
 let consultaInteresados = 0; // si llegan respuestas fuera de orden (al buscar), vale solo la última
@@ -27,6 +27,8 @@ interface IPublicacionState {
   portalesGetAll: () => Promise<void>;
   portalGuardar: (id: string, nombre: string, cambios: { activo: boolean; feedUrl: string; token?: string }) => Promise<TResultado>;
   portalExportarFeed: (id: string) => Promise<TResultado>;
+  portalRotarClave: () => Promise<TResultado>;
+  avisoAccion: (propId: string, op: TPubOperacion, portal: string, que: TAccionAviso) => Promise<TResultado>;
   publicacionSincronizar: () => Promise<TResultado>;
 }
 
@@ -99,7 +101,10 @@ export const usePublicacionStore = create<IPublicacionState>((set, get) => ({
       const [catalogo, est] = await Promise.all([publicacionService.getCatalogo(), publicacionService.getContacto().catch(() => null)]);
       const feeds: Record<string, number> = {};
       for (const x of catalogo.filter((y) => y.via !== 'api')) feeds[x.id] = (await publicacionService.getFeed(x.id)).avisos;
-      set({ portales: { catalogo, contacto: est?.contacto || {}, feeds }, error: null });
+      // las direcciones públicas las sirve la API y solo las ve el administrador: para el corredor quedan en null
+      const srv = await publicacionService.getFeedsServidor().catch(() => null);
+      const urls = srv ? Object.fromEntries(Object.entries(srv.feeds).map(([k, v]) => [k, v.url])) : null;
+      set({ portales: { catalogo, contacto: est?.contacto || {}, feeds, urls }, error: null });
     } catch (e) { set({ error: (e as Error).message }); }
   },
 
@@ -108,6 +113,22 @@ export const usePublicacionStore = create<IPublicacionState>((set, get) => ({
       await publicacionService.setPortal(id, cambios);
       await get().portalesGetAll();
       return { mensaje: `${nombre}: guardado.` };
+    } catch (e) { return { error: (e as Error).message }; }
+  },
+
+  portalRotarClave: async () => {
+    try {
+      await publicacionService.rotarFeedsServidor();
+      await get().portalesGetAll();
+      return { mensaje: 'Cambió la clave de los feeds: las direcciones anteriores ya no funcionan. Entrega las nuevas a cada portal.' };
+    } catch (e) { return { error: (e as Error).message }; }
+  },
+
+  avisoAccion: async (propId, op, portal, que) => {
+    try {
+      const r = await publicacionService.accionAviso(propId, op, portal, que);
+      await get().publicacionAbrir(); // el panel de avisos y los totales se vuelven a leer
+      return { mensaje: r.mensaje };
     } catch (e) { return { error: (e as Error).message }; }
   },
 

@@ -214,7 +214,7 @@ app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) creat
 
 // ---- IPC: cada handler devuelve {ok, data} o {ok:false, error, code} ----
 // Canales que solo usa el administrador (rol ADMIN del usuario de Asset; el resto lo usa también el corredor)
-const SOLO_ADMIN = { 'gdrive:connect': 'conexiones', 'gdrive:setClient': 'conexiones', 'gdrive:disconnect': 'conexiones', 'ml:conectar': 'conexiones', 'ml:desconectar': 'conexiones', 'ml:contacto': 'conexiones',
+const SOLO_ADMIN = { 'gdrive:connect': 'conexiones', 'gdrive:setClient': 'conexiones', 'gdrive:disconnect': 'conexiones', 'ml:conectar': 'conexiones', 'ml:desconectar': 'conexiones', 'ml:contacto': 'conexiones', 'pub:configurar': 'conexiones', 'pub:feeds': 'conexiones', 'pub:feedsRotar': 'conexiones',
   'res:configurar': 'conexiones', 'pv:claveWa': 'conexiones', 'obs:configurar': 'conexiones', 'dir:configurar': 'conexiones', 'ops:setFileKey': 'conexiones', 'ai:config': 'conexiones',
   'pv:configurar': 'fernanda', 'wallet:topup': 'saldo', 'inmo:propArchivar': 'borrar', 'inmo:perBorrar': 'borrar', 'leads:borrar': 'borrar', 'neg:borrar': 'borrar',
   'leads:asignar': 'reasignar', 'neg:corredor': 'reasignar', 'inmo:importar': 'importar', 'pv:importar': 'importar', 'fmt:configurar': 'documentos', 'usr:listar': 'usuarios', 'usr:crear': 'usuarios', 'usr:editar': 'usuarios', 'usr:clave': 'usuarios' };
@@ -1126,6 +1126,9 @@ handle('pub:redactar', (id, op) => pubs.redactar(id, op));
 handle('pub:textos', (id, t) => pubs.guardarTextos(id, t || {}));
 handle('pub:publicar', (id, op, portales, o) => pubs.publicar(id, op, portales || [], o || {}));
 handle('pub:retirar', (id, op, portal) => pubs.retirar(id, op, portal));
+handle('pub:accion', (id, op, portal, que) => pubs.accion(id, op, portal, que));
+handle('pub:feeds', () => pubs.feedsServidor(false));
+handle('pub:feedsRotar', () => pubs.feedsServidor(true));
 handle('pub:panel', () => pubs.panel());
 handle('pub:sincronizar', () => pubs.sincronizar());
 handle('pub:interesados', (f) => pubs.interesados(f || {}));
@@ -1150,6 +1153,7 @@ const leadsDir = () => path.join(process.env.PF_INMO_DIR || path.join(app.getPat
 // El equipo son los usuarios de Asset de la corredora (equipo.js); quién usa la app y qué puede ver, la sesión (permisos.js)
 const equipo = require('./equipo').crear({ asset, res: reservas, alCambiar: () => toUI('agent:event', { type: 'datos', que: 'equipo' }) });
 const permisos = require('./permisos').crear({ inmo, equipo, usuario: usuarioAsset });
+agenda.configurar({ yo: () => usuarioAsset()?.id || null });   // las visitas de un mismo corredor no se sobreponen: agenda.js necesita saber quién es
 handle('acc:estado', async () => { if (!equipo.lista().length && usuarioAsset()) await equipo.cargar(); return permisos.estado(); });
 handle('acc:captador', async (propId, usuarioId) => { const r = await permisos.asignarCaptador(propId, usuarioId || null); toUI('agent:event', { type: 'datos', que: 'propiedades' }); return r; });
 handle('acc:captadorVarios', async (ids, usuarioId) => { const r = await permisos.asignarVarios(ids || [], usuarioId || null); toUI('agent:event', { type: 'datos', que: 'propiedades' }); return r; });
@@ -1387,6 +1391,9 @@ handle('acta:eliminar', (id) => actaVisita.eliminar(id));
 const cartaOferta = require('./carta-oferta').crear({ inmo, negocios });
 handle('carta:vistaPrevia', (o) => cartaOferta.vistaPrevia(o || {}));
 handle('carta:enviar', (o) => cartaOferta.enviar(o || {}));
+const mandatoArriendo = require('./mandato-arriendo').crear({ inmo });   // mandato de arriendo: PDF del servidor, descargable sin firmar, y envío a firmar
+handle('mandato:vistaPrevia', (o) => mandatoArriendo.vistaPrevia(o || {}));
+handle('mandato:enviar', (o) => mandatoArriendo.enviar(o || {}));
 const contratoArriendo = require('./contrato-arriendo').crear({ inmo, negocios, reservas, abrir: (u) => shell.openExternal(u) });   // contrato de arriendo: PDF del servidor y envío a firmar
 handle('contrato:vistaPrevia', (o) => contratoArriendo.vistaPrevia(o || {}));
 handle('contrato:enviar', (o) => contratoArriendo.enviar(o || {}));
@@ -1465,6 +1472,11 @@ handle('neg:firmasRevisar', (id) => negocios.revisarFirmas(pf, id));
 handle('ml:estado', () => ml.estado());
 handle('ml:conectar', () => ml.conectar(win));
 handle('ml:desconectar', () => ml.desconectar());
+// Google (calendario y Drive): la cuenta de cada usuario y el Drive de la empresa; las sesiones viven en el servidor
+const googleConexion = require('./google-conexion');
+handle('google:estado', () => googleConexion.estado());
+handle('google:conectar', (p) => googleConexion.conectar(p));
+handle('google:desconectar', (p) => googleConexion.desconectar(p));
 handle('ml:contacto', (c, t) => ml.guardarContacto(c, t));
 handle('ml:paquetes', () => ml.paquetes());
 handle('ml:revisar', (id, op, o) => ml.revisar(id, op, o).then((r) => ({ ...r, payload: undefined })));

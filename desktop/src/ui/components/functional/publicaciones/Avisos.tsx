@@ -7,13 +7,32 @@ import Boton from '../../ui/Boton';
 import Card from '../../ui/Card';
 import Kpi from '../../ui/Kpi';
 import EstadoVacio from '../../ui/EstadoVacio';
-import { abrirFicha, abrirUrl, ajustarPrecioAviso, elegirParaPublicar, publicarPropiedad } from '../../../utils/app';
+import MenuMas from '../../ui/MenuMas';
+import { ModalConfirmar } from '../../ui/Modal';
+import { abrirFicha, abrirUrl, ajustarPrecioAviso, elegirParaPublicar, publicarPropiedad, toast } from '../../../utils/app';
+import { usePublicacion } from '../../../store/hooks/usePublicacion.hook';
 import { monto } from '../../../utils/formato';
-import { Anillo, BORDE_CARD, Estado, Foto, fmt, hace } from './comun';
+import { accionesDe, Anillo, BORDE_CARD, Estado, Foto, fmt, hace } from './comun';
+import type { TAccionAviso } from '../../../store/interfaces/publicacion.interface';
 import type { IAviso, IPanelPublicaciones } from '../../../store/interfaces/publicacion.interface';
 
+// confirmaciones de las acciones que no se pueden deshacer a la ligera
+const CONFIRMAR: Partial<Record<TAccionAviso, { titulo: string; mensaje: (portal: string) => string; boton: string }>> = {
+  retirar: { titulo: '¿Retirar el aviso?', boton: 'Retirar', mensaje: (p) => `Deja de verse en ${p}. En Portal Inmobiliario el aviso queda finalizado y no se puede reactivar; en los portales de feed puedes publicarlo de nuevo.` },
+  eliminar: { titulo: '¿Eliminar el aviso?', boton: 'Eliminar', mensaje: (p) => `Se quita de Asset y, si ${p} lo permite, también del portal. Para volver a tenerlo hay que publicarlo otra vez.` },
+};
+
 function Aviso({ f }: { f: IAviso }) {
+  const { avisoAccion } = usePublicacion();
   const [sinFoto, setSinFoto] = useState(false);
+  const [conf, setConf] = useState<{ portal: string; nombre: string; que: TAccionAviso } | null>(null);
+  const [ocupado, setOcupado] = useState(false);
+  const ejecutar = async (portal: string, que: TAccionAviso) => {
+    setOcupado(true);
+    const r = await avisoAccion(f.propId, f.op, portal, que);
+    setOcupado(false); setConf(null);
+    toast(r.error || r.mensaje || 'Listo.', 5000);
+  };
   const dif = f.comparables?.dif;
   return (
     <article className={`pb-av ${BORDE_CARD}`} data-prop={f.propId} data-op={f.op}>
@@ -27,6 +46,11 @@ function Aviso({ f }: { f: IAviso }) {
             <span key={x.nombre} className="pb-pt">
               {x.nombre} <Estado s={x.status} />
               {x.url && <a href="#" title="Ver aviso" onClick={(e) => { e.preventDefault(); abrirUrl(x.url!); }}><Icono nombre="link" tam={12} /></a>}
+              <MenuMas tamano="sm" etiqueta={`Acciones del aviso en ${x.nombre}`} id={`av-${f.propId}-${f.op}-${x.portal}`}
+                opciones={accionesDe(x.status).map((a) => ({
+                  id: `av-${a.que}`, texto: a.texto, icono: a.icono, disabled: ocupado,
+                  alTocar: () => (CONFIRMAR[a.que] ? setConf({ portal: x.portal, nombre: x.nombre, que: a.que }) : void ejecutar(x.portal, a.que)),
+                }))} />
             </span>
           ))}
         </span>
@@ -53,8 +77,13 @@ function Aviso({ f }: { f: IAviso }) {
           </p>
         )}
       </div>
+      {conf && (
+        <ModalConfirmar abierto onCerrar={() => setConf(null)} clave="modal-140" peligro icono="alert" textoConfirmar={CONFIRMAR[conf.que]!.boton}
+          titulo={`${CONFIRMAR[conf.que]!.titulo} (${conf.nombre})`} mensaje={`${f.codigo} · ${f.titulo}. ${CONFIRMAR[conf.que]!.mensaje(conf.nombre)}`}
+          onConfirmar={() => ejecutar(conf.portal, conf.que)} />
+      )}
       <div className="pb-acts">
-        <Boton variante="fantasma" tamano="sm" icono="export" data-mas onClick={() => publicarPropiedad(f.propId, f.op, 2)}>Más portales</Boton>
+        <Boton variante="fantasma" tamano="sm" icono="export" data-mas data-portales onClick={() => publicarPropiedad(f.propId, f.op, 2)}>Más portales</Boton>
         <Boton variante="fantasma" tamano="sm" icono="file" data-ficha onClick={() => abrirFicha(f.propId)}>Ficha</Boton>
       </div>
     </article>

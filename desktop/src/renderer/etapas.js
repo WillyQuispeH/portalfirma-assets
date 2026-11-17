@@ -108,6 +108,9 @@ function extraPaso(x, alTerminar) {
       () => (ng ? (t === 'revisar' ? ng.revisarFirmas() : ng.enviarFirma()) : window.Negocios.abrirNegocio(x.negocioId)), t === 'revisar' ? 'Revisar firmas' : 'Enviar a firmar'), alCambioDocs: alTerminar }; }
   return {};
 }
+// los propietarios de una propiedad como los usan las ventanas de los documentos (sus datos se completan ahí mismo)
+const dueñosDe = (propId) => { const t = (x) => (x == null ? '' : String(x)); return (propDe(propId)?.vinculos || []).filter((v) => v.rol === 'propietario').map((v) => (window.Inmo._IM.data?.personas || []).find((q) => q.id === v.personaId)).filter(Boolean)
+  .map((q) => ({ id: q.id, base: q, nombre: t(q.nombre), rut: t(q.rut), email: t(q.email), telefono: t(q.telefono), nacionalidad: t(q.nacionalidad) || 'chilena', estadoCivil: t(q.estadoCivil), profesion: t(q.profesion), direccion: t(q.direccion) })); };
 // ---------- carta oferta: Asset arma el PDF (plantilla HTML en el servidor); el corredor lo ve, lo ajusta y lo envía a firmar ----------
 // Lo editado se guarda en su origen (la persona del CRM y el negocio: monto, garantía, plazo, vigencia, condiciones) y el
 // servidor arma el PDF con lo ya guardado. Al firmarse, el negocio avanza solo.
@@ -116,26 +119,58 @@ async function cartaOferta(negocioId, despues) {
   if (!n0) return toast('No encontré el negocio.');
   if (!n0.cliente) return toast('Primero vincula al ' + (n0.tipo === 'venta' ? 'comprador' : 'arrendatario') + ' del negocio (paso «Interesado registrado»).', 5000);
   window.members(async () => {
-    window.Ventanas.abrir('negocios.agendaPreparandoOrden', { titulo: 'Carta oferta', texto: 'Preparando la carta oferta…' }, { clave: 'modal-2' });
-    let pdf = ''; let errorInicial = '';
-    try { pdf = (await api('cartaVistaPrevia', { negocioId })).pdf || ''; } catch (er) { errorInicial = er.message; }   // p. ej. falta el monto: la ventana se abre igual para completarlo
+    const pdfPromesa = api('cartaVistaPrevia', { negocioId }).then((r) => ({ pdf: r.pdf || '' })); pdfPromesa.catch(() => {});   // la ventana se abre ya: el documento se arma ahí mismo (o se trae, si ya existe) y la vista previa lo muestra al llegar
     const per = (IM.data.personas || []).find((x) => x.id === n0.cliente.id) || n0.cliente; const p = (IM.data.propiedades || []).find((x) => x.id === n0.prop?.id) || n0.prop || {};
     const o = n0.oferta || {}; const fmt = (x) => (x ? Number(x).toLocaleString('es-CL', { maximumFractionDigits: 2 }) : '');
     window.Ventanas.abrir('negocios.cartaOferta', {
-      pdf, errorInicial, tipo: n0.tipo === 'venta' ? 'venta' : 'arriendo',
-      datos: { nombre: per.nombre || '', rut: per.rut || '', email: per.email || '', telefono: per.telefono || '', monto: fmt(n0.valor?.valor), moneda: n0.valor?.moneda || 'UF', garantia: o.garantia || '', plazo: o.plazo || '', vigencia: o.vigencia || '5', condiciones: o.condiciones || '' },
+      pdfPromesa, tipo: n0.tipo === 'venta' ? 'venta' : 'arriendo',
+      datos: { nombre: per.nombre || '', rut: per.rut || '', email: per.email || '', telefono: per.telefono || '', nacionalidad: per.nacionalidad || 'chilena', estadoCivil: per.estadoCivil || '', profesion: per.profesion || '', direccion: per.direccion || '',
+        monto: fmt(n0.valor?.valor), moneda: n0.valor?.moneda || 'UF', garantia: o.garantia || '', plazo: o.plazo || '', vigencia: o.vigencia || '3', condiciones: o.condiciones || '',
+        piePct: o.piePct || '', promesaDias: o.promesaDias || '', escrituraDias: o.escrituraDias || '', seriedadUF: o.seriedadUF || '', comisionPct: o.comisionPct || '' },
+      propietarios: dueñosDe(n0.prop?.id),
       propiedad: { codigo: p.codigo || '', titulo: p.titulo || '', direccion: [p.direccion, p.unidad ? 'depto. ' + p.unidad : '', p.comuna].filter(Boolean).join(', ') },
       alGuardar: async (v) => {
-        if (['nombre', 'rut', 'email', 'telefono'].some((k) => (v[k] || '') !== (per[k] || ''))) { await api('inmoPerGuardar', { ...per, nombre: v.nombre, rut: v.rut, email: v.email, telefono: v.telefono }); Object.assign(per, { nombre: v.nombre, rut: v.rut, email: v.email, telefono: v.telefono }); }
-        await api('negGuardar', { id: negocioId, valor: { valor: Number(String(v.monto).replace(/\./g, '').replace(',', '.')), moneda: v.moneda }, oferta: { garantia: v.garantia, plazo: v.plazo, vigencia: v.vigencia, condiciones: v.condiciones } });
+        const CP = ['nombre', 'rut', 'email', 'telefono', 'nacionalidad', 'estadoCivil', 'profesion', 'direccion'];
+        if (CP.some((k) => (v[k] || '') !== (per[k] || (k === 'nacionalidad' ? 'chilena' : '')))) { const cambios = Object.fromEntries(CP.map((k) => [k, v[k]])); await api('inmoPerGuardar', { ...per, ...cambios }); Object.assign(per, cambios); }
+        await api('negGuardar', { id: negocioId, valor: { valor: Number(String(v.monto).replace(/\./g, '').replace(',', '.')), moneda: v.moneda }, oferta: { garantia: v.garantia, plazo: v.plazo, vigencia: v.vigencia, condiciones: v.condiciones, piePct: v.piePct, promesaDias: v.promesaDias, escrituraDias: v.escrituraDias, seriedadUF: v.seriedadUF, comisionPct: v.comisionPct } });
         const r = await api('cartaVistaPrevia', { negocioId });   // el servidor lee lo ya guardado
         try { await cargar(); } catch {}
         return { pdf: r.pdf || '' };
       },
       // si falla, la ventana muestra el error y sigue abierta
-      alConfirmar: async () => { const r = await api('cartaEnviar', { negocioId }); closeModal(); toast(`Carta oferta nº ${r.numero} enviada a firmar: operación ${r.operacion}.`, 5000); despues?.(r); },
+      alConfirmar: async (op) => { const r = await api('cartaEnviar', { negocioId, conPropietario: op?.conPropietario === true }); closeModal(); toast(`Carta oferta nº ${r.numero} enviada a firmar: operación ${r.operacion}.`, 5000); despues?.(r); },
     }, { clave: 'modal-125', ancho: true });
   }, 'Para enviar la carta oferta, inicia sesión con tu cuenta de Portalfirma.');
+}
+// ---------- mandato de arriendo: Asset arma el PDF (plantilla HTML en el servidor); se ve, se puede DESCARGAR sin firmar o enviar a firmar al propietario ----------
+async function mandatoArriendo(propId, despues) {
+  window.members(async () => {
+    const pdfPromesa = api('mandatoVistaPrevia', { propiedadId: propId }).then((r) => ({ pdf: r.pdf || '' })); pdfPromesa.catch(() => {});   // la ventana se abre ya: el documento se arma ahí mismo (o se trae, si ya existe) y la vista previa lo muestra al llegar
+    try { await cargar(); } catch {}   // la cartera al día: el propietario y la ficha pueden haber cambiado
+    const p = propDe(propId) || {}; const f = p.ficha || {};
+    const personas = IM.data.personas || [];
+    const propietarios = (p.vinculos || []).filter((v) => v.rol === 'propietario').map((v) => personas.find((q) => q.id === v.personaId)).filter(Boolean);
+    const t = (x) => (x == null ? '' : String(x));
+    const datos = {
+      propietarios: propietarios.map((q) => ({ id: q.id, base: q, nombre: t(q.nombre), rut: t(q.rut), email: t(q.email), telefono: t(q.telefono), nacionalidad: t(q.nacionalidad) || 'chilena', estadoCivil: t(q.estadoCivil), profesion: t(q.profesion), direccion: t(q.direccion) })),
+      rol: t(p.rol), supTotal: t(p.supTotal), supUtil: t(p.supUtil), canon: t(p.precioArriendo?.valor), moneda: p.precioArriendo?.moneda || 'UF',
+      publicar: f.publicarPortales !== false, exclusividad: !!f.exclusividad, mascotas: f.mascotas === true ? 'si' : f.mascotas === false ? 'no' : '', mesesGarantia: t(f.mesesGarantia), otras: t(f.condicionesMandato),
+    };
+    window.Ventanas.abrir('negocios.mandatoArriendo', {
+      pdfPromesa, archivo: ('Mandato de arriendo ' + (p.codigo || '') + '.pdf').replace(/\s+\.pdf$/, '.pdf'),
+      propiedad: { codigo: p.codigo || '', titulo: p.titulo || '', direccion: [p.direccion, p.unidad ? 'depto. ' + p.unidad : '', p.comuna].filter(Boolean).join(', ') },
+      datos,
+      // guarda la propiedad (las personas ya las guardó la ventana) y pide el PDF de nuevo: el servidor lee lo ya guardado
+      alGuardar: async (v) => {
+        const n = (x) => (String(x).trim() === '' ? null : Number(String(x).replace(/\./g, '').replace(',', '.')));
+        await api('inmoPropGuardar', { id: propId, rol: v.rol.trim(), supTotal: n(v.supTotal), supUtil: n(v.supUtil), precioArriendo: n(v.canon) ? { valor: n(v.canon), moneda: v.moneda } : null,
+          ficha: { publicarPortales: v.publicar, exclusividad: v.exclusividad, ...(v.mascotas ? { mascotas: v.mascotas === 'si' } : {}), ...(v.mesesGarantia !== '' ? { mesesGarantia: n(v.mesesGarantia) } : {}), condicionesMandato: v.otras.trim() } });
+        try { await cargar(); } catch {}
+        return { pdf: (await api('mandatoVistaPrevia', { propiedadId: propId })).pdf || '' };
+      },
+      alEnviar: async () => { const r = await api('mandatoEnviar', { propiedadId: propId }); closeModal(); toast('Mandato de arriendo nº ' + r.numero + ' enviado a firmar: operación ' + r.operacion + '.', 5000); despues?.(r); },
+    }, { clave: 'modal-129', ancho: true });
+  }, 'Para armar el mandato, inicia sesión con tu cuenta de Portalfirma.');
 }
 // ---------- contrato de arriendo ----------
 // Dos modos: 'borrador' (paso «Revisión del contrato»): se editan las condiciones, el servidor arma el PDF y se guarda como una VERSIÓN
@@ -151,40 +186,36 @@ async function contratoArriendo(negocioId, despues, modo = 'borrador') {
   // los codeudores son los avales de la evaluación del arrendatario (no se escriben a mano)
   const ev = await api('evVer', negocioId).catch(() => null); const codeudores = (ev && !ev.vacia ? ev.personas || [] : []).filter((q) => q.rol === 'aval').map((q) => { const per = (IM.data.personas || []).find((z) => z.id === q.personaId) || {}; return { personaId: q.personaId, nombre: q.nombre || per.nombre || '', rut: per.rut || '' }; });
   const tipoProp = String(p.tipo || '').toLowerCase(); const usoDe = /oficina/.test(tipoProp) ? 'oficina' : /local|comercial/.test(tipoProp) ? 'comercial' : /bodega/.test(tipoProp) ? 'bodega' : /estacion/.test(tipoProp) ? 'estacionamiento' : 'habitacional';
-  const persDe = (id, rol) => { const per = (IM.data.personas || []).find((z) => z.id === id) || {}; return { personaId: id, rol, nombre: per.nombre || '', rut: per.rut || '', email: per.email || '', telefono: per.telefono || '' }; };
+  const persDe = (id, rol) => { const per = (IM.data.personas || []).find((z) => z.id === id) || {}; return { personaId: id, rol, nombre: per.nombre || '', rut: per.rut || '', email: per.email || '', telefono: per.telefono || '', nacionalidad: per.nacionalidad || 'chilena', estadoCivil: per.estadoCivil || '', profesion: per.profesion || '', direccion: per.direccion || '' }; };
   const dueños = (propDe(n0.prop?.id)?.vinculos || []).filter((v) => v.rol === 'propietario').map((v) => persDe(v.personaId, 'Arrendador'));
   const firmantes = [...dueños, persDe(n0.cliente.id, 'Arrendatario'), ...codeudores.filter((c) => c.personaId).map((c) => persDe(c.personaId, 'Codeudor'))];
   // guarda los datos de los firmantes que se editaron en la ventana (en la ficha de cada persona)
-  const guardarFirmantes = async (nuevos) => { for (const q of nuevos) { const a = firmantes.find((z) => z.personaId === q.personaId); if (!a || ['nombre', 'rut', 'email', 'telefono'].every((c) => (a[c] || '') === (q[c] || ''))) continue; const per = (IM.data.personas || []).find((z) => z.id === q.personaId); if (!per) continue; await api('inmoPerGuardar', { ...per, nombre: q.nombre || per.nombre, rut: q.rut, email: q.email, telefono: q.telefono }); Object.assign(a, { nombre: q.nombre || per.nombre, rut: q.rut, email: q.email, telefono: q.telefono }); } try { await cargar(); } catch {} };
+  const guardarFirmantes = async (nuevos) => { for (const q of nuevos) { const a = firmantes.find((z) => z.personaId === q.personaId); const CP = ['nombre', 'rut', 'email', 'telefono', 'nacionalidad', 'estadoCivil', 'profesion', 'direccion']; if (!a || CP.every((c) => (a[c] || '') === (q[c] || ''))) continue; const per = (IM.data.personas || []).find((z) => z.id === q.personaId); if (!per) continue; const cambios = Object.fromEntries(CP.map((c) => [c, c === 'nombre' ? (q.nombre || per.nombre) : q[c]])); await api('inmoPerGuardar', { ...per, ...cambios }); Object.assign(a, cambios); } try { await cargar(); } catch {} };
   const kd = k.datos || {}; const mesesGar = kd.garantiaMeses || (/\d+([.,]\d+)?/.exec(String(n0.oferta?.garantia || ''))?.[0] || '1').replace(',', '.'); const fmt = (x) => (x ? Number(x).toLocaleString('es-CL', { maximumFractionDigits: 2 }) : '');
-  const datos = { inicio: kd.inicio || '', plazoMeses: String(kd.plazoMeses || ''), renta: fmt(n0.valor?.valor), moneda: n0.valor?.moneda || 'CLP', reajuste: kd.reajuste || 'ipc_anual', avisoDias: String(kd.avisoDias || '60'), diaPago: String(kd.diaPago || '5'), garantiaMeses: String(mesesGar), uso: kd.uso || usoDe, clausulas: kd.clausulas || '' };
+  const datos = { inicio: kd.inicio || '', plazoMeses: String(kd.plazoMeses || ''), renta: fmt(n0.valor?.valor), moneda: n0.valor?.moneda || 'CLP', reajuste: kd.reajuste || 'ipc_anual', avisoDias: String(kd.avisoDias || '60'), diaPago: String(kd.diaPago || '5'), garantiaMeses: String(mesesGar), cuenta: kd.cuenta || p.ficha?.cuentaPago || '', uso: kd.uso || usoDe, clausulas: kd.clausulas || '' };
   if (modo === 'firma') { // el contrato APROBADO: el PDF de la última versión, aprobada por el propietario y el arrendatario
     if (!ultima) return toast('Primero arma el contrato y apruébalo en el paso «Revisión del contrato».', 6000);
     { const fsV = ultima.firmantes || []; const faltan = fsV.filter((q) => !k.aprobado?.[q.personaId]); if (!fsV.length || faltan.length) return toast(`Falta la aprobación de ${faltan.map((q) => q.nombre).join(', ') || 'los firmantes'} sobre la versión ${ultima.n}: se registra en el paso «Revisión del contrato».`, 6000); }
     if (!ultima.archivo) return toast(`La versión ${ultima.n} no tiene su PDF: guárdala con su archivo en el paso «Revisión del contrato».`, 6000);
     window.members(async () => {
-      window.Ventanas.abrir('negocios.agendaPreparandoOrden', { titulo: 'Contrato de arriendo', texto: 'Preparando el contrato aprobado…' }, { clave: 'modal-2' });
-      let pdf = ''; let errorInicial = '';
-      try { pdf = (await api('contratoVersion', { negocioId, clave: ultima.archivo.clave })).pdf || ''; } catch (er) { errorInicial = er.message; }
+      let pdfAprobado = ''; const pdfPromesa = api('contratoVersion', { negocioId, clave: ultima.archivo.clave }).then((r) => { pdfAprobado = r.pdf || ''; return { pdf: pdfAprobado }; }); pdfPromesa.catch(() => {});   // la ventana se abre ya: el documento se arma ahí mismo (o se trae, si ya existe) y la vista previa lo muestra al llegar
       const firma0 = { tipoFirma: k.firma?.tipoFirma === 'avanzada' ? 'avanzada' : 'simple', tramite: k.firma?.tramite === 'legalization' ? 'legalization' : 'none' };
       window.Ventanas.abrir('negocios.contratoArriendo', {
-        modo: 'firma', versionN: ultima.n, pdf, errorInicial, firma: firma0, datos, propiedad, firmantes,
-        alGuardar: async (_d, _f, nuevos) => { await guardarFirmantes(nuevos); return { pdf }; },
+        modo: 'firma', versionN: ultima.n, pdfPromesa, firma: firma0, datos, propiedad, firmantes,
+        alGuardar: async (_d, _f, nuevos) => { await guardarFirmantes(nuevos); return { pdf: pdfAprobado }; },
         alConfirmar: async (f) => { const r = await api('contratoEnviar', { negocioId, tipoFirma: f.tipoFirma, tramite: f.tramite }); try { const b = JSON.parse(JSON.stringify((await api('negObtener', negocioId)).ciclo || {})); b.contrato ||= {}; b.contrato.firma = { tipoFirma: f.tipoFirma, tramite: f.tramite }; await api('negGuardar', { id: negocioId, ciclo: b }); } catch {} closeModal(); toast(`Contrato de arriendo (versión ${r.version}) enviado a firmar: operación ${r.operacion}.`, 5000); despues?.(r); },
       }, { clave: 'modal-127', ancho: true });
     }, 'Para enviar el contrato, inicia sesión con tu cuenta de Portalfirma.');
     return;
   }
   window.members(async () => {
-    window.Ventanas.abrir('negocios.agendaPreparandoOrden', { titulo: 'Contrato de arriendo', texto: 'Preparando el contrato…' }, { clave: 'modal-2' });
-    let pdf = ''; let errorInicial = '';
-    try { const r = await api('contratoVistaPrevia', { negocioId }); pdf = r.pdf || ''; } catch (er) { errorInicial = er.message; }   // p. ej. falta la fecha de inicio: la ventana se abre igual para completarla
+    const pdfPromesa = api('contratoVistaPrevia', { negocioId }).then((r) => ({ pdf: r.pdf || '' })); pdfPromesa.catch(() => {});   // la ventana se abre ya: el documento se arma ahí mismo (o se trae, si ya existe) y la vista previa lo muestra al llegar
     window.Ventanas.abrir('negocios.contratoArriendo', {
-      modo: 'borrador', pdf, errorInicial, firma: { tipoFirma: 'simple', tramite: 'none' }, datos, propiedad, firmantes,
+      modo: 'borrador', pdfPromesa, firma: { tipoFirma: 'simple', tramite: 'none' }, datos, propiedad, firmantes,
       alGuardar: async (d, _f, nuevos) => {
         await guardarFirmantes(nuevos);   // primero los datos de los firmantes: el servidor arma el PDF con lo ya guardado en sus fichas
         const base = JSON.parse(JSON.stringify((await api('negObtener', negocioId)).ciclo || {})); base.contrato ||= {};
-        base.contrato.datos = { inicio: d.inicio, plazoMeses: Number(d.plazoMeses), reajuste: d.reajuste, avisoDias: Number(d.avisoDias) || 0, diaPago: Number(d.diaPago) || 5, garantiaMeses: Number(String(d.garantiaMeses).replace(',', '.')), uso: d.uso, clausulas: d.clausulas.trim() };
+        base.contrato.datos = { inicio: d.inicio, plazoMeses: Number(d.plazoMeses), reajuste: d.reajuste, avisoDias: Number(d.avisoDias) || 0, diaPago: Number(d.diaPago) || 5, garantiaMeses: Number(String(d.garantiaMeses).replace(',', '.')), uso: d.uso, cuenta: (d.cuenta || '').trim(), clausulas: d.clausulas.trim() };
         await api('negGuardar', { id: negocioId, ciclo: base, valor: { valor: Number(String(d.renta).replace(/\./g, '').replace(',', '.')), moneda: d.moneda } });
         const r = await api('contratoVistaPrevia', { negocioId });   // el servidor lee lo ya guardado
         try { await cargar(); } catch {}
@@ -201,17 +232,17 @@ async function actaEntrega(negocioId, despues) {
   if (!n0) return toast('No encontré el negocio.');
   if (!n0.cliente) return toast('Primero vincula al arrendatario del negocio (paso «Interesado registrado»).', 5000);
   window.members(async () => {
-    window.Ventanas.abrir('negocios.agendaPreparandoOrden', { titulo: 'Acta de entrega', texto: 'Preparando el acta de entrega…' }, { clave: 'modal-2' });
     const e = n0.ciclo?.entrega || {}; const p = (IM.data.propiedades || []).find((x) => x.id === n0.prop?.id) || n0.prop || {};
     const datos = {
       fecha: e.fecha || '', llaves: e.llaves || '', observaciones: e.observaciones || '',
       medidores: { luz: { numero: e.medidores?.luz?.numero || '', lectura: e.medidores?.luz?.lectura || '' }, agua: { numero: e.medidores?.agua?.numero || '', lectura: e.medidores?.agua?.lectura || '' }, gas: { numero: e.medidores?.gas?.numero || '', lectura: e.medidores?.gas?.lectura || '' } },
       inventario: (e.inventario?.length ? e.inventario : INVENTARIO_BASE.map((espacio) => ({ espacio, estado: 'bueno', nota: '' }))).map((i) => ({ espacio: i.espacio || '', estado: i.estado || 'bueno', nota: i.nota || '' })),
     };
-    let pdf = ''; let errorInicial = ''; let firmantes = [];
-    if (e.fecha && e.inventario?.length) { try { const r = await api('entregaVistaPrevia', { negocioId }); pdf = r.pdf || ''; firmantes = r.firmantes || []; } catch (er) { errorInicial = er.message; } }   // sin datos guardados no hay PDF todavía: la ventana se abre para llenarlos
+    // sin datos guardados no hay PDF todavía: la ventana se abre para llenarlos; con datos, el PDF se arma ahí mismo
+    const pdfPromesa = e.fecha && e.inventario?.length ? api('entregaVistaPrevia', { negocioId }).then((r) => ({ pdf: r.pdf || '' })) : undefined; pdfPromesa?.catch(() => {});   // la ventana se abre ya: el documento se arma ahí mismo (o se trae, si ya existe) y la vista previa lo muestra al llegar
+    const firmantes = [...dueñosDe(n0.prop?.id).map((q) => ({ rol: 'Arrendador', nombre: q.nombre })), { rol: 'Arrendatario', nombre: n0.cliente.nombre }];
     window.Ventanas.abrir('negocios.actaEntrega', {
-      pdf, errorInicial, datos, firmantes: firmantes.length ? firmantes : [{ rol: 'Arrendatario', nombre: n0.cliente.nombre }],
+      pdfPromesa, datos, firmantes,
       propiedad: { codigo: p.codigo || '', titulo: p.titulo || '', direccion: [p.direccion, p.unidad ? 'depto. ' + p.unidad : '', p.comuna].filter(Boolean).join(', ') },
       alGuardar: async (d) => {
         const base = JSON.parse(JSON.stringify((await api('negObtener', negocioId)).ciclo || {}));
@@ -240,12 +271,14 @@ function docsDeFirma(x, re, enviar, etiqueta) {
 }
 async function accion(x, alTerminar) {
   const t = x.tipo; const id = x.pasoId || x.id; x.alTerminar = alTerminar; engancharAgente();
+  if (x.negocioId) { try { await cargar(); } catch {} }   // la cartera al día: los documentos y firmas de cada paso salen de ahí (si no, un documento recién enviado aparece como «todavía no hay»)
   if ((t === 'visita' || t === 'aceptacion' || t === 'pago' || t === 'revision' || t === 'post') && x.negocioId) return menuPaso(x, alTerminar);   // modal-13: agendar, confirmar, reprogramar y marcar la visita, todo adentro
   if (x.accion === 'Reprogramar' || x.accion === 'Reintentar') return reprogramar(x, alTerminar);
   // 0.16.14 · los pasos de la ficha abren la ficha completa en su bloque
   const BLQ = { datos: 'esencial', portal: 'portal', legal: 'legal', equip: 'equip' };
   if (BLQ[id] && x.propId) return window.FichaBloques.abrir(x.propId, { bloque: BLQ[id], despues: alTerminar });
   if (id === 'comovisitar' && x.propId) return window.FichaBloques.abrir(x.propId, { bloque: 'visita', despues: alTerminar });
+  if (id === 'mandato' && x.propId && (() => { const q = (IM.data.propiedades || []).find((y) => y.id === x.propId); return q && q.arriendo && !q.venta; })()) return mandatoArriendo(x.propId, alTerminar);   // propiedad solo de arriendo: mandato de Asset (la venta sigue con sus formatos)
   if (id === 'mandato' && x.propId) { const e = await api('fmtEstado').catch(() => null); const otro = () => documento(x, [/contrato de corretaje/i, /mandato/i, /^(?!.*visita).*corretaje/i], 'Mandato de corretaje', 'Contrato de corretaje');
     return e ? window.Formatos.abrir(x.propId, { hito: 'mandato', despues: alTerminar }, otro) : otro(); }
   if (id === 'mandato') return documento(x, [/contrato de corretaje/i, /mandato/i, /^(?!.*visita).*corretaje/i], 'Mandato de corretaje', 'Contrato de corretaje');
@@ -313,9 +346,11 @@ function pasoCol(x, i, j, esA) {
     // vencido: Asset lo pasa a no logrado y agrega «Venció el dd/mm.» al detalle; eso ya lo dice el plazo
     const d = x.vencido ? (x.d || '').replace(/(?:^| · )Venció el \d{2}\/\d{2}\.$/, '') : x.d;
     const sub = c === 'otro' ? `Esperando a ${x.quien}${d ? ' · ' + d : ''}` : c === 'fail' && !x.vencido ? `No logrado${d ? ' · ' + d : ''}` : d || x.accion || 'Por hacer';
+    // el paso actual: una persona corriendo (en curso) en vez del número
+    const run = `<span class="et-num et-run" aria-hidden="true">${icon('run', 20)}</span>`;
     return `<div class="et-p et-pa s-${x.vencido ? 'pend' : c}${c === 'fail' || plazo?.[0] === 'tarde' ? ' tarde' : ''}">
-      <div class="et-pf">${num}<div class="et-pt">${go}<small>${esc(sub)}</small></div>${plazo ? `<i class="et-plazo ${plazo[0]}">${plazo[1]}</i>` : ''}</div>
-      <div class="et-pacc"><button class="gl azul et-lg" data-lg="${k}">Marcar logrado</button><button class="gl et-pm2" data-pm="${k}">Más opciones</button></div></div>`;
+      <div class="et-pf">${run}<div class="et-pt">${go}<small>${esc(sub)}</small></div>${plazo ? `<i class="et-plazo ${plazo[0]}">${plazo[1]}</i>` : ''}</div>
+      <div class="et-pacc"><button class="gl et-pm2" data-pm="${k}">Más opciones</button>${x.accion && c !== 'ok' ? `<button class="gl azul et-do" data-go="${k}">${esc(x.accion)}</button>` : `<button class="gl azul et-lg" data-lg="${k}">Marcar logrado</button>`}</div></div>`;   // a la derecha: el secundario primero y el principal al final
   }
   const chk = c === 'ok' ? `<span class="et-chk ok" title="Logrado">${IC.ok}</span>` : `<button class="et-chk" data-lg="${k}" title="Marcar logrado" aria-label="Marcar logrado: ${esc(x.t)}">${IC.ok}</button>`;
   return `<div class="et-p s-${c}">${num}<div class="et-pt">${go}<small>${esc(estadoTxt(x, c))}</small></div>${chk}</div>`;
@@ -337,6 +372,7 @@ function columnas(r, a, mas) {
 // foco (la ficha del negocio): las etapas en columnas; sin foco, etapas plegables (la captación en la ficha de la propiedad)
 async function bloque(host, { negocioId, propId, alCambiar, compacto = false, foco = false } = {}) {
   let r; try { r = await api('etPasos', { negocioId, propId }); } catch (e) { host.innerHTML = `<p class="error">${esc(e.message)}</p>`; return; }
+  propId = propId || r.propId || undefined;   // en la ficha de un negocio solo se pasa el negocio: los documentos de cada paso se buscan en la propiedad del negocio
   if (negocioId && !propId) propId = (await api('negObtener', negocioId).catch(() => null))?.prop?.id || propId; // los pasos de un negocio necesitan su propiedad (orden de visita, documentos)
   if (!host.isConnected) return; // mientras tanto se cerró la ficha o el negocio (o React la volvió a dibujar)
   const clave = negocioId || propId; const a = r.actual; const abiertas = bloque._abiertas[clave] ||= {}; const mas = bloque._mas[clave] ||= {};
@@ -352,9 +388,11 @@ async function bloque(host, { negocioId, propId, alCambiar, compacto = false, fo
   </div>`;
   host.querySelectorAll('[data-mas]').forEach((b) => (b.onclick = () => { const i = Number(b.dataset.mas); mas[i] = !mas[i]; otraVez(); }));
   host.querySelectorAll('[data-tog]').forEach((b) => (b.onclick = () => { const i = Number(b.dataset.tog); const e = r.etapas[i]; abiertas[i] = !(abiertas[i] !== undefined ? abiertas[i] : (compacto ? false : e.actual)); otraVez(); }));
-  host.querySelectorAll('[data-pm]').forEach((b) => (b.onclick = () => { const [i, j] = b.dataset.pm.split('.').map(Number); menuPaso(paso(`${i}.${j}`), recargar); }));
+  host.querySelectorAll('[data-pm]').forEach((b) => (b.onclick = async () => { const [i, j] = b.dataset.pm.split('.').map(Number); try { await cargar(); } catch {} menuPaso(paso(`${i}.${j}`), recargar); }));   // con la cartera al día: los documentos y firmas del paso salen de ahí
   const paso = (k) => { const [i, j] = k.split('.').map(Number); const y = r.etapas[i].pasos[j]; return { ...y, negocioId, propId, pasoId: y.id, paso: y.t }; };
-  host.querySelectorAll('[data-go]').forEach((b) => (b.onclick = () => menuPaso(paso(b.dataset.go), recargar)));
+  host.querySelectorAll('[data-go]').forEach((b) => (b.onclick = async () => { try { await cargar(); } catch {} menuPaso(paso(b.dataset.go), recargar); }));
+  // toda la tarjeta del paso abre su detalle (no solo el título); los botones de adentro (logrado, más opciones) siguen con lo suyo
+  host.querySelectorAll('.et-p').forEach((card) => { if (!card.querySelector('[data-go]')) return; card.onclick = (ev) => { if (!ev.target.closest('button, a')) card.querySelector('[data-go]').click(); }; });
   host.querySelectorAll('[data-lg]').forEach((b) => (b.onclick = async () => { const y = paso(b.dataset.lg); await marcar(y, 'ok'); toast(`Logrado: ${y.t}.`); recargar(); }));
   luz(host);
 }

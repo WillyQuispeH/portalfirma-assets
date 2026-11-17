@@ -44,13 +44,13 @@ export default function SeleccionTarjetas<T extends string>({
   return (
     <div className={className}>
       {(etiqueta || ayuda) && (
-        <div className="tw:flex tw:items-baseline tw:justify-between tw:gap-3 tw:mb-2">
+        <div className="tw:flex tw:items-baseline tw:justify-between tw:gap-ui tw:mb-2">
           {etiqueta && <span id={`${base}-et`} className="tw:text-[13px] tw:font-semibold tw:text-text">{etiqueta}</span>}
           {ayuda && <span className="tw:text-xs tw:text-muted">{ayuda}</span>}
         </div>
       )}
       <div id={id} role={unica ? 'radiogroup' : 'group'} aria-labelledby={etiqueta ? `${base}-et` : undefined}
-        className={cx('tw:grid tw:grid-cols-1 tw:gap-2.5', COLUMNAS[columnas])}>
+        className={cx('tw:grid tw:grid-cols-1 tw:gap-ui', COLUMNAS[columnas])}>
         {opciones.map((o) => {
           const on = valor.includes(o.valor);
           return (
@@ -58,7 +58,7 @@ export default function SeleccionTarjetas<T extends string>({
               {...(unica ? { role: 'radio', 'aria-checked': on } : { 'aria-pressed': on })}
               onClick={() => elegir(o.valor)}
               className={cx(
-                'tw:group tw:relative tw:flex tw:items-start tw:gap-3 tw:m-0 tw:p-3 tw:pr-9 tw:text-left tw:rounded-card tw:cursor-pointer tw:font-[inherit]',
+                'tw:group tw:relative tw:flex tw:items-start tw:gap-ui tw:m-0 tw:p-3 tw:pr-9 tw:text-left tw:rounded-card tw:cursor-pointer tw:font-[inherit]',
                 'tw:border tw:border-solid tw:border-b-[3px] tw:transition-[transform,background-color,border-color] tw:duration-100',
                 'tw:active:translate-y-px tw:focus-visible:outline-2 tw:focus-visible:outline-offset-2 tw:focus-visible:outline-lav-edge',
                 on ? 'tw:bg-lav-soft tw:border-lav-edge' : 'tw:bg-card tw:border-edge tw:border-b-edge-b tw:hover:bg-sunken',

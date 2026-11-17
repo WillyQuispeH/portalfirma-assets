@@ -14,6 +14,7 @@ import { PersonasService } from './personas/personas.service';
 import { PropiedadesController } from './propiedades/propiedades.controller';
 import { PropiedadesService } from './propiedades/propiedades.service';
 import { ConvectaService } from './propiedades/convecta';
+import { FeedsController } from './propiedades/feeds';
 import { ArchivosModule } from './archivos/archivos';
 import { NegociosController, NegociosService } from './negocios/negocios';
 import { EventosController, EventosService } from './agenda/eventos';
@@ -26,6 +27,8 @@ import { ConexionesController, ConexionesService } from './conexiones/conexiones
 import { PortalfirmaOAuth } from './conexiones/portalfirma.oauth';
 import { PortalfirmaController, PortalfirmaService } from './conexiones/portalfirma';
 import { MercadoLibreOAuth } from './conexiones/mercadolibre.oauth';
+import { GoogleEmpresaOAuth, GoogleOAuth } from './conexiones/google.oauth';
+import { GoogleService } from './conexiones/google';
 import { MercadoLibreController, MercadoLibreService } from './conexiones/mercadolibre';
 import { ContadoresController, RegistrosController, RegistrosService } from './registros/registros';
 import { CanalesController, WechatiaController, WechatiaService } from './whatsapp/wechatia';
@@ -44,6 +47,7 @@ import { PdfService } from './documentos/pdf.service';
 import { EnvioFirmaService } from './documentos/envio-firma';
 import { CartaOfertaController, CartaOfertaService } from './negocios/carta-oferta';
 import { ContratoArriendoController, ContratoArriendoService } from './negocios/contrato-arriendo';
+import { MandatoArriendoController, MandatoArriendoService } from './negocios/mandato-arriendo';
 import { ActaEntregaController, ActaEntregaService } from './negocios/acta-entrega';
 import { ActaFirmaController, ActaFirmaService } from './whatsapp/acta-firma';
 import { LeadsWaService } from './whatsapp/leads-wa';
@@ -71,6 +75,7 @@ import { LeadsEnvioController, PuenteService } from './whatsapp/puente';
     UsuariosController,
     SaludController,
     PropiedadesController,
+    FeedsController,
     PersonasController,
     ActividadController,
     NegociosController,
@@ -100,6 +105,7 @@ import { LeadsEnvioController, PuenteService } from './whatsapp/puente';
     OrdenVisitaController,
     CartaOfertaController,
     ContratoArriendoController,
+    MandatoArriendoController,
     ActaEntregaController,
     ActaFirmaController,
     ConfirmacionVisitaController,
@@ -119,6 +125,9 @@ import { LeadsEnvioController, PuenteService } from './whatsapp/puente';
     CifradoService,
     PortalfirmaOAuth,
     MercadoLibreOAuth,
+    GoogleOAuth,
+    GoogleEmpresaOAuth,
+    GoogleService,
     ConexionesService,
     PortalfirmaService,
     MercadoLibreService,
@@ -134,6 +143,7 @@ import { LeadsEnvioController, PuenteService } from './whatsapp/puente';
     EnvioFirmaService,
     CartaOfertaService,
     ContratoArriendoService,
+    MandatoArriendoService,
     ActaEntregaService,
     ActaFirmaService,
     TranscripcionService,

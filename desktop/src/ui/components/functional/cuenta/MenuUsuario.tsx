@@ -9,7 +9,7 @@ import Icono from '../../ui/Icono';
 import { useCuenta } from '../../../store/hooks/useCuenta.hook';
 import { useAcceso } from '../../../store/hooks/useAcceso.hook';
 import {
-  abrirAyuda, abrirExpedientes, abrirOperaciones, abrirPlazos, abrirUrl, mostrarVista,
+  abrirAyuda, abrirOperaciones, abrirUrl, mostrarVista,
   pedirInicioSesion, recorridoDePantalla, sesionCerrada, soporteWhatsAppGeneral, toast, verCuentaDrive, versionApp,
 } from '../../../utils/app';
 import { verTokens } from '../asistente/controlador';
@@ -82,8 +82,6 @@ function Menu() {
         <button data-um="config" onClick={ir(() => abrirConfiguracion('general'))}><Icono nombre="sun" tam={15} /><span>Configuración</span></button>
         <button data-um="integraciones" onClick={ir(() => abrirConfiguracion('integraciones'))}><Icono nombre="link" tam={15} /><span>Integraciones</span></button>
         <button data-um="ops" onClick={ir(abrirOperaciones)}><Icono nombre="listCheck" tam={15} /><span>Mis operaciones</span></button>
-        <button data-um="plazos" onClick={ir(abrirPlazos)}><Icono nombre="calendar" tam={15} /><span>Plazos y vencimientos</span></button>
-        <button data-um="exp" onClick={ir(abrirExpedientes)}><Icono nombre="folderOpen" tam={15} /><span>Expedientes</span></button>
         <button data-um="drive" onClick={ir(verCuentaDrive)}><Icono nombre="drive" tam={15} /><span>Google Drive</span><small id="umDrive">{drive || ''}</small></button>
       </div>
       <div className="um-sec">

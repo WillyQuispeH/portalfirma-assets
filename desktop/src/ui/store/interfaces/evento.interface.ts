@@ -25,6 +25,8 @@ export interface IEvento {
   notas?: string;
   propId?: string | null;
   negocioId?: string | null;
+  personaIds?: string[];
+  corredorId?: string | null; // lo pone el servidor al sincronizar; sin él, es de quien lo creó aquí
   orden?: { operacion?: string } | null; // orden de visita enviada a firmar
   prop: { id: string; codigo: string; titulo: string; direccion?: string; comuna?: string } | null;
   personas: IEventoPersona[];
@@ -42,4 +44,17 @@ export interface IEventoCambios {
   fecha?: string;
   hora?: string;
   estado?: TEventoEstado;
+}
+
+// lo que acepta agendaCrear (src/agenda.js crear). Una visita no puede cruzarse con otra de la misma propiedad: si se cruza, lanza el error
+export interface IEventoNuevo {
+  tipo: TEventoTipo;
+  fecha: string;
+  hora?: string;
+  duracion?: number;
+  propId?: string;
+  personaIds?: string[];
+  negocioId?: string;
+  notas?: string;
+  titulo?: string;
 }

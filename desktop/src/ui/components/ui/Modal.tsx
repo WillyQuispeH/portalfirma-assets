@@ -156,22 +156,22 @@ export default function Modal({
       >
         {(titulo || descripcion || icono) && (
           // encabezado y pie un tono más oscuro que el cuerpo, con una línea que los separa; solo el cuerpo se desplaza
-          <header className="tw:flex-none tw:flex tw:items-start tw:gap-3 tw:px-6 tw:pt-4 tw:pb-3.5 tw:bg-sunken tw:rounded-t-card tw:border-b tw:border-solid tw:border-x-0 tw:border-t-0 tw:border-edge">
+          <header data-modal-cab className="tw:flex-none tw:flex tw:items-center tw:gap-2.5 tw:px-5 tw:py-3 tw:bg-sunken tw:rounded-t-card tw:border-b tw:border-solid tw:border-x-0 tw:border-t-0 tw:border-edge">
             {icono && (
-              <span className={cx('tw:flex-none tw:grid tw:place-items-center tw:w-10 tw:h-10 tw:rounded-icono', SUAVE[tonoIcono])}>
-                <Icono nombre={icono} tam={19} />
+              <span className={cx('tw:flex-none tw:grid tw:place-items-center tw:size-9 tw:rounded-icono', SUAVE[tonoIcono])}>
+                <Icono nombre={icono} tam={17} />
               </span>
             )}
-            <div className="tw:min-w-0 tw:flex-1 tw:pt-0.5">
-              {titulo && <h2 id={tituloId} className="tw:m-0 tw:text-[18px] tw:font-bold tw:leading-snug">{titulo}</h2>}
-              {descripcion && <p id={descId} className="tw:mt-1 tw:mb-0 tw:text-[13.5px] tw:leading-relaxed tw:text-muted">{descripcion}</p>}
+            <div className="tw:min-w-0 tw:flex-1 tw:flex tw:flex-col tw:justify-center tw:gap-0.5">
+              {titulo && <h2 id={tituloId} className="tw:m-0">{titulo}</h2>}
+              {descripcion && <p id={descId} className="tw:m-0 tw:text-[13px] tw:leading-snug tw:text-muted">{descripcion}</p>}
             </div>
             {cerrable && (
               <button
                 type="button"
                 aria-label="Cerrar"
                 onClick={onCerrar}
-                className="tw:flex-none tw:-mr-2 tw:-mt-1 tw:grid tw:place-items-center tw:w-8 tw:h-8 tw:p-0 tw:rounded-icono tw:border-0 tw:bg-transparent tw:text-muted tw:cursor-pointer tw:hover:bg-hover tw:hover:text-text"
+                className="tw:flex-none tw:grid tw:place-items-center tw:size-8 tw:p-0 tw:rounded-icono tw:border-0 tw:bg-transparent tw:text-muted tw:cursor-pointer tw:hover:bg-hover tw:hover:text-text"
               >
                 <Icono nombre="x" tam={16} />
               </button>
@@ -185,7 +185,7 @@ export default function Modal({
         )}
         <ClaveModal clave={clave} />
         {pie && (
-          <footer className="tw:flex-none tw:flex tw:flex-wrap tw:items-center tw:justify-end tw:gap-2 tw:px-6 tw:py-4 tw:border-t tw:border-solid tw:border-x-0 tw:border-b-0 tw:border-edge tw:bg-sunken tw:rounded-b-card">
+          <footer className="tw:flex-none tw:flex tw:flex-wrap tw:items-center tw:justify-end tw:gap-ui tw:px-6 tw:py-4 tw:border-t tw:border-solid tw:border-x-0 tw:border-b-0 tw:border-edge tw:bg-sunken tw:rounded-b-card">
             {pie}
           </footer>
         )}

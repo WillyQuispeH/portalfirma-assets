@@ -39,6 +39,30 @@ function titulo(n) {
   const p = n.propId ? inmo.todas().find((x) => x.id === n.propId) : null; const c = n.clienteId ? inmo.personaPorId(n.clienteId) : null;
   return [p ? p.titulo : 'Sin propiedad', c ? c.nombre : null].filter(Boolean).join(' · ');
 }
+// Todos los documentos del negocio, en el orden del proceso, con su estado: los que van a firma de una etapa, la carta oferta y el
+// acta de entrega (firmas «fuera del embudo»), la orden y el acta de visita (firmas de la propiedad ligadas a este negocio o a su cliente)
+// y el texto del contrato en revisión. Los que aún no se arman salen como «pendiente».
+function documentos(n, p) {
+  const fdm = (f) => (f ? String(f).slice(0, 10) : null);
+  const cli = n.clienteId ? inmo.personaPorId(n.clienteId) : null; const rutC = cli?.rut ? inmo.fmtRut(cli.rut) : null;
+  const deVisita = (re) => { // la firma de la propiedad que es de ESTE negocio (o suelta, pero del mismo cliente)
+    const suyas = (p?.firmas || []).filter((x) => re.test(x.plantilla || '') && ((x.negocioId === n.id) || (!x.negocioId && (x.firmantes || []).some((q) => (n.clienteId && q.personaId === n.clienteId) || (rutC && q.rut && inmo.fmtRut(q.rut) === rutC)))));
+    return suyas.find((x) => x.estado === 'firmado') || suyas[0] || null;
+  };
+  const doc = (id, titulo, et, f, detalle) => ({ id, titulo, etapa: et || null, estado: f?.estado === 'firmado' ? 'firmado' : f?.operacion || f?.estado === 'en_firma' ? 'en_firma' : 'pendiente', operacion: f?.operacion || null, firmados: f?.firmados ?? null, total: f?.total ?? null, fecha: fdm(f?.firmado || f?.fecha), fuera: !!f?.fuera, detalle: detalle || null });
+  const out = []; const usadas = new Set();
+  const firma = (k, et) => { usadas.add(k); out.push(doc(k, (etapa(n.tipo, k) || FIRMAS_FUERA[k] || { firma: 'Documento' }).firma, et || etapa(n.tipo, k)?.t || null, n.firmas?.[k])); };
+  out.push(doc('orden', 'Orden de visita', 'Visita', deVisita(/orden de visita/i)));
+  out.push(doc('acta', 'Acta de visita', 'Visita', deVisita(/^acta de visita/i)));
+  if (n.tipo === 'arriendo') {
+    firma('oferta', 'Reserva'); firma('reserva');
+    const k = n.ciclo?.contrato; const v = (k?.versiones || []).slice(-1)[0];
+    if (v) { const fs = v.firmantes || []; const ap = k.aprobado || {}; const faltan = fs.filter((q) => !ap[q.personaId]); out.push({ id: 'contrato_texto', titulo: 'Contrato de arriendo (texto)', etapa: 'Contrato', estado: fs.length && !faltan.length ? 'aprobado' : 'revision', operacion: null, firmados: fs.length - faltan.length, total: fs.length, fecha: null, fuera: false, detalle: `Versión ${v.n}${fs.length ? (faltan.length ? ` · falta que aprueben ${faltan.map((q) => q.nombre).join(', ')}` : ' · aprobado por todos los firmantes') : ' · sin firmantes registrados'}` }); }
+    firma('contrato'); firma('entrega_acta', 'Entrega');
+  } else for (const e of etapas(n.tipo)) if (e.firma) firma(e.id);
+  for (const [k, f] of Object.entries(n.firmas || {})) if (!usadas.has(k)) out.push(doc(k, (etapa(n.tipo, k) || FIRMAS_FUERA[k] || { firma: 'Documento' }).firma, etapa(n.tipo, k)?.t || null, f)); // cualquier otra firma ligada al negocio
+  return out;
+}
 function vista(n) { // datos derivados para la interfaz
   const p = n.propId ? inmo.todas().find((x) => x.id === n.propId) : null; const c = n.clienteId ? inmo.personaPorId(n.clienteId) : null;
   const et = etapa(n.tipo, n.etapa); const ord = etapas(n.tipo).findIndex((e) => e.id === n.etapa);
@@ -51,7 +75,7 @@ function vista(n) { // datos derivados para la interfaz
     else if (!et?.final) siguiente = `Listo para pasar a ${etapas(n.tipo)[ord + 1]?.t}`;
   }
   const comisionMonto = n.comision?.valor == null ? null : n.comision.tipo === '%' ? (n.valor?.valor || 0) * n.comision.valor / 100 : n.comision.valor;
-  return { ...n, titulo: titulo(n), prop: p ? { id: p.id, codigo: p.codigo, titulo: p.titulo, comuna: p.comuna, foto: (p.fotos || [])[0] || null, propietarios: (p.vinculos || []).filter((v) => v.rol === 'propietario').map((v) => inmo.personaPorId(v.personaId)).filter(Boolean).map((x) => ({ id: x.id, nombre: x.nombre, rut: x.rut })) } : null,
+  return { ...n, documentos: documentos(n, p), titulo: titulo(n), prop: p ? { id: p.id, codigo: p.codigo, titulo: p.titulo, comuna: p.comuna, foto: (p.fotos || [])[0] || null, propietarios: (p.vinculos || []).filter((v) => v.rol === 'propietario').map((v) => inmo.personaPorId(v.personaId)).filter(Boolean).map((x) => ({ id: x.id, nombre: x.nombre, rut: x.rut })) } : null,
     cliente: c ? { id: c.id, nombre: c.nombre, rut: c.rut, telefono: c.telefono, email: c.email } : null, etapaInfo: et, orden: ord, total: etapas(n.tipo).length, siguiente, pendientes: pend.length,
     diasEnEtapa: Math.floor((Date.now() - new Date(n.etapaDesde || n.creado).getTime()) / 864e5), comisionMonto,
     vencida: !!(n.estado === 'abierto' && n.proximaAccion?.fecha && n.proximaAccion.fecha < now().slice(0, 10)) };
@@ -68,7 +92,7 @@ function guardar(o) {
   if ('clienteId' in o) datos.clienteId = o.clienteId || null;
   if ('valor' in o) datos.valor = o.valor && o.valor.valor !== '' && o.valor.valor != null ? { valor: Number(o.valor.valor), moneda: ['UF', 'CLP', 'USD'].includes(o.valor.moneda) ? o.valor.moneda : 'UF' } : null;
   if ('comision' in o) datos.comision = o.comision && o.comision.valor !== '' && o.comision.valor != null ? { tipo: o.comision.tipo === 'monto' ? 'monto' : '%', valor: Number(o.comision.valor) } : null;
-  if ('oferta' in o) { const q = o.oferta || {}; datos.oferta = o.oferta ? { garantia: String(q.garantia || '').trim().slice(0, 120), plazo: String(q.plazo || '').trim().slice(0, 80), vigencia: String(q.vigencia || '').replace(/\D/g, '').slice(0, 3), condiciones: String(q.condiciones || '').trim().slice(0, 800) } : null; }   // la carta oferta lee estos datos
+  if ('oferta' in o) { const q = o.oferta || {}; datos.oferta = o.oferta ? { garantia: String(q.garantia || '').trim().slice(0, 120), plazo: String(q.plazo || '').trim().slice(0, 80), vigencia: String(q.vigencia || '').replace(/\D/g, '').slice(0, 3), condiciones: String(q.condiciones || '').trim().slice(0, 800), ...Object.fromEntries(['piePct', 'promesaDias', 'escrituraDias', 'seriedadUF', 'comisionPct'].filter((c) => String(q[c] ?? '').trim() !== '').map((c) => [c, String(q[c]).replace(',', '.').replace(/[^\d.]/g, '').slice(0, 8)])) } : null; }   // la carta oferta lee estos datos
   if ('aceptacion' in o) { // la negociación con el propietario: oferta, contraofertas y la respuesta final
     const T = ['oferta', 'contraoferta', 'aceptada', 'rechazada']; const txt = (v, m) => String(v || '').trim().slice(0, m);
     datos.aceptacion = o.aceptacion ? { rondas: (o.aceptacion.rondas || []).slice(-40).map((r) => ({ fecha: r.fecha || now(), tipo: T.includes(r.tipo) ? r.tipo : 'oferta', por: r.por === 'interesado' ? 'interesado' : 'propietario', monto: r.monto === '' || r.monto == null ? null : Number(r.monto) || null, moneda: ['UF', 'CLP', 'USD'].includes(r.moneda) ? r.moneda : 'UF', garantia: txt(r.garantia, 120), plazo: txt(r.plazo, 80), condiciones: txt(r.condiciones, 800), nota: txt(r.nota, 400) })) } : null;

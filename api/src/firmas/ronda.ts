@@ -27,6 +27,8 @@ import { UsuarioActual, type UsuarioToken } from '../auth/usuario-actual';
 import { ActividadService } from '../comun/actividad.service';
 import { AvisosService, type NuevoAviso } from '../avisos/avisos';
 import { PortalfirmaService } from '../conexiones/portalfirma';
+import { GoogleService } from '../conexiones/google';
+import { tipoDeDocumento } from '../documentos/drive';
 import type { Env } from '../config/env';
 import { igualJson } from '../comun/asignados';
 
@@ -111,6 +113,7 @@ export class FirmasRondaService implements OnModuleInit, OnModuleDestroy {
     private readonly pf: PortalfirmaService,
     private readonly actividad: ActividadService,
     private readonly avisos: AvisosService,
+    private readonly google: GoogleService,
     config: ConfigService<Env, true>,
   ) {
     this.cadaMs = config.get('FIRMAS_CADA_SEG', { infer: true }) * 1000;
@@ -218,6 +221,31 @@ export class FirmasRondaService implements OnModuleInit, OnModuleDestroy {
     return { revisadas, cambios };
   }
 
+  /**
+   * Baja de Portalfirma el PDF ya firmado y lo deja en Drive (el de la empresa y el de quien lo envió, si los conectaron), junto a la copia
+   * que se subió al enviarlo, en la carpeta de su negocio. Nunca lanza: si falla, el documento queda firmado igual y se anota en el log.
+   */
+  private async copiarFirmadoADrive(f: Firma, d: Detalle) {
+    try {
+      // el detalle de Portalfirma trae el contrato como processId (con ese id el servicio de archivos entrega el PDF firmado)
+      const contrato = String((d.processId as string) || (d.contractId as string) || (d.contract_id as string) || ((d.contract as Detalle | undefined)?.id as string) || '');
+      if (!contrato) return;
+      const pdf = await this.pf.archivoDeCorredora(f.corredoraId, contrato);
+      const bytes = Buffer.from(pdf.base64, 'base64');
+      const prop = f.propiedadIds[0] ? await this.db.propiedad.findUnique({ where: { id: f.propiedadIds[0] }, select: { codigo: true } }) : null;
+      const nombre = `${f.documento} (firmado)${prop ? ` - ${prop.codigo}` : ''}.pdf`.replace(/[\\/:*?"<>|]+/g, '-');
+      await this.google.subirDocumento({
+        corredoraId: f.corredoraId,
+        usuarioId: f.enviadoPorId,
+        nombre,
+        bytes,
+        ref: { tipo: tipoDeDocumento(f.documento), propiedadId: f.propiedadIds[0] ?? null, negocioId: f.negocioId },
+      });
+    } catch (e) {
+      this.log.warn(`drive: no pude copiar el documento firmado de la operación ${f.operacion}: ${(e as Error).message}`);
+    }
+  }
+
   /** guarda lo que dijo Portalfirma de un documento; devuelve los cambios (y los avisa) */
   private async aplicarFirma(f: Firma, d: Detalle): Promise<string[]> {
     const previos = (f.firmantes as Firmante[]) || [];
@@ -262,6 +290,8 @@ export class FirmasRondaService implements OnModuleInit, OnModuleDestroy {
         version: { increment: 1 },
       },
     });
+    // quedó firmado por todos: una copia del PDF firmado a Drive (empresa y usuario), en la carpeta de su negocio
+    if (r.count && x.estado === 'firmado' && f.estado !== 'firmado') void this.copiarFirmadoADrive(f, d);
     if (!r.count || !cambios.length) return [];
     const texto = `${cambios.join(' · ')} (operación ${f.operacion})`;
     await this.actividad

@@ -15,7 +15,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     await w.waitForSelector('#view-agente .ag.ag-full', { timeout: 15000 });
     ok(await w.isVisible('#agSide') && !(await w.isVisible('#agCanvas')), 'con sesión, Asset abre en el Agente: conversaciones y chat, sin lienzo en la portada');
     await w.evaluate(() => window.Inmo.importar()); await w.waitForSelector('text=Cartera actualizada', { timeout: 15000 }); await w.click('#mOk');
-    await w.click('#nav [data-view="agente"]'); await w.waitForSelector('#view-agente .ag.ag-full'); await w.waitForTimeout(500);
+    await w.evaluate(() => window.Agente.vista()); await w.waitForSelector('#view-agente .ag.ag-full'); await w.waitForTimeout(500);
 
     // Agendar: tarjeta fija, nunca un documento
     await w.click('#agMas'); await w.click('[data-rapida="visita"]'); await w.waitForSelector('.ga-agd [data-ok]');
@@ -44,7 +44,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     await w.click('[data-lz="avanzar"]'); await w.waitForFunction((e0) => document.querySelector('.lz-steps li.ahora b')?.textContent !== e0, etapa0, { timeout: 10000 });
     ok(/Negocio en «/.test(await ultimoBot()), `un toque en el lienzo mueve el negocio (${etapa0} → ${await w.$eval('.lz-steps li.ahora b', (e) => e.textContent)})`);
     await w.click('#nav [data-view="negocios"]'); await w.waitForSelector('.ng-board'); ok(/Arriendos 1/.test((await w.innerText('#ngTipo')).replace(/\s+/g, ' ')) && (await w.$$('.ng-card')).length === 1, 'el tablero de Negocios ya lo tiene, en su pestaña');
-    await w.click('#nav [data-view="agente"]'); await w.waitForSelector('#view-agente .ag.ag-full');
+    await w.evaluate(() => window.Agente.vista()); await w.waitForSelector('#view-agente .ag.ag-full');
 
     // Conversaciones
     await w.waitForSelector('.ag-ci'); ok(/Agendar una visita/.test(await txt('#agConvs')), 'la conversación queda guardada a la izquierda con un título automático');

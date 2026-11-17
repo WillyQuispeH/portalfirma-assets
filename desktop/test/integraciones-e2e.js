@@ -22,7 +22,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     await w.waitForSelector('#view-integraciones:not(.hidden) [data-integracion="portalfirma"]');
     ok(true, 'se abre desde el menú del usuario');
     ok(/Inicio Configuración/.test(await txt('#view-integraciones [data-migas]')) && await w.isVisible('#cfgTabs [data-t="integraciones"][aria-selected="true"]'), 'abre Configuración en la pestaña Integraciones');
-    for (const id of ['portalfirma', 'wechatia', 'canal-whatsapp', 'canal-instagram', 'canal-facebook', 'canal-correo', 'mercadolibre', 'drive', 'maps', 'ia'])
+    for (const id of ['portalfirma', 'wechatia', 'canal-whatsapp', 'canal-instagram', 'canal-facebook', 'canal-correo', 'mercadolibre', 'google', 'google_corredora', 'drive', 'maps', 'ia'])
       ok(await w.$(fila(id)), `muestra ${id}`);
     ok(/Entra con tu cuenta de Asset/.test(await txt(fila('canal-instagram'))), 'sin la cuenta de Asset, los canales dicen que no se puede saber su estado');
 
@@ -41,6 +41,16 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
       await w.waitForFunction((s) => /Sin conectar/.test(document.querySelector(s)?.innerText || ''), fila(id), { timeout: 15000 });
       ok(true, `${nombre} se desconecta`);
     }
+
+    // Google: la cuenta de cada usuario (calendario y Drive) y el Drive general de la empresa (simulados con PF_MOCK)
+    ok(/Sin conectar/.test(await txt(fila('google'))) && /Sin conectar/.test(await txt(fila('google_corredora'))), 'Google: tu cuenta y el Drive de la empresa salen sin conectar');
+    await w.click(`${fila('google')} button:has-text("Conectar")`); await w.waitForSelector(`${fila('google')} button:has-text("Desconectar")`);
+    ok(/Conectado/.test(await txt(fila('google'))) && /Google Calendar/.test(await txt(fila('google'))), 'tu cuenta de Google se conecta: las visitas van a tu calendario');
+    ok(/Sin conectar/.test(await txt(fila('google_corredora'))), 'y el Drive de la empresa sigue aparte (es otra conexión)');
+    await w.click(`${fila('google_corredora')} button:has-text("Conectar")`); await w.waitForSelector(`${fila('google_corredora')} button:has-text("Desconectar")`);
+    ok(/Conectado/.test(await txt(fila('google_corredora'))), 'el administrador conecta el Drive de la empresa');
+    await w.click(`${fila('google')} button:has-text("Desconectar")`); await w.waitForSelector(`${fila('google')} button:has-text("Conectar")`);
+    ok(/Conectado/.test(await txt(fila('google_corredora'))), 'desconectar la tuya no toca la de la empresa');
 
     await w.click('#view-integraciones [data-migas] button'); await w.waitForTimeout(500);
     ok(await w.$eval('#view-integraciones', (e) => e.classList.contains('hidden')), 'la miga «Inicio» vuelve al inicio');

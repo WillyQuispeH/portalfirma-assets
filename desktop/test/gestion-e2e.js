@@ -15,7 +15,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     await w.click('#view-inicio [data-do="importar"]'); await w.waitForSelector('text=Cartera actualizada', { timeout: 15000 }); await w.click('#mOk'); await w.waitForSelector('.im-card');
 
     // Pantalla completa
-    await w.click('#nav [data-view="agente"]'); await w.waitForSelector('#view-agente .ag.ag-full');
+    await w.evaluate(() => window.Agente.vista()); await w.waitForSelector('#view-agente .ag.ag-full');
     ok(await w.isVisible('#view-agente') && await w.isVisible('.ag-full .ag-hola') && await w.isHidden('#agClose'), 'la pestaña Agente abre el chat a pantalla completa, con saludo');
     await w.click('#agMas'); ok((await w.$$('.ag-full [data-rapida]')).length === 6 && /Gestionar una propiedad/.test(await txt('.ag-quick')), 'seis acciones rápidas bajo el cuadro de texto'); await w.click('#agMas');
     await w.waitForTimeout(300); await shot('ge1-agente.png');

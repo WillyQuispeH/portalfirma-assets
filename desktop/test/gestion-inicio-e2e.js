@@ -37,7 +37,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     ok(true, 'cada acción abre su parte (Expedientes)');
 
     await w.click('#nav [data-view="home"]'); await w.waitForSelector('#recAll'); await w.click('#recAll'); await w.waitForSelector('#view-recientes .rec-row');
-    ok(await filas() === 6 && /6 documentos/.test(await txt('#view-recientes .ops-head')), 'Recientes lista los 6');
+    ok(await filas() === 6 && /6 documentos/.test(await txt('#view-recientes [data-cabecera]')), 'Recientes lista los 6');
     ok(/no encontrado/.test(await txt('#view-recientes .rec-row.miss')), 'el que ya no está aparece como «no encontrado»');
     await w.click('#view-recientes [data-tipo="pdf"]'); await w.waitForFunction(() => document.querySelectorAll('#view-recientes .rec-row').length === 4);
     ok(true, 'filtro por tipo: PDF');

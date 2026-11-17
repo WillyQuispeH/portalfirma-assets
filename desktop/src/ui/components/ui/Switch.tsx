@@ -35,7 +35,7 @@ export default function Switch({ activo, alCambiar, etiqueta, descripcion, desha
   );
   if (!etiqueta && !descripcion) return <span className={className}>{boton}</span>;
   return (
-    <div className={cx('tw:flex tw:items-start tw:gap-3', className)}>
+    <div className={cx('tw:flex tw:items-start tw:gap-ui', className)}>
       {boton}
       <div className="tw:min-w-0">
         {etiqueta && <label htmlFor={idSw} className="tw:block tw:m-0 tw:text-sm tw:font-semibold tw:text-text tw:cursor-pointer">{etiqueta}</label>}

@@ -1,6 +1,6 @@
-// Casilla de verificación reutilizable (caja del kit + palomita), con etiqueta y descripción opcionales.
-//   <Checkbox marcado={sel} alCambiar={setSel} etiqueta="Enviar a Ana" descripcion="+56 9 1234 5678" />
-// Usa un <input type="checkbox"> real (accesible, con teclado); el aspecto lo da la caja de al lado.
+// Casilla filled del kit (misma familia visual que Input/Select: fondo, radio y borde inferior).
+//   <Checkbox marcado={sel} alCambiar={setSel} etiqueta="En venta" />
+// Usa un <input type="checkbox"> real (accesible, con teclado); el aspecto lo da la pastilla.
 import { useId, type ReactNode } from 'react';
 import Icono from './Icono';
 import { cx } from '../../utils/cx';
@@ -18,26 +18,29 @@ interface ICheckboxProps {
 export default function Checkbox({ marcado, alCambiar, etiqueta, descripcion, deshabilitado = false, id, className }: ICheckboxProps) {
   const auto = useId(); const idCb = id || auto;
   return (
-    <div className={cx('tw:flex tw:items-start tw:gap-2.5', className)}>
-      <span className="tw:relative tw:inline-flex tw:flex-none tw:mt-px">
+    <div className={cx('tw:inline-flex tw:flex-col tw:gap-1', className)}>
+      <label htmlFor={idCb}
+        className={cx(
+          'tw:relative tw:inline-flex tw:items-center tw:gap-2.5 tw:m-0 tw:min-h-10 tw:px-3 tw:rounded-control',
+          'tw:border-0 tw:border-solid tw:border-b-2 tw:select-none tw:transition-[background-color,border-color] tw:duration-150',
+          'tw:has-[:focus-visible]:outline-2 tw:has-[:focus-visible]:outline-offset-2 tw:has-[:focus-visible]:outline-lav-edge',
+          marcado
+            ? 'tw:bg-lav-soft tw:border-b-lav-edge tw:text-lav-softink'
+            : 'tw:bg-gray-soft tw:border-b-edge tw:text-text tw:hover:bg-hover',
+          deshabilitado ? 'tw:opacity-55 tw:cursor-default' : 'tw:cursor-pointer',
+        )}>
         <input type="checkbox" id={idCb} checked={marcado} disabled={deshabilitado} onChange={(e) => alCambiar(e.target.checked)}
           aria-describedby={descripcion ? `${idCb}-desc` : undefined}
-          className="tw:peer tw:absolute tw:inset-0 tw:m-0 tw:size-full tw:opacity-0 tw:cursor-pointer tw:disabled:cursor-default" />
+          className="tw:peer tw:sr-only" />
         <span aria-hidden="true" className={cx(
-          'tw:flex tw:items-center tw:justify-center tw:size-5 tw:rounded-icono tw:border tw:border-solid tw:border-b-2 tw:transition-colors tw:duration-150',
-          'tw:peer-focus-visible:outline-2 tw:peer-focus-visible:outline-offset-2 tw:peer-focus-visible:outline-lav-edge',
-          marcado ? 'tw:bg-lav tw:border-lav-edge tw:text-white' : 'tw:bg-card tw:border-edge tw:border-b-edge-b',
-          deshabilitado && 'tw:opacity-55',
+          'tw:grid tw:flex-none tw:place-items-center tw:size-[18px] tw:rounded-[6px] tw:border tw:border-solid tw:border-b-2 tw:transition-colors tw:duration-150',
+          marcado ? 'tw:bg-lav tw:border-lav-edge tw:text-white' : 'tw:bg-card tw:border-edge tw:border-b-edge-b tw:text-transparent',
         )}>
-          {marcado && <Icono nombre="check" tam={13} />}
+          <Icono nombre="check" tam={12} />
         </span>
-      </span>
-      {(etiqueta || descripcion) && (
-        <div className="tw:min-w-0">
-          {etiqueta && <label htmlFor={idCb} className={cx('tw:block tw:m-0 tw:text-sm tw:font-semibold tw:text-text', deshabilitado ? 'tw:opacity-70' : 'tw:cursor-pointer')}>{etiqueta}</label>}
-          {descripcion && <small id={`${idCb}-desc`} className="tw:block tw:mt-0.5 tw:text-xs tw:text-muted">{descripcion}</small>}
-        </div>
-      )}
+        {etiqueta && <span className="tw:text-sm tw:font-semibold tw:leading-none">{etiqueta}</span>}
+      </label>
+      {descripcion && <small id={`${idCb}-desc`} className="tw:text-xs tw:text-muted">{descripcion}</small>}
     </div>
   );
 }

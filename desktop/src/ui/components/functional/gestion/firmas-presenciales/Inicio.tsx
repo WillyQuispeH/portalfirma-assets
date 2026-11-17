@@ -8,6 +8,7 @@ import type { TTramite } from '../../../../store/interfaces/escritura.interface'
 import { cx } from '../../../../utils/cx';
 import { ENCABEZADO, ENCABEZADO_H3, PANEL } from './estilos';
 
+import Boton from '../../../ui/Boton';
 // Tarjeta de cada trámite (es-card la usan las pruebas)
 const TARJETA = 'es-card tw:w-auto tw:m-0 tw:text-left tw:bg-card tw:border tw:border-[color:var(--es-line)] tw:rounded-card! tw:p-[22px] tw:flex tw:flex-col tw:gap-2.5 tw:items-start tw:text-text tw:[box-shadow:var(--es-soft)] tw:[transition:transform_.18s,box-shadow_.18s,border-color_.18s] tw:hover:[transform:translateY(-2px)] tw:hover:border-[color-mix(in_srgb,var(--brand)_22%,var(--line))] tw:hover:[box-shadow:0_2px_4px_rgba(16,24,64,.04),0_18px_40px_-16px_rgba(47,73,224,.25)]';
 const TARJETA_IC = 'tw:size-12 tw:rounded-icono tw:grid tw:place-items-center tw:bg-[linear-gradient(135deg,color-mix(in_srgb,#3d9cf0_16%,var(--card)),color-mix(in_srgb,#6a2fe0_14%,var(--card)))] tw:text-brand';
@@ -39,10 +40,10 @@ export function SubirDocumento() {
     : red ? 'Debe ser un documento real y ya firmado. Nosotros lo reescribimos como escritura pública. En Word lo leemos con exactitud; si solo tienes PDF, foto o escaneo, lo leemos con IA (incluido en el valor).'
     : 'Solo Word (.doc, .docx, .rtf, .odt): así el texto se lee con exactitud.';
   return <>
-    <div className={ENCABEZADO}><div><h3 className={ENCABEZADO_H3}>{TRAMITES[tramite].t}</h3><div className="muted small">{TRAMITES[tramite].d()}</div></div><button className="ghost small" id="esCambiarT" onClick={() => escrituraElegir(null)}>Cambiar trámite</button></div>
+    <div className={ENCABEZADO}><div><h3 className={ENCABEZADO_H3}>{TRAMITES[tramite].t}</h3><div className="muted small">{TRAMITES[tramite].d()}</div></div><Boton variante="fantasma" tamano="sm" id="esCambiarT" onClick={() => escrituraElegir(null)}>Cambiar trámite</Boton></div>
     <Seguimiento actual={0} tramite={tramite} fin="Sube el documento" />
     <div className={SOLTAR} id="esDrop"><Icono nombre="filePlus" tam={40} /><p className="tw:m-0 tw:text-text"><b>Arrastra aquí {que}</b>, o</p>
-      <div className="row-c"><button className="primary with-ic" id="esPick" onClick={elegirArchivos}><Icono nombre="folderOpen" tam={16} /><span>{priv ? 'Elegir archivo…' : 'Elegir minuta en Word…'}</span></button></div>
+      <div className="row-c"><Boton icono="folderOpen" id="esPick" onClick={elegirArchivos}>{priv ? 'Elegir archivo…' : 'Elegir minuta en Word…'}</Boton></div>
       <small className="muted tw:max-w-[620px] tw:leading-[1.6]">{ayuda}</small>
       <div id="esBusy" className={cx('tw:flex tw:gap-2.5 tw:items-center tw:text-[12.5px] tw:text-text tw:bg-card tw:rounded-full tw:py-2 tw:px-3.5 tw:[box-shadow:var(--es-soft)]', !ocupado && 'hidden')}>{ocupado && <><span className="tw:size-3.5 tw:rounded-full tw:border-2 tw:border-[color-mix(in_srgb,var(--brand)_20%,transparent)] tw:border-t-brand tw:animate-[spin_.8s_linear_infinite]" />{ocupado}</>}</div>
     </div>
@@ -50,9 +51,9 @@ export function SubirDocumento() {
       <div className={cx(PANEL, 'tw:flex tw:flex-col tw:gap-2 tw:p-3.5')}>{proto.docs.map((x, i) => (
         <div key={i} className="tw:flex tw:items-center tw:gap-2.5 tw:[&_button]:w-auto tw:[&_button]:m-0"><span className="xp-ic"><Icono nombre={x.origen === 'Imagen' ? 'image' : 'file'} tam={18} /></span>
           <div className="xp-tx tw:flex-1"><b>{x.name}</b><small>{x.pages} {x.pages === 1 ? 'hoja' : 'hojas'} · {origenDoc(x)}</small></div>
-          <button className="ghost small" data-rm={i} title="Quitar" onClick={() => escrituraQuitarDoc(i)}><Icono nombre="x" tam={14} /></button></div>
+          <Boton variante="fantasma" tamano="sm" icono="x" data-rm={i} title="Quitar" onClick={() => escrituraQuitarDoc(i)} /></div>
       ))}</div>
-      <div className="row-end"><button className="primary" id="esNext" onClick={() => escrituraIrA('rev')}>Revisar</button></div>
+      <div className="row-end"><Boton id="esNext" onClick={() => escrituraIrA('rev')}>Revisar</Boton></div>
     </>}
   </>;
 }

@@ -12,6 +12,33 @@ export const BORDE_CARD = 'tw:rounded-card tw:border-edge tw:border-b-[3px] tw:b
 
 export const VIA = { api: 'API', feed: 'Feed diario', acuerdo: 'Acuerdo comercial' };
 
+// la marca de cada portal: su color y sus iniciales (Portales y Integraciones usan el mismo)
+const MARCA: Record<string, [string, string]> = {
+  pi: ['#e9b200', 'PI'], chilepropiedades: ['#1faa59', 'CP'], broku: ['#6a2fe0', 'B'], toctoc: ['#d97706', 'TT'], yapo: ['#e5484d', 'Y'],
+};
+export function LogoPortal({ id, nombre }: { id: string; nombre: string }) {
+  const [color, letras] = MARCA[id] || ['#64748b', nombre.slice(0, 2).toUpperCase()];
+  return (
+    <span aria-hidden="true" className="tw:inline-grid tw:flex-none tw:place-items-center tw:size-10 tw:rounded-icono tw:text-white tw:font-bold tw:text-[13px]" style={{ background: color }}>{letras}</span>
+  );
+}
+
+// qué se puede hacer con el aviso de un portal según su estado actual (el CRUD: publicar, actualizar, pausar, reactivar, retirar, eliminar)
+export const ACCIONES_AVISO: Record<string, { que: 'publicar' | 'actualizar' | 'pausar' | 'reactivar' | 'retirar' | 'eliminar'; texto: string; icono: string }> = {
+  publicar: { que: 'publicar', texto: 'Publicar de nuevo', icono: 'export' },
+  actualizar: { que: 'actualizar', texto: 'Actualizar el aviso', icono: 'rotateR' },
+  pausar: { que: 'pausar', texto: 'Pausar', icono: 'clock' },
+  reactivar: { que: 'reactivar', texto: 'Reactivar', icono: 'check' },
+  retirar: { que: 'retirar', texto: 'Retirar', icono: 'x' },
+  eliminar: { que: 'eliminar', texto: 'Eliminar', icono: 'trash' },
+};
+const POR_ESTADO: Record<string, string[]> = {
+  active: ['actualizar', 'pausar', 'retirar', 'eliminar'], publicada: ['actualizar', 'pausar', 'retirar', 'eliminar'], en_feed: ['actualizar', 'pausar', 'retirar', 'eliminar'],
+  under_review: ['actualizar', 'retirar', 'eliminar'], paused: ['reactivar', 'retirar', 'eliminar'], pausada: ['reactivar', 'retirar', 'eliminar'],
+  closed: ['eliminar'], retirada: ['publicar', 'eliminar'], vencida: ['publicar', 'eliminar'], pendiente: ['eliminar'], inactive: ['eliminar'],
+};
+export const accionesDe = (status?: string) => (POR_ESTADO[status || ''] || ['eliminar']).map((k) => ACCIONES_AVISO[k]);
+
 export const fmt = (n: number | null | undefined) => (n == null ? '—' : Number(n).toLocaleString('es-CL'));
 
 export function hace(iso?: string | null): string {

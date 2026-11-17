@@ -1,99 +1,117 @@
 <!doctype html>
 <!--
-  ORDEN DE VISITA de PortalFirma Asset. Es un HTML normal: se edita el texto y el estilo aquí.
-  Las variables van entre llaves dobles y se reemplazan solas al generar el PDF:
+  ORDEN DE VISITA de PortalFirma Asset. HTML normal: se edita el texto y el estilo aquí (el estilo común está en _base.css).
+  El contenido legal sigue el modelo «Orden de visita de propiedad» de la corredora.
+  Variables entre llaves dobles (se reemplazan solas al generar el PDF):
 
     {{numero}}  {{fechaEmision}}  {{visita.fecha}}  {{visita.hora}}
     {{corredora.nombre}}  {{corredora.rut}}
     {{corredor.nombre}}   {{corredor.email}}   {{corredor.telefono}}
-    {{visitante.nombre}}  {{visitante.rut}}    {{visitante.email}}   {{visitante.telefono}}
+    {{visitante.nombre}}  {{visitante.rut}}    {{visitante.email}}   {{visitante.telefono}}   {{visitante.nacionalidad}}
+    {{operacion.txt}}  («Venta» o «Arriendo»)   {{#operacion.venta}}…{{/operacion.venta}}   {{#operacion.arriendo}}…{{/operacion.arriendo}}
+    {{garantiaSeriedad}}  (monto de la garantía de seriedad en arriendos)   {{vigenciaDias}}  (días hábiles de vigencia de la orden)
 
   Las propiedades se repiten con  {{#propiedades}} … {{/propiedades}}  y dentro llevan:
     {{codigo}} {{tipo}} {{direccion}} {{operacion}} {{precio}} {{descripcion}} {{foto}}
   y su lista de características con  {{#rasgos}} {{nombre}}: {{valor}} {{/rasgos}}.
 
-  Un bloque  {{#algo}} … {{/algo}}  solo aparece si «algo» tiene valor (por ejemplo la foto o el teléfono).
+  Un bloque  {{#algo}} … {{/algo}}  solo aparece si «algo» tiene valor.
   Este documento NO lleva cajas ni líneas de firma: Portalfirma agrega su propia hoja de firma al enviarlo.
-  Este texto es un borrador para que lo revise el notario: al cambiarlo, el documento que firman los visitantes cambia.
+  Este texto debe revisarlo el notario: al cambiarlo, cambia lo que firman los visitantes.
 -->
 <html lang="es">
 <head>
 <meta charset="utf-8">
 <title>Orden de visita nº {{numero}}</title>
 <style>
-  @page { size: A4; margin: 13mm 15mm 14mm; }
-  * { box-sizing: border-box; }
-  body { font-family: "Helvetica Neue", Arial, sans-serif; font-size: 10pt; line-height: 1.4; color: #1c2230; margin: 0; }
-  .top { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #1c2230; padding-bottom: 10px; margin-bottom: 16px; }
-  .top h1 { margin: 0; font-size: 17pt; letter-spacing: .02em; }
-  .top .emp { font-size: 9.5pt; color: #4a5266; margin-top: 2px; }
-  .top .n { text-align: right; font-size: 9.5pt; color: #4a5266; }
-  .top .n b { display: block; font-size: 12pt; color: #1c2230; }
-  h2 { font-size: 10pt; text-transform: uppercase; letter-spacing: .06em; color: #4a5266; margin: 13px 0 5px; }
-  .caja { border: 1px solid #cfd5e2; border-radius: 6px; padding: 10px 12px; }
-  .datos { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 18px; }
-  .datos span { color: #4a5266; font-size: 9pt; display: block; }
-  .datos b { font-weight: 600; }
-  .prop { display: flex; gap: 12px; border: 1px solid #cfd5e2; border-radius: 6px; padding: 8px 10px; margin-bottom: 8px; page-break-inside: avoid; }
-  .prop .ft { width: 130px; flex: none; }
-  .prop .ft img { width: 130px; height: 96px; object-fit: cover; border-radius: 4px; display: block; }
-  .prop .cod { font-size: 9pt; color: #4a5266; }
-  .prop .ti { font-weight: 700; font-size: 11pt; }
-  .prop .pr { margin-top: 2px; font-weight: 600; }
-  .prop .rs { margin-top: 4px; font-size: 9.5pt; color: #4a5266; }
-  .prop .rs span { margin-right: 10px; }
-  .prop .de { margin-top: 4px; font-size: 9.5pt; }
-  .leg p { margin: 0 0 6px; text-align: justify; font-size: 9.5pt; }
+/*@base*/
+  .prop { display: flex; gap: 13px; border: 1px solid var(--linea); border-radius: 4px; padding: 9px 11px; margin-bottom: 8px; page-break-inside: avoid; font-family: "Helvetica Neue", Arial, sans-serif; }
+  .prop .ft { width: 118px; flex: none; }
+  .prop .ft img { width: 118px; height: 88px; object-fit: cover; border-radius: 3px; display: block; }
+  .prop .cod { font-size: 7.8pt; letter-spacing: .1em; text-transform: uppercase; color: var(--acento); font-weight: 600; }
+  .prop .ti { font-weight: 700; font-size: 10.5pt; margin-top: 1px; }
+  .prop .pr { margin-top: 2px; font-weight: 600; font-size: 10pt; }
+  .prop .rs { margin-top: 4px; font-size: 8.8pt; color: var(--suave); }
+  .prop .rs span { margin-right: 11px; }
+  .prop .de { margin-top: 4px; font-size: 8.8pt; line-height: 1.4; }
+  .com { margin: 3px 0 8px; padding: 0; list-style: none; font-family: "Helvetica Neue", Arial, sans-serif; font-size: 9.2pt; }
+  .com li { margin: 0 0 5px; padding-left: 0; text-align: left; }
+  .com li .caja-marca { margin-right: 9px; }
 </style>
 </head>
 <body>
 
-<div class="top">
-  <div>
-    <h1>ORDEN DE VISITA</h1>
-    <div class="emp">{{corredora.nombre}}{{#corredora.rut}} · RUT {{corredora.rut}}{{/corredora.rut}}</div>
+<div class="enc">
+  <div class="marca">{{corredora.nombre}}<small>{{#corredora.rut}}RUT {{corredora.rut}}{{/corredora.rut}}</small></div>
+  <div class="meta"><b>Orden Nº {{numero}}</b><br>Emitida el {{fechaEmision}}</div>
+</div>
+<div class="filete"></div>
+<h1>Orden de visita de propiedad</h1>
+<div class="subtitulo">Visita del {{visita.fecha}} · {{visita.hora}}</div>
+
+<div class="partes">
+  <div class="parte">
+    <div class="rol">Visitante</div>
+    <div class="nom">{{visitante.nombre}}</div>
+    <div class="det">RUT {{visitante.rut}}{{#visitante.nacionalidad}} · Nacionalidad {{visitante.nacionalidad}}{{/visitante.nacionalidad}}<br>{{visitante.email}}{{#visitante.telefono}} · {{visitante.telefono}}{{/visitante.telefono}}</div>
   </div>
-  <div class="n"><b>Nº {{numero}}</b>Emitida el {{fechaEmision}}</div>
+  <div class="parte">
+    <div class="rol">Corredora · atiende</div>
+    <div class="nom">{{corredora.nombre}}</div>
+    <div class="det">{{#corredora.rut}}RUT {{corredora.rut}}<br>{{/corredora.rut}}{{corredor.nombre}} · {{corredor.email}}{{#corredor.telefono}} · {{corredor.telefono}}{{/corredor.telefono}}</div>
+  </div>
 </div>
 
-<h2>Visitante</h2>
-<div class="caja datos">
-  <div><span>Nombre</span><b>{{visitante.nombre}}</b></div>
-  <div><span>RUT</span><b>{{visitante.rut}}</b></div>
-  <div><span>Correo</span><b>{{visitante.email}}</b></div>
-  <div><span>Teléfono</span><b>{{visitante.telefono}}</b></div>
-</div>
+<p class="comparecencia">Por la presente, el/la suscrito/a <b>{{visitante.nombre}}</b>, con cédula de identidad número <b>{{visitante.rut}}</b>{{#visitante.nacionalidad}}, nacionalidad {{visitante.nacionalidad}}{{/visitante.nacionalidad}}, solicita visitar la(s) siguiente(s) propiedad(es) para su <b>{{operacion.txt}}</b>:</p>
 
-<h2>Propiedades que visitará</h2>
 {{#propiedades}}
 <div class="prop">
   {{#foto}}<div class="ft"><img src="{{foto}}" alt=""></div>{{/foto}}
   <div>
     <div class="cod">Código {{codigo}}</div>
     <div class="ti">{{tipo}} · {{direccion}}</div>
-    <div class="pr">{{operacion}}{{#precio}}: {{precio}}{{/precio}}</div>
+    <div class="pr">{{operacion}}{{#precio}} · {{precio}}{{/precio}}</div>
     <div class="rs">{{#rasgos}}<span>{{nombre}}: <b>{{valor}}</b></span>{{/rasgos}}</div>
     {{#descripcion}}<div class="de">{{descripcion}}</div>{{/descripcion}}
   </div>
 </div>
 {{/propiedades}}
 
-<h2>Visita</h2>
-<div class="caja datos">
-  <div><span>Fecha</span><b>{{visita.fecha}}</b></div>
-  <div><span>Hora</span><b>{{visita.hora}}</b></div>
-  <div><span>Atiende</span><b>{{corredor.nombre}}</b></div>
-  <div><span>Contacto</span><b>{{corredor.email}}{{#corredor.telefono}} · {{corredor.telefono}}{{/corredor.telefono}}</b></div>
+<p>Por medio de la presente, confirmo que <b>{{corredora.nombre}}</b> es la primera entidad que me ha presentado las propiedades en cuestión. Me comprometo a realizar todas las gestiones y negociaciones pertinentes a través de su intermediación, acordando el pago de las comisiones detalladas a continuación, conforme a los términos y condiciones aquí estipulados.</p>
+
+<div class="cl">
+  <h2><i>1.</i> Estructura de comisiones</h2>
+  <ul class="com">
+    <li class="{{#operacion.venta}}on{{/operacion.venta}}"><span class="caja-marca {{#operacion.venta}}si{{/operacion.venta}}"></span><b>Compraventa:</b> 2 % + IVA del valor de transacción final.</li>
+    <li><span class="caja-marca"></span><b>Permutas:</b> 2 % + IVA del valor de cada propiedad involucrada en la transacción.</li>
+    <li class="{{#operacion.arriendo}}on{{/operacion.arriendo}}"><span class="caja-marca {{#operacion.arriendo}}si{{/operacion.arriendo}}"></span><b>Arriendos:</b> 50 % + IVA del canon mensual acordado, o 2 % + IVA del total del contrato en casos de arrendamientos que excedan los 24 meses.</li>
+    <li><span class="caja-marca"></span><b>Arriendos comerciales:</b> 2,0 % más IVA, calculado sobre el monto total del contrato, con una comisión mínima de una renta promedio mensual más IVA.</li>
+  </ul>
+  <p>Las comisiones se calcularán basándose siempre en los valores finales de las transacciones. La vigencia del presente documento será de <b>{{vigenciaDias}} días hábiles</b>.</p>
 </div>
 
-<h2>Declaraciones del visitante</h2>
-<div class="leg">
-  <p>1. {{visitante.nombre}} (el «Visitante») solicita a {{corredora.nombre}} (la «Corredora») visitar las propiedades indicadas en esta orden, y declara que la información que se le entrega sobre ellas es referencial.</p>
-  <p>2. El Visitante reconoce que la Corredora fue quien le presentó estas propiedades. Si decide arrendarlas o comprarlas, se obliga a realizar la operación por intermedio de la Corredora y a pagar la comisión de corretaje que corresponda según los honorarios informados por la Corredora, más los impuestos aplicables.</p>
-  <p>3. La información de las propiedades y de sus propietarios es personal e intransferible: el Visitante no la usará ni la entregará a terceros para contratar la propiedad por otra vía, directa o indirectamente.</p>
-  <p>4. Declara contar con las facultades para firmar esta orden, por sí o en representación de quien indique, y autoriza a la Corredora a contactarlo por los medios señalados para coordinar visitas y dar seguimiento, conforme a la Ley Nº 19.628 sobre protección de la vida privada.</p>
-  <p>5. Esta orden se firma electrónicamente con Portalfirma y su vigencia es de 180 días corridos desde su fecha de emisión.</p>
+<div class="cl">
+  <h2><i>2.</i> Solicitud y obligación de intermediación</h2>
+  <p>Mediante este acto, también solicito formalmente la orden de visita para la propiedad mencionada, y me obligo, tanto en nombre propio como en representación de mi mandante, a concretar cualquier transacción a través de {{corredora.nombre}}. Me comprometo a satisfacer las comisiones previamente indicadas sobre el valor final de las transacciones realizadas, pagaderas al contado en el momento de la firma de la escritura pública, contrato o promesa correspondiente, incluyendo el impuesto legal aplicable, independientemente de si existe o no un mandato formal por parte de los propietarios.</p>
 </div>
+
+<div class="cl">
+  <h2><i>3.</i> Incumplimiento</h2>
+  <p>En caso de incumplimiento, donde se establezca una interacción directa con los propietarios o terceros, se facilite información a terceros sobre la propiedad o se realice la adquisición por medio de otra agencia inmobiliaria, acordamos el pago del <b>doble de la comisión estipulada</b> como multa o cláusula penal. {{corredora.nombre}} actuará exclusivamente como intermediario en estas operaciones.</p>
+</div>
+
+<div class="cl">
+  <h2><i>4.</i> Competencia y protocolización</h2>
+  <p>Para la resolución de cualquier controversia que surja entre las partes respecto al cobro de comisiones acordadas con la corredora, ya sea por inmuebles visitados bajo esta orden o cualquier otra facilitada al cliente en distintas modalidades, se acuerda someterse a la jurisdicción y competencia de los tribunales de justicia chilenos. Las partes se comprometen a seguir el proceso judicial correspondiente según la legislación vigente en Chile, renunciando a cualquier otro procedimiento alternativo de resolución de conflictos. La causa será tramitada ante el tribunal competente en la ciudad de Santiago, Región Metropolitana. Las partes acuerdan que el presente documento será protocolizado ante Notario Público, para otorgar fe pública y formalizar legalmente el compromiso de todas las obligaciones que emanan de este documento.</p>
+</div>
+
+<div class="cl">
+  <h2><i>5.</i> Términos y condiciones de la garantía de seriedad</h2>
+  <p>En caso de que el interesado manifieste formalmente su intención de reservar una propiedad para arriendo, deberá efectuar un pago en calidad de garantía de seriedad, equivalente a <b>{{garantiaSeriedad}}</b>, el cual se destinará a asegurar su compromiso de avanzar en la negociación del contrato. Esta reserva tendrá una vigencia de 5 días hábiles desde su pago, plazo en el cual el arrendatario deberá presentar la documentación requerida.</p>
+  <p>En caso de que el interesado desista de arrendar la propiedad dentro del plazo señalado o no cumpla con los requisitos exigidos para la aprobación por parte del propietario, el monto pagado en reserva se considerará a favor de {{corredora.nombre}} en compensación por los perjuicios derivados del incumplimiento. Por el contrario, si la operación no se concreta por decisión unilateral del propietario o por causas no imputables al interesado, el monto pagado será devuelto en su totalidad dentro de un plazo máximo de 5 días hábiles, contados desde la notificación del desistimiento. El monto transferido se descontará del pago de honorarios de corretaje.</p>
+</div>
+
+<div class="pie-legal">Documento emitido por {{corredora.nombre}}{{#corredora.rut}}, RUT {{corredora.rut}}{{/corredora.rut}}, el {{fechaEmision}}. Se firma electrónicamente con Portalfirma y queda disponible para su verificación.</div>
 
 </body>
 </html>

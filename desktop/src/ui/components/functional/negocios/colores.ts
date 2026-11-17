@@ -1,6 +1,6 @@
-// Color de cada etapa del tablero (la variable --c de .ng-col y .ng-card en styles.css). Sigue el degradado de la
-// marca (azul → violeta) y pasa por rosa y naranjo; la etapa final siempre es verde. Ventas y Arriendos comparten
-// las primeras etapas, así que comparten sus colores.
+// Color de cada etapa del tablero (variable --c): lo usan las tarjetas (.ng-card), no las columnas.
+// Sigue el degradado de la marca (azul → violeta) y pasa por rosa y naranjo; la etapa final siempre es verde.
+// Ventas y Arriendos comparten las primeras etapas, así que comparten sus colores.
 import type { CSSProperties } from 'react';
 import type { IEtapa, TNegocioEstado } from '../../../store/interfaces/negocio.interface';
 

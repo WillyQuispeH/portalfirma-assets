@@ -20,7 +20,7 @@ export default function Chips<T extends string>({ opciones, valor, alCambiar, et
   return (
     <div className={className}>
       {etiqueta && <span id={idEt} className="tw:block tw:mb-1.5 tw:text-[13px] tw:font-semibold tw:text-text">{etiqueta}</span>}
-      <div id={id} role="group" aria-labelledby={etiqueta ? idEt : undefined} className="tw:flex tw:flex-wrap tw:gap-2">
+      <div id={id} role="group" aria-labelledby={etiqueta ? idEt : undefined} className="tw:flex tw:flex-wrap tw:gap-ui">
         {opciones.map(([k, t]) => {
           const on = valor.includes(k);
           return (

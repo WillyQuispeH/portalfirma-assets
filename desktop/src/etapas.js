@@ -91,6 +91,9 @@ function crear({ agenda = null, formatos = null } = {}) {
         return { e: 'pend', q: 'tu', d: `Falta: ${b.faltanClave.slice(0, 5).join(', ')}${b.faltanClave.length > 5 ? ` y ${b.faltanClave.length - 5} más` : ''}.` };
       }
       case 'mandato': {
+        // mandato de arriendo que armó Asset (api/mandato-arriendo.ts): si ya se envió o se firmó, el paso lo sigue (con o sin formatos propios)
+        const fa = p ? firmaProp(p, /mandato de arriendo n/i) : null;
+        if (fa) return fa.estado === 'firmado' ? { e: 'ok', f: fa.firmado || fa.fecha } : { e: 'pend', q: 'otro', quien: 'la firma del propietario', d: `Mandato de arriendo enviado a firmar el ${fdm(fa.fecha)}${fa.operacion ? ' · operación ' + fa.operacion : ''}.` };
         // 0.16.15 · con formatos propios: un mandato por operación (venta y/o arriendo); el paso dice qué falta o si está listo
         const fh = p && formatos?.activo() ? formatos.estadoHito(p, 'mandato') : null;
         if (fh) {
@@ -216,7 +219,7 @@ function crear({ agenda = null, formatos = null } = {}) {
       else if (actual.e === 'pend' && actual.q === 'otro') { sig.x.accion = actual.accion = actual.tipo === 'firma' ? 'Revisar firmas' : 'Ver detalle'; sig.x.tipo = actual.tipo = actual.tipo === 'firma' ? 'revisar' : 'ver'; }
     }
     for (const e of etapas) { e.ok = e.pasos.filter((x) => x.e === 'ok').length; e.total = e.pasos.length; e.fail = e.pasos.some((x) => x.e === 'fail'); e.completa = e.ok === e.total; e.actual = !!actual && etapas.indexOf(e) === actual.ei; }
-    return { tipo, ambito, etapas, actual, cerrado: !actual, ctx };
+    return { tipo, ambito, etapas, actual, cerrado: !actual, ctx, propId: p?.id || null };   // propId: el de la propiedad del negocio (la ficha del negocio no lo trae y sus documentos se buscan por propiedad)
   }
 
   // marcar a mano: estado 'ok' | 'fail' | 'pend' | null (volver a lo automático); quien = «esperando a…»; vence = fecha límite

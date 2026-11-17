@@ -16,10 +16,13 @@ import Icono from '../../ui/Icono';
 import { useIntegraciones } from '../../../store/hooks/useIntegraciones.hook';
 import { useCuenta } from '../../../store/hooks/useCuenta.hook';
 import { useAcceso } from '../../../store/hooks/useAcceso.hook';
-import { integracionesService as svc } from '../../../store/services/integraciones.service';
+import { integracionesService as svc, type IGoogleEstado } from '../../../store/services/integraciones.service';
 import { refrescarCuenta } from '../cuenta/controlador';
 import { abrirConfiguracion } from './controlador';
-import { abrirUrl, pedirInicioSesion, toast } from '../../../utils/app';
+import { abrirPublicaciones, abrirUrl, pedirInicioSesion, toast } from '../../../utils/app';
+import { api } from '../../../utils/api';
+import { LogoPortal } from '../publicaciones/comun';
+import type { IPortal } from '../../../store/interfaces/publicacion.interface';
 import { fechaHora } from '../../../utils/formato';
 import type { ICanal } from '../../../store/interfaces/integraciones.interface';
 
@@ -34,7 +37,7 @@ function Logo({ icono, letra, color }: { icono?: string; letra?: string; color: 
   );
 }
 
-type TEstado = 'conectado' | 'en-uso' | 'sin-conectar' | 'atencion' | 'incluido' | 'no-disponible';
+type TEstado = 'conectado' | 'en-uso' | 'sin-conectar' | 'atencion' | 'incluido' | 'no-disponible' | 'en-tramite';
 const ESTADO: Record<TEstado, [string, Parameters<typeof Badge>[0]['tono']]> = {
   conectado: ['Conectado', 'verde'],
   'en-uso': ['En uso', 'verde'],
@@ -42,6 +45,7 @@ const ESTADO: Record<TEstado, [string, Parameters<typeof Badge>[0]['tono']]> = {
   atencion: ['Revisar', 'amarillo'],
   incluido: ['Incluido', 'azul'],
   'no-disponible': ['No disponible', 'gris'],
+  'en-tramite': ['En trámite', 'amarillo'],
 };
 
 function Fila({ id, logo, nombre, detalle, estado, children }: { id: string; logo: ReactNode; nombre: string; detalle: ReactNode; estado: TEstado; children?: ReactNode }) {
@@ -68,7 +72,19 @@ export function IntegracionesContenido() {
   const { conectado: pfConectado, usuario: pfUsuario, sesion, saldo } = useCuenta();
   const { usuario: yo } = useAcceso();
   const admin = yo?.rol === 'ADMIN';
-  useEffect(() => { integCargar(); refrescarCuenta(); }, [integCargar]);
+  // los portales que leen un feed (Chilepropiedades, Broku, TOCTOC, Yapo): los mismos y con el mismo estado que en Publicaciones › Portales
+  const [portales, setPortales] = useState<IPortal[]>([]);
+  const cargarPortales = () => { api<IPortal[]>('pubCatalogo').then(setPortales).catch(() => setPortales([])); };
+  // Google (calendario y Drive): la cuenta de cada usuario y el Drive de la empresa; las sesiones viven en el servidor
+  const [google, setGoogle] = useState<IGoogleEstado | null>(null); const [ocupadoG, setOcupadoG] = useState<string | null>(null);
+  const cargarGoogle = () => { svc.google().then((r) => setGoogle(r.ok ? r.data ?? null : null)).catch(() => setGoogle(null)); };
+  const accionGoogle = async (prov: 'google' | 'google_corredora', fn: typeof svc.googleConectar, listo: string) => {
+    setOcupadoG(prov);
+    const r = await fn(prov).catch((e: Error) => ({ ok: false, error: e.message, data: undefined }));
+    setOcupadoG(null);
+    if (r.ok) { setGoogle(r.data ?? null); toast(listo); } else toast(r.error || 'No se pudo completar.', 6000);
+  };
+  useEffect(() => { integCargar(); refrescarCuenta(); cargarPortales(); cargarGoogle(); }, [integCargar]);
 
   const accion = async (id: string, fn: () => Promise<{ ok: boolean; error?: string }>, listo?: string) => {
     const error = await integAccion(id, fn);
@@ -81,8 +97,8 @@ export function IntegracionesContenido() {
   return (
     <div id="integraciones" className="tw:flex tw:flex-col tw:gap-4">
       <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-3">
-        <p className="tw:m-0 tw:flex-1 tw:text-sm tw:text-muted">Los servicios con los que trabaja tu corredora: firma, mensajes y redes, portales y archivos.</p>
-        <Boton variante="secundario" tamano="sm" icono="rotateR" cargando={cargando} onClick={() => { integCargar(); refrescarCuenta(); }}>Actualizar</Boton>
+        <p className="tw:m-0 tw:flex-1 tw:text-sm tw:text-muted">Los servicios con los que trabaja tu corredora: firma, mensajes y redes, portales y Google.</p>
+        <Boton variante="secundario" tamano="sm" icono="rotateR" cargando={cargando} onClick={() => { integCargar(); refrescarCuenta(); cargarPortales(); }}>Actualizar</Boton>
       </div>
       <Card titulo="Firma electrónica">
         <Lista>
@@ -124,18 +140,48 @@ export function IntegracionesContenido() {
               : <Boton tamano="sm" icono="link" cargando={ocupado === 'ml'} disabled={!admin} title={admin ? undefined : 'La conecta el administrador de la corredora'}
                   onClick={() => accion('ml', svc.mlConectar, 'Mercado Libre conectado.')}>Conectar</Boton>)}
           </Fila>
+          {portales.filter((x) => x.id !== 'pi').map((x) => (
+            <Fila key={x.id} id={x.id} logo={<LogoPortal id={x.id} nombre={x.nombre} />} nombre={x.nombre}
+              detalle={x.listo ? `${x.estado}. Publicar y retirar avisos es entrar y salir de su feed.` : x.enTramite ? 'La integración está en trámite con el portal: el feed y los avisos en espera ya están listos.' : x.via === 'acuerdo' ? 'Requiere un acuerdo comercial con el portal; recibe el mismo feed.' : 'Activa la integración y pega el TOKEN cuando el portal lo entregue.'}
+              estado={x.listo ? 'conectado' : x.enTramite ? 'en-tramite' : 'sin-conectar'}>
+              <Boton tamano="sm" variante="secundario" icono="settings" disabled={!admin} title={admin ? undefined : 'Lo configura el administrador de la corredora'}
+                onClick={() => abrirPublicaciones('portales')}>Configurar</Boton>
+            </Fila>
+          ))}
         </Lista>
       </Card>
 
-      <Card titulo="Archivos">
+      <Card titulo="Google: calendario y Drive" subtitulo="Cada persona conecta su propia cuenta (el administrador también). El administrador conecta además la cuenta de la empresa, que todos usan como copia extra.">
         <Lista>
-          <Fila id="drive" logo={<Logo icono="drive" color="#1a73e8" />} nombre="Google Drive"
-            detalle={drive?.connected ? `Expedientes y fotos${drive.email ? ' · ' + drive.email : ''}` : drive?.reconnect ? 'Vuelve a conectar: cambió el permiso que pide Asset.' : 'Para traer documentos y fotos desde tu Drive. Se conecta en cada equipo.'}
-            estado={!drive?.configured ? 'no-disponible' : drive.connected ? 'conectado' : drive.reconnect ? 'atencion' : 'sin-conectar'}>
-            {drive?.configured && (drive.connected
-              ? <Boton tamano="sm" variante="fantasma" cargando={ocupado === 'drive'} onClick={() => accion('drive', svc.driveDesconectar, 'Google Drive desconectado.')}>Desconectar</Boton>
-              : <Boton tamano="sm" icono="link" cargando={ocupado === 'drive'} onClick={() => accion('drive', svc.driveConectar, 'Google Drive conectado.')}>Conectar</Boton>)}
+          <Fila id="google" logo={<Logo icono="calendar" color="#1a73e8" />} nombre="Tu cuenta de Google"
+            detalle={!google?.disponible ? 'Todavía no está activada en el servidor de Asset.' : google.usuario.conectada ? `Tus visitas y eventos se crean en tu Google Calendar, y lo que envías a firmar deja una copia en tu Drive${google.usuario.cuenta ? ' · ' + google.usuario.cuenta : ''}.` : google.usuario.estado ? 'La sesión con Google venció: vuelve a conectarla.' : 'Conéctala para ver tus visitas en tu Google Calendar y guardar copias de los documentos en tu Drive.'}
+            estado={!google?.disponible ? 'no-disponible' : google.usuario.conectada ? 'conectado' : google.usuario.estado ? 'atencion' : 'sin-conectar'}>
+            {google?.disponible && (google.usuario.conectada
+              ? <Boton tamano="sm" variante="fantasma" cargando={ocupadoG === 'google'} onClick={() => accionGoogle('google', svc.googleDesconectar, 'Google desconectado.')}>Desconectar</Boton>
+              : <Boton tamano="sm" icono="link" cargando={ocupadoG === 'google'} onClick={() => accionGoogle('google', svc.googleConectar, 'Google conectado.')}>Conectar</Boton>)}
           </Fila>
+          <Fila id="google_corredora" logo={<Logo icono="drive" color="#188038" />} nombre="Drive de la empresa"
+            detalle={!google?.disponible ? 'Todavía no está activado en el servidor de Asset.'
+              : google.empresa.conectada ? `Cada documento que envías a firmar deja además una copia en «Asset / Documentos enviados a firmar» de la empresa${google.empresa.cuenta ? ' · ' + google.empresa.cuenta : ''}. Es un extra: tu propio Drive sigue aparte.`
+                : google.empresa.estado ? 'La sesión con Google venció: vuelve a conectarla.'
+                  : google.admin ? 'Un Drive general para toda la empresa. Conéctalo tú (administrador), además de tu propia cuenta.'
+                    : 'Un Drive general para toda la empresa. Lo conecta el administrador; cuando esté conectado, tus documentos también quedan copiados ahí.'}
+            estado={!google?.disponible ? 'no-disponible' : google.empresa.conectada ? 'conectado' : google.empresa.estado ? 'atencion' : 'sin-conectar'}>
+            {google?.disponible && (google.empresa.conectada
+              ? <Boton tamano="sm" variante="fantasma" cargando={ocupadoG === 'google_corredora'} disabled={!google.admin} title={google.admin ? undefined : 'Lo desconecta el administrador de la corredora'}
+                  onClick={() => accionGoogle('google_corredora', svc.googleDesconectar, 'Drive de la empresa desconectado.')}>Desconectar</Boton>
+              : <Boton tamano="sm" icono="link" cargando={ocupadoG === 'google_corredora'} disabled={!google.admin} title={google.admin ? undefined : 'Lo conecta el administrador de la corredora'}
+                  onClick={() => accionGoogle('google_corredora', svc.googleConectar, 'Drive de la empresa conectado.')}>Conectar</Boton>)}
+          </Fila>
+          {drive?.configured && (
+            <Fila id="drive" logo={<Logo icono="drive" color="#1a73e8" />} nombre="Traer documentos desde Drive"
+              detalle={drive?.connected ? `Expedientes y fotos${drive.email ? ' · ' + drive.email : ''}` : drive?.reconnect ? 'Vuelve a conectar: cambió el permiso que pide Asset.' : 'Para traer documentos y fotos desde tu Drive. Se conecta en cada equipo.'}
+              estado={!drive?.configured ? 'no-disponible' : drive.connected ? 'conectado' : drive.reconnect ? 'atencion' : 'sin-conectar'}>
+              {drive?.configured && (drive.connected
+                ? <Boton tamano="sm" variante="fantasma" cargando={ocupado === 'drive'} onClick={() => accion('drive', svc.driveDesconectar, 'Google Drive desconectado.')}>Desconectar</Boton>
+                : <Boton tamano="sm" icono="link" cargando={ocupado === 'drive'} onClick={() => accion('drive', svc.driveConectar, 'Google Drive conectado.')}>Conectar</Boton>)}
+            </Fila>
+          )}
         </Lista>
       </Card>
 

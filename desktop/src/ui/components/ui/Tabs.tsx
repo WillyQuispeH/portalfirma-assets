@@ -34,16 +34,16 @@ export default function Tabs<T extends string>({ opciones, valor, alCambiar, eti
 
   return (
     <div ref={lista} role="tablist" aria-label={etiqueta} id={id} onKeyDown={teclado}
-      className={cx('tw:inline-flex tw:gap-1 tw:p-1 tw:rounded-control tw:bg-sunken tw:border tw:border-solid tw:border-edge', className)}>
+      className={cx('tw:inline-flex tw:h-10 tw:items-center tw:gap-1 tw:p-1 tw:box-border tw:rounded-control tw:bg-sunken tw:border tw:border-solid tw:border-edge', className)}>
       {opciones.map(([v, texto, cuenta, icono]) => {
         const on = v === valor;
         return (
           <button key={v} type="button" role="tab" aria-selected={on} tabIndex={on ? 0 : -1} data-tab={v} {...(dato ? { [`data-${dato}`]: v } : {})}
             onClick={() => alCambiar(v)}
             className={cx(
-              'tw:inline-flex tw:items-center tw:gap-2 tw:m-0 tw:text-sm tw:font-semibold tw:cursor-pointer tw:whitespace-nowrap tw:transition-colors tw:duration-100',
+              'tw:inline-flex tw:items-center tw:gap-2 tw:m-0 tw:h-full tw:px-3 tw:text-sm tw:font-semibold tw:cursor-pointer tw:whitespace-nowrap tw:transition-colors tw:duration-100',
               'tw:focus-visible:outline-2 tw:focus-visible:outline-offset-1 tw:focus-visible:outline-lav-edge',
-              'tw:h-8 tw:px-3 tw:rounded-control tw:border tw:border-solid',
+              'tw:rounded-control tw:border tw:border-solid',
               on ? 'tw:bg-card tw:text-text tw:border-edge tw:border-b-2 tw:border-b-edge-b' : 'tw:bg-transparent tw:border-transparent tw:text-muted tw:hover:text-text',
             )}>
             {icono && <Icono nombre={icono} tam={15} />}

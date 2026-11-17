@@ -321,6 +321,19 @@ async function cambiarEstado(propId, op, status, motivo) {
   return guardarAviso(propId, op, { status: item.status || status, pausadoPorEstado: status === 'paused' && !!motivo }, `Aviso de ${PORTAL} ${ESTADO_TXT[status]} (${OP_TXT[op]})${motivo ? ': ' + motivo : ''}`);
 }
 
+// Borrar el aviso: se finaliza en Mercado Libre (si no lo estaba), se pide su eliminación y se quita de la ficha. Si Mercado Libre no
+// deja eliminarlo (solo lo permite sobre avisos ya finalizados), queda finalizado y se quita igual de Asset.
+async function eliminar(propId, op) {
+  const a = inmo.obtener(propId).portales?.pi?.[op]; if (!a) throw err('Esta propiedad no tiene aviso en Portal Inmobiliario.');
+  let borrado = false;
+  if (a.itemId) {
+    if (a.status !== 'closed') await api('PUT', `/items/${a.itemId}`, { status: 'closed' });
+    try { await api('PUT', `/items/${a.itemId}`, { deleted: 'true' }); borrado = true; } catch { /* queda finalizado */ }
+  }
+  inmo.parchear(propId, (p) => { if (p.portales?.pi) { delete p.portales.pi[op]; if (!Object.keys(p.portales.pi).length) delete p.portales.pi; } }, `Aviso de ${PORTAL} ${borrado ? 'eliminado' : 'finalizado y quitado de Asset'} (${OP_TXT[op]})`);
+  return { borrado };
+}
+
 // La ficha cambió: el aviso se mantiene al día solo (precio, fotos, título, estado comercial).
 const CAMPOS_AVISO = ['titulo', 'tituloPortal', 'precioVenta', 'precioArriendo', 'fotos', 'descripcion', 'direccion', 'unidad'];
 async function reaccionar(antes, p) {
@@ -413,4 +426,4 @@ async function metricas(itemId, dias = 30) {
   const [v, t] = await Promise.all([api('GET', `/items/${itemId}/visits/time_window?last=${dias}&unit=day`).catch(() => null), api('GET', `/items/${itemId}/contacts/phone_views/time_window?last=${dias}&unit=day`).catch(() => null)]);
   return { visitas: v?.total_visits ?? null, telefonos: t?.total ?? t?.total_phone_views ?? null, serie: (v?.results || []).map((x) => ({ fecha: String(x.date).slice(0, 10), n: x.total })) };
 }
-module.exports = { metricas, tokensOk, conectada, estado, conectar, desconectar, revisar, publicar, actualizar, cambiarEstado, reaccionar, sincronizar, traerLeads, avisosExistentes, vincularAvisos, barrios, guardarContacto, paquetes, _norm: norm, _whatsapp: whatsapp };
+module.exports = { metricas, tokensOk, conectada, estado, conectar, desconectar, revisar, publicar, actualizar, cambiarEstado, eliminar, reaccionar, sincronizar, traerLeads, avisosExistentes, vincularAvisos, barrios, guardarContacto, paquetes, _norm: norm, _whatsapp: whatsapp };

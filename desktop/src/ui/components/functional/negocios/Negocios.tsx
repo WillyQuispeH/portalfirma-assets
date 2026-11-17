@@ -2,7 +2,7 @@
 // (Panel de brokers: metas, pendientes y negocios por corredor, en panel/PanelBrokers.tsx). La pestaña es ngVista (data-vi).
 // Arrastrar una tarjeta a otra columna mueve el negocio de etapa.
 // Hecha con el kit: Layout (cabecera y barra), Boton, Tabs, Buscador, Kpi, Card y EstadoVacio; las columnas y tarjetas del
-// tablero siguen con sus clases ng-* de styles.css, con el color de su etapa en --c (colores.ts).
+// tablero: columnas neutras; el color de la etapa (--c, colores.ts) solo tiñe las tarjetas.
 // Layout altoCompleto: el tablero ocupa el alto de la ventana con la cabecera quieta; cada columna se desplaza por su cuenta.
 //
 // La ficha del negocio y «Nuevo negocio» siguen en src/renderer/negocios.js; se llaman por utils/app.ts.

@@ -11,6 +11,7 @@ import type { ICotizacion } from '../../../../store/interfaces/escritura.interfa
 import { cx } from '../../../../utils/cx';
 import { CAMPO, LINEA, MALO, NOTARIA, NOTARIA_BOTON, PERSONAS, PERSONAS_H, PERSONA_INFO, PRECIO, avatar, persona } from './estilos';
 
+import Boton from '../../../ui/Boton';
 const CAMPO_PERSONA = cx(CAMPO, 'tw:min-w-0');
 
 export function Precio({ q }: { q: ICotizacion }) {
@@ -29,7 +30,7 @@ export function TarjetaNotaria() {
   if (!n) return (
     <div className={NOTARIA(true)}><div className={PERSONAS_H}><b>Notaría</b><small className="muted">paso obligatorio</small></div>
       <p className="small muted">Elige dónde se hará el trámite. Sus datos quedan en el documento y la notaría recibe el caso al pagar.</p>
-      <button className="ghost with-ic" data-notsel onClick={elegir}><Icono nombre="building" tam={15} /><span>Elegir notaría</span></button></div>
+      <Boton variante="fantasma" icono="building" data-notsel onClick={elegir}>Elegir notaría</Boton></div>
   );
   if ('auto' in n) return (
     <div className={NOTARIA()}><div className={PERSONAS_H}><b>Notaría</b><button className={`ghost small ${NOTARIA_BOTON}`} data-notsel onClick={elegir}>Cambiar</button></div>

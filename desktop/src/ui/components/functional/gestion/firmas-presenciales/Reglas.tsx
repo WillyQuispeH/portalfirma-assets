@@ -69,9 +69,9 @@ function Propuesta({ p, alCambiar }: { p: IReglaPropuesta; alCambiar: () => Prom
         <input className="tw:w-full tw:min-w-[150px] tw:m-0 tw:py-[7px] tw:px-2.5 tw:font-[ui-monospace,Menlo,Consolas,monospace] tw:text-[12px]" data-pat value={patron} spellCheck={false} onChange={(e) => setPatron(e.target.value)} /></label>
       <div data-ev><Prueba ev={prueba} /></div>
       <div className="row-end">
-        <button className="ghost small" data-probar onClick={async () => setPrueba(await reglaProbar(p, patron.trim()))}>Probar</button>
-        <button className="ghost small" data-descartar onClick={() => decidir('descartar')}>Descartar</button>
-        {p.estado !== 'invalida' && <button className="primary small" data-aprobar onClick={() => decidir('aprobar')}>Aprobar</button>}
+        <Boton variante="fantasma" tamano="sm" data-probar onClick={async () => setPrueba(await reglaProbar(p, patron.trim()))}>Probar</Boton>
+        <Boton variante="fantasma" tamano="sm" data-descartar onClick={() => decidir('descartar')}>Descartar</Boton>
+        {p.estado !== 'invalida' && <Boton tamano="sm" data-aprobar onClick={() => decidir('aprobar')}>Aprobar</Boton>}
       </div>
     </div>
   );
@@ -136,8 +136,8 @@ export default function Reglas({ alCambiar }: { alCambiar: () => Promise<void> }
   return <>
     <div className={ENCABEZADO}><div><h3 className={ENCABEZADO_H3}>Reglas de detección</h3><div className="muted small">Interno Portalfirma. La IA propone reglas a partir de los casos que los clientes corrigieron; una persona las aprueba y desde ahí funcionan <b>sin IA</b>.{R.version ? ` Versión ${R.version}.` : ''}</div></div>
       <div className="ops-head-r">
-        <button className="ghost small with-ic" id="rgExport" onClick={async () => aviso(await reglaExportar())}><Icono nombre="fileOut" tam={14} /><span>Exportar</span></button>
-        <button className="primary small with-ic" id="rgProponer" disabled={!C.length} onClick={proponer}><Icono nombre="sparkle" tam={14} /><span>Proponer reglas con IA</span></button>
+        <Boton variante="fantasma" tamano="sm" icono="fileOut" id="rgExport" onClick={async () => aviso(await reglaExportar())}>Exportar</Boton>
+        <Boton tamano="sm" icono="sparkle" id="rgProponer" disabled={!C.length} onClick={proponer}>Proponer reglas con IA</Boton>
       </div></div>
     <div className="rg-stats">
       <div><b id="rgNCasos">{C.length}</b><small>casos corregidos</small></div>
@@ -160,7 +160,7 @@ export default function Reglas({ alCambiar }: { alCambiar: () => Promise<void> }
         <div className={`rg-card sm ${r.activo === false ? 'off' : ''}`} data-rid={r.id} key={r.id}>
           <div className="rg-top"><Chip color={TIPO[r.tipo][1]}>{TIPO[r.tipo][0]}</Chip><Objetivo r={r} /><small className="muted">Aprobada {fecha(r.aprobada)}</small>
             <label className={`es-sw ${SW} tw:ml-1`} title="Activa"><input type="checkbox" className={SW_INPUT} data-activa checked={r.activo !== false} onChange={(e) => activar(r.id, e.target.checked)} /><span className={SW_RIEL} /></label>
-            <button className="ghost small" data-eliminar title="Eliminar" onClick={() => eliminar(r.id)}><Icono nombre="x" tam={13} /></button></div>
+            <Boton variante="fantasma" tamano="sm" icono="x" data-eliminar title="Eliminar" onClick={() => eliminar(r.id)} /></div>
           <code className="rg-code">{r.patron}</code>
         </div>
       )) : <p className="muted small">Todavía no hay reglas aprobadas.</p>}
@@ -171,7 +171,7 @@ export default function Reglas({ alCambiar }: { alCambiar: () => Promise<void> }
       {C.length ? C.slice(0, 40).map((c) => (
         <div className="rg-caso" data-cid={c.id} key={c.id}>
           <div><b>{c.titulo || 'Sin título'}</b><small className="muted">{TRAMITE[c.tramite] || ''} · {fecha(c.creado)}</small><span className="small"><ResumenCaso c={c} /></span></div>
-          <button className="ghost small" data-borrar title="Borrar caso" onClick={() => reglaBorrarCaso(c.id)}><Icono nombre="x" tam={13} /></button>
+          <Boton variante="fantasma" tamano="sm" icono="x" data-borrar title="Borrar caso" onClick={() => reglaBorrarCaso(c.id)} />
         </div>
       )) : <p className="muted small">—</p>}
     </div>

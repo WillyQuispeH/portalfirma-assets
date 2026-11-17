@@ -1,6 +1,6 @@
 // Tarjeta de un negocio en el tablero (o en «Cerrados»). La caja usa las clases ng-* de styles.css; por dentro,
 // el kit (Miniatura, Avatar, Badge e Icono). Las pruebas usan .ng-card[data-n] (y .vencida) y la arrastran entre columnas.
-// En el tablero toma el color (--c) de su columna; en «Cerrados», el de su estado.
+// En el tablero hereda el color (--c) de la columna (la columna no lo pinta); en «Cerrados», el de su estado.
 import { useState } from 'react';
 import Avatar from '../../ui/Avatar';
 import Badge from '../../ui/Badge';

@@ -70,7 +70,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     // «Generar orden de visita» llama a la herramienta de src/renderer/agenda.js. Con la ficha incompleta avisa
     // qué falta (el envío completo lo prueba agente-asset-e2e).
     await w.click(`[data-ev="${visita.id}"] [data-orden]`); await w.waitForSelector('#mOk:has-text("Generar y enviar a firmar")', { timeout: 15000 });
-    ok(true, '0.18.10 · «Generar orden de visita» arma el PDF y lo muestra para revisarlo antes de enviar a firmar'); await w.click('#mCancel');
+    ok(true, '0.18.10 · «Generar orden de visita» arma el PDF y lo muestra para revisarlo antes de enviar a firmar'); await w.click('#ovMas'); await w.click('#mCancel');
 
     // el Agente navega a la agenda
     await w.click('#nav [data-view="cartera"]'); await w.evaluate(() => window.AssetNav('agenda')); await w.waitForSelector('#view-agenda:not(.hidden) #agNew');

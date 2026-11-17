@@ -2,11 +2,12 @@
 // mostrar en la carpeta, quitar de la lista y borrar la lista. Los id rc* los usan las pruebas.
 import { useEffect } from 'react';
 import Buscador from '../../../ui/Buscador';
-import Icono from '../../../ui/Icono';
 import { mostrarEnCarpeta, useReciente, type TTipoArchivo } from '../../../../store/hooks/useReciente.hook';
 import { abrirDocumento, abrirReciente, confirmar } from '../../../../utils/app';
 import { IconoArchivo, carpetaDe, fechaCorta, tamano, tipoArchivo } from '../comun/archivos';
 
+import Boton from '../../../ui/Boton';
+import Layout from '../../../ui/Layout';
 const POR_PAGINA = 20;
 const TIPOS: [TTipoArchivo, string][] = [['', 'Todos'], ['pdf', 'PDF'], ['doc', 'Word'], ['xls', 'Excel'], ['img', 'Imágenes']];
 
@@ -31,19 +32,19 @@ export default function Recientes() {
   const borrar = async () => { if (await confirmar({ clave: 'modal-119', titulo: '¿Borrar la lista de recientes?', texto: 'Solo se borra la lista; tus archivos no se eliminan.', boton: 'Borrar lista', peligro: true })) recientesBorrarTodo(); };
 
   return (
-    <div className="rec-page">
-      <div className="ops-head">
-        <div><h2>Recientes</h2><span className="muted small">{todos.length} {todos.length === 1 ? 'documento' : 'documentos'} abiertos o guardados en este computador</span></div>
-        <div className="ops-head-r">
-          {faltan > 0 && <button className="ghost small" id="rcMiss" onClick={recientesQuitarFaltantes}>Quitar los {faltan} que no existen</button>}
-          {todos.length > 0 && <button className="ghost small" id="rcClear" onClick={borrar}>Borrar lista</button>}
-          <button className="primary small with-ic" id="rcOpen" onClick={abrirDocumento}><Icono nombre="folderOpen" tam={15} /><span>Abrir documento…</span></button>
+    <Layout titulo="Recientes" ilustracion={{ imagen: 'img/formas/etapa.svg', tinte: '#6d5bd0' }}
+      subtitulo={`${todos.length} ${todos.length === 1 ? 'documento' : 'documentos'} abiertos o guardados en este computador`}
+      acciones={<>
+        {faltan > 0 && <Boton variante="fantasma" id="rcMiss" onClick={recientesQuitarFaltantes}>Quitar los {faltan} que no existen</Boton>}
+        {todos.length > 0 && <Boton variante="fantasma" id="rcClear" onClick={borrar}>Borrar lista</Boton>}
+        <Boton icono="folderOpen" id="rcOpen" onClick={abrirDocumento}>Abrir documento…</Boton>
+      </>}
+      barra={(
+        <div className="rec-bar">
+          <Buscador id="rcQ" clase="ops-search" valor={q} alCambiar={(v) => recientesSetFiltros({ q: v })} espera={120} placeholder="Buscar por nombre o carpeta…" />
+          <div className="rec-seg">{TIPOS.map(([k, x]) => <button key={k} data-tipo={k} className={tipo === k ? 'on' : ''} onClick={() => recientesSetFiltros({ tipo: k })}>{x}</button>)}</div>
         </div>
-      </div>
-      <div className="rec-bar">
-        <Buscador id="rcQ" clase="ops-search" valor={q} alCambiar={(v) => recientesSetFiltros({ q: v })} espera={120} placeholder="Buscar por nombre o carpeta…" />
-        <div className="rec-seg">{TIPOS.map(([k, x]) => <button key={k} data-tipo={k} className={tipo === k ? 'on' : ''} onClick={() => recientesSetFiltros({ tipo: k })}>{x}</button>)}</div>
-      </div>
+      )}>
       <div className="rec-card">
         {trozo.length ? (
           <>
@@ -54,8 +55,8 @@ export default function Recientes() {
                 <span className="rc-tx"><b>{x.name}</b><small>{carpetaDe(x.path)}{!x.exists && <> · <b className="tw:text-err tw:font-semibold">no encontrado</b></>}</small></span>
                 <span className="muted small">{tamano(x.size)}</span><span className="muted small">{fechaCorta(x.date)}</span>
                 <span className="rec-act" onClick={(e) => e.stopPropagation()}>
-                  {x.exists && <button className="ghost small" data-folder title="Mostrar en la carpeta" onClick={() => mostrarEnCarpeta(x.path)}><Icono nombre="folder" tam={15} /></button>}
-                  <button className="ghost small" data-rm title="Quitar de la lista" onClick={() => recienteQuitar(x.path)}><Icono nombre="x" tam={15} /></button>
+                  {x.exists && <Boton variante="fantasma" tamano="sm" icono="folder" data-folder title="Mostrar en la carpeta" onClick={() => mostrarEnCarpeta(x.path)} />}
+                  <Boton variante="fantasma" tamano="sm" icono="x" data-rm title="Quitar de la lista" onClick={() => recienteQuitar(x.path)} />
                 </span>
               </div>
             ))}
@@ -66,12 +67,12 @@ export default function Recientes() {
         <div className="rec-pag">
           <span className="muted small">Mostrando {desde + 1}–{desde + trozo.length} de {lista.length}</span>
           <div className="rec-pg">
-            <button className="ghost small" data-pg={pag - 1} disabled={pag === 1} onClick={() => ir(pag - 1)}><Icono nombre="chevL" tam={14} /> Anterior</button>
+            <Boton variante="fantasma" tamano="sm" icono="chevL" data-pg={pag - 1} disabled={pag === 1} onClick={() => ir(pag - 1)}>Anterior</Boton>
             {nums.map((x, i) => (x === '…' ? <span key={`s${i}`} className="muted">…</span> : <button key={x} className={`ghost small ${x === pag ? 'on' : ''}`} data-pg={x} onClick={() => ir(x)}>{x}</button>))}
-            <button className="ghost small" data-pg={pag + 1} disabled={pag === paginas} onClick={() => ir(pag + 1)}>Siguiente <Icono nombre="chevR" tam={14} /></button>
+            <Boton variante="fantasma" tamano="sm" iconoDerecha="chevR" data-pg={pag + 1} disabled={pag === paginas} onClick={() => ir(pag + 1)}>Siguiente</Boton>
           </div>
         </div>
       )}
-    </div>
+    </Layout>
   );
 }

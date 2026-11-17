@@ -6,7 +6,6 @@ import { useEffect, useState } from 'react';
 import Boton from '../../ui/Boton';
 import Input from '../../ui/Input';
 import Textarea from '../../ui/Textarea';
-import { CAJA_ERROR } from '../../ui/Campo';
 import { VentanaCabecera, VentanaCuerpo, VentanaPie } from '../../ui/Ventana';
 import { asistenteEstado, useAsistente } from '../../../store/hooks/useAsistente.hook';
 import { cerrarModal } from '../../../utils/modal';
@@ -59,7 +58,7 @@ export function Tokens({ motivo, alActivar }: { motivo?: string; alActivar: () =
         <Boton id="tkWa" variante="exito" icono="whatsapp" onClick={() => soporteWhatsApp(`Hola, quiero comprar un ${p.name || 'Paquete de tokens'} (${p.tokens} tokens por ${pesos(p.price)}) para el asistente de PortalFirma Asset.`)}>Comprar por WhatsApp</Boton></div>
       <div className="tw:flex tw:gap-2 tw:items-end">
         <Input id="tkCode" etiqueta="¿Ya pagaste? Ingresa el código que te envió soporte" clasesCampo="tw:flex-1 tw:min-w-0" autoComplete="off" spellCheck={false} placeholder="Código de activación"
-          className={malo ? CAJA_ERROR : undefined} aria-invalid={malo || undefined} value={codigo}
+          error={malo ? 'Código no válido' : null} value={codigo}
           onChange={(e) => { setCodigo(e.target.value); setMalo(false); }} onKeyDown={(e) => { if (e.key === 'Enter') activar(); }} />
         <Boton id="tkGo" variante="secundario" onClick={activar}>Activar</Boton>
       </div>

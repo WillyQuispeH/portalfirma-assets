@@ -4,6 +4,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { PortalfirmaService } from '../conexiones/portalfirma';
+import { GoogleService, type IRefDrive } from '../conexiones/google';
 
 export interface FirmanteEnvio {
   rut: string;
@@ -52,6 +53,7 @@ export class EnvioFirmaService {
   constructor(
     private readonly db: PrismaService,
     private readonly pf: PortalfirmaService,
+    private readonly google: GoogleService,
   ) {}
 
   private async herramienta(corredoraId: string, args: Record<string, unknown>, nombre: string) {
@@ -77,6 +79,10 @@ export class EnvioFirmaService {
     corredoraId: string;
     /** si la corredora no tiene correo de pagos configurado, el de quien envía */
     pagadorRespaldo: string;
+    /** quien lo envía: si conectó su Google Drive, ahí también queda una copia (y en el Drive de la empresa, si está conectado) */
+    usuarioId?: string;
+    /** de qué es el documento (tipo, propiedad y negocio): decide en qué carpetas de Drive queda la copia; sin esto, «Documentos enviados a firmar» */
+    drive?: IRefDrive;
     bytes: Buffer;
     nombreArchivo: string;
     firmantes: FirmanteEnvio[];
@@ -121,6 +127,10 @@ export class EnvioFirmaService {
         return {
           error: `Portalfirma no devolvió el número de operación${r.texto ? `: ${r.texto.slice(0, 200)}` : '.'} Revisa «Mis operaciones» antes de reintentar.`,
         };
+      // una copia en Drive (empresa y usuario, si los conectaron): sin esperar y sin que un fallo afecte el envío
+      void this.google
+        .subirDocumento({ corredoraId: o.corredoraId, usuarioId: o.usuarioId, nombre: o.nombreArchivo, bytes: o.bytes, ref: o.drive })
+        .catch(() => null);
       return { operacion };
     } catch (e) {
       const m = (e as { response?: { codigo?: string } }).response;

@@ -17,12 +17,15 @@ const cd = (s) => `<![CDATA[ ${xmlEsc(s)} ]]>`;
 const PORTALES = {
   pi: { id: 'pi', nombre: 'Portal Inmobiliario', via: 'api', detalle: 'Publica por API y se ve también en Mercado Libre. Usa el paquete de publicaciones de la cuenta.', maxTitulo: 60 },
   chilepropiedades: { id: 'chilepropiedades', nombre: 'Chilepropiedades', via: 'feed', detalle: 'Lee el feed de avisos una vez al día (de madrugada). La integración es gratis si la aprueban; el número de avisos depende del plan (desde $3.990 al mes por 30).', maxTitulo: 65, correo: 'integraciones@chilepropiedades.cl' },
+  broku: { id: 'broku', nombre: 'Broku', via: 'feed', enTramite: true, detalle: 'Portal inmobiliario con mapa de precios. La integración está en trámite: mientras Broku entrega su API, Asset deja el feed listo y los avisos en espera; al activarla, entran solos.', maxTitulo: 70, correo: null },
   toctoc: { id: 'toctoc', nombre: 'TOCTOC', via: 'acuerdo', detalle: 'Recibe avisos de software de corredoras por acuerdo comercial. Se usa el mismo feed.', maxTitulo: 70 },
   yapo: { id: 'yapo', nombre: 'Yapo', via: 'acuerdo', detalle: 'Requiere un acuerdo con su equipo comercial. Se usa el mismo feed.', maxTitulo: 70 },
 };
 const TIPO_FEED = { casa: 'Casa', departamento: 'Departamento', oficina: 'Oficina', sitio: 'Sitio', local_comercial: 'Local Comercial', industrial: 'Terreno Industrial', agricola: 'Terreno Agricola', parcela: 'Parcela', estacionamiento: 'Estacionamiento', terreno_construccion: 'Terreno', bodega: 'Bodega' };
 const MONEDA_FEED = { UF: 'CLF', CLP: 'CLP', USD: 'USD' };
 const VIVIENDA = ['casa', 'departamento', 'parcela'];
+// Lo que se puede hacer con el aviso de una propiedad en un portal (el mismo CRUD para todos; cada portal lo resuelve a su manera)
+const ACCIONES = ['publicar', 'actualizar', 'pausar', 'reactivar', 'retirar', 'eliminar'];
 
 function crear({ ml, ai, cambiarPropiedad }) {
   const cfg = () => inmo.config().portales || {};
@@ -39,8 +42,8 @@ function crear({ ml, ai, cambiarPropiedad }) {
     return Object.values(PORTALES).map((x) => {
       const c = cfgPortal(x.id);
       const listo = x.id === 'pi' ? piOk : !!c.activo;
-      const estado = x.id === 'pi' ? (piOk ? 'Cuenta conectada' : 'Falta conectar la cuenta') : c.activo ? (x.via === 'feed' ? (c.token ? 'Feed activo · seguimiento conectado' : 'Feed activo') : 'Integración activa') : x.via === 'feed' ? 'Falta activar la integración' : 'Requiere acuerdo comercial';
-      return { ...x, listo, estado, token: !!c.token, feedUrl: c.feedUrl || null, desde: c.desde || null };
+      const estado = x.id === 'pi' ? (piOk ? 'Cuenta conectada' : 'Falta conectar la cuenta') : c.activo ? (x.via === 'feed' ? (c.token ? 'Feed activo · seguimiento conectado' : 'Feed activo') : 'Integración activa') : x.enTramite ? 'Integración en trámite' : x.via === 'feed' ? 'Falta activar la integración' : 'Requiere acuerdo comercial';
+      return { ...x, listo, estado, token: !!c.token, feedUrl: c.feedUrl || null, desde: c.desde || null, acciones: ACCIONES };
     });
   }
   function configurar(id, cambios) {
@@ -111,6 +114,51 @@ function crear({ ml, ai, cambiarPropiedad }) {
   async function retirar(propId, op, portal) {
     if (portal === 'pi') { await ml.cambiarEstado(propId, op, 'paused', 'retirada desde Publicaciones'); return true; }
     guardarAviso(propId, portal, op, { status: 'retirada', retirada: hoy() }, `Retirada de ${PORTALES[portal]?.nombre || portal} (${op})`); return true;
+  }
+
+  // ---------- CRUD del aviso en cada portal: publicar, actualizar, pausar, reactivar, retirar y eliminar ----------
+  // Portal Inmobiliario: por su API (publicar y actualizar la ficha; pausar, reactivar y finalizar el aviso; eliminarlo).
+  // Los portales de feed (Chilepropiedades, Broku, TOCTOC, Yapo) leen el feed que sirve la API: publicar = entrar al feed,
+  // pausar o retirar = salir de él, reactivar = volver a entrar. El aviso sigue en Asset hasta eliminarlo.
+  const EN_FEED = ['en_feed', 'publicada'];
+  async function accion(propId, op, portal, que) {
+    const P = PORTALES[portal]; if (!P) throw err('Portal no válido.');
+    if (!ACCIONES.includes(que)) throw err('Acción no válida.');
+    if (op !== 'venta' && op !== 'arriendo') throw err('Indica si es venta o arriendo.');
+    const p = inmo.obtener(propId); const a = aviso(p, portal, op);
+    if (que !== 'publicar' && !a) throw err(`Esta propiedad no tiene aviso en ${P.nombre}.`);
+    let mensaje = '';
+    if (portal === 'pi') {
+      if (que === 'publicar') { await ml.publicar(propId, op, {}); mensaje = 'Publicado en Portal Inmobiliario.'; }
+      else if (que === 'actualizar') { await ml.actualizar(propId, op); mensaje = 'Aviso actualizado en Portal Inmobiliario.'; }
+      else if (que === 'pausar') { await ml.cambiarEstado(propId, op, 'paused'); mensaje = 'Aviso pausado: ya no se ve en Portal Inmobiliario.'; }
+      else if (que === 'reactivar') { await ml.cambiarEstado(propId, op, 'active'); mensaje = 'Aviso reactivado.'; }
+      else if (que === 'retirar') { await ml.cambiarEstado(propId, op, 'closed', 'finalizado desde Publicaciones'); mensaje = 'Aviso finalizado en Portal Inmobiliario.'; }
+      else { const r = await ml.eliminar(propId, op); mensaje = r.borrado ? 'Aviso eliminado de Portal Inmobiliario.' : 'Aviso finalizado y quitado de Asset.'; }
+    } else if (que === 'publicar') {
+      const r = await publicar(propId, op, [portal], {}); const x = r.resultados[0]; if (!x?.ok) throw err(x?.error || `No se pudo publicar en ${P.nombre}.`); mensaje = x.estado;
+    } else if (que === 'actualizar') {
+      if (!EN_FEED.includes(a.status)) throw err(`El aviso está ${a.status === 'pausada' ? 'pausado' : 'fuera del feed'}: reactívalo primero.`);
+      guardarAviso(propId, portal, op, { cambio: hoy() }, `Aviso de ${P.nombre} marcado como actualizado (${op})`); mensaje = `El feed ya trae los datos de hoy; ${P.nombre} los toma en su próxima lectura.`;
+    } else if (que === 'pausar') {
+      if (!EN_FEED.includes(a.status)) throw err('Solo se puede pausar un aviso que está en el feed.');
+      guardarAviso(propId, portal, op, { status: 'pausada', pausada: hoy() }, `Aviso de ${P.nombre} pausado (${op})`); mensaje = `Sale del feed: ${P.nombre} lo quita en su próxima lectura.`;
+    } else if (que === 'reactivar') {
+      if (EN_FEED.includes(a.status)) throw err('El aviso ya está en el feed.');
+      const r = await publicar(propId, op, [portal], {}); const x = r.resultados[0]; if (!x?.ok) throw err(x?.error || 'No se pudo reactivar.'); mensaje = x.estado;
+    } else if (que === 'retirar') {
+      guardarAviso(propId, portal, op, { status: 'retirada', retirada: hoy() }, `Aviso de ${P.nombre} retirado (${op})`); mensaje = `Retirado: ${P.nombre} lo quita en su próxima lectura del feed.`;
+    } else {
+      inmo.parchear(propId, (q) => { if (q.portales?.[portal]) { delete q.portales[portal][op]; if (!Object.keys(q.portales[portal]).length) delete q.portales[portal]; } }, `Aviso de ${P.nombre} eliminado de Asset (${op})`);
+      mensaje = 'Aviso eliminado de Asset. Si sigue visible en el portal, retíralo antes desde su lado.';
+    }
+    return { ok: true, mensaje, estado: aviso(inmo.obtener(propId), portal, op)?.status || null };
+  }
+
+  // Direcciones públicas de los feeds (las sirve la API con una clave secreta por corredora; solo las ve el administrador)
+  async function feedsServidor(rotar = false) {
+    if (MOCK) { const feeds = {}; for (const id of Object.keys(PORTALES)) if (id !== 'pi') feeds[id] = { url: `https://api.prueba.test/v1/feeds/clave-de-prueba/${id}.xml`, avisos: feed(id).avisos }; return { feeds }; }
+    return require('./asset').llamar(rotar ? 'POST' : 'GET', rotar ? '/portales/feeds/rotar' : '/portales/feeds', rotar ? {} : undefined);
   }
 
   // ---------- feed XML (formato de Chilepropiedades; también sirve para TOCTOC y Yapo) ----------
@@ -251,7 +299,7 @@ ${area('floorArea', p.supTotal)}${area('usableFloorArea', p.supUtil)}${p.estacio
     return { texto, whatsapp: wa, email: l.email || null };
   }
 
-  return { PORTALES, catalogo, configurar, calidad, redactar, guardarTextos, publicar, retirar, feed, sincronizar, panel, interesados, actualizarInteresado, agregarInteresado, respuesta };
+  return { PORTALES, catalogo, configurar, calidad, redactar, guardarTextos, publicar, retirar, accion, feedsServidor, ACCIONES, feed, sincronizar, panel, interesados, actualizarInteresado, agregarInteresado, respuesta };
 }
 
 module.exports = { crear, PORTALES };

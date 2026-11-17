@@ -15,6 +15,7 @@ import { openDialog } from './controlador';
 import { irAGestionDocumental } from '../../../../utils/app';
 import type { IDocumento } from '../../../../store/interfaces/editor.interface';
 
+import Boton from '../../../ui/Boton';
 // Panel derecho: ancho ajustable (se recuerda en este equipo)
 const PANEL_MIN = 220, PANEL_MAX = 620;
 const anchoGuardado = () => { try { return Number(localStorage.getItem('pf.panelW')) || 0; } catch { return 0; } };
@@ -22,7 +23,7 @@ const anchoGuardado = () => { try { return Number(localStorage.getItem('pf.panel
 function Vacio() {
   return <div className="dropzone ed-empty"><div className="drop-icon"><Ic n="upload" t={44} /></div><h2>PortalFirma Asset</h2>
     <p className="muted">Arrastra aquí PDF, Word, Excel o imágenes, o ábrelos desde el menú Archivo.</p>
-    <div className="row" style={{ justifyContent: 'center' }}><button className="primary" id="edOpenBtn" onClick={() => openDialog()}>Abrir…</button><button className="secondary" id="edHomeBtn" onClick={irAGestionDocumental}>Ir al inicio</button></div></div>;
+    <div className="row" style={{ justifyContent: 'center' }}><Boton id="edOpenBtn" onClick={() => openDialog()}>Abrir…</Boton><Boton variante="secundario" id="edHomeBtn" onClick={irAGestionDocumental}>Ir al inicio</Boton></div></div>;
 }
 
 // Número de página, tamaño y la búsqueda (⌘F)
@@ -75,7 +76,7 @@ export default function EditorPdf() {
           <BarraPagina T={T} />
           <div id="edNotice">{T.notice ? <div className="ed-banner"><span>{T.notice}</span><button className="ibtn" id="edNoticeX" onClick={() => { T.notice = null; tocar(); }}><Ic n="x" t={14} /></button></div> : null}</div>
           <div id="edBanner">{T.scanned ? <div className="ed-banner"><span>Esta página es una imagen (fotocopia o escaneo). Reconoce el texto para poder buscarlo y editarlo.</span>
-            <span className="row-tight"><button className="secondary small" data-ocr="page" onClick={() => M.recognize([T.current])}>Reconocer esta página</button> <button className="glass-red" data-ocr="all" onClick={async () => M.recognize(await scannedPages(T))}><Ic n="scanText" t={16} /><span>Reconocer todo</span></button></span></div> : null}</div>
+            <span className="row-tight"><Boton variante="secundario" tamano="sm" data-ocr="page" onClick={() => M.recognize([T.current])}>Reconocer esta página</Boton> <button className="glass-red" data-ocr="all" onClick={async () => M.recognize(await scannedPages(T))}><Ic n="scanText" t={16} /><span>Reconocer todo</span></button></span></div> : null}</div>
           <div id="edStage" ref={M.montarEscenario} />
         </section>
       </div>

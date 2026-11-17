@@ -20,8 +20,24 @@ import { DocumentoRevisionService } from '../whatsapp/documento-revision';
 import { EnvioFirmaService, type FirmanteEnvio } from '../documentos/envio-firma';
 import { cargarPlantilla, llenar } from '../documentos/plantilla';
 import { hoy } from '../whatsapp/comun';
+import { describir, dominioDe, unir } from '../documentos/comparecientes';
 
 const SERIE = 'contrato_arriendo';
+/** multa por cada atraso en el pago (modelo de contrato de la corredora) */
+const MULTA_MORA = '0,5 Unidades de Fomento';
+/** último día del plazo: inicio + N meses − 1 día */
+const terminoDe = (inicio: string, meses: number) => {
+  const d = new Date(`${inicio}T12:00:00Z`);
+  d.setUTCMonth(d.getUTCMonth() + meses);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+};
+const cuenta = (n: number, uno: string, varios: string) => (n > 0 ? `${n} ${n === 1 ? uno : varios}` : '');
+/** «compuesto por 3 dormitorios y 2 baños» (vacío si no hay nada que decir) */
+const conLista = (inicio: string, partes: string[]) => {
+  const p = partes.filter(Boolean);
+  return p.length ? `${inicio} ${p.join(' y ')}` : '';
+};
 const emailOk = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 const mayus = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const fechaLarga = (f: string) =>
@@ -39,6 +55,8 @@ export interface ContratoDatos {
   /** (contratos antiguos) texto libre del destino */
   destino?: string;
   diaPago?: number | string;
+  /** cuenta donde se paga la renta («corriente nº 00-123 del Banco de Chile»); si no se escribe, el contrato dice que el arrendador la indicará */
+  cuenta?: string;
   /** garantía: cuántos meses de renta */
   garantiaMeses?: number | string;
   /** (contratos antiguos) texto libre de la garantía */
@@ -165,6 +183,9 @@ export class ContratoArriendoService {
     const meses = Number(k.garantiaMeses) || Number(/d+([.,]d+)?/.exec(String(k.garantia ?? ''))?.[0]?.replace(',', '.')) || 1;
     const garantiaTxt = `${meses.toLocaleString('es-CL')} ${meses === 1 ? 'mes' : 'meses'} de renta (${monto(Math.round(v * meses), moneda)})`;
     const varios = avales.length > 1;
+    // dónde se paga la renta: lo escrito en el contrato o, si no, lo de la ficha de la propiedad
+    const cuentaPago =
+      String(k.cuenta ?? '').trim() || String(((prop.ficha ?? {}) as Record<string, unknown>).cuentaPago ?? '').trim();
     return {
       n,
       prop,
@@ -175,11 +196,27 @@ export class ContratoArriendoService {
         fechaEmision: fechaLarga(hoy()),
         ciudad: prop.comuna || 'Santiago',
         corredora: { nombre: corredora?.nombre ?? 'la corredora', rut: corredora?.rut ?? '' },
-        arrendador: duenos.map((d) => `${d.persona.nombre}, RUT ${rutDe(d.persona)}`).join(', y '),
-        arrendatario: { nombre: arr.nombre, rut: rutDe(arr), email: arr.email ?? '', telefono: arr.telefono ?? '' },
+        corredor: { nombre: usuario.nombre, email: usuario.email, telefono: usuario.telefono ?? '' },
+        arrendador: {
+          texto: unir(duenos.map((d) => describir(d.persona))),
+          firma: unir(duenos.map((d) => d.persona.nombre)),
+          email: unir(duenos.map((d) => d.persona.email ?? '')),
+          domicilio: unir(duenos.map((d) => d.persona.direccion ?? '')),
+          cuentaTxt: cuentaPago
+            ? `en la cuenta ${cuentaPago}, a nombre del Arrendador`
+            : 'en la cuenta que el Arrendador indique por escrito',
+        },
+        arrendatario: {
+          nombre: arr.nombre,
+          texto: describir(arr),
+          rut: rutDe(arr),
+          email: arr.email ?? '',
+          telefono: arr.telefono ?? '',
+          domicilio: arr.direccion ?? '',
+        },
         codeudor: avales.length
           ? {
-              texto: avales.map((a) => `${a.nombre}, RUT ${rutDe(a)}`).join(', y '),
+              texto: unir(avales.map((a) => describir(a))),
               titulo: varios ? 'codeudores solidarios' : 'codeudor solidario',
               etiqueta: varios ? 'los «Codeudores»' : 'el «Codeudor»',
               verbo: varios ? 'intervienen' : 'interviene',
@@ -191,9 +228,25 @@ export class ContratoArriendoService {
           codigo: prop.codigo,
           tipo: mayus(String(prop.tipo || '').replace(/_/g, ' ')),
           direccion: [prop.direccion, prop.unidad ? `depto. ${prop.unidad}` : '', prop.comuna].filter(Boolean).join(', '),
+          // «el departamento número 1502, ubicado en…, de una superficie aproximada de 85 m², compuesto por…»
+          descripcion: [
+            `${String(prop.tipo || 'inmueble').replace(/_/g, ' ')}${prop.unidad ? ` número ${prop.unidad}` : ''}`,
+            `ubicado en ${[prop.direccion, prop.comuna, prop.region].filter(Boolean).join(', ') || 'la dirección indicada'}`,
+            prop.supTotal || prop.supUtil
+              ? `de una superficie aproximada de ${Number(prop.supUtil || prop.supTotal).toLocaleString('es-CL')} m²`
+              : '',
+            conLista('compuesto por', [cuenta(prop.dormitorios ?? 0, 'dormitorio', 'dormitorios'), cuenta(prop.banos ?? 0, 'baño', 'baños')]),
+            conLista('con', [cuenta(prop.estacionamientos ?? 0, 'estacionamiento', 'estacionamientos'), cuenta(prop.bodegas ?? 0, 'bodega', 'bodegas')]),
+          ]
+            .filter(Boolean)
+            .join(', '),
+          dominio: dominioDe(prop.ficha),
         },
         contrato: {
           inicio: fechaLarga(inicio),
+          termino: fechaLarga(terminoDe(inicio, plazo)),
+          avisoDias: aviso ? String(aviso) : '',
+          multaMora: MULTA_MORA,
           plazo: `${plazo} mes${plazo === 1 ? '' : 'es'}`,
           aviso: aviso
             ? `Si ninguna de las partes avisa por escrito con ${aviso} días de anticipación su intención de no renovar, el contrato se renueva por períodos iguales.`
@@ -344,6 +397,8 @@ export class ContratoArriendoService {
     const r = await this.envio.enviar({
       corredoraId: u.corredoraId,
       pagadorRespaldo: x.usuario.email,
+      usuarioId: u.sub,
+      drive: { tipo: 'Contratos de arriendo', propiedadId: x.prop.id, negocioId: x.n.id },
       bytes,
       nombreArchivo: `Contrato de arriendo nº ${numero} - ${x.prop.codigo}.pdf`,
       protocolizacion: tramite,

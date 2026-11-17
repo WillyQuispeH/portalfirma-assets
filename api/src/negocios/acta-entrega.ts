@@ -157,6 +157,8 @@ export class ActaEntregaService {
     const r = await this.envio.enviar({
       corredoraId: u.corredoraId,
       pagadorRespaldo: x.usuario.email,
+      usuarioId: u.sub,
+      drive: { tipo: 'Actas de entrega', propiedadId: x.prop.id, negocioId: x.n.id },
       bytes,
       nombreArchivo: `Acta de entrega nº ${numero} - ${x.prop.codigo}.pdf`,
       firmantes: x.firmantes.map((f) => ({

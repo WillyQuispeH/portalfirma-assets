@@ -1,0 +1,67 @@
+/* Estilo común de los documentos legales de Asset. Cada plantilla lo incluye con la marca «arroba base» dentro de su style
+   (la reemplaza cargarPlantilla). Para cambiar el aspecto de TODOS los documentos, se edita aquí.
+   Paleta sobria: tinta azul oscuro + un acento cálido solo en filetes y numeración. */
+:root { --tinta: #1b2333; --suave: #5a6376; --linea: #d5d9e2; --fondo: #f5f6f9; --acento: #b4592f; }
+
+@page {
+  size: A4;
+  margin: 20mm 20mm 21mm;
+  @bottom-left { content: "{{corredora.nombre}}  ·  Documento Nº {{numero}}"; font: 7.5pt "Helvetica Neue", Arial, sans-serif; color: #7a8294; letter-spacing: .02em; }
+  @bottom-right { content: "Página " counter(page) " de " counter(pages); font: 7.5pt "Helvetica Neue", Arial, sans-serif; color: #7a8294; }
+}
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { margin: 0; font-variant-numeric: lining-nums; color: var(--tinta); font-family: Georgia, "Times New Roman", "Liberation Serif", serif; font-size: 10.2pt; line-height: 1.5; }
+.sans { font-family: "Helvetica Neue", Arial, "Liberation Sans", sans-serif; }
+
+/* ---------- encabezado ---------- */
+.enc { display: flex; justify-content: space-between; align-items: flex-end; padding-bottom: 9px; border-bottom: 1px solid var(--tinta); }
+.marca { font: 600 11pt "Helvetica Neue", Arial, sans-serif; letter-spacing: .32em; text-transform: uppercase; }
+.marca small { display: block; margin-top: 3px; font: 400 7.5pt "Helvetica Neue", Arial, sans-serif; letter-spacing: .08em; color: var(--suave); text-transform: none; }
+.meta { text-align: right; font: 8.5pt "Helvetica Neue", Arial, sans-serif; color: var(--suave); line-height: 1.45; }
+.meta b { color: var(--tinta); font-weight: 600; }
+.filete { height: 3px; width: 54px; background: var(--acento); margin: 16px auto 0; }
+h1 { margin: 12px 0 2px; text-align: center; font: 600 16pt Georgia, "Times New Roman", serif; letter-spacing: .12em; text-transform: uppercase; }
+.subtitulo { text-align: center; font: 9pt "Helvetica Neue", Arial, sans-serif; color: var(--suave); margin-bottom: 18px; }
+
+/* ---------- bloques de datos ---------- */
+.resumen { border: 1px solid var(--linea); background: var(--fondo); border-radius: 4px; padding: 11px 14px; margin: 0 0 16px; page-break-inside: avoid; }
+.resumen h3, .partes h3 { margin: 0 0 7px; font: 600 7.8pt "Helvetica Neue", Arial, sans-serif; letter-spacing: .14em; text-transform: uppercase; color: var(--acento); }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px 22px; }
+.grid.tres { grid-template-columns: 1fr 1fr 1fr; }
+.grid .ancho { grid-column: 1 / -1; }
+.dato span { display: block; font: 7.6pt "Helvetica Neue", Arial, sans-serif; letter-spacing: .06em; text-transform: uppercase; color: var(--suave); }
+.dato b { display: block; font-weight: 600; font-size: 10.2pt; }
+.dato .grande { font: 600 14pt Georgia, serif; }
+.partes { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 0 0 16px; }
+.parte { border-top: 2px solid var(--tinta); padding-top: 7px; page-break-inside: avoid; }
+.parte .rol { font: 600 7.8pt "Helvetica Neue", Arial, sans-serif; letter-spacing: .14em; text-transform: uppercase; color: var(--acento); }
+.parte .nom { font-weight: 700; font-size: 11pt; margin: 2px 0 3px; }
+.parte .det { font: 8.8pt "Helvetica Neue", Arial, sans-serif; color: var(--suave); line-height: 1.5; }
+
+/* ---------- texto legal ---------- */
+p { margin: 0 0 8px; text-align: justify; hyphens: auto; }
+.comparecencia { margin-bottom: 14px; }
+.cl { margin: 0 0 11px; }
+.cl h2 { margin: 0 0 3px; font: 700 9.2pt "Helvetica Neue", Arial, sans-serif; letter-spacing: .07em; text-transform: uppercase; color: var(--tinta); page-break-after: avoid; }
+.cl h2 i { font-style: normal; color: var(--acento); }
+/* cláusulas numeradas solas («Primero», «Segundo»…): así una cláusula opcional no descuadra la numeración */
+@counter-style ordinal-es { system: fixed; fallback: decimal; symbols: "Primero" "Segundo" "Tercero" "Cuarto" "Quinto" "Sexto" "Séptimo" "Octavo" "Noveno" "Décimo" "Décimo primero" "Décimo segundo" "Décimo tercero" "Décimo cuarto" "Décimo quinto" "Décimo sexto" "Décimo séptimo" "Décimo octavo" "Décimo noveno" "Vigésimo" "Vigésimo primero" "Vigésimo segundo" "Vigésimo tercero" "Vigésimo cuarto" "Vigésimo quinto" "Vigésimo sexto" "Vigésimo séptimo" "Vigésimo octavo" "Vigésimo noveno" "Trigésimo"; }
+body { counter-reset: cl; }
+.cl.n { counter-increment: cl; }
+.cl.n h2::before { content: counter(cl, ordinal-es) " · "; color: var(--acento); }
+.adicionales { margin: 16px 0 10px; text-align: center; font: 700 9pt "Helvetica Neue", Arial, sans-serif; letter-spacing: .16em; text-transform: uppercase; color: var(--suave); border-top: 1px solid var(--linea); padding-top: 12px; page-break-after: avoid; }
+.cl p:last-child { margin-bottom: 0; }
+.sub { margin: 2px 0 7px 18px; padding: 0; list-style: none; }
+.sub li { position: relative; margin: 0 0 5px; padding-left: 20px; text-align: justify; }
+.sub li > b:first-child { position: absolute; left: 0; font: 600 9pt "Helvetica Neue", Arial, sans-serif; color: var(--acento); }
+.lista { margin: 3px 0 8px 18px; padding: 0; }
+.lista li { margin: 0 0 3px; }
+.dest { border-left: 3px solid var(--acento); padding: 3px 0 3px 11px; margin: 4px 0 9px; background: none; }
+.tabla { width: 100%; border-collapse: collapse; margin: 3px 0 10px; font: 9.4pt "Helvetica Neue", Arial, sans-serif; page-break-inside: avoid; }
+.tabla th, .tabla td { border: 1px solid var(--linea); padding: 5px 9px; text-align: left; vertical-align: top; }
+.tabla th { width: 34%; background: var(--fondo); font-weight: 600; color: var(--suave); font-size: 8.4pt; letter-spacing: .05em; text-transform: uppercase; }
+.pie-legal { margin-top: 16px; padding-top: 9px; border-top: 1px solid var(--linea); font: 8.4pt "Helvetica Neue", Arial, sans-serif; color: var(--suave); text-align: justify; }
+.caja-marca { display: inline-block; width: 11px; height: 11px; border: 1.3px solid var(--tinta); border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+.caja-marca.si { background: var(--tinta); }
+.pre { white-space: pre-wrap; }

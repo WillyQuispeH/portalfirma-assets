@@ -12,7 +12,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÃ“: ' + m); console.log('  â
     await w.setViewportSize({ width: 1500, height: 960 });
     await w.waitForSelector('#view-agente .ag.ag-full', { timeout: 15000 });
     await w.evaluate(() => window.Inmo.importar()); await w.waitForSelector('text=Cartera actualizada', { timeout: 15000 }); await w.click('#mOk');
-    await w.click('#nav [data-view="agente"]'); await w.waitForSelector('#view-agente .ag.ag-full'); await w.waitForTimeout(300);
+    await w.evaluate(() => window.Agente.vista()); await w.waitForSelector('#view-agente .ag.ag-full'); await w.waitForTimeout(300);
     const ids = await w.evaluate(async () => { const d = (await window.pf.inmoListar()).data; const juan = d.personas.find((x) => /JUAN PEREZ/.test(x.nombre)); await window.pf.inmoPerGuardar({ ...juan, telefono: '9 8765 4321' });
       const otra = d.personas.find((x) => x.id !== juan.id); await window.pf.inmoPerGuardar({ ...otra, telefono: '' });
       return { p: d.propiedades.find((x) => x.codigo === 'CV-9002').id, c: juan.id, o: otra.id, on: otra.nombre }; });

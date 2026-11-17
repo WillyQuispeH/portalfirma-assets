@@ -1,34 +1,95 @@
-// Partes comunes de Input y Select: etiqueta, texto de ayuda o error, y las clases de la caja.
+// Partes comunes de Input, Select y Textarea: superficie filled (etiqueta adentro, borde inferior)
+// y el texto de ayuda o error. Estados: reposo (gris), foco (azul), ok (verde + ✓), error (rojo),
+// pendiente (amarillo) y resaltado (lila, valor propuesto por Asset).
+//
+// Altura: con etiqueta 56px (formulario); sin etiqueta 40px (= Boton md / Tabs), para que en barras
+// de filtros buscador, selects, pestañas y botones midan lo mismo.
 import type { ReactNode } from 'react';
 import { cx } from '../../utils/cx';
 
-// caja del campo: fondo hundido, borde inferior un poco más marcado y anillo lavanda al enfocar.
-// tw:focus:* gana a la regla input:focus de styles.css (más específica que un selector de elemento).
-export const CAJA = 'tw:block tw:w-full tw:m-0 tw:h-10 tw:py-0 tw:px-3 tw:text-sm tw:text-text tw:bg-field '
-  + 'tw:rounded-control tw:border tw:border-solid tw:border-edge tw:border-b-2 tw:border-b-edge-b '
-  + 'tw:shadow-[inset_0_1px_2px_rgb(0_0_0/0.05)] tw:transition-[border-color,box-shadow] tw:duration-100 '
-  + 'tw:placeholder:text-muted tw:focus:outline-none tw:focus:border-lav-edge tw:focus:ring-[3px] tw:focus:ring-lav/60 '
-  + 'tw:disabled:opacity-60 tw:disabled:cursor-not-allowed';
-export const CAJA_ERROR = 'tw:border-red-edge tw:focus:border-red-edge tw:focus:ring-red/50';
-// falta completarlo (sin ser un error): borde amarillo
-export const CAJA_PENDIENTE = 'tw:border-yellow-edge tw:border-b-yellow-edge';
-// el valor lo propuso Asset (dictado, IA, ficha): fondo lila hasta que se edita
-export const CAJA_RESALTADA = 'tw:bg-lav-soft';
+/** superficie filled: fondo, radio en las 4 esquinas, borde inferior grueso; el foco lo pinta el focus-within */
+export const SUPERFICIE = 'tw:group tw:relative tw:flex tw:items-center tw:gap-2 tw:px-3 tw:bg-gray-soft '
+  + 'tw:rounded-control tw:border-0 tw:border-solid tw:border-b-2 tw:border-b-edge '
+  + 'tw:transition-[background-color,border-color] tw:duration-150 '
+  + 'tw:focus-within:bg-blue-soft tw:focus-within:border-b-brand';
+export const SUPERFICIE_ERROR = 'tw:bg-red-soft tw:border-b-red-edge tw:focus-within:bg-red-soft tw:focus-within:border-b-red-edge';
+export const SUPERFICIE_OK = 'tw:bg-green-soft tw:border-b-green-edge tw:focus-within:bg-green-soft tw:focus-within:border-b-green-edge';
+export const SUPERFICIE_PENDIENTE = 'tw:border-b-yellow-edge tw:focus-within:border-b-yellow-edge';
+export const SUPERFICIE_RESALTADA = 'tw:bg-lav-soft';
+
+/** el control dentro de la superficie: sin caja propia (la superficie ya es la caja) */
+export const CAJA = 'tw:block tw:w-full tw:m-0 tw:min-h-0 tw:h-auto tw:py-0 tw:px-0 tw:text-sm tw:leading-snug tw:text-text '
+  + 'tw:bg-transparent tw:rounded-none tw:border-0 tw:shadow-none tw:outline-none tw:ring-0 '
+  + 'tw:focus:outline-none tw:focus:ring-0 tw:focus:border-transparent '
+  + 'tw:placeholder:text-muted tw:disabled:opacity-60 tw:disabled:cursor-not-allowed';
+
+/** aliases: quien aplica el estado a la superficie (Input/Select/Textarea vía Campo) */
+export const CAJA_ERROR = SUPERFICIE_ERROR;
+export const CAJA_PENDIENTE = SUPERFICIE_PENDIENTE;
+export const CAJA_RESALTADA = SUPERFICIE_RESALTADA;
+
+/** caja filled compacta para un <input> suelto (p. ej. dentro de una línea de texto) */
+export const CAJA_SUELTA = 'tw:m-0 tw:h-8 tw:px-2.5 tw:text-sm tw:text-text tw:bg-gray-soft tw:rounded-control '
+  + 'tw:border-0 tw:border-solid tw:border-b-2 tw:border-b-edge tw:shadow-none tw:outline-none '
+  + 'tw:transition-[background-color,border-color] tw:duration-150 '
+  + 'tw:focus:bg-blue-soft tw:focus:border-b-brand tw:focus:outline-none tw:focus:ring-0 '
+  + 'tw:placeholder:text-muted tw:disabled:opacity-60';
+
+const ETIQUETA = 'tw:block tw:m-0 tw:mb-0.5 tw:text-[11px] tw:font-medium tw:leading-tight tw:text-muted tw:pointer-events-none';
+
+function Ok() {
+  return (
+    <svg className="tw:flex-none tw:text-green-softink" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M20 6 9 17l-5-5" />
+    </svg>
+  );
+}
 
 interface ICampoProps {
   id: string;
   etiqueta?: ReactNode;
-  ayuda?: ReactNode; // texto bajo el campo (en letra monoespaciada si es una URL o un formato)
+  ayuda?: ReactNode;
   error?: string | null;
+  /** valor válido: fondo verde y ✓ */
+  ok?: boolean;
+  /** falta completarlo: borde amarillo (el contenedor lleva la clase «falta») */
+  pendiente?: boolean;
+  /** valor propuesto por Asset: fondo lila */
+  resaltado?: boolean;
+  /** a la izquierda del valor (ícono) */
+  antes?: ReactNode;
+  /** a la derecha del valor (sufijo, flecha del select…) */
+  despues?: ReactNode;
+  /** superficie más alta y alineada arriba (textarea) */
+  multilinea?: boolean;
   className?: string;
   children: ReactNode;
 }
 
-export default function Campo({ id, etiqueta, ayuda, error, className, children }: ICampoProps) {
+export default function Campo({ id, etiqueta, ayuda, error, ok, pendiente, resaltado, antes, despues, multilinea, className, children }: ICampoProps) {
+  const valido = !!ok && !error;
+  const conEtiqueta = !!etiqueta;
   return (
-    <div className={cx('tw:flex tw:flex-col tw:gap-1.5', className)}>
-      {etiqueta && <label htmlFor={id} className="tw:block tw:m-0 tw:text-[13px] tw:font-semibold tw:text-text">{etiqueta}</label>}
-      {children}
+    <div className={cx('tw:flex tw:flex-col tw:gap-1', className)}>
+      <div data-campo data-ok={valido || undefined} data-error={error ? '' : undefined}
+        className={cx(
+          SUPERFICIE,
+          multilinea ? 'tw:items-start tw:min-h-[6.5rem] tw:py-2.5'
+            : conEtiqueta ? 'tw:min-h-14 tw:py-2'
+            : 'tw:h-10 tw:py-0',
+          error && SUPERFICIE_ERROR,
+          valido && SUPERFICIE_OK,
+          pendiente && !error && !valido && SUPERFICIE_PENDIENTE,
+          resaltado && !error && !valido && SUPERFICIE_RESALTADA,
+        )}>
+        {antes && <span className={cx('tw:flex-none tw:text-muted', multilinea ? 'tw:mt-1' : 'tw:self-center')}>{antes}</span>}
+        <div className="tw:min-w-0 tw:flex-1 tw:flex tw:flex-col tw:justify-center">
+          {etiqueta && <label htmlFor={id} className={ETIQUETA}>{etiqueta}</label>}
+          {children}
+        </div>
+        {valido && <span className={cx('tw:flex-none', multilinea ? 'tw:mt-1' : 'tw:self-center')}><Ok /></span>}
+        {despues && <span className={cx('tw:flex-none tw:text-muted tw:group-focus-within:text-brand', multilinea ? 'tw:mt-1' : 'tw:self-center')}>{despues}</span>}
+      </div>
       {error
         ? <small id={`${id}-msj`} className="tw:text-xs tw:text-err" role="alert">{error}</small>
         : ayuda && <small id={`${id}-msj`} className="tw:text-xs tw:text-muted">{ayuda}</small>}

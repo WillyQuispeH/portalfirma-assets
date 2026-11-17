@@ -6,6 +6,9 @@ import { muestraFlujo, toast } from '../../../../utils/app';
 import { etiquetaCorta, nominaEjemplo, normalizar, plural } from '../../../../utils/flujos';
 import type { ICampoModelo, TRegla } from '../../../../store/interfaces/flujo.interface';
 
+import Boton from '../../../ui/Boton';
+import Input from '../../../ui/Input';
+import Select from '../../../ui/Select';
 export function PasoPlantilla() {
   const { w, modelos, asistenteModelo } = useFlujo();
   const [q, setQ] = useState('');
@@ -14,7 +17,7 @@ export function PasoPlantilla() {
   const grupos = cats.map((c) => [c, lista.filter((m) => m.categoria === c)] as const).filter(([, ms]) => ms.length);
   return (
     <div className="fl-card"><h3>1. Elige la plantilla</h3><p className="muted small">Modelos aprobados de la Notaría Virtual de Portalfirma. El texto no se modifica: solo se llenan sus datos.</p>
-      <input id="flQ" className="fl-q" placeholder="Buscar: mandato, pagaré, arriendo, poder…" value={q} onChange={(e) => setQ(e.target.value)} />
+      <Input id="flQ" icono="search" placeholder="Buscar: mandato, pagaré, arriendo, poder…" value={q} onChange={(e) => setQ(e.target.value)} />
       <div className="fl-models" id="flModels">
         {grupos.length ? grupos.map(([c, ms]) => (
           <div key={c} style={{ display: 'contents' }}>
@@ -44,14 +47,14 @@ export function PasoNomina() {
         onDragOver={(e) => { e.preventDefault(); setEncima(true); }} onDragLeave={() => setEncima(false)} onDrop={() => setEncima(false)}>
         <Icono nombre="upload" tam={30} /><b>Arrastra aquí la nómina o haz clic para elegirla</b><span>Excel (.xlsx) o CSV · hasta 2.000 filas</span>
       </div>
-      <div className="fl-row-acts"><button className="ghost small with-ic" id="flTpl" onClick={() => { nominaEjemplo(w.modelo!); toast('Nómina de ejemplo descargada: ábrela en Excel, llénala y vuelve a cargarla.', 5000); }}><Icono nombre="download" tam={14} /><span>Descargar nómina de ejemplo para esta plantilla</span></button></div>
+      <div className="fl-row-acts"><Boton variante="fantasma" tamano="sm" icono="download" id="flTpl" onClick={() => { nominaEjemplo(w.modelo!); toast('Nómina de ejemplo descargada: ábrela en Excel, llénala y vuelve a cargarla.', 5000); }}>Descargar nómina de ejemplo para esta plantilla</Boton></div>
       <div id="flPrev">
         {n && <>
           <div className="fl-ok"><Icono nombre="check" tam={15} /> <b>{n.name}</b> · {plural(n.rows.length, 'fila', 'filas')} · {plural(n.headers.length, 'columna', 'columnas')}</div>
           <div className="fl-table-wrap"><table className="fl-table"><thead><tr>{n.headers.map((h, i) => <th key={i}>{h}</th>)}</tr></thead>
             <tbody>{n.rows.slice(0, 5).map((r, i) => <tr key={i}>{r.map((c, j) => <td key={j}>{c.s}</td>)}</tr>)}</tbody></table></div>
           {n.rows.length > 5 && <p className="muted small">… y {n.rows.length - 5} filas más.</p>}
-          <div className="fl-nav"><span /><button className="primary" id="flNext" onClick={() => asistenteIr(3)}>Siguiente: unir columnas con los datos <Icono nombre="chevR" tam={15} /></button></div>
+          <div className="fl-nav"><span /><Boton iconoDerecha="chevR" id="flNext" onClick={() => asistenteIr(3)}>Siguiente: unir columnas con los datos</Boton></div>
         </>}
       </div>
     </div>
@@ -85,14 +88,14 @@ export function PasoCampos() {
                   <div key={f.id} className={`fl-mrow ${f.required && !r ? 'miss' : ''}`}>
                     <span className="fl-lab">{etiquetaCorta(f)}{!f.required && <> <small className="muted">(opcional)</small></>}{f.signerKey && <> <small className="muted">· {QUIEN[f.signerKey]}</small></>}</span>
                     <span>
-                      <select data-f={f.id} value={valor(r)} onChange={(e) => cambiar(f, e.target.value)}>
+                      <Select data-f={f.id} aria-label={`De dónde sale: ${etiquetaCorta(f)}`} value={valor(r)} onChange={(e) => cambiar(f, e.target.value)}>
                         <option value="empty">— Dejar vacío —</option>
                         <optgroup label="Columna de la nómina">{n.headers.map((h) => <option key={h} value={'col:' + h}>{h}</option>)}</optgroup>
                         <optgroup label="Otro"><option value="fixed">Valor fijo (igual para todos)</option>{/fecha/i.test(f.label) && <option value="today">Fecha del día en que se genera</option>}</optgroup>
-                      </select>
+                      </Select>
                     </span>
                     <span>{r?.type === 'fixed'
-                      ? <input data-fx={f.id} value={r.value || ''} placeholder="Escribe el valor" onChange={(e) => asistenteRegla(f.id, { type: 'fixed', value: e.target.value })} />
+                      ? <Input data-fx={f.id} aria-label={`Valor fijo: ${etiquetaCorta(f)}`} value={r.value || ''} placeholder="Escribe el valor" onChange={(e) => asistenteRegla(f.id, { type: 'fixed', value: e.target.value })} />
                       : <small className="muted fl-sample">{ejemplo(f) || ' '}</small>}</span>
                   </div>
                 );
@@ -101,7 +104,7 @@ export function PasoCampos() {
           );
         })}
       </div>
-      <div className="fl-nav"><button className="ghost" id="flPrevS" onClick={() => asistenteIr(2)}><Icono nombre="chevL" tam={15} /> Nómina</button><button className="primary" id="flNext" onClick={() => asistenteIr(4)}>Revisar las {n.rows.length} filas <Icono nombre="chevR" tam={15} /></button></div>
+      <div className="fl-nav"><Boton variante="fantasma" icono="chevL" id="flPrevS" onClick={() => asistenteIr(2)}>Nómina</Boton><Boton iconoDerecha="chevR" id="flNext" onClick={() => asistenteIr(4)}>Revisar las {n.rows.length} filas</Boton></div>
     </div>
   );
 }
@@ -121,9 +124,9 @@ export function PasoRevision() {
       </>}
       {buenas.length > 0 && <>
         <h4>Muestra</h4><p className="muted small">Revisa cómo queda el documento antes de generar {c.ok === 1 ? 'el documento' : `los ${c.ok}`}.</p>
-        <div className="fl-samples">{buenas.slice(0, 3).map((x) => <button key={x.n} className="secondary small" data-sm={x.n} onClick={() => muestraFlujo(pedido(w), x.n)}><Icono nombre="file" tam={14} /> Ver {x.label}</button>)}</div>
+        <div className="fl-samples">{buenas.slice(0, 3).map((x) => <Boton variante="secundario" tamano="sm" icono="file" key={x.n} data-sm={x.n} onClick={() => muestraFlujo(pedido(w), x.n)}>Ver {x.label}</Boton>)}</div>
       </>}
-      <div className="fl-nav"><button className="ghost" id="flPrevS" onClick={() => asistenteIr(3)}><Icono nombre="chevL" tam={15} /> Campos</button><button className="primary" id="flNext" disabled={!c.ok} onClick={() => asistenteIr(5)}>Siguiente: firma <Icono nombre="chevR" tam={15} /></button></div>
+      <div className="fl-nav"><Boton variante="fantasma" icono="chevL" id="flPrevS" onClick={() => asistenteIr(3)}>Campos</Boton><Boton iconoDerecha="chevR" id="flNext" disabled={!c.ok} onClick={() => asistenteIr(5)}>Siguiente: firma</Boton></div>
     </div>
   );
 }

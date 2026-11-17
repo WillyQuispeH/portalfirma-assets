@@ -2,7 +2,7 @@
 import { api } from '../../utils/api';
 import type {
   ICalidadAviso, IContactoAvisos, IInteresados, IPanelPublicaciones, IPortal, IRedaccionAviso, IRespuestaInteresado, IResultadoPortalPublicar,
-  IResultadoSincronizar, TInteresadoEstado, TPaquetes, TPubOperacion, TTipoAviso,
+  IResultadoSincronizar, TAccionAviso, TInteresadoEstado, TPaquetes, TPubOperacion, TTipoAviso,
 } from '../interfaces/publicacion.interface';
 
 export const publicacionService = {
@@ -15,6 +15,11 @@ export const publicacionService = {
   getContacto: () => api<{ contacto?: IContactoAvisos } | null>('mlEstado'),
   getFeed: (portal: string) => api<{ avisos: number }>('pubFeed', portal),
   setPortal: (portal: string, cambios: { activo: boolean; feedUrl: string; token?: string }) => api<unknown>('pubConfigurar', portal, cambios),
+  // el CRUD del aviso en un portal: publicar, actualizar, pausar, reactivar, retirar o eliminar
+  accionAviso: (propId: string, op: TPubOperacion, portal: string, que: TAccionAviso) => api<{ mensaje: string; estado: string | null }>('pubAccion', propId, op, portal, que),
+  // direcciones públicas de los feeds que sirve la API (solo el administrador)
+  getFeedsServidor: () => api<{ feeds: Record<string, { url: string; avisos: number }> }>('pubFeeds'),
+  rotarFeedsServidor: () => api<{ feeds: Record<string, { url: string; avisos: number }> }>('pubFeedsRotar'),
   exportarFeed: (portal: string) => api<{ avisos: number; ruta: string } | null>('pubExportarFeed', portal),
   // el flujo «Publicar»
   getCalidad: (propId: string, op: TPubOperacion) => api<ICalidadAviso>('pubCalidad', propId, op),

@@ -21,9 +21,10 @@ import EstadoVacio from '../../ui/EstadoVacio';
 import { ListaActividad, copiarCorreo, precio, whatsapp } from '../ficha/comun';
 import { abrirFicha, avisarAyuda } from '../../../utils/app';
 import { cx } from '../../../utils/cx';
+import { fecha } from '../../../utils/formato';
 import MenuMas from '../../ui/MenuMas';
 import { SUAVE, type TTono } from '../../ui/tonos';
-import type { IEtapa, IMonto, INegocioDetalle } from '../../../store/interfaces/negocio.interface';
+import type { IDocumentoNegocio, IEtapa, IMonto, INegocioDetalle } from '../../../store/interfaces/negocio.interface';
 
 const TIPO = { venta: 'Venta', arriendo: 'Arriendo' } as const;
 const CLIENTE = { venta: 'Comprador', arriendo: 'Arrendatario' } as const;
@@ -201,27 +202,37 @@ function Condiciones({ n, vez, guardar }: { n: INegocioDetalle; vez: number; gua
   );
 }
 
-function Documentos({ n, etapas }: { n: INegocioDetalle; etapas: IEtapa[] }) {
-  const docs = etapas.filter((x) => x.firma);
+// Todos los documentos del negocio, en el orden del proceso (los arma negocios.js): orden y acta de visita, carta oferta, reserva,
+// texto del contrato, contrato y acta de entrega. Los que aún no se arman salen como «Pendiente».
+const ESTADO_DOC: Record<string, [TTono, string]> = {
+  firmado: ['verde', 'Firmado'], en_firma: ['amarillo', 'En firma'], pendiente: ['gris', 'Pendiente'], revision: ['amarillo', 'En revisión'], aprobado: ['verde', 'Aprobado'],
+};
+const esFirmable = (d: IDocumentoNegocio) => d.id !== 'contrato_texto';
+
+function Documentos({ n }: { n: INegocioDetalle }) {
+  const docs = n.documentos || [];
   return docs.length ? (
     <div className="tw:flex tw:flex-col">
-      {docs.map((x) => {
-        const y = n.firmas?.[x.id]; const ok = y?.estado === 'firmado';
+      {docs.map((d) => {
+        const ok = d.estado === 'firmado' || d.estado === 'aprobado'; const [tono, txt] = ESTADO_DOC[d.estado] || ESTADO_DOC.pendiente;
+        const etiqueta = d.estado === 'firmado' && d.fuera ? 'Firmado fuera de Asset'
+          : d.estado === 'en_firma' ? `En firma${d.total ? ` · ${d.firmados ?? 0}/${d.total}` : ''}${d.operacion ? ` · op. ${d.operacion}` : ''}` : txt;
+        const detalle = [d.detalle, d.etapa && `Etapa «${d.etapa}»`, d.estado === 'firmado' && d.fecha && fecha(d.fecha)].filter(Boolean).join(' · ');
         return (
-          <div key={x.id} className={cx(FILA_PERSONA, 'tw:py-2.5')}>
-            <span className={cx('tw:grid tw:size-8 tw:flex-none tw:place-items-center tw:rounded-icono', ok ? SUAVE.verde : y?.operacion ? SUAVE.amarillo : 'tw:bg-sunken tw:text-muted')}>
+          <div key={d.id} data-doc={d.id} className={cx(FILA_PERSONA, 'tw:py-2.5')}>
+            <span className={cx('tw:grid tw:size-8 tw:flex-none tw:place-items-center tw:rounded-icono', ok ? SUAVE.verde : d.estado === 'pendiente' ? 'tw:bg-sunken tw:text-muted' : SUAVE.amarillo)}>
               <Icono nombre={ok ? 'check' : 'file'} tam={15} />
             </span>
             <span className="tw:flex tw:min-w-0 tw:flex-1 tw:flex-col">
-              <span className={cx('tw:text-sm', x.id === n.etapa && 'tw:font-semibold')}>{x.firma}</span>
-              <small className="tw:text-xs tw:text-muted">Etapa «{x.t}»</small>
+              <span className={cx('tw:text-sm', d.id === n.etapa && 'tw:font-semibold')}>{d.titulo}</span>
+              {detalle && <small className="tw:text-xs tw:text-muted">{detalle}</small>}
             </span>
-            <Badge tono={ok ? 'verde' : y?.operacion ? 'amarillo' : 'gris'} punto>{ok ? 'Firmado' : y?.operacion ? `En firma · op. ${y.operacion}` : 'Pendiente'}</Badge>
+            <Badge tono={tono} punto>{etiqueta}</Badge>
           </div>
         );
       })}
     </div>
-  ) : <EstadoVacio compacto texto="Este tipo de negocio no lleva documentos para firmar." />;
+  ) : <EstadoVacio compacto texto="Este negocio todavía no tiene documentos." />;
 }
 
 // ---------- la ficha ----------
@@ -242,7 +253,7 @@ function Subtitulo({ n }: { n: INegocioDetalle }) {
 export default function FichaNegocio({ n, etapas, corredores, vez, acc }: IFichaNegocioProps) {
   useEffect(() => { avisarAyuda('negocio'); }, [n.id]);
   const principal = accionPrincipal(n, etapas, acc);
-  const docs = etapas.filter((x) => x.firma); const firmados = docs.filter((x) => n.firmas?.[x.id]?.estado === 'firmado').length;
+  const docs = (n.documentos || []).filter(esFirmable); const firmados = docs.filter((d) => d.estado === 'firmado').length;
   const cond = [valorTxt(n.valor, n.tipo), n.comision ? (n.comision.tipo === '%' ? `${n.comision.valor}% + IVA` : 'monto fijo + IVA') : ''].filter(Boolean).join(' · ');
   const duenos = n.prop?.propietarios?.length || 0; const movs = (n.actividad || []).length;
   const secciones: ISeccion[] = [
@@ -252,7 +263,7 @@ export default function FichaNegocio({ n, etapas, corredores, vez, acc }: IFicha
     { id: 'ngPlCond', titulo: 'Condiciones', icono: 'tag', tono: 'verde', clave: 'modal-136', resumen: cond || 'Sin valor',
       contenido: <Condiciones n={n} vez={vez} guardar={acc.condiciones} /> },
     { id: 'ngPlDoc', titulo: 'Documentos', icono: 'file', tono: 'azul', clave: 'modal-137', resumen: docs.length ? `${firmados} de ${docs.length} firmados` : 'Sin firmas',
-      contenido: <Documentos n={n} etapas={etapas} /> },
+      contenido: <Documentos n={n} /> },
     { id: 'ngPlHist', titulo: 'Historial y notas', icono: 'clock', tono: 'amarillo', clave: 'modal-138', resumen: `${movs} ${movs === 1 ? 'movimiento' : 'movimientos'}`,
       contenido: <Historial n={n} vez={vez} nota={acc.nota} /> },
   ];

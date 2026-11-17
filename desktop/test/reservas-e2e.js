@@ -16,7 +16,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÃ“: ' + m); console.log('  â
     await w.setViewportSize({ width: 1500, height: 980 });
     await w.waitForSelector('#view-agente .ag.ag-full', { timeout: 15000 });
     await w.evaluate(() => window.Inmo.importar()); await w.waitForSelector('text=Cartera actualizada', { timeout: 15000 }); await w.click('#mOk');
-    await w.click('#nav [data-view="agente"]'); await w.waitForSelector('#view-agente .ag.ag-full'); await w.waitForTimeout(300);
+    await w.evaluate(() => window.Agente.vista()); await w.waitForSelector('#view-agente .ag.ag-full'); await w.waitForTimeout(300);
     const ids = await w.evaluate(async () => { const d = (await window.pf.inmoListar()).data; return { p: d.propiedades.find((x) => x.codigo === 'CV-9002').id, c: d.personas.find((x) => /JUAN PEREZ/.test(x.nombre)).id }; });
     await w.evaluate((o) => window.pf.negGuardar({ tipo: 'arriendo', propId: o.p, clienteId: o.c }), ids);
 

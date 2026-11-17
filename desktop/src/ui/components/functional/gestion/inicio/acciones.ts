@@ -36,6 +36,9 @@ export const NIVELES = [
 export const HERRAMIENTAS_PDF = ['edittext', 'ocr', 'organize', 'split', 'compress', 'export', 'print'];
 // solo para clientes de Portalfirma (IA y firma)
 export const DE_MIEMBROS = new Set(['send', 'tpl', 'ops', 'ai', 'plan', 'bulk', 'flows', 'plazos']);
+// Ocultas por ahora (decisión del producto): no se ven en el inicio de Gestión documental. Su código y sus pruebas siguen ahí;
+// para volver a mostrarlas basta quitarlas de esta lista. «escr» = Gestión de firmas presenciales (trámites notariales).
+export const OCULTAS = new Set<string>(['escr']);
 // llevan «Nuevo» hasta que se abren por primera vez
 export const NUEVAS = new Set(['escr', 'exp', 'flows', 'plazos']);
 

@@ -95,6 +95,13 @@ const CAMPOS = [
   C('propietarioRut', 'RUT o Rol Único Tributario del propietario', 'texto', 'legal', { req: siempre, per: 'rut' }),
   C('propietarioEmail', 'Correo del propietario', 'texto', 'legal', { req: siempre, per: 'email' }),
   C('rol', 'Rol (manzana-predio)', 'texto', 'legal', { plano: true, req: siempre, voz: 'rol de avalúo, rol SII' }),
+  // inscripción de dominio y cuenta de pago: las usan la carta oferta, el contrato de arriendo y el mandato (si faltan, el documento lo dice en general)
+  C('fojas', 'Fojas de la inscripción de dominio', 'texto', 'legal', { voz: 'fojas, inscripción de dominio, título de dominio' }),
+  C('numeroInscripcion', 'Número de la inscripción de dominio', 'texto', 'legal', { voz: 'número de inscripción' }),
+  C('anioInscripcion', 'Año de la inscripción de dominio', 'texto', 'legal', { voz: 'año de inscripción, registro de propiedad del año' }),
+  C('conservador', 'Conservador de Bienes Raíces', 'texto', 'legal', { voz: 'conservador, CBR de Santiago' }),
+  C('cuentaPago', 'Cuenta donde se paga la renta', 'texto', 'legal', { si: (p) => !!p.arriendo, voz: 'cuenta bancaria del arrendador, cuenta corriente, banco para el arriendo' }),
+  C('condicionesMandato', 'Otras condiciones del mandato', 'texto', 'legal', { si: (p) => !!p.arriendo, voz: 'condiciones especiales del mandato' }),
   C('exclusividad', 'Exclusividad', 'bool', 'legal', { req: siempre }),
   C('publicarPortales', 'Publicar en portales y redes sociales', 'bool', 'legal', { voz: 'si quiere que se publique; si no, solo cartera' }),   // 0.16.15 · va en el mandato (si no se dice: sí)
   C('mesesGarantia', 'Meses de garantía que se pedirán', 'num', 'legal', { si: (p) => !!p.arriendo, voz: 'mes de garantía, meses de garantía, garantía' }),

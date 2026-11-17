@@ -21,6 +21,8 @@ import { esAdministrador, nuevoTramite } from './controlador';
 import { cx } from '../../../../utils/cx';
 import { PANEL } from './estilos';
 
+import Boton from '../../../ui/Boton';
+import Layout from '../../../ui/Layout';
 const DETALLE = cx(PANEL, 'tw:py-[22px] tw:px-6 tw:min-w-0 tw:min-h-[520px]');
 // Un elemento de la lista; el elegido lleva una barra a la izquierda. es-item y on los usan las pruebas.
 const elemento = (on: boolean, admin = false) => cx('es-item tw:w-full tw:flex tw:items-center tw:gap-[11px] tw:py-[11px] tw:px-3 tw:rounded-card! tw:text-left tw:text-text tw:relative',
@@ -54,9 +56,9 @@ export default function FirmasPresenciales() {
   const ops = S.ops.filter((o) => !q || `${o.titulo} ${o.materia} ${o.operation}`.toLowerCase().includes(q));
   const admin = esAdministrador(S.mock);
   return (
-    <div className="bulk es tw:gap-[18px]">
-      <div className="ops-head"><div><h2>Gestión de firmas presenciales</h2><span className="muted small">{S.ops.length} {S.ops.length === 1 ? 'trámite' : 'trámites'} · escrituras públicas, protocolizaciones y reducciones</span></div>
-        <div className="ops-head-r"><button className="primary small with-ic" id="esNuevo" onClick={nuevoTramite}><Icono nombre="plus" tam={15} /><span>Nuevo trámite</span></button></div></div>
+    <Layout titulo="Gestión de firmas presenciales" ilustracion={{ imagen: 'img/formas/etapa.svg', tinte: '#6d5bd0' }}
+      subtitulo={<>{S.ops.length} {S.ops.length === 1 ? 'trámite' : 'trámites'} · escrituras públicas, protocolizaciones y reducciones</>}
+      acciones={<Boton icono="plus" id="esNuevo" onClick={nuevoTramite}>Nuevo trámite</Boton>}>
       <div className="es-layout tw:grid tw:grid-cols-[330px_1fr] tw:gap-4 tw:items-start tw:max-[1250px]:grid-cols-[280px_1fr]">
         <aside className={cx('es-list tw:p-3 tw:flex tw:flex-col tw:gap-2.5 tw:sticky tw:top-0 tw:max-h-[calc(100vh-170px)]', PANEL)}>
           <div className="ops-search"><Icono nombre="search" tam={14} /><input id="esQ" className="tw:border-0! tw:bg-transparent! tw:[box-shadow:none]! tw:m-0 tw:pl-1!" placeholder="Buscar trámite o número…" value={S.q} onChange={(e) => S.escrituraBuscar(e.target.value)} /></div>
@@ -85,6 +87,6 @@ export default function FirmasPresenciales() {
         </aside>
         {S.sel === 'reglas' && admin ? <PanelReglas key="reglas" /> : <section className={DETALLE} id="esBody" key="detalle"><Detalle /></section>}
       </div>
-    </div>
+    </Layout>
   );
 }

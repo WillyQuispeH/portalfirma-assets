@@ -5,12 +5,16 @@
 //    reprogramarla, marcarla realizada o cancelarla.
 // Las visitas son eventos de la agenda ligados al negocio (agendaCrear con negocioId). La lógica del estado del paso
 // (esperando / logrado / no logrado) está en src/etapas.js.
-// Los id (#pvForm, #pvDia, #pvHora, #pvDur, #pvNotas, #pvAgendar, #pvErr) y [data-pv-visita] los usan las pruebas.
+// El día y la hora se eligen en el calendario (SelectorHorario): solo se ofrecen horarios libres, porque las visitas de una propiedad
+// (y las de un corredor) no se pueden sobreponer.
+// Los id (#pvForm, #shCal, #shHorarios, #shDur, #pvNotas, #pvAgendar, #pvErr) y [data-pv-visita] los usan las pruebas.
 /* eslint-disable @typescript-eslint/no-explicit-any -- eventos de la agenda sin tipos */
 import { useCallback, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Boton from '../../../ui/Boton';
 import Badge from '../../../ui/Badge';
 import Input from '../../../ui/Input';
+import SelectorHorario from '../../agenda/SelectorHorario';
 import MenuMas from '../../../ui/MenuMas';
 import { api } from '../../../../utils/api';
 import { toast } from '../../../../utils/app';
@@ -38,11 +42,12 @@ function estadoDe(e: any): { txt: string; tono: 'verde' | 'amarillo' | 'rojo' | 
   return pasada ? { txt: 'Ya pasó, sin marcar', tono: 'rojo' } : { txt: 'Agendada', tono: 'amarillo' };
 }
 
-export default function PasoVisita({ v }: { v: IVisitaPaso }) {
+/** `pie`: el lugar del pie de la ventana donde va el botón principal («Agendar visita»), en vez de «Logrado» */
+export default function PasoVisita({ v, pie }: { v: IVisitaPaso; pie?: HTMLElement | null }) {
   const [lista, setLista] = useState<any[] | null>(null);
   const [editando, setEditando] = useState<string | null>(null);   // id de la visita que se reprograma
   const [mostrarForm, setMostrarForm] = useState(false);            // «agendar otra» cuando ya hay una visita
-  const [f, setF] = useState({ fecha: mananaLocal(), hora: '11:00', duracion: '45', notas: '' });
+  const [f, setF] = useState({ fecha: mananaLocal(), hora: '', duracion: '45', notas: '' });
   const [error, setError] = useState(''); const [ocupado, setOcupado] = useState(false);
 
   const cargar = useCallback(async () => {
@@ -58,13 +63,13 @@ export default function PasoVisita({ v }: { v: IVisitaPaso }) {
     try { await fn(); await api('etMarcar', { negocioId: v.negocioId, paso: 'visita', estado: null }).catch(() => null); toast(aviso); setEditando(null); setMostrarForm(false); await cargar(); v.alCambio(); } catch (e) { setError(mensaje(e)); }
     setOcupado(false);
   };
-  const agendar = () => correr(() => editando
+  const agendar = () => { if (!f.hora) return setError('Elige un horario libre del día.'); return correr(() => editando
     ? api('agendaActualizar', editando, { fecha: f.fecha, hora: f.hora, duracion: f.duracion, notas: f.notas })
     : api('agendaCrear', { tipo: 'visita', fecha: f.fecha, hora: f.hora, duracion: f.duracion, notas: f.notas, propId: v.propId, personaIds: v.clienteId ? [v.clienteId] : [], negocioId: v.negocioId }),
-  editando ? 'Visita reprogramada.' : 'Visita agendada.');
+  editando ? 'Visita reprogramada.' : 'Visita agendada.'); };
   const confirmar = (e: any) => correr(() => api('visitaConfirmar', e.id), `Confirmación enviada por WhatsApp a ${e.personas?.[0]?.nombre || 'el cliente'}.`);
   const estado = (e: any, st: 'hecho' | 'cancelado') => correr(() => api('agendaActualizar', e.id, { estado: st }), st === 'hecho' ? 'Visita marcada como realizada.' : 'Visita cancelada.');
-  const reprogramar = (e: any) => { setEditando(e.id); setMostrarForm(true); setF({ fecha: e.fecha < hoyLocal() ? mananaLocal() : e.fecha, hora: e.hora || '11:00', duracion: String(e.duracion || 45), notas: e.notas || '' }); setError(''); };
+  const reprogramar = (e: any) => { setEditando(e.id); setMostrarForm(true); setF({ fecha: e.fecha < hoyLocal() ? mananaLocal() : e.fecha, hora: '', duracion: String(e.duracion || 45), notas: e.notas || '' }); setError(''); };
 
   if (!lista) return <p className="tw:m-0 tw:text-[13px] tw:text-muted">Cargando visitas…</p>;
   const activas = lista.filter((e) => e.estado === 'programado');
@@ -75,7 +80,7 @@ export default function PasoVisita({ v }: { v: IVisitaPaso }) {
       <section className={CAJA} id="pvLista">
         <div className="tw:flex tw:items-center tw:gap-2">
           <h3 className="tw:m-0 tw:flex-1 tw:text-sm tw:font-bold">Visitas de este negocio</h3>
-          {!formVisible && <MenuMas tamano="sm" etiqueta="Más acciones" opciones={[{ id: 'pvOtra', texto: 'Agendar otra visita', icono: 'plus', alTocar: () => { setMostrarForm(true); setEditando(null); setF({ fecha: mananaLocal(), hora: '11:00', duracion: '45', notas: '' }); } }]} />}
+          {!formVisible && <MenuMas tamano="sm" etiqueta="Más acciones" opciones={[{ id: 'pvOtra', texto: 'Agendar otra visita', icono: 'plus', alTocar: () => { setMostrarForm(true); setEditando(null); setF({ fecha: mananaLocal(), hora: '', duracion: '45', notas: '' }); } }]} />}
         </div>
         <ul className="tw:list-none tw:m-0 tw:p-0 tw:flex tw:flex-col tw:gap-4">
           {[...lista].sort((a, b) => (b.fecha + (b.hora || '')).localeCompare(a.fecha + (a.hora || ''))).map((e) => {
@@ -113,19 +118,16 @@ export default function PasoVisita({ v }: { v: IVisitaPaso }) {
         <h3 className="tw:m-0 tw:text-sm tw:font-bold">{editando ? 'Reprogramar la visita' : lista.length ? 'Agendar otra visita' : 'Agendar la visita'}</h3>
         <ListaFija propiedad={v.lugar} cliente={v.cliente} />
         {!v.clienteId && <p className="tw:m-0 tw:text-[13px] tw:text-muted">Este negocio todavía no tiene cliente: vincúlalo en el paso «Interesado registrado» para poder confirmar y generar la orden de visita.</p>}
-        <div className="tw:grid tw:grid-cols-1 tw:sm:grid-cols-3 tw:gap-3">
-          <Input etiqueta="Día" id="pvDia" type="date" value={f.fecha} onChange={fijar('fecha')} />
-          <Input etiqueta="Hora" id="pvHora" type="time" value={f.hora} onChange={fijar('hora')} />
-          <Input etiqueta="Duración (min)" id="pvDur" type="number" value={f.duracion} onChange={fijar('duracion')} />
-          <Input etiqueta={<>Notas <span className="tw:font-normal tw:text-muted">(opcional)</span></>} id="pvNotas" clasesCampo="tw:sm:col-span-3" placeholder="Ej.: llevar llaves, conserje avisado" value={f.notas} onChange={fijar('notas')} />
-        </div>
+        <SelectorHorario propId={v.propId} valor={{ fecha: f.fecha, hora: f.hora, duracion: f.duracion }} ignorar={editando} alCambiar={(x) => setF((s) => ({ ...s, ...x }))} />
+        <Input etiqueta={<>Notas <span className="tw:font-normal tw:text-muted">(opcional)</span></>} id="pvNotas" placeholder="Ej.: llevar llaves, conserje avisado" value={f.notas} onChange={fijar('notas')} />
         {error && <p id="pvErr" role="alert" className="tw:m-0 tw:text-[13px] tw:text-red-softink">{error}</p>}
-        <div className="tw:flex tw:justify-end tw:gap-2">
-          {(editando || lista.length > 0) && <Boton variante="secundario" onClick={() => { setEditando(null); setMostrarForm(false); setError(''); }}>Cancelar</Boton>}
-          <Boton id="pvAgendar" icono="calendar" cargando={ocupado} onClick={agendar}>{editando ? 'Guardar cambio' : 'Agendar visita'}</Boton>
-        </div>
+        {(editando || lista.length > 0) && <div className="tw:flex tw:justify-end"><Boton variante="secundario" onClick={() => { setEditando(null); setMostrarForm(false); setError(''); }}>Cancelar</Boton></div>}
       </section>
     ) : null}
+    {/* el botón principal va en el pie de la ventana, a la derecha, en lugar de «Logrado»: agendar la visita es lograr el paso */}
+    {pie && createPortal(formVisible
+      ? <Boton id="pvAgendar" icono="calendar" cargando={ocupado} disabled={!f.hora} onClick={agendar}>{editando ? 'Guardar cambio' : 'Agendar visita'}</Boton>
+      : <Boton id="pvOtraPie" icono="plus" variante="secundario" onClick={() => { setMostrarForm(true); setEditando(null); setF({ fecha: mananaLocal(), hora: '', duracion: '45', notas: '' }); setError(''); }}>Agendar otra visita</Boton>, pie)}
   </>;
 }
 

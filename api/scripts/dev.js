@@ -30,6 +30,8 @@ process.on('SIGINT', () => salir(0));
 process.on('SIGTERM', () => salir(0));
 
 const esperarTunel = process.argv.includes('--esperar-tunel');
+// con --esperar-publica (start-dev.ps1) la API espera a que publica.js (ngrok) deje la dirección pública en el .env: así arranca ya con ella
+const esperarPublica = process.argv.includes('--esperar-publica');
 
 (async () => {
   if (esperarTunel) {
@@ -61,6 +63,13 @@ const esperarTunel = process.argv.includes('--esperar-tunel');
       console.error('[dev] el túnel no respondió en 15 segundos.');
       salir(1);
     }
+  }
+  if (esperarPublica) {
+    const marca = path.join(raiz, '.publica-lista');
+    console.log('[dev] esperando la dirección pública (ngrok)...');
+    for (let i = 0; i < 120 && !fs.existsSync(marca); i++) await new Promise((r) => setTimeout(r, 500));
+    if (fs.existsSync(marca)) console.log(`[dev] dirección pública: ${fs.readFileSync(marca, 'utf8').trim()}`);
+    else console.warn('[dev] ngrok no dejó la dirección en 60 segundos: sigo con la local (revisa el panel «publica»).');
   }
   const nest = path.join(raiz, 'node_modules', '@nestjs', 'cli', 'bin', 'nest.js');
   const api = spawn(process.execPath, [nest, 'start', '--watch'], { cwd: raiz, stdio: 'inherit' });

@@ -30,6 +30,7 @@ import { CifradoService } from './cifrado';
 import { esSesionVencida, SesionVencidaError, type ProveedorOAuth, type TokensOAuth } from './proveedores';
 import { PortalfirmaOAuth } from './portalfirma.oauth';
 import { MercadoLibreOAuth } from './mercadolibre.oauth';
+import { GoogleEmpresaOAuth, GoogleOAuth } from './google.oauth';
 
 const PENDIENTE_MIN = 10;
 /** se renueva si al token le queda menos que esto */
@@ -59,11 +60,18 @@ export class ConexionesService {
     config: ConfigService<Env, true>,
     portalfirma: PortalfirmaOAuth,
     mercadolibre: MercadoLibreOAuth,
+    google: GoogleOAuth,
+    googleEmpresa: GoogleEmpresaOAuth,
   ) {
     this.base = config.get('API_URL_PUBLICA', { infer: true });
     for (const p of [portalfirma]) this.proveedores.set(p.id, p);
     // Mercado Libre solo si el servidor tiene la app (ML_CLIENT_ID y ML_CLIENT_SECRET)
     if (mercadolibre.configurado) this.proveedores.set(mercadolibre.id, mercadolibre);
+    // Google solo si el servidor tiene la app (GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET): la cuenta de cada usuario y el Drive de la empresa
+    if (google.configurado) {
+      this.proveedores.set(google.id, google);
+      this.proveedores.set(googleEmpresa.id, googleEmpresa);
+    }
   }
 
   /** ¿ese proveedor está disponible en este servidor? */

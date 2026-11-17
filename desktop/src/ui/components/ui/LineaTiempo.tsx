@@ -21,7 +21,7 @@ export default function LineaTiempo({ items, vacio = 'Sin movimientos todavía.'
   return (
     <ul data-historial className={cx('tw:m-0 tw:p-0 tw:list-none', className)}>
       {items.map((a, i) => (
-        <li key={i} {...(a.destacado ? { 'data-nota': '' } : {})} className="tw:relative tw:flex tw:gap-3 tw:pb-3.5 tw:last:pb-0">
+        <li key={i} {...(a.destacado ? { 'data-nota': '' } : {})} className="tw:relative tw:flex tw:gap-ui tw:pb-3.5 tw:last:pb-0">
           {/* punto y línea que une con el siguiente */}
           <span className="tw:relative tw:flex-none tw:w-3 tw:flex tw:justify-center">
             <span className={cx('tw:mt-1.5 tw:w-2.5 tw:h-2.5 tw:rounded-full tw:border-2 tw:border-solid', a.destacado ? 'tw:bg-lav tw:border-lav-edge' : 'tw:bg-card tw:border-edge-b')} />

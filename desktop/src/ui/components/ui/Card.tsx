@@ -37,7 +37,7 @@ export default function Card({ titulo, subtitulo, accion, pie, tono, relleno = t
       className,
     )}>
       {cabecera && (
-        <header className={cx('tw:flex tw:items-start tw:gap-3', relleno ? 'tw:px-5 tw:pt-4' : 'tw:px-5 tw:py-4 tw:border-b tw:border-edge')}>
+        <header className={cx('tw:flex tw:items-start tw:gap-ui', relleno ? 'tw:px-5 tw:pt-4' : 'tw:px-5 tw:py-4 tw:border-b tw:border-edge')}>
           <div className="tw:min-w-0 tw:flex-1">
             {titulo && <h3 className="tw:m-0 tw:text-[17px] tw:font-bold tw:leading-tight">{titulo}</h3>}
             {subtitulo && <p className={cx('tw:mt-1 tw:mb-0 tw:text-[13px]', tono ? 'tw:opacity-75' : 'tw:text-muted')}>{subtitulo}</p>}
@@ -45,7 +45,9 @@ export default function Card({ titulo, subtitulo, accion, pie, tono, relleno = t
           {accion && <div className="tw:flex-none">{accion}</div>}
         </header>
       )}
-      <div className={relleno ? cx('tw:px-5 tw:pb-5', cabecera ? 'tw:pt-3' : 'tw:pt-5') : ''}>{children}</div>
+      {children != null && children !== false && (
+        <div className={relleno ? cx('tw:px-5 tw:pb-5', cabecera ? 'tw:pt-3' : 'tw:pt-5') : ''}>{children}</div>
+      )}
       {pie && <footer className="tw:px-5 tw:py-3 tw:border-t tw:border-edge tw:bg-sunken tw:text-[13px]">{pie}</footer>}
     </section>
   );

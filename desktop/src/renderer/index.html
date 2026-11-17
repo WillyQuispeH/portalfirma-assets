@@ -14,7 +14,6 @@
   <header class="topbar">
     <div class="brand"><img src="assets/logo.png" alt="Portalfirma" class="brand-logo" /><span class="brand-studio">Asset<svg class="brand-casa" viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="bcG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5b7cfa"/><stop offset=".55" stop-color="#3346c7"/><stop offset="1" stop-color="#7c3aed"/></linearGradient></defs><path d="M3 11.2 12 4l9 7.2" fill="none" stroke="url(#bcG)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5.6 10v8.6c0 .8.6 1.4 1.4 1.4h10c.8 0 1.4-.6 1.4-1.4V10L12 5.2Z" fill="url(#bcG)"/><rect x="10.2" y="14" width="3.6" height="6" rx=".8" fill="#fff"/><rect x="15.2" y="11.6" width="2.2" height="2.2" rx=".4" fill="#fff" opacity=".85"/><path d="M16.4 6.2V4.6h1.9v3.1" fill="url(#bcG)"/></svg></span></div>
     <nav id="nav">
-      <button class="tab tab-ag" data-view="agente">Agente</button>
       <button class="tab active" data-view="inicio">Hoy</button>
       <button class="tab" data-view="cartera">Cartera</button>
       <button class="tab" data-view="personas">Personas</button>
@@ -27,10 +26,11 @@
       <button class="tab" data-view="finanzas">Finanzas</button>
       <button class="tab tab-doc" data-view="home">Gestión documental</button>
     </nav>
-    <div class="doc-tabs" id="docTabs"></div>
     <!-- «Iniciar sesión» o el menú del usuario (React: src/ui/components/functional/cuenta) -->
     <div id="account" class="account"></div>
   </header>
+  <!-- Documentos abiertos (React: components/functional/gestion/editor-pdf/Pestanas.tsx): una fila bajo el menú, solo en Gestión documental -->
+  <div class="doc-tabs" id="docTabs"></div>
 
   <main id="app">
     <!-- Login -->
@@ -56,7 +56,7 @@
 
     <!-- Enviar a firmar (React: src/ui/components/functional/gestion/enviar-a-firmar; app.js monta las cuatro) -->
     <section id="view-drop" class="view hidden"></section>
-    <section id="view-working" class="view center hidden"></section>
+    <section id="view-working" class="view hidden"></section>
     <section id="view-review" class="view hidden"></section>
     <section id="view-done" class="view hidden"></section>
 

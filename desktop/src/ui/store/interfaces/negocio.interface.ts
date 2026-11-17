@@ -43,6 +43,7 @@ export interface INegocio {
   prop: { id: string; codigo: string; titulo: string; comuna?: string; foto?: string | null } | null;
   cliente: { id: string; nombre: string; rut?: string } | null;
   firmas?: Record<string, IFirmaEtapa>; // por id de etapa
+  documentos?: IDocumentoNegocio[]; // todos los documentos del negocio, en el orden del proceso (los arma negocios.js)
   proximaAccion?: { texto: string; fecha: string | null } | null;
   siguiente?: string | null; // «¿qué sigue?» en la etapa actual (solo abiertos)
   vencida?: boolean; // la próxima acción ya pasó
@@ -55,6 +56,20 @@ export interface INegocio {
   total?: number; // cuántas etapas tiene el tipo de negocio
   creado?: string;
   actualizado?: string;
+}
+
+// un documento del negocio con su estado (orden y acta de visita, carta oferta, reserva, contrato, acta de entrega…)
+export interface IDocumentoNegocio {
+  id: string;
+  titulo: string;
+  etapa: string | null;
+  estado: 'firmado' | 'en_firma' | 'pendiente' | 'revision' | 'aprobado';
+  operacion: string | number | null;
+  firmados: number | null;
+  total: number | null;
+  fecha: string | null; // YYYY-MM-DD
+  fuera: boolean; // firmado fuera de Asset
+  detalle: string | null;
 }
 
 // documento de una etapa enviado a firmar con Portalfirma

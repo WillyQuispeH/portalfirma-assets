@@ -44,5 +44,10 @@ function llenarCon(t: string, ctx: Contexto[]): string {
 export const llenar = (html: string, datos: Contexto) => llenarCon(html.replace(/<!--[\s\S]*?-->/g, ''), [datos]);
 
 /** lee una plantilla de src/documentos/plantillas (en dist se copia al compilar, ver nest-cli.json) */
-export const cargarPlantilla = (nombre: string) =>
-  readFileSync(join(__dirname, 'plantillas', `${nombre}.html`), 'utf8');
+export const cargarPlantilla = (nombre: string) => {
+  const dir = join(__dirname, 'plantillas');
+  // el estilo común (_base.css) se mete donde la plantilla escribe  /*@base*/  dentro de su <style>
+  return readFileSync(join(dir, `${nombre}.html`), 'utf8').replace('/*@base*/', () =>
+    readFileSync(join(dir, '_base.css'), 'utf8'),
+  );
+};

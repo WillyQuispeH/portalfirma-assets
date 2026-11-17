@@ -18,7 +18,7 @@ interface IEstadoVacioProps {
 export default function EstadoVacio({ icono, titulo, texto, accion, compacto = false, className }: IEstadoVacioProps) {
   if (compacto) return <p className={cx('tw:m-0 tw:py-1 tw:text-[13px] tw:text-muted', className)}>{texto ?? titulo}</p>;
   return (
-    <div className={cx('tw:flex tw:flex-col tw:items-center tw:text-center tw:gap-2 tw:px-6 tw:py-10', className)}>
+    <div className={cx('tw:flex tw:flex-col tw:items-center tw:text-center tw:gap-ui tw:px-6 tw:py-10', className)}>
       {icono && (
         <span className="tw:grid tw:place-items-center tw:w-14 tw:h-14 tw:mb-1 tw:rounded-icono tw:bg-lav-soft tw:text-lav-softink">
           <Icono nombre={icono} tam={26} />

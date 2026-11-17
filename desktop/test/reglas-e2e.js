@@ -16,7 +16,7 @@ const FX = process.env.PF_ESCR_FX || '/home/claude/scratch/escr/fx2';
   const total = async () => txt('#esTotal');
   try {
     await w.evaluate(() => { window.Usuario._u.user = { name: 'Prueba' }; });
-    await w.click('[data-act="escr"]'); await w.waitForSelector('.es-layout');
+    await w.evaluate(() => window.Escrituras.open()); await w.waitForSelector('.es-layout'); // la tarjeta está oculta por ahora (OCULTAS en gestion/inicio/acciones.ts)
     ok(await w.isVisible('[data-sel="reglas"]'), 'el panel de reglas aparece (modo de prueba / administradores)');
     await w.click('[data-tr="escritura"]'); await w.waitForSelector('#esPick');
     await drop('mandato-oculto.docx'); await w.waitForSelector('.es-hid'); await w.waitForTimeout(300);

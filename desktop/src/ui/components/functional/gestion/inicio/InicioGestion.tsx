@@ -21,7 +21,7 @@ import { useReciente } from '../../../../store/hooks/useReciente.hook';
 import BibliotecaPlantillas from '../editor-pdf/BibliotecaPlantillas';
 import { abrirAyudaNivel, abrirDrive, abrirReciente, accionGestion, abrirRecientes } from '../../../../utils/app';
 import { IconoArchivo, carpetaDe, fechaCorta, tamano } from '../comun/archivos';
-import { ACCION, DE_MIEMBROS, HERRAMIENTAS_PDF, NIVELES, NUEVAS, marcarVisto, visto } from './acciones';
+import { ACCION, DE_MIEMBROS, HERRAMIENTAS_PDF, NIVELES, NUEVAS, OCULTAS, marcarVisto, visto } from './acciones';
 
 const RECIENTES = 3;
 // color de cada acción (acciones.ts) → tono del kit
@@ -148,15 +148,17 @@ export default function InicioGestion() {
           </div>
 
           <Card className="hub-panel hub-not" titulo={<span className="tw:inline-flex tw:items-center tw:gap-2"><Icono nombre="notary" tam={18} />Notaría</span>} subtitulo="Firmas ante notario y documentos notariales, sin filas">
-            <div className="tw:grid tw:gap-3 tw:grid-cols-1 tw:md:grid-cols-2">
-              <button type="button" className={cx('hn-card main', TACTIL, MARCA, 'tw:flex tw:items-start tw:gap-3 tw:p-4')} data-act="escr" onClick={() => hacer('escr')}>
-                <Burbuja k="escr" sobre="marca" />
-                <span className="tw:flex tw:min-w-0 tw:flex-1 tw:flex-col tw:gap-1">
-                  <strong className="tw:flex tw:flex-wrap tw:items-center tw:gap-1.5 tw:text-sm tw:font-bold">{ACCION.escr[2]}<Nuevo k="escr" /></strong>
-                  <small className="tw:text-xs tw:leading-snug tw:opacity-85">{ACCION.escr[3]}</small>
-                  <span className="tw:inline-flex tw:self-start tw:items-center tw:gap-1 tw:mt-1.5 tw:px-2.5 tw:py-1 tw:rounded-full tw:bg-white/20 tw:text-[13px] tw:font-semibold">Comenzar <Icono nombre="arrowR" tam={14} /></span>
-                </span>
-              </button>
+            <div className={cx('tw:grid tw:gap-3 tw:grid-cols-1', !OCULTAS.has('escr') && 'tw:md:grid-cols-2')}>
+              {!OCULTAS.has('escr') && (
+                <button type="button" className={cx('hn-card main', TACTIL, MARCA, 'tw:flex tw:items-start tw:gap-3 tw:p-4')} data-act="escr" onClick={() => hacer('escr')}>
+                  <Burbuja k="escr" sobre="marca" />
+                  <span className="tw:flex tw:min-w-0 tw:flex-1 tw:flex-col tw:gap-1">
+                    <strong className="tw:flex tw:flex-wrap tw:items-center tw:gap-1.5 tw:text-sm tw:font-bold">{ACCION.escr[2]}<Nuevo k="escr" /></strong>
+                    <small className="tw:text-xs tw:leading-snug tw:opacity-85">{ACCION.escr[3]}</small>
+                    <span className="tw:inline-flex tw:self-start tw:items-center tw:gap-1 tw:mt-1.5 tw:px-2.5 tw:py-1 tw:rounded-full tw:bg-white/20 tw:text-[13px] tw:font-semibold">Comenzar <Icono nombre="arrowR" tam={14} /></span>
+                  </span>
+                </button>
+              )}
               <button type="button" className={cx('hn-card', TACTIL, color('tpl'), 'tw:flex tw:items-start tw:gap-3 tw:p-4 tw:pr-9')} data-act="tpl" {...miembro('tpl')} onClick={() => hacer('tpl')}>
                 <Burbuja k="tpl" />
                 <span className="tw:flex tw:min-w-0 tw:flex-1 tw:flex-col tw:gap-1">

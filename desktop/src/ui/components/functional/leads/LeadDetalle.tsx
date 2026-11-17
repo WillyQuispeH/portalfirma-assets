@@ -256,8 +256,8 @@ export default function LeadDetalle({ id, datos, version, alCambiar }: ILeadDeta
             title={ficha ? 'Ocultar la ficha del lead' : 'Ver la ficha del lead'}>{ficha ? 'Ocultar ficha' : 'Ficha'}</Boton>
         </div>
 
-        {/* la conversación */}
-        <div ref={cuerpo} id="ldChB" className="ld-ch-b tw:flex tw:flex-1 tw:flex-col tw:gap-1.5 tw:overflow-y-auto tw:px-5 tw:py-4 tw:bg-sunken">
+        {/* la conversación (fondo tipo WhatsApp Mac: .ld-ch-b en styles.css) */}
+        <div ref={cuerpo} id="ldChB" className="ld-ch-b tw:flex tw:flex-1 tw:flex-col tw:gap-1.5 tw:overflow-y-auto tw:px-5 tw:py-4">
           {!l.mensajesLista.length && <EstadoVacio compacto texto="Todavía no hay mensajes." className="tw:m-auto" />}
           {l.mensajesLista.map((m, i) => {
             const d = m.fecha.slice(0, 10); const nuevoDia = d !== diaAnt; diaAnt = d;
@@ -278,21 +278,19 @@ export default function LeadDetalle({ id, datos, version, alCambiar }: ILeadDeta
           )}
         </div>
 
-        {/* escribirle */}
-        <div className="ld-resp tw:flex tw:flex-col tw:gap-1.5 tw:px-3 tw:py-2.5 tw:border-0 tw:border-t tw:border-solid tw:border-edge tw:bg-card">
+        {/* escribirle: barra plana tipo WhatsApp Mac (sin caja con borde) */}
+        <div className="ld-resp tw:flex tw:flex-col tw:gap-1 tw:px-3 tw:py-2 tw:border-0 tw:border-t tw:border-solid tw:border-edge">
           {bloqueo
             ? <p className="tw:m-0 tw:flex tw:items-center tw:gap-2 tw:px-1 tw:py-1.5 tw:text-[12.5px] tw:text-muted"><Icono nombre="lock" tam={13} /> {bloqueo}</p>
             : <>
               <MenuComandos items={sug} activo={act} alElegir={(n) => elegir(n, false)} />
-              {/* la misma caja que la del Agente: el texto arriba, grande, y el botón de enviar abajo a la derecha */}
-              <div className="tw:flex tw:flex-col tw:gap-1 tw:px-2 tw:pt-2 tw:pb-2 tw:rounded-card tw:border tw:border-solid tw:border-edge tw:border-b-[3px] tw:border-b-edge-b tw:bg-card tw:transition-[border-color,box-shadow] tw:focus-within:border-lav-edge tw:focus-within:ring-[3px] tw:focus-within:ring-lav/60">
-                <textarea id="ldRespTx" ref={caja} rows={2} value={texto} onChange={(e) => { setTexto(e.target.value); setPos(e.target.selectionStart); setIdx(0); }} onSelect={(e) => setPos(e.currentTarget.selectionStart)} onKeyDown={teclas} disabled={enviando}
+              <div className="tw:flex tw:items-end tw:gap-2">
+                <textarea id="ldRespTx" ref={caja} rows={1} value={texto} onChange={(e) => { setTexto(e.target.value); setPos(e.target.selectionStart); setIdx(0); }} onSelect={(e) => setPos(e.currentTarget.selectionStart)} onKeyDown={teclas} disabled={enviando}
                   placeholder={`Escríbele a ${nombreDe(l)}… (/ para comandos)`} aria-label={`Mensaje para ${nombreDe(l)}`}
-                  className="tw:block tw:w-full tw:min-h-16 tw:max-h-52 tw:m-0 tw:px-2 tw:py-1.5 tw:border-0 tw:bg-transparent tw:text-[15px] tw:leading-relaxed tw:text-text tw:placeholder:text-muted tw:font-[inherit] tw:resize-none tw:field-sizing-content tw:focus:outline-none tw:focus:ring-0 tw:focus:shadow-none" />
-                <div className="tw:flex tw:items-center tw:justify-end tw:gap-1.5">
-                  <Boton id="ldRespOk" tamano="sm" icono={salida ? CANALES[salida].icono : 'arrowR'} cargando={enviando} disabled={!texto.trim()} onClick={() => void enviar()}
-                    title={[salida ? `Sale por ${CANALES[salida].nombre}` : '', fuera24 ? 'No ha escrito por WhatsApp en 24 h: saldrá la plantilla de primer contacto y tu mensaje quedará pendiente hasta que responda.' : ''].filter(Boolean).join(' · ') || undefined}>Enviar</Boton>
-                </div>
+                  className="tw:block tw:flex-1 tw:min-h-10 tw:max-h-40 tw:m-0 tw:px-4 tw:py-2.5 tw:rounded-[22px] tw:border-0 tw:bg-card tw:text-[15px] tw:leading-snug tw:text-text tw:placeholder:text-muted tw:font-[inherit] tw:resize-none tw:field-sizing-content tw:shadow-none tw:focus:outline-none tw:focus:ring-0" />
+                <Boton id="ldRespOk" tamano="md" icono={salida ? CANALES[salida].icono : 'arrowR'} cargando={enviando} disabled={!texto.trim()} onClick={() => void enviar()}
+                  className="tw:h-10 tw:shrink-0 tw:rounded-[22px] tw:px-4"
+                  title={[salida ? `Sale por ${CANALES[salida].nombre}` : '', fuera24 ? 'No ha escrito por WhatsApp en 24 h: saldrá la plantilla de primer contacto y tu mensaje quedará pendiente hasta que responda.' : ''].filter(Boolean).join(' · ') || undefined}>Enviar</Boton>
               </div>
             </>}
         </div>

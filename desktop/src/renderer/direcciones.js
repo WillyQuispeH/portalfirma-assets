@@ -15,8 +15,12 @@ function conectar(input, { inicial = {}, alElegir } = {}) {
   const S = { google: false, sesion: uuid(), geo: inicial.lat != null ? { lat: inicial.lat, lng: inicial.lng, placeId: inicial.placeId || null } : null, texto: input.value, items: [], i: -1, tok: 0 };
 
   const pintarPie = (extra = '') => {
-    pie.innerHTML = (S.geo ? `<span class="dr-ok">${icon('pin', 12)} Ubicación guardada <a href="#" data-mapa>ver en el mapa</a></span>` : '')
-      + (S.google ? `<span class="dr-g">${icon('sparkle', 11)} Direcciones de Google</span>` : `<a href="#" data-activar>${icon('sparkle', 11)} Activar direcciones de Google</a>`) + extra;
+    // el pie flota bajo el campo al enfocar (no estira la fila del formulario); ver .dr-pie en styles.css
+    pie.innerHTML = (S.geo ? `<span class="dr-ok">${icon('pin', 12)} Ubicación guardada <button type="button" class="dr-link" data-mapa>ver en el mapa</button></span>` : '')
+      + (S.google
+        ? `<span class="dr-g">${icon('sparkle', 11)} Direcciones de Google</span>`
+        : `<button type="button" class="dr-btn" data-activar>${icon('sparkle', 13)}<span>Activar direcciones de Google</span></button>`)
+      + extra;
     pie.querySelector('[data-mapa]')?.addEventListener('click', (e) => { e.preventDefault(); pf.openUrl(mapa(S.geo.lat, S.geo.lng)); });
     pie.querySelector('[data-activar]')?.addEventListener('click', (e) => { e.preventDefault(); activar(); });
     bus.classList.toggle('hidden', S.google);
@@ -53,10 +57,19 @@ function conectar(input, { inicial = {}, alElegir } = {}) {
   bus.onclick = async () => { bus.disabled = true; try { mostrar(await api('dirBuscar', input.value), 'osm'); input.focus(); } catch (e) { pintarPie(`<span class="dr-err">${esc(e.message)}</span>`); } finally { bus.disabled = false; } };
 
   function activar() {
-    pintarPie(`<span class="dr-act"><input type="password" placeholder="Pega la clave de Google Maps (AIza…)" autocomplete="off" spellcheck="false" /><button type="button" class="primary small" data-ok>Activar</button>
+    box.classList.add('dr-abierto'); // mantener el pie visible mientras se pega la clave
+    pintarPie(`<span class="dr-act"><input type="password" placeholder="Pega la clave de Google Maps (AIza…)" autocomplete="off" spellcheck="false" /><button type="button" class="dr-btn dr-btn-ok" data-ok>Activar</button>
       <small>Una clave de Google Cloud con la «Places API (New)» y facturación activas. Queda cifrada en este computador.</small></span>`);
     const k = pie.querySelector('.dr-act input'); k.focus();
-    const ok = async () => { const b = pie.querySelector('[data-ok]'); b.disabled = true; try { const r = await api('dirConfigurar', k.value); k.value = ''; S.google = r.google; pintarPie(); toast('Direcciones de Google activadas.'); input.focus(); } catch (e) { b.disabled = false; pie.querySelector('.dr-act small').textContent = e.message; pie.querySelector('.dr-act small').classList.add('dr-err'); } };
+    const ok = async () => {
+      const b = pie.querySelector('[data-ok]'); b.disabled = true;
+      try {
+        const r = await api('dirConfigurar', k.value); k.value = ''; S.google = r.google;
+        box.classList.remove('dr-abierto'); pintarPie(); toast('Direcciones de Google activadas.'); input.focus();
+      } catch (e) {
+        b.disabled = false; pie.querySelector('.dr-act small').textContent = e.message; pie.querySelector('.dr-act small').classList.add('dr-err');
+      }
+    };
     pie.querySelector('[data-ok]').onclick = ok; k.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); ok(); } };
   }
 

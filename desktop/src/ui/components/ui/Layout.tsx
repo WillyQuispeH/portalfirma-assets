@@ -43,7 +43,7 @@ interface ILayoutProps extends Partial<TCabecera> {
   children?: ReactNode;
   /** color del tinte del fondo general (por defecto, el de la ilustración o el de la marca) */
   tinte?: string;
-  /** espacio entre los bloques del contenido (pantalla: el mismo margen de los costados) */
+  /** @deprecated el espacio entre bloques es siempre --ui-gap; se conserva por las pantallas que lo pasan */
   espacio?: 'normal' | 'compacto' | 'pantalla';
   id?: string;
   className?: string;
@@ -66,7 +66,7 @@ interface ILayoutProps extends Partial<TCabecera> {
   altoCompleto?: boolean;
 }
 
-export default function Layout({ barra, children, tinte, espacio = 'normal', id, className, contenidoClassName, cabeceraClassName, fondo, ref, titulo, migas, miga, volver, altoCompleto, ...cabecera }: ILayoutProps) {
+export default function Layout({ barra, children, tinte, espacio: _espacio = 'normal', id, className, contenidoClassName, cabeceraClassName, fondo, ref, titulo, migas, miga, volver, altoCompleto, ...cabecera }: ILayoutProps) {
   useAnchoBarra();
   useDesplazada();
   const color = tinte ?? cabecera.ilustracion?.tinte ?? 'var(--brand)';
@@ -79,7 +79,7 @@ export default function Layout({ barra, children, tinte, espacio = 'normal', id,
     // entre la cabecera, la barra y el contenido, el mismo margen que a los costados y abajo (ver main:has(…) en globals.css)
     <div ref={ref} id={id} data-layout data-alto-completo={altoCompleto ? '' : undefined}
       // alto completo: la ventana menos el menú principal (56px), el padding de arriba de main (20px) y el margen de abajo
-      className={cx('im-wrap tw:relative tw:flex tw:flex-col tw:gap-[var(--ui-margen-pantalla)]', altoCompleto && 'tw:h-[calc(100vh-76px-var(--ui-margen-pantalla))] tw:min-h-[560px]', className)}>
+      className={cx('im-wrap tw:relative tw:flex tw:flex-col tw:gap-ui', altoCompleto && 'tw:h-[calc(100vh-76px-var(--ui-margen-pantalla))] tw:min-h-[560px]', className)}>
       {/* el fondo general: fijo detrás de la pantalla; se va con ella cuando la vista se oculta */}
       {fondo === undefined
         ? <div aria-hidden data-layout-fondo className="tw:pointer-events-none tw:fixed tw:inset-0 tw:-z-10" style={tintado} />
@@ -89,8 +89,8 @@ export default function Layout({ barra, children, tinte, espacio = 'normal', id,
           // con la ventana quieta no hace falta que se pegue: relative (no static) por la ilustración en ::before
           className={cx(altoCompleto && 'tw:relative! tw:top-auto!', cabeceraClassName)} />
       )}
-      {barra && <div data-layout-barra className="tw:flex tw:flex-wrap tw:items-center tw:gap-3">{barra}</div>}
-      <div data-layout-contenido className={cx('tw:flex tw:min-w-0 tw:flex-col', { normal: 'tw:gap-4', compacto: 'tw:gap-3', pantalla: 'tw:gap-[var(--ui-margen-pantalla)]' }[espacio], altoCompleto && 'tw:min-h-0 tw:flex-1', contenidoClassName)}>
+      {barra && <div data-layout-barra className="tw:flex tw:flex-wrap tw:items-center tw:gap-ui">{barra}</div>}
+      <div data-layout-contenido className={cx('tw:flex tw:min-w-0 tw:flex-col tw:gap-ui', altoCompleto && 'tw:min-h-0 tw:flex-1', contenidoClassName)}>
         {children}
       </div>
     </div>

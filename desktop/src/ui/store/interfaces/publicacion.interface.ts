@@ -21,7 +21,7 @@ export interface IAviso {
   comuna?: string;
   foto?: string | null;
   precio?: IMonto | null;
-  portales: { nombre: string; status?: string; url?: string | null }[];
+  portales: { portal: string; nombre: string; status?: string; url?: string | null }[];
   visitas: number | null;
   contactos: number | null;
   interesados: number;
@@ -71,8 +71,11 @@ export interface IRespuestaInteresado {
   email?: string | null;
 }
 
+// lo que se puede hacer con el aviso de una propiedad en un portal (el mismo CRUD para todos los portales)
+export type TAccionAviso = 'publicar' | 'actualizar' | 'pausar' | 'reactivar' | 'retirar' | 'eliminar';
+
 export interface IPortal {
-  id: string; // 'pi', 'chilepropiedades', 'toctoc', 'yapo'…
+  id: string; // 'pi', 'chilepropiedades', 'broku', 'toctoc', 'yapo'…
   nombre: string;
   via: 'api' | 'feed' | 'acuerdo';
   listo: boolean;
@@ -81,6 +84,10 @@ export interface IPortal {
   token?: boolean; // hay TOKEN guardado
   feedUrl?: string;
   correo?: string | null; // a quién pedir la integración
+  desde?: string | null; // cuándo se activó
+  enTramite?: boolean; // la integración está pedida y aún no responde el portal (Broku)
+  acciones?: TAccionAviso[];
+  maxTitulo?: number;
 }
 
 export interface IContactoAvisos {
@@ -96,6 +103,7 @@ export interface IPortales {
   catalogo: IPortal[];
   contacto: IContactoAvisos;
   feeds: Record<string, number>; // avisos en el feed de cada portal (los que no van por API)
+  urls: Record<string, string> | null; // dirección pública de cada feed (la sirve la API); null si no se puede ver (solo el administrador)
 }
 
 // ---------- el flujo «Publicar»: calidad del aviso, portales y publicar (pubCalidad, pubRedactar, pubTextos, pubPublicar) ----------

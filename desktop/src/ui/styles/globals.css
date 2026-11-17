@@ -20,21 +20,26 @@
   --radius-card: var(--ui-radio-card);
   --radius-control: var(--ui-radio-control);
   --radius-icono: var(--ui-radio-icono);
+  /* espacio entre bloques: tw:gap-ui, tw:p-ui, … */
+  --spacing-ui: var(--ui-gap);
 }
 
 /* ---------- medidas globales de diseño (regla en .cursor/rules/diseno-pantallas.mdc) ----------
    Cambiar aquí cambia toda la app: componentes React (Tailwind) y CSS de src/renderer (border-radius: var(--ui-radio)). */
 :root {
-  /* el radio base de todo lo que tiene esquinas (los círculos y las píldoras usan rounded-full / 999px) */
-  --ui-radio: 5px;
+  /* el radio base de todo lo que tiene esquinas (los círculos y las píldoras usan rounded-full / 999px).
+     Prueba «Mac 2026 / Tahoe»: controles 8, cards 14, íconos 10. Para volver: poné los tres en var(--ui-radio) o 10px. */
+  --ui-radio: 10px;
   /* superficies: Card, columnas, paneles, tarjetas de listas, menús flotantes, ventanas modales */
-  --ui-radio-card: var(--ui-radio);
+  --ui-radio-card: 14px;
   /* lo que se toca o se escribe: botones, campos, pestañas, filas de listas, badges */
-  --ui-radio-control: var(--ui-radio);
+  --ui-radio-control: 8px;
   /* cuadritos de ícono, avatares, miniaturas, casillas */
-  --ui-radio-icono: var(--ui-radio);
+  --ui-radio-icono: 10px;
   /* el margen de las pantallas: a los costados, bajo la cabecera y abajo (lo pone Layout) */
-  --ui-margen-pantalla: 5px;
+  --ui-margen-pantalla: 10px;
+  /* espacio entre bloques del Layout y del kit (no el huequito ícono+texto) */
+  --ui-gap: 10px;
   --ui-edge: color-mix(in srgb, var(--text) 14%, transparent);
   --ui-edge-b: color-mix(in srgb, var(--text) 26%, transparent);
   --ui-field: var(--card);
@@ -232,7 +237,7 @@ html[data-theme="dark"] {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  [data-menu-mas] {
+  [data-menu-mas], [data-menu-select] {
     animation: none;
   }
 }
@@ -343,16 +348,35 @@ html[data-theme="dark"] {
   width: min(880px, 94vw);
 }
 
+/* campos filled del kit: anulan el margin/padding/borde de input/select/textarea/label de styles.css */
+[data-campo] label { margin-bottom: 0; font-size: inherit; color: inherit; }
+[data-campo] :is(input, select, textarea) {
+  margin-top: 0;
+  padding: 0;
+  width: 100%;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  color: inherit;
+  font: inherit;
+}
+[data-campo] :is(input, select, textarea):focus {
+  outline: none;
+  border-color: transparent;
+  box-shadow: none;
+}
 
-/* título de CabeceraPagina: el degradado del texto del logo (--ui-logo-grad) y una escala que armoniza con los botones del kit
-   (botón: 40px de alto, 14px y grosor 600 → título: 22px y 700, subtítulo: 14px). Le gana a «.im-wrap h1» y «h1» de
-   styles.css por cargarse después con la misma especificidad. fit-content: el degradado recorre el texto, no la fila. */
-[data-cabecera] h1 {
+
+/* título de CabeceraPagina, VentanaCabecera (.mdl-cab) y Modal ([data-modal-cab]): degradado del logo.
+   fit-content: el degradado recorre el texto, no la fila. Le gana a h1/h2 de styles.css. */
+[data-cabecera] h1,
+.mdl-cab h2,
+[data-modal-cab] h2 {
   width: fit-content;
   max-width: 100%;
   margin: 0;
   padding-bottom: .06em;
-  font-size: 20px;
   font-weight: 700;
   line-height: 1.2;
   letter-spacing: -.012em;
@@ -361,6 +385,9 @@ html[data-theme="dark"] {
   background-clip: text;
   color: transparent;
 }
+[data-cabecera] h1 { font-size: 20px; }
+.mdl-cab h2,
+[data-modal-cab] h2 { font-size: 17px; }
 
 /* las pantallas con Layout: a lo ancho de la ventana, con --ui-margen-pantalla a los costados, bajo la cabecera y abajo
    (regla en .cursor/rules/diseno-pantallas.mdc). Arriba no hace falta: la cabecera sube hasta el menú (--layout-arriba).
@@ -381,7 +408,7 @@ main:has(> .view:not(.hidden) [data-layout]) {
   --cab-fondo: color-mix(in srgb, var(--text) 6%, var(--card));
   margin-top: calc(-1 * var(--layout-arriba, 26px));
   margin-inline: calc(-1 * var(--cab-lado));
-  /* el texto de la cabecera conserva 24px desde el borde de la ventana, aunque el contenido vaya a 5px */
+  /* el texto de la cabecera conserva 24px desde el borde de la ventana, aunque el contenido vaya a --ui-margen-pantalla */
   padding: 14px calc(var(--cab-lado) + 24px - var(--ui-margen-pantalla)) 22px;
   background: var(--cab-fondo);
   /* el borde inferior de las Card del kit (grueso, el que «se hunde») */

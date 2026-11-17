@@ -1,93 +1,171 @@
 <!doctype html>
 <!--
-  CARTA OFERTA de PortalFirma Asset. Es un HTML normal: se edita el texto y el estilo aquí.
-  Las variables van entre llaves dobles y se reemplazan solas al generar el PDF:
+  CARTA OFERTA Y ACEPTACIÓN de PortalFirma Asset. HTML normal: se edita el texto y el estilo aquí (el estilo común está en _base.css).
+  El contenido legal sigue el modelo «Carta oferta y aceptación de compraventa» de la corredora; en arriendo usa una versión más corta.
+  Variables entre llaves dobles (se reemplazan solas al generar el PDF):
 
-    {{numero}}  {{fechaEmision}}  {{operacionVerbo}} («arrendar» o «comprar»)  {{operacionTxt}} («Arriendo» o «Venta»)  {{contrato}} («arrendamiento» o «compraventa»)
-    {{corredora.nombre}}  {{corredora.rut}}
-    {{corredor.nombre}}   {{corredor.email}}   {{corredor.telefono}}
-    {{oferente.nombre}}   {{oferente.rut}}     {{oferente.email}}   {{oferente.telefono}}   {{oferente.calidad}}
-    {{propietario}}  (nombre de quien figura como propietario en la ficha; «el propietario» si no hay)
-    {{propiedad.codigo}}  {{propiedad.tipo}}  {{propiedad.direccion}}  {{propiedad.precioLista}}
-    {{oferta.monto}}  {{oferta.garantia}}  {{oferta.plazo}}  {{oferta.vigencia}}  {{oferta.vence}}  {{oferta.condiciones}}
+    {{numero}}  {{fechaEmision}}  {{ciudad}}  {{operacionVerbo}} («arrendar» o «comprar»)  {{contrato}} («arrendamiento» o «compraventa»)
+    {{#esVenta}}…{{/esVenta}}   {{#esArriendo}}…{{/esArriendo}}
+    {{rol.oferente}} («Comprador» / «Arrendatario»)   {{rol.contraparte}} («Vendedor» / «Arrendador»)
+    {{corredora.nombre}}  {{corredora.rut}}   {{corredor.nombre}}  {{corredor.email}}  {{corredor.telefono}}
+    {{oferente.nombre}} {{oferente.rut}} {{oferente.perfil}} («chilena, soltera, abogada») {{oferente.domicilio}} {{oferente.email}} {{oferente.telefono}}
+    {{contraparte.nombre}} {{contraparte.texto}} (todos los propietarios con RUT y datos) {{contraparte.firma}} («Juan Pérez y Ana Soto»)
+    {{propiedad.codigo}} {{propiedad.tipo}} {{propiedad.direccion}} {{propiedad.precioLista}} {{propiedad.rol}} {{propiedad.dominio}} (inscripción, si se conoce)
+    {{oferta.monto}}  {{oferta.montoLargo}} («4.850 Unidades de Fomento»)  {{oferta.garantia}}  {{oferta.plazo}}  {{oferta.vigencia}}  {{oferta.vence}}  {{oferta.condiciones}}
+    Compraventa: {{venta.piePct}} {{venta.pie}}  {{venta.saldoPct}} {{venta.saldo}}  {{venta.promesaDias}} {{venta.escrituraDias}}  {{venta.seriedad}} {{venta.comisionPct}}
 
-  Un bloque  {{#algo}} … {{/algo}}  solo aparece si «algo» tiene valor (por ejemplo la garantía o las condiciones).
+  Un bloque  {{#algo}} … {{/algo}}  solo aparece si «algo» tiene valor.
   Este documento NO lleva cajas ni líneas de firma: Portalfirma agrega su propia hoja de firma al enviarlo.
-  Este texto es un borrador para que lo revise el notario: al cambiarlo, el documento que firman los oferentes cambia.
+  Este texto debe revisarlo el notario: al cambiarlo, cambia lo que firman las partes.
 -->
 <html lang="es">
 <head>
 <meta charset="utf-8">
 <title>Carta oferta nº {{numero}}</title>
 <style>
-  @page { size: A4; margin: 13mm 15mm 14mm; }
-  * { box-sizing: border-box; }
-  body { font-family: "Helvetica Neue", Arial, sans-serif; font-size: 10pt; line-height: 1.4; color: #1c2230; margin: 0; }
-  .top { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #1c2230; padding-bottom: 10px; margin-bottom: 14px; }
-  .top h1 { margin: 0; font-size: 17pt; letter-spacing: .02em; }
-  .top .emp { font-size: 9.5pt; color: #4a5266; margin-top: 2px; }
-  .top .n { text-align: right; font-size: 9.5pt; color: #4a5266; }
-  .top .n b { display: block; font-size: 12pt; color: #1c2230; }
-  h2 { font-size: 10pt; text-transform: uppercase; letter-spacing: .06em; color: #4a5266; margin: 13px 0 5px; }
-  .caja { border: 1px solid #cfd5e2; border-radius: 6px; padding: 10px 12px; }
-  .datos { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 18px; }
-  .datos span { color: #4a5266; font-size: 9pt; display: block; }
-  .datos b { font-weight: 600; }
-  .datos .ancho { grid-column: 1 / -1; }
-  .monto { font-size: 15pt; font-weight: 700; }
-  .leg p { margin: 0 0 6px; text-align: justify; font-size: 9.5pt; }
-  .cond { white-space: pre-wrap; font-size: 9.5pt; }
+/*@base*/
 </style>
 </head>
 <body>
 
-<div class="top">
-  <div>
-    <h1>CARTA OFERTA</h1>
-    <div class="emp">{{corredora.nombre}}{{#corredora.rut}} · RUT {{corredora.rut}}{{/corredora.rut}}</div>
+<div class="enc">
+  <div class="marca">{{corredora.nombre}}<small>{{#corredora.rut}}RUT {{corredora.rut}}{{/corredora.rut}}</small></div>
+  <div class="meta"><b>Carta Nº {{numero}}</b><br>{{ciudad}}, {{fechaEmision}}</div>
+</div>
+<div class="filete"></div>
+<h1>Carta oferta y aceptación</h1>
+<div class="subtitulo">de {{contrato}} · propiedad {{propiedad.codigo}}</div>
+
+<div class="resumen">
+  <h3>Resumen de la oferta</h3>
+  <div class="grid">
+    <div class="dato ancho"><span>Inmueble</span><b>{{propiedad.tipo}} · {{propiedad.direccion}}</b></div>
+    <div class="dato"><span>{{#esVenta}}Precio ofrecido{{/esVenta}}{{#esArriendo}}Renta mensual ofrecida{{/esArriendo}}</span><b class="grande">{{oferta.monto}}</b></div>
+    <div class="dato"><span>Vigencia de la oferta</span><b>{{oferta.vigencia}} · hasta el {{oferta.vence}}</b></div>
+    {{#propiedad.precioLista}}<div class="dato"><span>Precio publicado</span><b>{{propiedad.precioLista}}</b></div>{{/propiedad.precioLista}}
+    {{#oferta.garantia}}<div class="dato"><span>Garantía o reserva</span><b>{{oferta.garantia}}</b></div>{{/oferta.garantia}}
+    {{#oferta.plazo}}<div class="dato"><span>Plazo</span><b>{{oferta.plazo}}</b></div>{{/oferta.plazo}}
   </div>
-  <div class="n"><b>Nº {{numero}}</b>Emitida el {{fechaEmision}}</div>
 </div>
 
-<p style="margin: 0 0 10px;">Señor(a) <b>{{propietario}}</b><br>Por intermedio de {{corredora.nombre}}.</p>
-
-<h2>Oferente</h2>
-<div class="caja datos">
-  <div><span>Nombre</span><b>{{oferente.nombre}}</b></div>
-  <div><span>RUT</span><b>{{oferente.rut}}</b></div>
-  <div><span>Correo</span><b>{{oferente.email}}</b></div>
-  <div><span>Teléfono</span><b>{{oferente.telefono}}</b></div>
+<div class="partes">
+  <div class="parte">
+    <div class="rol">{{rol.oferente}}</div>
+    <div class="nom">{{oferente.nombre}}</div>
+    <div class="det">RUT {{oferente.rut}}{{#oferente.perfil}} · {{oferente.perfil}}{{/oferente.perfil}}{{#oferente.domicilio}}<br>{{oferente.domicilio}}{{/oferente.domicilio}}<br>{{oferente.email}}{{#oferente.telefono}} · {{oferente.telefono}}{{/oferente.telefono}}</div>
+  </div>
+  <div class="parte">
+    <div class="rol">{{rol.contraparte}}</div>
+    <div class="nom">{{contraparte.firma}}</div>
+    <div class="det">{{contraparte.texto}}</div>
+  </div>
 </div>
 
-<h2>Propiedad</h2>
-<div class="caja datos">
-  <div><span>Código</span><b>{{propiedad.codigo}}</b></div>
-  <div><span>Operación</span><b>{{operacionTxt}}</b></div>
-  <div class="ancho"><span>{{propiedad.tipo}}</span><b>{{propiedad.direccion}}</b></div>
-  {{#propiedad.precioLista}}<div><span>Precio publicado</span><b>{{propiedad.precioLista}}</b></div>{{/propiedad.precioLista}}
+<p class="comparecencia">En {{ciudad}}, a {{fechaEmision}}, comparece por una parte <b>{{oferente.nombre}}</b>{{#oferente.perfil}}, {{oferente.perfil}}{{/oferente.perfil}}, cédula de identidad número {{oferente.rut}}{{#oferente.domicilio}}, con domicilio en {{oferente.domicilio}}{{/oferente.domicilio}}, en adelante «el {{rol.oferente}}»; y por otra parte {{contraparte.texto}}, en adelante «el {{rol.contraparte}}».</p>
+
+{{#esVenta}}
+<div class="cl"><h2><i>Primero ·</i> Inmueble</h2>
+  <p>El Vendedor es propietario del inmueble ubicado en {{propiedad.direccion}}{{#propiedad.rol}}, Rol de avalúo {{propiedad.rol}}{{/propiedad.rol}}, en adelante «el Inmueble».</p>
+  <p>El título de dominio se encuentra inscrito a nombre del Vendedor {{propiedad.dominio}}</p>
 </div>
 
-<h2>Oferta</h2>
-<div class="caja datos">
-  <div class="ancho"><span>Monto ofrecido</span><div class="monto">{{oferta.monto}}</div></div>
-  {{#oferta.garantia}}<div><span>Garantía o reserva</span><b>{{oferta.garantia}}</b></div>{{/oferta.garantia}}
-  {{#oferta.plazo}}<div><span>Plazo</span><b>{{oferta.plazo}}</b></div>{{/oferta.plazo}}
-  <div><span>Vigencia de la oferta</span><b>{{oferta.vigencia}} (hasta el {{oferta.vence}})</b></div>
+<div class="cl"><h2><i>Segundo ·</i> Visita del comprador</h2>
+  <p>El Comprador declara haber visitado la propiedad individualizada en la cláusula anterior, la que le fue ofrecida en venta por la corredora de propiedades {{corredora.nombre}}{{#corredora.rut}}, RUT {{corredora.rut}}{{/corredora.rut}}.</p>
 </div>
-{{#oferta.condiciones}}
-<h2>Condiciones</h2>
-<div class="cond">{{oferta.condiciones}}</div>
-{{/oferta.condiciones}}
 
-<h2>Declaraciones del oferente</h2>
-<div class="leg">
-  <p>1. Yo, {{oferente.nombre}}, {{oferente.calidad}}, ofrezco {{operacionVerbo}} la propiedad individualizada más arriba por el monto y en las condiciones indicadas, por intermedio de {{corredora.nombre}} (la «Corredora»).</p>
-  <p>2. Esta oferta se mantiene vigente por el plazo señalado. Vencido ese plazo sin que el propietario la haya aceptado, queda sin efecto.</p>
-  <p>3. La oferta está sujeta a la aceptación del propietario y no constituye por sí sola un contrato de {{contrato}}: las partes lo formalizarán por escrito en los plazos y condiciones que acuerden.</p>
-  <p>4. Declaro que la información que entrego es verdadera y que cuento con las facultades para hacer esta oferta. Autorizo a la Corredora a contactarme por los medios señalados y a compartir esta carta con el propietario, conforme a la Ley Nº 19.628 sobre protección de la vida privada.</p>
-  <p>5. Reconozco que la Corredora me presentó esta propiedad y que, si la operación se concreta, corresponde pagar la comisión de corretaje según los honorarios informados por la Corredora, más los impuestos aplicables.</p>
-  <p>6. Esta carta se firma electrónicamente con Portalfirma.</p>
+<div class="cl"><h2><i>Tercero ·</i> Oferta de compra</h2>
+  <p>Mediante la presente Carta Oferta y Aceptación de Compraventa, y por intermedio de la corredora de propiedades {{corredora.nombre}}, el Comprador formula la oferta de compra por el Inmueble al Vendedor de que dan cuenta las siguientes cláusulas. A su vez, el Vendedor acepta íntegramente la oferta de compra.</p>
 </div>
+
+<div class="cl"><h2><i>Cuarto ·</i> Precio</h2>
+  <p>El valor de la oferta de compra corresponde a la suma de <b>{{oferta.montoLargo}}</b>, en adelante «el Precio».</p>
+</div>
+
+<div class="cl"><h2><i>Quinto ·</i> Forma de pago</h2>
+  <p>El Comprador pagará al Vendedor el Precio en su equivalente en pesos según el valor de la Unidad de Fomento a la fecha de la firma de la escritura de compraventa, de la siguiente forma:</p>
+  <ul class="sub">
+    <li><b>i.</b>Un {{venta.piePct}} %, equivalente a {{venta.pie}}, se pagará mediante vale vista en su equivalente en pesos a la fecha de la firma de la escritura de compraventa. Dicho vale vista quedará con instrucciones notariales para ser entregado al Vendedor una vez que el Inmueble se encuentre debidamente inscrito a nombre del Comprador en el Conservador de Bienes Raíces respectivo.</li>
+    <li><b>ii.</b>El {{venta.saldoPct}} % restante, equivalente a {{venta.saldo}}, se pagará mediante un crédito hipotecario otorgado por alguna institución financiera de la plaza.</li>
+  </ul>
+</div>
+
+<div class="cl"><h2><i>Sexto ·</i> Promesa de compraventa</h2>
+  <p>Las partes deberán suscribir una promesa de compraventa respecto del Inmueble en un plazo máximo de {{venta.promesaDias}} días hábiles a contar de la fecha de aceptación por parte del Vendedor de la presente Carta Oferta y Aceptación de Compraventa. A su vez, la escritura de compraventa deberá suscribirse en un plazo máximo de {{venta.escrituraDias}} días corridos contados desde la fecha de suscripción de la promesa de compraventa.</p>
+</div>
+
+<div class="cl"><h2><i>Séptimo ·</i> Garantía de seriedad</h2>
+  <p>A fin de garantizar el cumplimiento fiel y oportuno de lo establecido en la presente Carta Oferta y Aceptación de Compraventa, las partes se obligan a dejar con instrucciones notariales, al momento de suscribirse la promesa de compraventa, un cheque nominativo y sin fecha, a nombre de la contraparte, por el equivalente en pesos a {{venta.seriedad}}. Asimismo, ambas partes deberán dejar con instrucciones notariales un cheque sin fecha a nombre de {{corredora.nombre}} por el equivalente al {{venta.comisionPct}} % del precio de compraventa, más IVA, en su equivalente en pesos a la fecha de firma de la promesa de compraventa.</p>
+  <p>Dichas instrucciones notariales establecerán que, si alguna de las partes se retractare de suscribir la escritura de compraventa, la parte incumplidora perderá la cantidad estipulada en garantía de seriedad en beneficio de la parte diligente como multa a su favor. De igual forma, la parte incumplidora deberá pagar además la comisión de corretaje total acordada a la corredora de propiedades {{corredora.nombre}}.</p>
+</div>
+
+<div class="cl"><h2><i>Octavo ·</i> Comisión de corretaje</h2>
+  <p>La comisión acordada correspondiente a la corredora de propiedades {{corredora.nombre}}{{#corredora.rut}}, rol único tributario número {{corredora.rut}},{{/corredora.rut}} es la siguiente: por una parte, el Comprador deberá dejar en la carta de instrucciones, al momento de la firma de la promesa de compraventa, en poder del señor Notario respectivo, un cheque por el equivalente al {{venta.comisionPct}} % más IVA del precio de venta indicado en la cláusula Cuarta del presente documento; y por otra parte, el Vendedor deberá dejar en la carta de instrucciones, al momento de la firma de la promesa de compraventa, en poder del señor Notario respectivo, un cheque por el equivalente al {{venta.comisionPct}} % más IVA del precio de venta indicado en la cláusula Cuarta del presente documento. Ambos cheques deberán extenderse a nombre de {{corredora.nombre}}.</p>
+  <p>Dicha comisión será plenamente exigible contra la inscripción de la propiedad a nombre del Comprador o de quien este designe en el Conservador de Bienes Raíces respectivo, presentando copia simple de dominio vigente.</p>
+</div>
+
+<div class="cl"><h2><i>Noveno ·</i> Competencia</h2>
+  <p>Cualquier dificultad que pueda surgir entre las partes o entre cualquiera de ellas con la corredora de propiedades {{corredora.nombre}}, con motivo de esta oferta y/o del corretaje, sea en razón de su validez, interpretación, efectos, cumplimiento, incumplimiento o por cualquier otra causa, será resuelta por los tribunales ordinarios de justicia, fijando para estos efectos su domicilio en Santiago de Chile.</p>
+</div>
+
+<div class="cl"><h2><i>Décimo ·</i> Condición</h2>
+  <p>Será condición esencial para la celebración del contrato de compraventa prometido que los títulos del inmueble objeto de la presente «carta oferta y aceptación» se encuentren ajustados a derecho.</p>
+</div>
+
+<div class="cl"><h2><i>Décimo primero ·</i> Documentación necesaria</h2>
+  <p>El Vendedor se obliga a poner a disposición del Comprador los títulos que se señalan de la propiedad objeto de esta oferta y aceptación. La corredora de propiedades {{corredora.nombre}}, por su parte, se encargará de obtener los títulos del inmueble.</p>
+  <ul class="lista">
+    <li>Copia de dominio vigente emitida por el Conservador de Bienes Raíces de la zona.</li>
+    <li>Certificado de hipotecas y gravámenes emitido por el Conservador de Bienes Raíces de la zona.</li>
+    <li>Certificados municipales, de no expropiación y de número.</li>
+    <li>Certificado de no expropiación, Serviu.</li>
+    <li>Cuentas de servicios básicos.</li>
+    <li>Certificado de deuda de contribuciones.</li>
+    <li>Certificado de avalúo fiscal, emitido por el SII.</li>
+  </ul>
+</div>
+
+<div class="cl"><h2><i>Décimo segundo ·</i> Protocolización notarial</h2>
+  <p>Las partes acuerdan que la presente carta oferta y cualquier aceptación de la misma por parte del Vendedor será protocolizada ante Notario Público, para otorgar fe pública y formalizar legalmente el compromiso de compraventa del inmueble descrito en este documento.</p>
+</div>
+
+<div class="cl"><h2><i>Décimo tercero ·</i> Gastos notariales</h2>
+  <p>Todos los gastos notariales correspondientes al contrato de promesa de compraventa y su carta de instrucciones respectiva serán pagados por mitades iguales, y los gastos del contrato de compraventa, carta de instrucciones e inscripción en el Conservador de Bienes Raíces e impuestos, si los hubiera, serán de cargo del Comprador.</p>
+</div>
+
+<div class="cl"><h2><i>Décimo cuarto ·</i> Vigencia</h2>
+  <p>La presente carta oferta y aceptación se mantendrá válida y en pleno efecto durante un período de <b>{{oferta.vigencia}}</b> corridos, contados a partir de la fecha de entrega de esta carta al Vendedor o su representante autorizado (hasta el {{oferta.vence}}).</p>
+  <p>La aceptación de la oferta por parte del Vendedor deberá ser comunicada por escrito al Comprador dentro de dicho período de vigencia. En caso de que el Vendedor no emita una respuesta formal aceptando los términos aquí presentados antes del cierre del último día de vigencia, la oferta se considerará rechazada y el Comprador quedará liberado de cualquier obligación o compromiso derivado de esta propuesta.</p>
+  <p>La respuesta del Vendedor se entenderá aceptada solo con la firma de este mismo documento de carta oferta y aceptación, y puede ser entregada personalmente, enviada por correo electrónico a {{oferente.email}}, o mediante cualquier otro método de comunicación escrita que asegure la confirmación de la recepción por parte del Comprador.</p>
+</div>
+{{/esVenta}}
+
+{{#esArriendo}}
+<div class="cl"><h2><i>Primero ·</i> Inmueble</h2>
+  <p>El inmueble objeto de esta oferta es el {{propiedad.tipo}} ubicado en {{propiedad.direccion}}{{#propiedad.rol}}, Rol de avalúo {{propiedad.rol}}{{/propiedad.rol}}, de propiedad de {{contraparte.firma}}, en adelante «el Inmueble», que le fue presentado al Arrendatario por la corredora de propiedades {{corredora.nombre}}{{#corredora.rut}}, RUT {{corredora.rut}}{{/corredora.rut}}.</p>
+</div>
+
+<div class="cl"><h2><i>Segundo ·</i> Oferta de arrendamiento</h2>
+  <p>Por intermedio de {{corredora.nombre}}, el Arrendatario ofrece arrendar el Inmueble por una renta mensual de <b>{{oferta.monto}}</b>{{#oferta.plazo}}, por un plazo de {{oferta.plazo}}{{/oferta.plazo}}{{#oferta.garantia}}, con la siguiente garantía o reserva: {{oferta.garantia}}{{/oferta.garantia}}. La oferta queda sujeta a la aprobación del propietario y a la firma del contrato de arrendamiento.</p>
+</div>
+
+{{#oferta.condiciones}}<div class="cl"><h2><i>Tercero ·</i> Condiciones de la oferta</h2>
+  <p class="pre">{{oferta.condiciones}}</p>
+</div>{{/oferta.condiciones}}
+
+<div class="cl"><h2><i>Cuarto ·</i> Vigencia</h2>
+  <p>Esta oferta se mantiene vigente por {{oferta.vigencia}} corridos, hasta el {{oferta.vence}}. Vencido ese plazo sin que el propietario la haya aceptado por escrito, queda sin efecto y el Arrendatario queda liberado de toda obligación derivada de ella.</p>
+</div>
+
+<div class="cl"><h2><i>Quinto ·</i> Comisión de corretaje</h2>
+  <p>El Arrendatario reconoce que la corredora {{corredora.nombre}} le presentó el Inmueble. Si la operación se concreta, se pagará la comisión de corretaje de 50 % + IVA del canon mensual acordado, o de 2 % + IVA del total del contrato si este excede los 24 meses, conforme a los honorarios informados por la corredora.</p>
+</div>
+
+<div class="cl"><h2><i>Sexto ·</i> Declaraciones</h2>
+  <p>El Arrendatario declara que la información que entrega es verdadera y que cuenta con las facultades para hacer esta oferta. Autoriza a la corredora a contactarlo por los medios señalados y a compartir esta carta con el propietario, conforme a la Ley Nº 19.628 sobre protección de la vida privada. Cualquier controversia será resuelta por los tribunales ordinarios de justicia de Santiago de Chile.</p>
+</div>
+{{/esArriendo}}
+
+<div class="pie-legal">Documento emitido por {{corredora.nombre}}{{#corredora.rut}}, RUT {{corredora.rut}}{{/corredora.rut}}, atendido por {{corredor.nombre}} ({{corredor.email}}). Se firma electrónicamente con Portalfirma y queda disponible para su verificación.</div>
 
 </body>
 </html>

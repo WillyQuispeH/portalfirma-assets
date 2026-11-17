@@ -76,6 +76,14 @@ const esquema = z.object({
   /** app de Asset en Mercado Libre (Portal Inmobiliario); sin las dos, la integración no aparece */
   ML_CLIENT_ID: z.string().optional(),
   ML_CLIENT_SECRET: z.string().optional(),
+  /** app de Asset en Google (cliente OAuth «Aplicación web»): calendario y Drive de cada usuario y Drive de la empresa; sin las dos, no aparece */
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
+  /** solo fuera de producción (pruebas con un Google falso) */
+  GOOGLE_AUTH_URL: z.string().optional(),
+  GOOGLE_TOKEN_URL: z.string().optional(),
+  GOOGLE_USERINFO_URL: z.string().optional(),
+  GOOGLE_API_URL: z.string().optional(),
   /** API de Convecta (de donde se importa la cartera): dirección base y clave de suscripción (cabecera Ocp-Apim-Subscription-Key) */
   CONVECTA_API_URL: z
     .url()

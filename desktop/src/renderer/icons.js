@@ -33,6 +33,7 @@ const ICON_PATHS = {
   building: '<rect x="5" y="3" width="14" height="18" rx="1.5"/><path d="M9 7h2M13 7h2M9 11h2M13 11h2M9 15h2M13 15h2M11 21v-3h2v3"/>',
   settings: '<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>',
   alert: '<path d="M12 3 2.5 20h19z"/><path d="M12 10v4.5M12 17.5v.01"/>',
+  run: '<circle cx="15.5" cy="4.5" r="1.8"/><path d="M13.5 8.5 11 14.5"/><path d="M13.5 8.5l4 2 2-1.5"/><path d="M13 9.5 9 10.5 7.5 13.5"/><path d="M11 14.5l4 2.5-.5 4"/><path d="M11 14.5l-3 3-3.5.5"/>',
   download: '<path d="M12 4v11M7.5 10.5 12 15l4.5-4.5"/><path d="M5 19h14"/>',
   flow: '<rect x="3" y="4" width="6" height="5" rx="1.5"/><rect x="15" y="4" width="6" height="5" rx="1.5"/><rect x="9" y="15" width="6" height="5" rx="1.5"/><path d="M9 6.5h6M18 9v2.5a2 2 0 0 1-2 2H12v1.5M6 9v2.5a2 2 0 0 0 2 2h4"/>',
   files: '<rect x="8" y="3" width="12" height="15" rx="2"/><path d="M16 21H6a2 2 0 0 1-2-2V7"/><path d="M14 7.5v6M11 10.5h6"/>',

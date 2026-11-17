@@ -1,7 +1,10 @@
 // Ventanas de un paso de las etapas (etapas.js): «Reprogramar / Volver a intentar» (modal-12) y el menú de estados del
 // paso (modal-13). Marcar el paso sigue en etapas.js (alGuardar, alElegir).
 // Los id (#rpF, #rpD, #emT, #emOk, #mOk, #mCancel) y .et-mopts [data-e] los usan las pruebas.
+// El pie lleva «No logrado» y, a la derecha, UN botón principal: la acción propia del paso (Agendar visita, Enviar a firmar, Vincular…)
+// y no «Logrado»: hacer la acción ya es lograr el paso (el estado sigue a lo que se hizo). «Logrado» solo sale en los pasos sin acción.
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Boton from '../../../ui/Boton';
 import Input from '../../../ui/Input';
 import Select from '../../../ui/Select';
@@ -68,6 +71,11 @@ export function MenuPaso({ post, revision, pagos, aceptacion, alCambioDocs, titu
   /** «No logrado»: el motivo */
   alGuardar: (modo: TModo, texto: string) => void;
 }) {
+  const [pie, setPie] = useState<HTMLElement | null>(null);   // dónde va la acción principal del paso (en el pie, a la derecha)
+  const enPie = (boton: React.ReactNode) => (pie ? createPortal(boton, pie) : null);
+  const sinDocs = !!documentos && documentos.length === 0;
+  // pasos con acción propia: esa acción reemplaza a «Logrado»
+  const conAccion = !!visita || !!alAccion || (!!alEnviar && sinDocs) || (!!personas && !!alVincular);
   const [verOp, setVerOp] = useState<number | null>(null);   // documento cuyo PDF se está viendo
   const [archivo, setArchivo] = useState<{ bytes?: Uint8Array; error?: string; cargando?: boolean }>({});
   const [revisando, setRevisando] = useState<number | null>(null);
@@ -109,13 +117,19 @@ export function MenuPaso({ post, revision, pagos, aceptacion, alCambioDocs, titu
     return () => { vivo = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- solo al abrir
   }, []);
+  // si el paso ya tiene un documento creado (enviado a firmar o firmado), se muestra apenas se abre la ventana: el último, a la vista
+  useEffect(() => {
+    const ult = [...(documentos || [])].reverse().find((d) => d.operacion);
+    if (ult) verPdf(Number(ult.operacion));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- solo al abrir
+  }, []);
   const elegir = (m: TModo) => { setModo(m); setTimeout(() => document.getElementById('emT')?.focus(), 0); };
   return <>
     <VentanaCabecera icono="listCheck" titulo={titulo} descripcion={descripcion || (evaluacionNegocioId ? 'Solicitar documentación por WhatsApp: reciben el mensaje y mandan por el mismo chat contrato de trabajo, cédula por ambos lados, últimas 3 liquidaciones, AFP de 6 meses y Dicom.' : 'Elige cómo está este paso.')} />
     <VentanaCuerpo className={FORM}>
       {evaluacionNegocioId && <PanelEvaluacion negocioId={evaluacionNegocioId} />}
       {actaNegocioId && <PanelActa negocioId={actaNegocioId} alCerrada={alActaCerrada} />}
-      {visita && <PasoVisita v={visita} />}
+      {visita && <PasoVisita v={visita} pie={pie} />}
       {aceptacion && <AceptacionPropietario negocioId={aceptacion.negocioId} alCambio={aceptacion.alCambio} />}
       {post && <PostarriendoNegocio negocioId={post.negocioId} modo={post.modo} alCambio={post.alCambio} />}
       {revision && <RevisionContrato negocioId={revision.negocioId} alCambio={revision.alCambio} reabrir={revision.reabrir} />}
@@ -152,16 +166,16 @@ export function MenuPaso({ post, revision, pagos, aceptacion, alCambioDocs, titu
                 </li>
               ))}
             </ul>}
-          {alEnviar && documentos.length === 0 && <div className="tw:flex tw:justify-end"><Boton id="pasoEnviar" icono="sign" onClick={alEnviar}>{etiquetaEnviar || 'Preparar y enviar a firmar'}</Boton></div>}
+          {alEnviar && documentos.length === 0 && enPie(<Boton id="pasoEnviar" icono="sign" onClick={alEnviar}>{etiquetaEnviar || 'Preparar y enviar a firmar'}</Boton>)}
         </section>
       )}
       {personas && alVincular && (
         <div className="tw:flex tw:items-end tw:gap-2">
           <Select etiqueta={etRol} id="pasoCliente" clasesCampo="tw:flex-1" value={cli} onChange={(e) => setCli(e.target.value)} vacia={personas.length ? 'Elegir…' : `No hay ${etRol.toLowerCase()}s en la cartera`} opciones={personas.map((c) => [c.id, c.texto])} />
-          <Boton id="pasoVincular" disabled={!cli || cli === clienteActual} onClick={() => alVincular(cli)}>{clienteActual ? 'Cambiar' : 'Vincular'}</Boton>
+          {enPie(<Boton id="pasoVincular" disabled={!cli || cli === clienteActual} onClick={() => alVincular(cli)}>{clienteActual ? 'Cambiar' : 'Vincular'}</Boton>)}
         </div>
       )}
-      {alAccion && <div className="tw:flex tw:justify-end"><Boton id="pasoAccion" onClick={alAccion}>{accionTxt}</Boton></div>}
+      {alAccion && enPie(<Boton id="pasoAccion" onClick={alAccion}>{accionTxt}</Boton>)}
       {modo && (
         <div id="emX" className="tw:flex tw:flex-wrap tw:items-end tw:gap-2">
           <Input id="emT" etiqueta="Motivo" clasesCampo="tw:flex-[1_1_200px]" value={t} onChange={(e) => setT(e.target.value)} />
@@ -174,7 +188,8 @@ export function MenuPaso({ post, revision, pagos, aceptacion, alCambioDocs, titu
       <span className="et-mopts tw:contents">
         {manual && <Boton variante="fantasma" data-e="auto" onClick={() => alElegir('auto')}>Volver a lo automático</Boton>}
         <Boton variante="secundario" icono="alert" data-e="fail" className={modo === 'fail' ? 'tw:ring-2 tw:ring-lav-edge' : ''} onClick={() => elegir('fail')}>No logrado</Boton>
-        <Boton icono="check" data-e="ok" onClick={() => alElegir('ok')}>Logrado</Boton>
+        <span ref={setPie} className="tw:contents" />
+        {!conAccion && <Boton icono="check" data-e="ok" onClick={() => alElegir('ok')}>Logrado</Boton>}
       </span>
     </VentanaPie>
   </>;

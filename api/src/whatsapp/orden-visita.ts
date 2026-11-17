@@ -50,6 +50,10 @@ export interface ArgsOrden {
   fecha?: string;
   hora?: string;
   operacion?: string;
+  /** días hábiles de vigencia de la orden (por defecto 250, el modelo de la corredora) */
+  vigencia_dias?: string | number;
+  /** garantía de seriedad de los arriendos, como se escribe en la orden (por defecto «$250.000») */
+  garantia_seriedad?: string;
   /** el negocio del visitante: la firma y la visita quedan ligadas a él */
   negocio_id?: string;
   confirmado?: boolean;
@@ -147,6 +151,7 @@ type Visitante = {
   rut: string;
   email: string;
   telefono: string;
+  nacionalidad?: string;
 };
 /** todo lo necesario para el documento, ya validado */
 interface Armada {
@@ -157,6 +162,8 @@ interface Armada {
   usuario: Usuario;
   corredora: { nombre: string; rut: string | null };
   op: 'venta' | 'arriendo';
+  vigenciaDias: string;
+  garantiaSeriedad: string;
   fecha: string;
   hora: string;
   negocioId: string | null;
@@ -252,7 +259,7 @@ export class OrdenVisitaService {
     const rut = persona.rutFormato || persona.rut || '';
     if (!rut)
       return { error: `${persona.nombre} no tiene RUT en su ficha: agrégalo para poder enviarle la orden a firmar.` };
-    return { persona, nombre: persona.nombre, rut, email, telefono };
+    return { persona, nombre: persona.nombre, rut, email, telefono, nacionalidad: persona.nacionalidad ?? '' };
   }
 
   // ---------------------------------------------------------------- los datos del documento
@@ -329,7 +336,11 @@ export class OrdenVisitaService {
           ? 'arriendo'
           : 'venta';
     const propiedades = await Promise.all(props.map((x) => this.datosPropiedad(x, op)));
+    const vig = String(a.vigencia_dias ?? '').replace(/D/g, '');
+    if (vig && (Number(vig) < 1 || Number(vig) > 999)) return { error: 'La vigencia de la orden va en días hábiles, entre 1 y 999.' };
     return {
+      vigenciaDias: vig || '250',
+      garantiaSeriedad: String(a.garantia_seriedad ?? '').trim().slice(0, 40) || '$250.000',
       c,
       p,
       props,
@@ -365,8 +376,16 @@ export class OrdenVisitaService {
       fechaEmision: fechaLarga(hoy()),
       corredora: { nombre: x.corredora.nombre, rut: x.corredora.rut ?? '' },
       corredor: { nombre: x.usuario.nombre, email: x.usuario.email, telefono: x.usuario.telefono ?? '' },
-      visitante: { nombre: x.vis.nombre, rut: x.vis.rut, email: x.vis.email, telefono: x.vis.telefono },
-      visita: { fecha: fechaLarga(x.fecha), hora: x.hora ? `${x.hora} hrs.` : 'a coordinar' },
+      visitante: { nombre: x.vis.nombre, rut: x.vis.rut, email: x.vis.email, telefono: x.vis.telefono, nacionalidad: x.vis.nacionalidad ?? '' },
+      visita: { fecha: fechaLarga(x.fecha), hora: x.hora ? `${x.hora} hrs.` : 'hora a coordinar' },
+      operacion: {
+        txt: x.op === 'arriendo' ? 'arriendo' : 'venta',
+        venta: x.op === 'venta',
+        arriendo: x.op === 'arriendo',
+      },
+      // condiciones del modelo de la corredora (orden de visita): vigencia de la orden y garantía de seriedad del arriendo
+      vigenciaDias: x.vigenciaDias,
+      garantiaSeriedad: x.garantiaSeriedad,
       propiedades: x.propiedades,
     });
   }
@@ -419,6 +438,8 @@ export class OrdenVisitaService {
     const r = await this.envio.enviar({
       corredoraId: c.corredoraId,
       pagadorRespaldo: usuario.email,
+      usuarioId: c.usuarioId,
+      drive: { tipo: 'Órdenes de visita', propiedadId: p.id, negocioId: x.negocioId },
       bytes,
       nombreArchivo,
       firmantes: [
@@ -612,6 +633,8 @@ export class OrdenVisitaService {
           x.fecha,
           x.hora,
           x.op,
+          x.vigenciaDias,
+          x.garantiaSeriedad,
           x.negocioId,
         ]),
       )
@@ -655,6 +678,8 @@ const pedidoEsquema = z.object({
   fecha: z.string().trim().max(10).optional(),
   hora: z.string().trim().max(5).optional(),
   operacion: z.enum(['venta', 'arriendo']).optional(),
+  vigenciaDias: z.string().trim().max(4).optional(),
+  garantiaSeriedad: z.string().trim().max(40).optional(),
   negocioId: z.string().trim().max(80).optional(),
 });
 type Pedido = z.infer<typeof pedidoEsquema>;
@@ -669,6 +694,8 @@ const aArgs = (b: Pedido): ArgsOrden => ({
   fecha: b.fecha,
   hora: b.hora,
   operacion: b.operacion,
+  vigencia_dias: b.vigenciaDias,
+  garantia_seriedad: b.garantiaSeriedad,
   negocio_id: b.negocioId,
 });
 

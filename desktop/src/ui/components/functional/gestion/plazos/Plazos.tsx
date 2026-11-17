@@ -8,6 +8,8 @@ import { ACCION, contratos, fecha, fechaClave, fechaClaveDoc, lectura, orden, re
 import { abrirDrive, abrirEnEditor, avisar, configurarAccesoDocumentos, confirmar, ia, toast } from '../../../../utils/app';
 import type { IContratoPlazo, IDocPlazo, IAgregadosPlazos } from '../../../../store/interfaces/plazo.interface';
 
+import Boton from '../../../ui/Boton';
+import Layout from '../../../ui/Layout';
 // lectura del estado para src/renderer/plazos.js (window.Plazos._p, _keyDate, _keyFor: pruebas y depuración)
 (window as unknown as Record<string, unknown>).__plazos = { estado: estadoPlazos, fechaClave, fechaClaveDoc };
 
@@ -64,8 +66,8 @@ export default function Plazos() {
       <div className="opd"><h3>{it.name}</h3>
         <p className="muted">{it.status === 'reading' || it.status === 'pending' ? <><i className="bk-spin" /> Leyendo el documento…</> : it.error}</p>
         <div className="opd-acts">
-          {it.status === 'error' && <><button className="secondary" id="plBasic" onClick={() => plazoLeer(it.id)}><Icono nombre="rotateR" tam={15} /> Volver a leer</button><button className="ghost" id="plOpen" onClick={() => verDoc(it)}><Icono nombre="file" tam={14} /> Ver documento</button></>}
-          <button className="ghost" id="plDel" onClick={() => quitar(it)}>Quitar de la lista</button>
+          {it.status === 'error' && <><Boton variante="secundario" icono="rotateR" id="plBasic" onClick={() => plazoLeer(it.id)}>Volver a leer</Boton><Boton variante="fantasma" icono="file" id="plOpen" onClick={() => verDoc(it)}>Ver documento</Boton></>}
+          <Boton variante="fantasma" id="plDel" onClick={() => quitar(it)}>Quitar de la lista</Boton>
         </div>
       </div>
     );
@@ -82,8 +84,8 @@ export default function Plazos() {
               <div key={i} className={`plz-act ${s.urgente ? 'urg' : ''}`}>
                 <div><b>{s.titulo}</b><small>{ACCION[s.tipo] || ''}{ctos.length > 1 && Number.isInteger(s.contrato) ? ` · contrato ${s.contrato! + 1}` : ''}{s.urgente ? ' · urgente' : ''}</small><p>{s.motivo || ''}</p></div>
                 {s.tipo === 'ninguna'
-                  ? <button className="secondary small" data-ok={i} onClick={() => plazoActualizar(it.id, { done: 'Revisado: se deja así' })}>Entendido</button>
-                  : <button className="primary small" data-draft={i} onClick={() => redactar(it, s)}><Icono nombre="sparkle" tam={13} /> Redactar <small className="tk-cost">2 tokens</small></button>}
+                  ? <Boton variante="secundario" tamano="sm" data-ok={i} onClick={() => plazoActualizar(it.id, { done: 'Revisado: se deja así' })}>Entendido</Boton>
+                  : <Boton tamano="sm" icono="sparkle" data-draft={i} onClick={() => redactar(it, s)}>Redactar <small className="tk-cost">2 tokens</small></Boton>}
               </div>
             ))}
           </div>
@@ -100,27 +102,25 @@ export default function Plazos() {
           </div>
         ))}
         <div className="plz-foot">
-          <button className="ghost small" id="plIcs" disabled={!it.deadline} onClick={async () => { const r = await documentoPlazo.calendario(it.id); if (!r.ok) toast(r.error || '', 4000); else if (r.data) toast('Recordatorio creado: ábrelo para agregarlo a tu calendario.', 4000); }}><Icono nombre="calendar" tam={14} /> Agregar al calendario</button>
-          <button className="ghost small" id="plOpen" onClick={() => verDoc(it)}><Icono nombre="file" tam={14} /> Ver documento</button>
+          <Boton variante="fantasma" tamano="sm" icono="calendar" id="plIcs" disabled={!it.deadline} onClick={async () => { const r = await documentoPlazo.calendario(it.id); if (!r.ok) toast(r.error || '', 4000); else if (r.data) toast('Recordatorio creado: ábrelo para agregarlo a tu calendario.', 4000); }}>Agregar al calendario</Boton>
+          <Boton variante="fantasma" tamano="sm" icono="file" id="plOpen" onClick={() => verDoc(it)}>Ver documento</Boton>
           {inteligente
-            ? <button className="ghost small" id="plRe" disabled={ocupado} onClick={generar}><Icono nombre="sparkle" tam={14} /> Actualizar informe <small className="tk-cost">1 token</small></button>
-            : <button className="ghost small" id="plBasic" onClick={() => plazoLeer(it.id)}><Icono nombre="rotateR" tam={14} /> Volver a leer</button>}
-          <button className="ghost small" id="plDel" onClick={() => quitar(it)}>Quitar de la lista</button>
+            ? <Boton variante="fantasma" tamano="sm" icono="sparkle" id="plRe" disabled={ocupado} onClick={generar}>Actualizar informe <small className="tk-cost">1 token</small></Boton>
+            : <Boton variante="fantasma" tamano="sm" icono="rotateR" id="plBasic" onClick={() => plazoLeer(it.id)}>Volver a leer</Boton>}
+          <Boton variante="fantasma" tamano="sm" id="plDel" onClick={() => quitar(it)}>Quitar de la lista</Boton>
         </div>
       </div>
     );
   };
 
   return (
-    <div className="bulk plz">
-      <div className="ops-head">
-        <div><h2>Plazos y vencimientos</h2><span className="muted small">Tus contratos ordenados por su fecha clave. Cada documento trae su informe básico gratis; el informe inteligente con IA te sugiere qué hacer y redacta el documento.</span></div>
-        <div className="ops-head-r">
-          <button className="secondary small with-ic" id="plPf" title="Traer los contratos firmados de Mis operaciones" disabled={!!trayendo} onClick={traer}><Icono nombre="rotateR" tam={15} /><span>{trayendo || 'Traer de Portalfirma'}</span></button>
-          <button className="secondary small with-ic" id="plDrive" onClick={() => abrirDrive('plazos')}><Icono nombre="drive" tam={15} /><span>Desde Google Drive</span></button>
-          <button className="primary small with-ic" id="plAdd" onClick={async () => avisar(plazosAplicar(await documentoPlazo.elegir()), 6000)}><Icono nombre="plus" tam={15} /><span>Agregar documentos</span></button>
-        </div>
-      </div>
+    <Layout titulo="Plazos y vencimientos" ilustracion={{ imagen: 'img/formas/etapa.svg', tinte: '#6d5bd0' }}
+      subtitulo="Tus contratos ordenados por su fecha clave. Cada documento trae su informe básico gratis; el informe inteligente con IA te sugiere qué hacer y redacta el documento."
+      acciones={<>
+        <Boton variante="secundario" icono="rotateR" id="plPf" title="Traer los contratos firmados de Mis operaciones" disabled={!!trayendo} onClick={traer}>{trayendo || 'Traer de Portalfirma'}</Boton>
+        <Boton variante="secundario" icono="drive" id="plDrive" onClick={() => abrirDrive('plazos')}>Desde Google Drive</Boton>
+        <Boton icono="plus" id="plAdd" onClick={async () => avisar(plazosAplicar(await documentoPlazo.elegir()), 6000)}>Agregar documentos</Boton>
+      </>}>
       <div className="plz-legend">
         <span className="ops-chip bad">Rojo · 30 días o menos</span><span className="ops-chip wait">Amarillo · hasta 90 días</span><span className="ops-chip ok">Verde · más de 90 días o indefinido</span>
         <span className="plz-run" id="plRun">{leyendo && <><i className="bk-spin" /> Leyendo… quedan {items.filter((x) => x.status === 'pending').length}</>}</span>
@@ -152,6 +152,6 @@ export default function Plazos() {
         </div>
         <div className="ops-detail plz-detail" id="plDetail"><Detalle /></div>
       </div>
-    </div>
+    </Layout>
   );
 }

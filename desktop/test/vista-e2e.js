@@ -28,7 +28,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     await shot('vs1-actividad.png');
 
     // 2. Agente: tarjeta con «Lo último» de 3 a la vista y negocios por cliente
-    await w.click('#nav [data-view="agente"]'); await w.waitForSelector('#view-agente .ag.ag-full');
+    await w.evaluate(() => window.Agente.vista()); await w.waitForSelector('#view-agente .ag.ag-full');
     for (let i = 0; i < 3; i++) { await w.fill('#agQ', 'CV-9002'); await w.press('#agQ', 'Enter'); await w.waitForFunction((n) => document.querySelectorAll('.ga-est').length === n, i + 1); }
     const h = await w.evaluate(() => { const u = [...document.querySelectorAll('.ga-hist.scroll')].pop(); return { alto: u.clientHeight, total: u.scrollHeight, items: u.children.length }; });
     ok(h.items > 3 && h.alto < 90 && h.total > h.alto, `«Lo último» muestra 3 y el resto con scroll (${h.items} en total)`);

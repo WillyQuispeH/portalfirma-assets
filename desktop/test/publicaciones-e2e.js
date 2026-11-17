@@ -47,12 +47,10 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
 
     // 3. Portales: activar Chilepropiedades (feed + TOKEN)
     await w.click('#pwFin'); await w.waitForSelector('.pb-av'); await w.click('#pbTabs [data-t="portales"]'); await w.waitForSelector('[data-po="chilepropiedades"]');
-    await w.check('[data-po="chilepropiedades"] [data-act]'); await w.fill('[data-po="chilepropiedades"] [data-token]', 'token-demo'); await w.fill('[data-po="chilepropiedades"] [data-url]', 'https://feeds.portalfirma.cl/demo/chilepropiedades.xml'); await w.click('[data-po="chilepropiedades"] [data-save]');
-    await w.waitForSelector('[data-po="chilepropiedades"].on'); ok(/1 aviso en el feed/.test(await txt('[data-po="chilepropiedades"]')), 'al activar la integración, lo que esperaba pasa al feed');
+    await w.click('[data-po="chilepropiedades"] [role="switch"]'); await w.fill('[data-po="chilepropiedades"] [data-token]', 'token-demo'); await w.click('[data-po="chilepropiedades"] [data-save]');
+    await w.waitForSelector('[data-po="chilepropiedades"].on'); ok(/En el feeds*1 aviso/.test(await txt('[data-po="chilepropiedades"]')), 'al activar la integración, lo que esperaba pasa al feed');
     const feed = await w.evaluate(() => window.pf.pubFeed('chilepropiedades').then((r) => r.data.xml));
     ok(/<referenceId><!\[CDATA\[ CV-9002-A \]\]><\/referenceId>/.test(feed) && /<price currency="CLP" operation="Arriendo">/.test(feed) && /<propertyType><!\[CDATA\[ Departamento \]\]>/.test(feed) && /<commune><!\[CDATA\[ Providencia \]\]>/.test(feed), 'feed XML con el formato oficial de Chilepropiedades');
-    await w.click('[data-po="chilepropiedades"] [data-sol]'); const ab = await app.evaluate(() => global.__abiertos || []);
-    ok(ab.some((u) => /^mailto:integraciones@chilepropiedades\.cl/.test(u) && /TOKEN/.test(decodeURIComponent(u))), 'solicitar integración: correo listo a integraciones@chilepropiedades.cl con el feed y el pedido del TOKEN');
     await shot('pb4-conexiones.png');
 
     // 4. Actualizar: estados, visitas e interesados
@@ -78,7 +76,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     // 6. Recomendación de precio y ajuste
     await w.click('#pbTabs [data-t="avisos"]'); await w.waitForSelector('.pb-av');
     ok((await w.$$('.pb-av .ga-ph')).length === 1 && /Más portales/.test(await txt('.pb-av')), 'aviso con acciones para seguir');
-    await w.click('.pb-av [data-mas]'); await w.waitForSelector('.pb-psel'); ok(/Ya publicado/.test(await txt('[data-pc="pi"]')), '«Más portales» vuelve al paso de portales con lo ya publicado marcado');
+    await w.click('.pb-av [data-portales]'); await w.waitForSelector('.pb-psel'); ok(/Ya publicado/.test(await txt('[data-pc="pi"]')), '«Más portales» vuelve al paso de portales con lo ya publicado marcado');
     await w.click('#pwBack'); await w.waitForSelector('.pb-av');
     // agente
     ok(!errs.length, 'sin errores de JavaScript' + (errs.length ? ': ' + errs.join(' | ') : ''));

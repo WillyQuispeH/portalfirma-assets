@@ -26,7 +26,7 @@ const iso = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 6e4).toISOStri
     await call('negCerrar', n.id, 'ganado');
     h = await call('etHoy'); const it = h.tetoca.find((i) => i.pasoId === 'reajustes' && i.negocioId === n.id);
     ok(it && it.aviso && /Postarriendo/.test(it.etapa) && it.tipo === 'post', 'cerrado el negocio, el aviso de reajuste aparece en «Hoy» en «Te toca»');
-    await w.click('#nav [data-view="agente"]'); await w.click('#nav [data-view="inicio"]'); await w.waitForFunction(() => /Reajustes/.test(document.querySelector('#view-inicio')?.textContent || ''), null, { timeout: 10000 }); await shot('pa-hoy.png');
+    await w.evaluate(() => window.Agente.vista()); await w.click('#nav [data-view="inicio"]'); await w.waitForFunction(() => /Reajustes/.test(document.querySelector('#view-inicio')?.textContent || ''), null, { timeout: 10000 }); await shot('pa-hoy.png');
     ok(true, 'la pantalla «Hoy» muestra el aviso «Reajustes» del arriendo ganado');
     const x = (id, t) => ({ negocioId: n.id, propId: pA.id, tipo: 'post', id, pasoId: id, t, paso: t, accion: 'Abrir' });
     await abrir(x('reajustes', 'Reajustes')); await w.waitForSelector('#paRegistrar');

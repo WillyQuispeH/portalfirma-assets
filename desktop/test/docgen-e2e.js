@@ -13,7 +13,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     await w.setViewportSize({ width: 1500, height: 980 });
     await w.waitForSelector('#view-agente .ag.ag-full', { timeout: 15000 });
     await w.evaluate(() => window.Inmo.importar()); await w.waitForSelector('text=Cartera actualizada', { timeout: 15000 }); await w.click('#mOk');
-    await w.click('#nav [data-view="agente"]'); await w.waitForSelector('#view-agente .ag.ag-full');
+    await w.evaluate(() => window.Agente.vista()); await w.waitForSelector('#view-agente .ag.ag-full');
     const ids = await w.evaluate(async () => { const d = (await window.pf.inmoListar()).data; const juan = d.personas.find((x) => /JUAN PEREZ/.test(x.nombre)); await window.pf.inmoPerGuardar({ ...juan, email: 'juan@correo.cl', telefono: '+56 9 8765 4321' });
       const p = d.propiedades.find((x) => x.codigo === 'CV-9002').id; const n = (await window.pf.negGuardar({ tipo: 'arriendo', propId: p, clienteId: juan.id })).data;
       await window.pf.assetEjecutar('asset_mover_negocio', { negocio: n.id, etapa: 'reserva' });
@@ -58,7 +58,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     const b = await w.evaluate(() => window.pf.dgBuscar({ texto: 'orden de visita' }).then((r) => r.data));
     ok(b.coincide && /orden de visita/i.test(b.coincide.nombre), `si existe la plantilla («${b.coincide?.nombre}»), se usa esa`);
     // 4. documento que Asset no conoce: lo redacta la IA con los datos
-    await w.click('#nav [data-view="agente"]'); await w.waitForSelector('#view-agente .ag.ag-full');
+    await w.evaluate(() => window.Agente.vista()); await w.waitForSelector('#view-agente .ag.ag-full');
     await w.evaluate((p) => window.Gestion.docNuevo({ propId: p, titulo: 'Carta de desistimiento de reserva' }), ids.p); await w.waitForSelector('.ga-dn:last-of-type [data-ia]');
     await w.click('.ga-dn [data-ia]'); await w.waitForFunction(() => /Carta de desistimiento de reserva/.test([...document.querySelectorAll('.ga-dn [data-texto]')].pop().value));
     ok(/Avenida Demo 450/.test(await w.evaluate(() => [...document.querySelectorAll('.ga-dn [data-texto]')].pop().value)), 'un documento sin modelo lo redacta la IA con los datos de la propiedad y las personas');

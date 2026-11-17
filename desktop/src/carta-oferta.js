@@ -18,14 +18,14 @@ function crear({ inmo, negocios }) {
       if (simulada()) { const n = negocios.ver(negocioId); return { ok: true, pdf: PDF_MINIMO, archivo: 'Carta oferta (simulada).pdf', oferente: n.cliente?.nombre || '', propiedad: n.prop?.codigo || '' }; }
       return revisar(await api('POST', '/cartas-oferta/vista-previa', { negocioId: String(negocioId) }, ESPERA));
     },
-    async enviar({ negocioId }) {
+    async enviar({ negocioId, conPropietario }) {
       if (simulada()) {
         const n = negocios.ver(negocioId); const op = 910000 + Math.floor(Math.random() * 9999);
         negocios.vincularFirma(negocioId, n.tipo === 'venta' ? 'reserva' : 'oferta', op);
         inmo.agregarFirma({ operacion: op, plantilla: 'Carta oferta nº 1', origen: 'asset', fecha: new Date().toISOString(), estado: 'en_firma', firmantes: [{ nombre: n.cliente?.nombre, rut: n.cliente?.rut, rol: n.tipo === 'venta' ? 'Comprador' : 'Arrendatario', personaId: n.cliente?.id }], negocioId }, [n.prop?.id], `Carta oferta enviada a firmar a ${n.cliente?.nombre} (operación ${op})`);
         return { ok: true, enviada: true, operacion: op, numero: 1, oferente: n.cliente?.nombre, indicacion: 'Carta simulada (pruebas).', simulada: true };
       }
-      const r = revisar(await api('POST', '/cartas-oferta/enviar', { negocioId: String(negocioId) }, ESPERA));
+      const r = revisar(await api('POST', '/cartas-oferta/enviar', { negocioId: String(negocioId), conPropietario: conPropietario === true }, ESPERA));
       try { await inmo.sincronizar(); } catch { /* se trae en la próxima sincronización */ }   // trae la firma y el negocio que creó el servidor
       return r;
     },

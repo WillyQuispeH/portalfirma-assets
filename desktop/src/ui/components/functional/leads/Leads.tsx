@@ -1,12 +1,11 @@
-// Leads: la bandeja de conversaciones (WhatsApp, Instagram, correo) con KPIs, filtros y lista.
-// Hecha con el kit: Layout (cabecera con ilustración), Boton, Buscador y Select. Los filtros de la lista llevan su número
-// (antes eran 4 tarjetas arriba: se quitaron para dar el alto a la bandeja).
+// Leads: la bandeja de conversaciones (WhatsApp, Instagram, correo) con filtros compactos y lista.
+// Hecha con el kit: Layout, Boton, Buscador y Select. El estado del lead va en #ldFiltro (antes eran chips).
 //
 // La conversación y la ficha del lead (columnas #ldChat y #ldFicha) son LeadDetalle.tsx y FichaLead.tsx.
 // src/renderer/leads.js queda con las ventanas de importar, derivar y eliminar. Puente en los dos sentidos:
 //  - React → leads.js: mostrarLead() con el elegido (lo usa al importar) y window.Leads.derivar / eliminar / agregarMensajes.
 //  - leads.js → React: el evento «pf:leads» (al importar, eliminar, llegar mensajes…) pide recargar la lista.
-// Los id ldQ, ldChips (con data-f en cada filtro), ldItems, ldOrigen, ldBroker, ldFile, ldFileIg, ldCorBtn,
+// Los id ldQ, ldFiltro, ldChips, ldItems, ldOrigen, ldBroker, ldFile, ldFileIg, ldCorBtn,
 // ldCuentas, ldImp2, ldIg2 y la clase .ld-vacio los usan las pruebas y leads.js.
 import { useEffect, useRef, type ReactNode } from 'react';
 import { useLead } from '../../../store/hooks/useLead.hook';
@@ -73,16 +72,18 @@ export default function Leads({ sel: selInicial, filtro: filtroInicial }: ILeads
     if (a) leadsImportar(rutaDe(a), canal);
   };
 
-  // cuántos hay en cada filtro (al lado de su nombre) y qué significa cada uno (en el globo)
+  // cuántos hay en cada filtro (al lado del nombre en el select)
   const k = datos?.kpis;
   const cuantos: Record<string, number | undefined> = {
     abiertos: k?.abiertos, nuevo: k?.nuevos, seguimiento: k?.seguimiento, visita: k?.visitas,
     ganado: datos?.cuenta.ganado, perdido: datos?.cuenta.perdido, todos: datos ? total : undefined,
   };
-  const AYUDA: Record<string, string> = { nuevo: 'Sin trabajar', seguimiento: 'Sin respuesta o con la acción vencida', visita: 'Con visita agendada' };
-  const cajaFiltro = 'tw:h-9 tw:pl-2.5 tw:pr-7 tw:text-[13px]';
   // las tres columnas con el borde de una Card del kit (react-ui.css va después de styles.css: gana a .ld-lista…)
   const columna = 'tw:rounded-card tw:border-edge tw:border-b-[3px] tw:border-b-edge-b';
+  const optsEstado = FILTROS.map(([k2, t]): [string, string] => {
+    const n = cuantos[k2];
+    return [k2, n != null ? `${t} (${n})` : t];
+  });
 
   return (
     <Layout
@@ -104,38 +105,24 @@ export default function Leads({ sel: selInicial, filtro: filtroInicial }: ILeads
 
       <div className="ld-cols" ref={columnas}>
         <div className={cx('ld-lista', columna)}>
-          <div className="tw:flex tw:flex-col tw:gap-2.5 tw:p-3 tw:border-0 tw:border-b tw:border-solid tw:border-edge">
-            <Buscador kit id="ldQ" className="tw:w-full" valor={f.q} alCambiar={(q) => leadSetFiltros({ q })} espera={200} placeholder="Nombre, teléfono, comuna o mensaje" />
-            {/* fichas de una sola opción (Chips del kit es de selección múltiple y Tabs no cabe en esta columna) */}
-            <div id="ldChips" role="group" aria-label="Estado del lead" className="tw:flex tw:flex-wrap tw:gap-1.5">
-              {FILTROS.map(([k2, t]) => {
-                const on = f.filtro === k2; const n = cuantos[k2];
-                return (
-                  <button key={k2} type="button" data-f={k2} aria-pressed={on} title={AYUDA[k2]} onClick={() => leadSetFiltros({ filtro: k2 as TLeadFiltro })}
-                    className={cx(
-                      'tw:inline-flex tw:items-center tw:h-7 tw:m-0 tw:px-2.5 tw:rounded-full tw:text-[12.5px] tw:font-semibold tw:cursor-pointer',
-                      'tw:border tw:border-solid tw:transition-colors tw:duration-100 tw:focus-visible:outline-2 tw:focus-visible:outline-offset-1 tw:focus-visible:outline-lav-edge',
-                      on ? 'tw:bg-lav-soft tw:text-lav-softink tw:border-lav-edge' : 'tw:bg-card tw:text-muted tw:border-edge tw:hover:text-text tw:hover:bg-hover',
-                    )}>
-                    {t}
-                    {n != null && <span className={cx('tw:ml-1.5 tw:min-w-[18px] tw:h-[18px] tw:px-1 tw:rounded-full tw:text-[11px] tw:leading-[18px] tw:text-center tw:tabular-nums',
-                      on ? 'tw:bg-card tw:text-lav-softink' : 'tw:bg-gray-soft tw:text-gray-softink')}>{n}</span>}
-                  </button>
-                );
-              })}
-            </div>
+          {/* cabecera compacta: buscar + estado a ancho completo; origen/corredor en la fila de abajo */}
+          <div id="ldChips" className="tw:flex tw:flex-col tw:gap-2 tw:p-2.5 tw:border-0 tw:border-b tw:border-solid tw:border-edge">
+            <Buscador kit id="ldQ" className="tw:w-full" valor={f.q} alCambiar={(q) => leadSetFiltros({ q })} espera={200} placeholder="Buscar" />
+            <Select id="ldFiltro" aria-label="Estado del lead" clasesCampo="tw:w-full" className="tw:text-[13px]"
+              value={f.filtro} onChange={(e) => leadSetFiltros({ filtro: e.target.value as TLeadFiltro })}
+              opciones={optsEstado} />
             <div className="tw:flex tw:gap-2">
-              <Select id="ldOrigen" aria-label="Origen" clasesCampo="tw:flex-1 tw:min-w-0" className={cajaFiltro}
+              <Select id="ldOrigen" aria-label="Origen" clasesCampo="tw:flex-1 tw:min-w-0" className="tw:text-[13px]"
                 value={f.origen} onChange={(e) => leadSetFiltros({ origen: e.target.value })}
                 vacia="Todos los orígenes" opciones={Object.entries(datos?.origenes || {})} />
               {datos?.corredores.length ? (
-                <Select id="ldBroker" aria-label="Corredor" clasesCampo="tw:flex-1 tw:min-w-0" className={cajaFiltro}
+                <Select id="ldBroker" aria-label="Corredor" clasesCampo="tw:flex-1 tw:min-w-0" className="tw:text-[13px]"
                   value={f.broker} onChange={(e) => leadSetFiltros({ broker: e.target.value })} vacia="Todos los corredores">
                   <option value="_sin">Sin corredor{datos.sinCorredor ? ` (${datos.sinCorredor})` : ''}</option>
                   {datos.corredores.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
                 </Select>
               ) : (
-                <Select id="ldBroker" aria-label="Broker" className={cajaFiltro}
+                <Select id="ldBroker" aria-label="Broker" className="tw:text-[13px]"
                   clasesCampo={cx('tw:flex-1 tw:min-w-0', (datos?.brokers.length || 0) < 2 && 'hidden')}
                   value={f.broker} onChange={(e) => leadSetFiltros({ broker: e.target.value })}
                   vacia="Todos los brokers" opciones={(datos?.brokers || []).map((b): [string, string] => [b, b])} />

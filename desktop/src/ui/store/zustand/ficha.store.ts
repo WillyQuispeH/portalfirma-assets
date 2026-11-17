@@ -10,7 +10,7 @@ import { refrescarCarteraLegado } from '../../utils/app';
 import type { IEstadoPortal, IPasosCaptacion, IRegistroActividad, TOperacion } from '../interfaces/propiedad.interface';
 import type { INegocio } from '../interfaces/negocio.interface';
 
-export type TFichaTab = 'resumen' | 'propietario' | 'negocios' | 'firmas' | 'portales' | 'historial';
+export type TFichaTab = 'resumen' | 'propietario' | 'negocios' | 'visitas' | 'firmas' | 'portales' | 'historial';
 export type TFiltroNegocios = 'abiertos' | 'cerrados' | 'todos';
 type TResultado = { mensaje?: string; error?: string };
 

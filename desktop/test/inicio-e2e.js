@@ -9,13 +9,13 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
   const w = await app.firstWindow(); const errs = []; w.on('pageerror', (e) => errs.push(e.message));
   const txt = (s) => w.textContent(s).then((t) => t || '');
   const filas = () => w.$$eval('#view-recientes .rec-row', (x) => x.length);
-  const recientes = async () => { await w.click('#nav [data-view="home"]'); await w.waitForSelector('#recAll'); await w.click('#recAll'); await w.waitForSelector('#view-recientes:not(.hidden) .ops-head'); };
+  const recientes = async () => { await w.click('#nav [data-view="home"]'); await w.waitForSelector('#recAll'); await w.click('#recAll'); await w.waitForSelector('#view-recientes:not(.hidden) [data-cabecera]'); };
   try {
     await w.setViewportSize({ width: 1500, height: 920 }); await w.waitForFunction(() => window.studio && window.ReactUI, null, { timeout: 20000 }); await w.waitForTimeout(400);
     await w.click('#nav [data-view="home"]'); await w.waitForSelector('#homeBody .hub-card'); await w.waitForTimeout(500);
     ok(!!(await w.$('#homeBody [data-layout] [data-layout-fondo]')), 'el inicio usa el Layout del kit (con su fondo)');
-    ok(await w.isVisible('.hub-center .hub-not [data-act="escr"]') && await w.isVisible('.hub-center .hub-not [data-act="tpl"]') && !(await w.$('.hub-col [data-act="escr"]')), 'Notaría al centro: Gestión de firmas presenciales y Notaría virtual');
-    ok(/Gestión de firmas presenciales/.test(await txt('.hub-not')) && !/Trámites notariales/.test(await txt('#homeBody')), 'ya no dice «Trámites notariales»');
+    ok(await w.isVisible('.hub-center .hub-not [data-act="tpl"]') && !(await w.$('[data-act="escr"]')), 'Notaría al centro con la Notaría virtual; «Gestión de firmas presenciales» está oculta por ahora')
+    ok(/Notaría virtual/.test(await txt('.hub-not')) && !/Gestión de firmas presenciales|Trámites notariales/.test(await txt('#homeBody')), 'el inicio no ofrece firmas presenciales por ahora ni dice «Trámites notariales»');
     for (const f of files) await w.evaluate((p) => window.pf.recentAdd(p), f);
     await w.evaluate(() => window.studio.goHome()); await w.waitForSelector('#recAll'); await w.waitForTimeout(300);
     ok((await w.$$('.hub-panel .recent-item')).length === 3 && /Contrato 45/.test(await txt('.hub-panel .recent-list')), 'el inicio muestra los 3 últimos');
@@ -34,14 +34,14 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     await w.click('#view-recientes [data-tipo=""]'); await w.waitForTimeout(200);
     fs.unlinkSync(files[44]); await recientes(); await w.waitForSelector('#rcMiss');
     ok(/no encontrado/.test(await txt('#view-recientes .rec-row')), 'marca los que ya no existen');
-    await w.click('#rcMiss'); await w.waitForTimeout(300); ok(/44 documentos/.test(await txt('#view-recientes .ops-head')), 'quita los que no existen');
-    await w.hover('#view-recientes .rec-row'); await w.click('#view-recientes .rec-row [data-rm]'); await w.waitForTimeout(300); ok(/43 documentos/.test(await txt('#view-recientes .ops-head')), 'quitar uno de la lista');
+    await w.click('#rcMiss'); await w.waitForTimeout(300); ok(/44 documentos/.test(await txt('#view-recientes [data-cabecera]')), 'quita los que no existen');
+    await w.hover('#view-recientes .rec-row'); await w.click('#view-recientes .rec-row [data-rm]'); await w.waitForTimeout(300); ok(/43 documentos/.test(await txt('#view-recientes [data-cabecera]')), 'quitar uno de la lista');
     await w.click('#view-recientes .rec-row'); await w.waitForTimeout(800); ok(await w.isVisible('#view-editor'), 'abrir un reciente lo abre en el editor');
     await recientes(); await w.waitForSelector('#rcClear'); await w.click('#rcClear'); await w.waitForSelector('#modal:not(.hidden) #mOk'); await w.click('#mOk'); await w.waitForTimeout(300);
-    ok(/0 documentos/.test(await txt('#view-recientes .ops-head')) && /Aquí aparecerán/.test(await txt('#view-recientes .rec-card')), 'borrar la lista (sin borrar archivos)');
+    ok(/0 documentos/.test(await txt('#view-recientes [data-cabecera]')) && /Aquí aparecerán/.test(await txt('#view-recientes .rec-card')), 'borrar la lista (sin borrar archivos)');
     ok(fs.existsSync(files[0]), 'los archivos siguen en su carpeta');
-    await w.click('#nav [data-view="home"]'); await w.waitForSelector('.hub-not'); await w.click('.hn-card.main'); await w.waitForSelector('.es-layout');
-    ok(/Gestión de firmas presenciales/.test(await txt('#view-escrituras .ops-head h2')), 'abre Gestión de firmas presenciales');
+    await w.click('#nav [data-view="home"]'); await w.waitForSelector('.hub-not'); await w.evaluate(() => window.Escrituras.open()); await w.waitForSelector('.es-layout');
+    ok(/Gestión de firmas presenciales/.test(await txt('#view-escrituras [data-cabecera] h1')), 'abre Gestión de firmas presenciales');
     ok(!errs.length, 'sin errores de JavaScript' + (errs.length ? ': ' + errs.join(' | ') : ''));
     console.log('OK inicio');
   } catch (e) { console.error(e.message); await w.screenshot({ path: path.resolve(__dirname, 'in-error.png') }).catch(() => {}); process.exitCode = 1; } finally { await w.evaluate(() => window.pf.closeNow?.()).catch(() => {}); await app.close().catch(() => {}); }

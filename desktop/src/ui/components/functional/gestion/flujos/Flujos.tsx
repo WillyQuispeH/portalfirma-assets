@@ -13,6 +13,10 @@ import { PasoCampos, PasoNomina, PasoPlantilla, PasoRevision } from './Pasos';
 import type { IColaMasiva } from '../../../../store/interfaces/masiva.interface';
 import type { IEjecucion, INomina } from '../../../../store/interfaces/flujo.interface';
 
+import Boton from '../../../ui/Boton';
+import Input from '../../../ui/Input';
+import Select from '../../../ui/Select';
+import Layout from '../../../ui/Layout';
 const PASOS = ['Plantilla', 'Nómina', 'Campos', 'Revisión', 'Firma'];
 // lectura del estado para src/renderer/flujos.js (window.Flujos._fl: pruebas y depuración)
 (window as unknown as Record<string, unknown>).__estadoFlujos = estadoFlujos;
@@ -29,11 +33,12 @@ function Inicio() {
   const borrarReceta = async (id: string, nombre: string) => { if (await confirmar({ clave: 'modal-113', titulo: 'Eliminar receta', texto: `¿Eliminar «${nombre}»? Las ejecuciones anteriores y los documentos enviados no se tocan.`, boton: 'Eliminar', peligro: true })) recetaBorrar(id); };
   const borrarEjecucion = async (r: IEjecucion) => { if (await confirmar({ clave: 'modal-114', titulo: 'Borrar documentos generados', texto: `Se borrarán de este computador los ${r.total} PDF generados en esta ejecución (tienen datos personales de la nómina). Las operaciones ya enviadas a Portalfirma no se tocan.`, boton: 'Borrar', peligro: true })) ejecucionBorrar(r.id); };
   return (
-    <div className="bulk fl">
-      <div className="ops-head">
-        <div><h2>Flujos documentales</h2><span className="muted small">Una receta une una plantilla, una nómina y sus firmantes. Prepárala una vez y vuelve a usarla con cada nómina nueva.</span></div>
-        <div className="ops-head-r"><button className="secondary small with-ic" id="flBulk" onClick={() => abrirCarga('load')}><Icono nombre="files" tam={15} /><span>Carga masiva</span></button><button className="primary small with-ic" id="flNew" onClick={() => asistenteIniciar()}><Icono nombre="plus" tam={15} /><span>Nuevo flujo</span></button></div>
-      </div>
+    <Layout titulo="Flujos documentales" ilustracion={{ imagen: 'img/formas/etapa.svg', tinte: '#6d5bd0' }}
+      subtitulo="Una receta une una plantilla, una nómina y sus firmantes. Prepárala una vez y vuelve a usarla con cada nómina nueva."
+      acciones={<>
+        <Boton variante="secundario" icono="files" id="flBulk" onClick={() => abrirCarga('load')}>Carga masiva</Boton>
+        <Boton icono="plus" id="flNew" onClick={() => asistenteIniciar()}>Nuevo flujo</Boton>
+      </>}>
       <h3 className="fl-h">Mis recetas</h3>
       <div className="fl-recipes">
         {recetas.length ? recetas.map((r) => {
@@ -43,15 +48,15 @@ function Inicio() {
               <div className="fl-r-ic"><Icono nombre="flow" tam={22} /></div>
               <div className="fl-r-tx"><b>{r.name}</b><small>{m?.nombre || 'Modelo no disponible'}</small><small className="muted">{ult ? `Última ejecución: ${fechaHora(ult.date)} · ${plural(ult.total, 'documento', 'documentos')}` : 'Sin ejecuciones todavía'}</small></div>
               <div className="fl-r-acts">
-                <button className="primary small" data-a="run" disabled={!m} onClick={() => asistenteIniciar(r, 2)}><Icono nombre="upload" tam={14} /> Ejecutar con nueva nómina</button>
-                <button className="ghost small" data-a="edit" disabled={!m} onClick={() => asistenteIniciar(r, 3)}>Editar</button>
-                <button className="ibtn" data-a="del" title="Eliminar receta" onClick={() => borrarReceta(r.id, r.name)}><Icono nombre="trash" tam={14} /></button>
+                <Boton tamano="sm" icono="upload" data-a="run" disabled={!m} onClick={() => asistenteIniciar(r, 2)}>Ejecutar con nueva nómina</Boton>
+                <Boton variante="fantasma" tamano="sm" data-a="edit" disabled={!m} onClick={() => asistenteIniciar(r, 3)}>Editar</Boton>
+                <Boton variante="fantasma" tamano="sm" icono="trash" data-a="del" title="Eliminar receta" onClick={() => borrarReceta(r.id, r.name)} aria-label="Eliminar receta" />
               </div>
             </div>
           );
         }) : (
           <div className="ops-empty fl-empty"><div><Icono nombre="flow" tam={34} /><p><b>Todavía no tienes recetas.</b><br />Ejemplo: «Mandatos de pagaré mensuales»: eliges el modelo, cargas la nómina de deudores y la app genera un documento por persona y lo envía a firmar.</p>
-            <button className="primary" id="flNew2" onClick={() => asistenteIniciar()}><Icono nombre="plus" tam={15} /> Crear mi primer flujo</button></div></div>
+            <Boton icono="plus" id="flNew2" onClick={() => asistenteIniciar()}>Crear mi primer flujo</Boton></div></div>
         )}
       </div>
       <h3 className="fl-h">Ejecuciones</h3>
@@ -60,11 +65,11 @@ function Inicio() {
           <div key={r.id} className="fl-run" data-x={r.id}>
             <span className="fl-run-tx"><b>{r.recipeName}</b><small>{fechaHora(r.date)} · {r.nomina || ''} · {plural(r.total, 'documento', 'documentos')}</small></span>
             <span className="fl-run-ch"><Chips c={conteoEjecucion(r, cola, ops)} orden={['signed', 'sent', 'ready', 'busy', 'error']} />{r.status === 'error' && <span className="ops-chip bad">{r.error || 'Error'}</span>}</span>
-            <span className="fl-r-acts"><button className="ghost small" data-a="see" onClick={() => asistenteVerEjecucion(r)}>Ver</button><button className="ibtn" data-a="rm" title="Borrar los documentos generados" onClick={() => borrarEjecucion(r)}><Icono nombre="trash" tam={14} /></button></span>
+            <span className="fl-r-acts"><Boton variante="fantasma" tamano="sm" data-a="see" onClick={() => asistenteVerEjecucion(r)}>Ver</Boton><Boton variante="fantasma" tamano="sm" icono="trash" data-a="rm" title="Borrar los documentos generados" onClick={() => borrarEjecucion(r)} aria-label="Borrar los documentos generados" /></span>
           </div>
         )) : <div className="ops-empty small"><p>Aquí verás cada ejecución con el estado de sus firmas.</p></div>}
       </div>
-    </div>
+    </Layout>
   );
 }
 
@@ -98,10 +103,10 @@ function PasoFirma() {
           })}
         </div>
         <div className="bk-foot" id="flRunFoot">
-          {cola.sending ? <button className="secondary" data-a="stop" onClick={() => nominaFlujo.detener()}>Detener el envío</button> : <>
-            <button className="ghost" data-a="sync" onClick={flujosSincronizarFirmas}><Icono nombre="rotateR" tam={14} /> Actualizar firmas</button>
-            <button className="ghost" data-a="bulk" onClick={() => abrirCarga('load')}>Ver en Carga masiva</button>
-            {listos.length > 0 && <button className="primary" data-a="send" onClick={enviar}><Icono nombre="sign" tam={16} /> Enviar {listos.length} a firmar</button>}
+          {cola.sending ? <Boton variante="secundario" data-a="stop" onClick={() => nominaFlujo.detener()}>Detener el envío</Boton> : <>
+            <Boton variante="fantasma" icono="rotateR" data-a="sync" onClick={flujosSincronizarFirmas}>Actualizar firmas</Boton>
+            <Boton variante="fantasma" data-a="bulk" onClick={() => abrirCarga('load')}>Ver en Carga masiva</Boton>
+            {listos.length > 0 && <Boton icono="sign" data-a="send" onClick={enviar}>Enviar {listos.length} a firmar</Boton>}
           </>}
         </div>
       </div>
@@ -112,14 +117,17 @@ function PasoFirma() {
   return (
     <div className="fl-card"><h3>5. Firma</h3>
       <div className="fl-sumline"><Icono nombre="file" tam={16} /> Se generarán <b>{plural(w.revision!.ok, 'documento', 'documentos')}</b> con «{w.modelo!.nombre}». Firma{w.modelo!.roles.length === 1 ? '' : 'n'}: {w.modelo!.roles.map((r, i) => <span key={r.alias}>{i > 0 && ', '}<b>{r.alias}</b></span>)}.</div>
-      <label className="fl-lbl">Nombre de la receta<input id="flName" className={sinNombre ? 'invalid' : ''} value={w.nombre} placeholder="Ej.: Mandatos de pagaré mensuales" onChange={(e) => { setSinNombre(false); asistenteFijar({ nombre: e.target.value }); }} /></label>
-      <div className="bk-opts">
-        <label>Trámite<select id="flProc" value={w.opciones.protocolization} onChange={(e) => asistenteFijar({ opciones: { ...w.opciones, protocolization: e.target.value as typeof w.opciones.protocolization } })}><option value="none">Solo firma electrónica</option><option value="legalization">Legalizar ante notario</option><option value="protocolization">Protocolizar</option></select></label>
-        <label>Tipo de firma<select id="flType" value={w.opciones.typeSign} onChange={(e) => asistenteFijar({ opciones: { ...w.opciones, typeSign: e.target.value as typeof w.opciones.typeSign } })}><option value="simple">Simple</option><option value="avanzada">Avanzada</option><option value="visada">Visada</option><option value="enrolada">Enrolada</option></select></label>
+      <Input id="flName" etiqueta="Nombre de la receta" error={sinNombre ? 'Ponle un nombre a la receta.' : null} value={w.nombre} placeholder="Ej.: Mandatos de pagaré mensuales"
+        onChange={(e) => { setSinNombre(false); asistenteFijar({ nombre: e.target.value }); }} />
+      <div className="tw:grid tw:grid-cols-1 tw:gap-ui tw:md:grid-cols-2">
+        <Select id="flProc" etiqueta="Trámite" value={w.opciones.protocolization} onChange={(e) => asistenteFijar({ opciones: { ...w.opciones, protocolization: e.target.value as typeof w.opciones.protocolization } })}
+          opciones={[['none', 'Solo firma electrónica'], ['legalization', 'Legalizar ante notario'], ['protocolization', 'Protocolizar']]} />
+        <Select id="flType" etiqueta="Tipo de firma" value={w.opciones.typeSign} onChange={(e) => asistenteFijar({ opciones: { ...w.opciones, typeSign: e.target.value as typeof w.opciones.typeSign } })}
+          opciones={[['simple', 'Simple'], ['avanzada', 'Avanzada'], ['visada', 'Visada'], ['enrolada', 'Enrolada']]} />
       </div>
       <p className="muted small">Primero se generan los PDF y se suben a Portalfirma (no se cobra nada). Después confirmas el envío a firmar, que sí descuenta saldo.</p>
-      <div className="fl-nav"><button className="ghost" id="flPrevS" onClick={() => asistenteIr(4)}><Icono nombre="chevL" tam={15} /> Revisión</button>
-        <span><button className="secondary" id="flSave" onClick={guardar}>Solo guardar la receta</button> <button className="primary" id="flGo" disabled={generando} onClick={generar}>{generando ? <><i className="bk-spin" /> Generando…</> : <><Icono nombre="flow" tam={15} /> Guardar y generar {w.revision!.ok}</>}</button></span></div>
+      <div className="fl-nav"><Boton variante="fantasma" icono="chevL" id="flPrevS" onClick={() => asistenteIr(4)}>Revisión</Boton>
+        <span><Boton variante="secundario" id="flSave" onClick={guardar}>Solo guardar la receta</Boton> <button className="primary" id="flGo" disabled={generando} onClick={generar}>{generando ? <><i className="bk-spin" /> Generando…</> : <><Icono nombre="flow" tam={15} /> Guardar y generar {w.revision!.ok}</>}</button></span></div>
     </div>
   );
 }
@@ -130,11 +138,9 @@ function Asistente() {
   useEffect(() => { if (w?.paso === 4 && !w.revision) asistenteRevisar().then(avisar); }, [w?.paso, w?.revision]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!w) return null;
   return (
-    <div className="bulk fl">
-      <div className="ops-head">
-        <div><h2>{w.receta?.name || w.nombre || 'Nuevo flujo'}</h2><span className="muted small">{w.modelo ? w.modelo.nombre : 'Flujo documental'}</span></div>
-        <div className="ops-head-r"><button className="ghost small with-ic" id="flBack" onClick={flujosVerInicio}><Icono nombre="chevL" tam={15} /><span>Volver a mis flujos</span></button></div>
-      </div>
+    <Layout titulo={w.receta?.name || w.nombre || 'Nuevo flujo'} ilustracion={{ imagen: 'img/formas/etapa.svg', tinte: '#6d5bd0' }}
+      subtitulo={w.modelo ? w.modelo.nombre : 'Flujo documental'}
+      acciones={<Boton variante="fantasma" icono="chevL" id="flBack" onClick={flujosVerInicio}>Volver a mis flujos</Boton>}>
       <div className="fl-steps">
         {PASOS.map((s, i) => (
           <span key={s} style={{ display: 'contents' }}>
@@ -146,7 +152,7 @@ function Asistente() {
         ))}
       </div>
       <div className="fl-body" id="flBody">{[null, <PasoPlantilla key="1" />, <PasoNomina key="2" />, <PasoCampos key="3" />, <PasoRevision key="4" />, <PasoFirma key="5" />][w.paso]}</div>
-    </div>
+    </Layout>
   );
 }
 

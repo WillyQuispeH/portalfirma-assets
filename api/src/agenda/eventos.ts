@@ -17,6 +17,7 @@ import {
 import { Prisma, type Evento } from '@prisma/client';
 import { z } from 'zod';
 import { PrismaService } from '../prisma/prisma.service';
+import { GoogleService } from '../conexiones/google';
 import { ZodPipe } from '../comun/zod.pipe';
 import { UsuarioActual, type UsuarioToken } from '../auth/usuario-actual';
 import {
@@ -59,6 +60,15 @@ const importarEsquema = z.object({ items: z.array(z.record(z.string(), z.unknown
 const COLUMNAS = ['tipo', 'estado', 'fecha', 'hora', 'propId', 'negocioId', 'personaIds', 'corredorId'];
 const dia = (f: string) => new Date(f + 'T00:00:00Z');
 
+/** minutos que dura una visita si no se dijo otra cosa (igual que la app: src/agenda.js) */
+const DUR_VISITA = 45;
+const aMin = (h: string) => Number(h.slice(0, 2)) * 60 + Number(h.slice(3, 5));
+const aHora = (m: number) => `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+const duracionDe = (d: unknown) => {
+  const n = Number((d as { duracion?: unknown } | null)?.duracion);
+  return Number.isFinite(n) && n > 0 ? n : DUR_VISITA;
+};
+
 export const eventoApp = (e: Evento) => ({
   ...((e.datos as object) ?? {}),
   id: e.id,
@@ -75,7 +85,16 @@ export const eventoApp = (e: Evento) => ({
 
 @Injectable()
 export class EventosService {
-  constructor(private readonly db: PrismaService) {}
+  constructor(
+    private readonly db: PrismaService,
+    private readonly google: GoogleService,
+  ) {}
+
+  /** refleja el evento en el Google Calendar de su corredor (si lo conectó) y devuelve el evento con el id de Google ya anotado */
+  private async reflejar(fila: Evento): Promise<Evento> {
+    await this.google.sincronizarEvento(fila);
+    return (await this.db.evento.findUnique({ where: { id: fila.id } })) ?? fila;
+  }
 
   listar(u: UsuarioToken, f: ListarAsignados) {
     return listar(this.db.evento, u, f, eventoApp);
@@ -99,6 +118,69 @@ export class EventosService {
     return u.sub;
   }
 
+  /**
+   * Las visitas no se pueden sobreponer: ni las de una misma propiedad ni las de un mismo corredor (no puede estar en dos
+   * visitas a la vez). Cuenta la hora de inicio y la duración (45 min si no se dijo); las canceladas, las que no tienen hora y
+   * los demás tipos de evento no ocupan horario. Solo se revisa al crear o cuando cambia el horario, la propiedad, el corredor
+   * o se reabre una cancelada: así una visita antigua que ya se cruzaba no impide editar sus notas. Rechaza con 400 y
+   * code CRUCE (la app lo muestra y quita el evento de su lista).
+   */
+  private async revisarCruce(
+    u: UsuarioToken,
+    id: string,
+    o: EventoEntrada,
+    cols: { propiedadId: string | null; corredorId: string | null; fecha: Date; hora: string | null },
+    previa: Evento | null,
+  ) {
+    if (o.tipo !== 'visita' || o.estado === 'cancelado' || !cols.hora) return;
+    const dur = duracionDe(o);
+    const cambio =
+      !previa ||
+      previa.estado === 'cancelado' ||
+      previa.tipo !== 'visita' ||
+      previa.fecha.getTime() !== cols.fecha.getTime() ||
+      previa.hora !== cols.hora ||
+      previa.propiedadId !== cols.propiedadId ||
+      previa.corredorId !== cols.corredorId ||
+      duracionDe(previa.datos) !== dur;
+    if (!cambio) return;
+    const o2 = [
+      ...(cols.propiedadId ? [{ propiedadId: cols.propiedadId }] : []),
+      ...(cols.corredorId ? [{ corredorId: cols.corredorId }] : []),
+    ];
+    if (!o2.length) return;
+    const otras = await this.db.evento.findMany({
+      where: {
+        corredoraId: u.corredoraId,
+        tipo: 'visita',
+        fecha: cols.fecha,
+        eliminadoEn: null,
+        estado: { not: 'cancelado' },
+        hora: { not: null },
+        id: { not: id },
+        OR: o2,
+      },
+      select: { hora: true, datos: true, propiedadId: true, corredorId: true },
+    });
+    const ini = aMin(cols.hora);
+    const fin = ini + dur;
+    const choca = otras.filter((x) => x.hora && ini < aMin(x.hora) + duracionDe(x.datos) && aMin(x.hora) < fin);
+    const rango = (x: { hora: string | null; datos: unknown }) =>
+      `${x.hora}–${aHora(aMin(x.hora as string) + duracionDe(x.datos))}`;
+    const prop = choca.find((x) => cols.propiedadId && x.propiedadId === cols.propiedadId);
+    if (prop)
+      throw new BadRequestException({
+        message: `Esa hora se cruza con otra visita de esta propiedad (${rango(prop)}). Elige otro horario.`,
+        code: 'CRUCE',
+      });
+    const corr = choca.find((x) => cols.corredorId && x.corredorId === cols.corredorId);
+    if (corr)
+      throw new BadRequestException({
+        message: `${cols.corredorId === u.sub ? 'Ya tienes' : 'Ese corredor ya tiene'} otra visita en ese horario (${rango(corr)}). Elige otro horario.`,
+        code: 'CRUCE',
+      });
+  }
+
   async guardar(u: UsuarioToken, id: string, o: EventoEntrada) {
     const previa = await revisarPut(this.db.evento, u, id, o.version, 'El evento');
     const personas = o.personaIds.filter(esUuid);
@@ -111,7 +193,11 @@ export class EventosService {
       : esAdmin(u) && o.corredorId !== undefined
         ? (o.corredorId ?? previa.corredorId)
         : previa.corredorId;
-    const datos = restoDatos(o, COLUMNAS) as Prisma.InputJsonValue;
+    const datosApp = restoDatos(o, COLUMNAS) as Record<string, unknown>;
+    // el id del evento en Google lo pone el servidor: si la app manda el evento sin él (su copia es anterior), se conserva
+    const gid = (previa?.datos as { googleEventId?: string } | null | undefined)?.googleEventId;
+    if (gid && !datosApp.googleEventId) datosApp.googleEventId = gid;
+    const datos = datosApp as Prisma.InputJsonValue;
     const cols = {
       tipo: o.tipo,
       estado: o.estado,
@@ -123,10 +209,11 @@ export class EventosService {
       personaIds: personas.filter((p) => ref.personas.has(p)),
       corredorId,
     };
+    await this.revisarCruce(u, id, o, cols, previa);
     if (!previa) {
       try {
         return eventoApp(
-          await this.db.evento.create({
+          await this.reflejar(await this.db.evento.create({
             data: {
               id,
               corredoraId: u.corredoraId,
@@ -135,7 +222,7 @@ export class EventosService {
               ...cols,
               datos,
             },
-          }),
+          })),
         );
       } catch (e) {
         if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002')
@@ -157,12 +244,13 @@ export class EventosService {
       data: { ...cols, datos, version: { increment: 1 } },
     });
     if (!r.count) throw new ConflictException({ message: 'Otra persona cambió el evento recién.', code: 'VERSION' });
-    return eventoApp((await this.db.evento.findUnique({ where: { id } }))!);
+    return eventoApp(await this.reflejar((await this.db.evento.findUnique({ where: { id } }))!));
   }
 
   async eliminar(u: UsuarioToken, id: string) {
-    await buscarVisible(this.db.evento, u, id, 'El evento');
+    const fila = await buscarVisible(this.db.evento, u, id, 'El evento');
     await this.db.evento.update({ where: { id }, data: { eliminadoEn: new Date(), version: { increment: 1 } } });
+    await this.google.sincronizarEvento({ ...fila, eliminadoEn: new Date() });   // lo borra del calendario de Google
     return { ok: true };
   }
 

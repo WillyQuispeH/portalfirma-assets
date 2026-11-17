@@ -5,6 +5,7 @@ import { abrirEnEditor, configurarAccesoDocumentos, toast } from '../../../../ut
 import { ESTADOS_OPERACION } from '../../../../utils/envio';
 import type { IDetalleOperacion, IFirmanteOperacion } from '../../../../store/interfaces/envio.interface';
 
+import Boton from '../../../ui/Boton';
 const nombre = (s: IFirmanteOperacion) => [s.name, s.paternalLastName, s.maternalLastName].filter(Boolean).join(' ');
 
 export default function DetalleOperacion({ d, alActualizar }: { d: IDetalleOperacion; alActualizar: () => void }) {
@@ -29,25 +30,25 @@ export default function DetalleOperacion({ d, alActualizar }: { d: IDetalleOpera
             <td>{s.signed ? <span className="pill ok">Firmó</span> : <span className="pill wait">Pendiente</span>}</td>
             <td>{!s.signed && (
               <div className="link-actions">
-                <button className="secondary small" data-copy={(s.url || '').trim()} onClick={intentar(async () => { await navigator.clipboard.writeText((s.url || '').trim()); toast('Enlace copiado'); })}>Copiar</button>
-                <button className="secondary small" data-mail={i} onClick={intentar(async () => {
+                <Boton variante="secundario" tamano="sm" data-copy={(s.url || '').trim()} onClick={intentar(async () => { await navigator.clipboard.writeText((s.url || '').trim()); toast('Enlace copiado'); })}>Copiar</Boton>
+                <Boton variante="secundario" tamano="sm" data-mail={i} onClick={intentar(async () => {
                   await envioOperacion.gestionar({ action: 'send_signature_link_by_email', email: s.email, name: s.name, link: (s.url || '').trim(), operation: d.operation });
                   toast('Enlace enviado por correo a ' + s.email);
-                })}>Correo</button>
-                <button className="secondary small" data-wa={i} onClick={intentar(async () => {
+                })}>Correo</Boton>
+                <Boton variante="secundario" tamano="sm" data-wa={i} onClick={intentar(async () => {
                   await envioOperacion.gestionar({ action: 'send_signature_link_by_whatsapp', operation: d.operation, personId: s.personId });
                   toast('Enlace enviado por WhatsApp');
-                })}>WhatsApp</button>
+                })}>WhatsApp</Boton>
               </div>
             )}</td>
           </tr>
         ))}
       </tbody>
     </table>
-    {d.processId != null && <><h3 style={{ marginTop: 14 }}>Documento</h3><button className="secondary small" data-doc onClick={intentar(verDocumento)}>Ver documento</button></>}
+    {d.processId != null && <><h3 style={{ marginTop: 14 }}>Documento</h3><Boton variante="secundario" tamano="sm" data-doc onClick={intentar(verDocumento)}>Ver documento</Boton></>}
     <div className="actions" style={{ marginTop: 12 }}>
-      <button className="ghost small" data-refresh onClick={alActualizar}>Actualizar</button>
-      {d.status !== 'finalized' && <button className="secondary small" data-resend onClick={intentar(async () => { await envioOperacion.gestionar({ action: 'resend_operation_to_sign', contract_id: d.processId }); toast('Operación reenviada'); })}>Reenviar a todos</button>}
+      <Boton variante="fantasma" tamano="sm" data-refresh onClick={alActualizar}>Actualizar</Boton>
+      {d.status !== 'finalized' && <Boton variante="secundario" tamano="sm" data-resend onClick={intentar(async () => { await envioOperacion.gestionar({ action: 'resend_operation_to_sign', contract_id: d.processId }); toast('Operación reenviada'); })}>Reenviar a todos</Boton>}
     </div>
   </>;
 }

@@ -97,10 +97,19 @@ export class PortalfirmaService {
 
   /** PDF de una operación. Pide que la corredora tenga Portalfirma conectado (la credencial del servicio es de Asset). */
   async archivo(u: UsuarioToken, contrato: string) {
+    return this.descargar(this.conexiones.duenoDe(u, 'portalfirma'), contrato);
+  }
+
+  /** lo mismo para los procesos del servidor que no tienen un usuario (p. ej. copiar a Drive el documento ya firmado) */
+  archivoDeCorredora(corredoraId: string, contrato: string) {
+    return this.descargar({ corredoraId, usuarioId: null }, contrato);
+  }
+
+  private async descargar(d: DuenoConexion, contrato: string) {
     if (!/^[A-Za-z0-9_-]{1,80}$/.test(contrato)) throw new NotFoundException('Contrato no válido');
     if (!this.archivosId)
       throw new ServiceUnavailableException('Falta configurar el servicio de archivos de Portalfirma en el servidor.');
-    await this.conToken(this.conexiones.duenoDe(u, 'portalfirma'), async () => null);
+    await this.conToken(d, async () => null);
     const r = await fetch(ARCHIVOS_URL, {
       method: 'POST',
       headers: { Accept: 'application/json', 'Content-Type': 'application/json', id: this.archivosId },

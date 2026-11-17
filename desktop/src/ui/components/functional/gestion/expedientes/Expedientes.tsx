@@ -13,6 +13,8 @@ import { accionExpediente, confirmar, desdeDriveExpediente, elegirExpedienteLega
 import { tamano } from '../comun/archivos';
 import type { IArchivoExpediente, IMovimientoExpediente, IOperacionResumen, TExpedienteTipo } from '../../../../store/interfaces/expediente.interface';
 
+import Boton from '../../../ui/Boton';
+import Layout from '../../../ui/Layout';
 const TIPOS: Record<TExpedienteTipo, [string, string]> = { propiedad: ['Propiedad', 'home'], persona: ['Persona', 'user'], empresa: ['Empresa', 'building'], tramite: ['Trámite', 'listCheck'], otro: ['Otro', 'folder'] };
 const HK: Record<string, string> = { created: 'folder', added: 'upload', removed: 'trash', sent: 'sign', plazos: 'calendar', saved: 'file', note: 'textEdit' };
 const ext = (n: string) => String(n).split('.').pop()!.toLowerCase();
@@ -26,7 +28,7 @@ function Movimiento({ h, ops }: { h: IMovimientoExpediente; ops: IOperacionResum
   if (h.kind === 'sent' && h.op != null) {
     const o = ops?.find((x) => String(x.operation) === String(h.op));
     const lab = !o ? 'Enviado' : (o.stage === 'finalized' || o.status === 'finalized') ? (o.signers && (o.signed ?? 0) < o.signers ? 'Cerrada sin todas las firmas' : 'Firmado') : `Firmando ${o.signed ?? 0}/${o.signers ?? '?'}`;
-    estado = <><span className={`ops-chip ${/Firmado/.test(lab) ? 'ok' : /Cerrada/.test(lab) ? 'wait' : 'run'}`}>{lab} · N° {h.op}</span><button className="ghost small" data-op={h.op} onClick={() => verOperacion(Number(h.op))}>Ver</button></>;
+    estado = <><span className={`ops-chip ${/Firmado/.test(lab) ? 'ok' : /Cerrada/.test(lab) ? 'wait' : 'run'}`}>{lab} · N° {h.op}</span><Boton variante="fantasma" tamano="sm" data-op={h.op} onClick={() => verOperacion(Number(h.op))}>Ver</Boton></>;
   }
   return <div className="xp-h"><span className="xp-h-ic"><Icono nombre={HK[h.kind] || 'file'} tam={15} /></span><span className="xp-h-tx"><b>{h.text || ''}</b><small>{fecha(h.at)}</small></span><span className="xp-h-st">{estado}</span></div>;
 }
@@ -55,11 +57,9 @@ export default function Expedientes({ sel: selInicial }: { sel?: string | null }
   };
 
   return (
-    <div className="bulk xp">
-      <div className="ops-head">
-        <div><h2>Expedientes</h2><span className="muted small">Una carpeta por caso con todos sus documentos (contratos, cédulas, fotos…) y su historial. En tu computador o en Google Drive.</span></div>
-        <div className="ops-head-r"><button className="primary small with-ic" id="xpNew" onClick={nuevoExpediente}><Icono nombre="plus" tam={15} /><span>Nuevo expediente</span></button></div>
-      </div>
+    <Layout titulo="Expedientes" ilustracion={{ imagen: 'img/formas/etapa.svg', tinte: '#6d5bd0' }}
+      subtitulo="Una carpeta por caso con todos sus documentos (contratos, cédulas, fotos…) y su historial. En tu computador o en Google Drive."
+      acciones={<Boton icono="plus" id="xpNew" onClick={nuevoExpediente}>Nuevo expediente</Boton>}>
       <div className="xp-grid">
         <div className="xp-side">
           <Buscador id="xpQ" clase="ops-search" valor={q} alCambiar={expedienteSetQ} espera={80} placeholder="Buscar expediente…" />
@@ -77,7 +77,7 @@ export default function Expedientes({ sel: selInicial }: { sel?: string | null }
             <div className="ops-empty"><div>
               <Icono nombre="folderOpen" tam={38} />
               <p><b>Ordena tus documentos por caso.</b><br />Ej.: «Depto Calle Nueva 120»: el contrato, las cédulas de las partes, fotos del inventario y lo que se envió a firmar.</p>
-              <button className="primary" id="xpNew2" onClick={nuevoExpediente}><Icono nombre="plus" tam={15} /> Crear mi primer expediente</button>
+              <Boton icono="plus" id="xpNew2" onClick={nuevoExpediente}>Crear mi primer expediente</Boton>
             </div></div>
           ) : (
             <>
@@ -92,8 +92,8 @@ export default function Expedientes({ sel: selInicial }: { sel?: string | null }
                   </div>
                 </div>
                 <div className="xp-h-acts">
-                  <button className="ghost small with-ic" id="xpReveal" onClick={async () => { const r = await mostrarCarpetaExpediente(e.id); if (!r.ok) toast(r.error || '', 5000); }}><Icono nombre="folderOpen" tam={14} /><span>Abrir carpeta</span></button>
-                  <button className="ibtn" id="xpMore" title="Más opciones" onClick={() => masOpcionesExpediente(e)}><Icono nombre="settings" tam={15} /></button>
+                  <Boton variante="fantasma" tamano="sm" icono="folderOpen" id="xpReveal" onClick={async () => { const r = await mostrarCarpetaExpediente(e.id); if (!r.ok) toast(r.error || '', 5000); }}>Abrir carpeta</Boton>
+                  <Boton variante="fantasma" tamano="sm" icono="settings" id="xpMore" title="Más opciones" onClick={() => masOpcionesExpediente(e)} aria-label="Más opciones" />
                 </div>
               </div>
               <div className="ai-tabs xp-tabs">
@@ -103,17 +103,17 @@ export default function Expedientes({ sel: selInicial }: { sel?: string | null }
               {tab === 'docs' ? (
                 <>
                   <div className="xp-add">
-                    <button className="secondary small with-ic" id="xpAdd" onClick={async () => aviso(await archivosAgregar())}><Icono nombre="upload" tam={14} /><span>Agregar desde el computador</span></button>
-                    <button className="secondary small with-ic" id="xpDrive" onClick={() => desdeDriveExpediente(e)}><Icono nombre="drive" tam={14} /><span>Desde Google Drive</span></button>
+                    <Boton variante="secundario" tamano="sm" icono="upload" id="xpAdd" onClick={async () => aviso(await archivosAgregar())}>Agregar desde el computador</Boton>
+                    <Boton variante="secundario" tamano="sm" icono="drive" id="xpDrive" onClick={() => desdeDriveExpediente(e)}>Desde Google Drive</Boton>
                     <span className="muted small">o arrastra los archivos aquí (PDF, Word, Excel, fotos de cédulas…)</span>
                   </div>
                   {n > 0 && (
                     <div className="xp-selbar"><b>{n} seleccionado{n === 1 ? '' : 's'}</b>
-                      <button className="secondary small" data-do="open" onClick={() => accionExpediente('open', elegidos, e)}>Abrir en el editor</button>
-                      {n > 1 && <button className="secondary small" data-do="combine" onClick={() => accionExpediente('combine', elegidos, e)}>Combinar en un PDF</button>}
-                      <button className="secondary small" data-do="plazos" onClick={() => accionExpediente('plazos', elegidos, e)}><Icono nombre="calendar" tam={13} /> Agregar a Plazos</button>
-                      <button className="primary small" data-do="sign" data-member="" onClick={() => accionExpediente('sign', elegidos, e)}><Icono nombre="sign" tam={13} /> Enviar a firmar{n > 1 ? ` (${n})` : ''}</button>
-                      <button className="ghost small" data-do="none" onClick={archivosDesmarcar}>Quitar selección</button>
+                      <Boton variante="secundario" tamano="sm" data-do="open" onClick={() => accionExpediente('open', elegidos, e)}>Abrir en el editor</Boton>
+                      {n > 1 && <Boton variante="secundario" tamano="sm" data-do="combine" onClick={() => accionExpediente('combine', elegidos, e)}>Combinar en un PDF</Boton>}
+                      <Boton variante="secundario" tamano="sm" icono="calendar" data-do="plazos" onClick={() => accionExpediente('plazos', elegidos, e)}>Agregar a Plazos</Boton>
+                      <Boton tamano="sm" icono="sign" data-do="sign" data-member="" onClick={() => accionExpediente('sign', elegidos, e)}>Enviar a firmar{n > 1 ? ` (${n})` : ''}</Boton>
+                      <Boton variante="fantasma" tamano="sm" data-do="none" onClick={archivosDesmarcar}>Quitar selección</Boton>
                     </div>
                   )}
                   <div className="xp-files" id="xpFiles">
@@ -127,8 +127,8 @@ export default function Expedientes({ sel: selInicial }: { sel?: string | null }
                               <span className="fi"><Icono nombre={i} tam={18} /></span>
                               <span className="xp-f-tx"><b>{f.name}</b><small>{k} · {tamano(f.size) || '1 KB'} · {fecha(f.modified)}</small></span>
                               <span className="xp-f-acts">
-                                {u && <button className="ghost small" data-fa="view" onClick={() => accionExpediente('open', [f], e)}>Ver</button>}
-                                <button className="ibtn" data-fa="rm" title="Enviar a la papelera" onClick={() => papelera(f)}><Icono nombre="trash" tam={14} /></button>
+                                {u && <Boton variante="fantasma" tamano="sm" data-fa="view" onClick={() => accionExpediente('open', [f], e)}>Ver</Boton>}
+                                <Boton variante="fantasma" tamano="sm" icono="trash" data-fa="rm" title="Enviar a la papelera" onClick={() => papelera(f)} aria-label="Enviar a la papelera" />
                               </span>
                             </div>
                           );
@@ -142,6 +142,6 @@ export default function Expedientes({ sel: selInicial }: { sel?: string | null }
           )}
         </div>
       </div>
-    </div>
+    </Layout>
   );
 }

@@ -26,7 +26,7 @@ export default function ItemLista({ titulo, detalle, media, derecha, alTocar, fl
     {derecha && <span className="tw:flex-none tw:flex tw:items-center tw:gap-2">{derecha}</span>}
     {flecha && <span className="tw:flex-none tw:text-muted"><Icono nombre="chevR" tam={16} /></span>}
   </>;
-  const clases = cx('tw:flex tw:items-center tw:gap-3 tw:w-full tw:m-0 tw:px-3 tw:py-2.5 tw:rounded-control', className);
+  const clases = cx('tw:flex tw:items-center tw:gap-ui tw:w-full tw:m-0 tw:px-3 tw:py-2.5 tw:rounded-control', className);
   return alTocar ? (
     <button type="button" onClick={alTocar} {...resto}
       className={cx(clases, 'tw:border-0 tw:bg-transparent tw:cursor-pointer tw:font-[inherit] tw:hover:bg-hover tw:focus-visible:outline-2 tw:focus-visible:outline-lav-edge')}>

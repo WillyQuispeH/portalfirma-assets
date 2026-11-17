@@ -41,13 +41,13 @@ export function VentanaCabecera({ titulo, descripcion, icono, tonoIcono = 'lavan
   return (
     <header className={cx('mdl-cab', className)}>
       {icono && (
-        <span className={cx('tw:flex-none tw:grid tw:place-items-center tw:w-10 tw:h-10 tw:rounded-icono', SUAVE[tonoIcono])}>
-          <Icono nombre={icono} tam={19} />
+        <span className={cx('tw:flex-none tw:grid tw:place-items-center tw:size-9 tw:rounded-icono', SUAVE[tonoIcono])}>
+          <Icono nombre={icono} tam={17} />
         </span>
       )}
-      <div className="tw:min-w-0 tw:flex-1 tw:pt-1">
-        <h2 className="tw:m-0 tw:text-[18px] tw:font-bold tw:leading-snug">{titulo}</h2>
-        {descripcion && <p className="tw:mt-1 tw:mb-0 tw:text-[13.5px] tw:leading-relaxed tw:text-muted">{descripcion}</p>}
+      <div className="tw:min-w-0 tw:flex-1 tw:flex tw:flex-col tw:justify-center tw:gap-0.5">
+        <h2 className="tw:m-0">{titulo}</h2>
+        {descripcion && <p className="tw:m-0 tw:text-[13px] tw:leading-snug tw:text-muted">{descripcion}</p>}
       </div>
       {cerrable && (
         <button type="button" className="mdl-x" aria-label="Cerrar" onClick={onCerrar ?? cerrarVentana}>
@@ -65,7 +65,7 @@ export function VentanaCuerpo({ children, sinRelleno = false, className }: { chi
 
 /** los botones, a la derecha; un botón con className="tw:mr-auto" queda a la izquierda */
 export function VentanaPie({ children, className }: { children?: ReactNode; className?: string }) {
-  return <footer className={cx('mdl-pie tw:flex tw:flex-wrap tw:items-center tw:justify-end tw:gap-2', className)}>{children}</footer>;
+  return <footer className={cx('mdl-pie tw:flex tw:flex-wrap tw:items-center tw:justify-end tw:gap-ui', className)}>{children}</footer>;
 }
 
 /** Pregunta de sí o no en el modal de la app (la usa confirmar() de utils/app.ts). En `texto` y `nota`, lo que va

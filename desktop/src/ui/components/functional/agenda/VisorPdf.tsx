@@ -52,3 +52,12 @@ export default function VisorPdf({ base64, bytes }: { base64?: string; bytes?: U
     </div>
   );
 }
+
+/** la vista previa mientras el documento se arma (la ventana ya está abierta y se puede editar) */
+export function PdfCargando() {
+  return (
+    <div className="tw:grid tw:min-h-[320px] tw:place-items-center tw:rounded-icono tw:bg-sunken tw:p-3" role="status">
+      <div className="tw:flex tw:flex-col tw:items-center tw:gap-3 tw:text-sm tw:text-muted"><div className="spinner" />Preparando el documento…</div>
+    </div>
+  );
+}

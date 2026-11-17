@@ -8,6 +8,7 @@
 // #aeNota-N, #aeQuitar-N, #aeObs, #aeGuardar, #mOk, #mCancel) los usan las pruebas.
 import { useState } from 'react';
 import Boton from '../../ui/Boton';
+import MenuMas from '../../ui/MenuMas';
 import Badge from '../../ui/Badge';
 import Card from '../../ui/Card';
 import Input from '../../ui/Input';
@@ -17,7 +18,10 @@ import { VentanaCabecera, VentanaCuerpo, VentanaPie } from '../../ui/Ventana';
 import { NOTA } from '../gestion/editor-pdf/Modales';
 import { ErrorVentana } from './VentanasAntiguas';
 import { cerrarModal } from '../../../utils/modal';
-import VisorPdf from '../agenda/VisorPdf';
+import { toast } from '../../../utils/app';
+import { descargarPdf } from '../../../utils/pdf';
+import VisorPdf, { PdfCargando } from '../agenda/VisorPdf';
+import { usePdfInicial, type IPdfInicial } from '../agenda/usePdfInicial';
 
 export interface IItemInventario { espacio: string; estado: string; nota: string }
 export interface IEntregaDatos {
@@ -29,6 +33,8 @@ export interface IActaEntregaProps {
   pdf?: string;
   /** lo que impidió armar el PDF (falta la fecha, el correo de un firmante…): se muestra al abrir y se corrige aquí mismo */
   errorInicial?: string;
+  /** el PDF que se está armando (o trayendo): la ventana se abre ya y la vista previa lo muestra al llegar */
+  pdfPromesa?: Promise<IPdfInicial>;
   datos: IEntregaDatos;
   propiedad: { codigo: string; titulo: string; direccion: string };
   firmantes: { nombre: string; rol: string }[];
@@ -37,15 +43,17 @@ export interface IActaEntregaProps {
 }
 
 const mensaje = (e: unknown) => (e instanceof Error ? e.message : String(e));
+/** guarda el PDF en el computador: firmar en Asset es opcional */
+const bajar = async (pdf: string, nombre: string, avisar: (m: string) => void) => { if (!pdf) return; try { if (await descargarPdf(pdf, nombre)) toast('PDF guardado.'); } catch (e) { avisar(mensaje(e)); } };
 const ESTADOS: [string, string][] = [['bueno', 'Bueno'], ['regular', 'Regular'], ['malo', 'Malo'], ['na', 'No aplica']];
 const MEDIDORES: ['luz' | 'agua' | 'gas', string][] = [['luz', 'Electricidad'], ['agua', 'Agua'], ['gas', 'Gas']];
 /** los espacios con que parte un inventario nuevo (se editan, quitan y agregan libremente) */
 export const INVENTARIO_BASE = ['Living-comedor', 'Cocina', 'Dormitorio principal', 'Baño', 'Pisos y muros', 'Ventanas y puertas'];
 
-export function ActaEntrega({ pdf: pdf0, errorInicial, datos, propiedad, firmantes: firmantes0, alGuardar, alConfirmar }: IActaEntregaProps) {
+export function ActaEntrega({ pdf: pdf0, pdfPromesa, errorInicial, datos, propiedad, firmantes: firmantes0, alGuardar, alConfirmar }: IActaEntregaProps) {
   const [v, setV] = useState<IEntregaDatos>(datos);
   const [guardado, setGuardado] = useState<IEntregaDatos>(datos);
-  const [pdf, setPdf] = useState(pdf0 || ''); const [firmantes, setFirmantes] = useState(firmantes0);
+  const { pdf, setPdf, cargando: cargandoPdf, errorCarga } = usePdfInicial(pdf0, pdfPromesa); const [firmantes, setFirmantes] = useState(firmantes0);
   const [guardando, setGuardando] = useState(false); const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState(errorInicial || '');
   const sucio = JSON.stringify(v) !== JSON.stringify(guardado);
@@ -126,20 +134,23 @@ export function ActaEntrega({ pdf: pdf0, errorInicial, datos, propiedad, firmant
             </div>
           </Card>
 
-          <ErrorVentana id="aeErr" texto={error} />
+          <ErrorVentana id="aeErr" texto={error || errorCarga} />
         </div>
 
         <Card titulo="Vista previa" subtitulo="Así se envía a firmar" relleno={true} className="tw:min-w-0 tw:lg:sticky tw:lg:top-0">
-          <div className={guardando ? 'tw:opacity-50 tw:transition-opacity' : 'tw:transition-opacity'}>{pdf ? <VisorPdf base64={pdf} /> : <p className={NOTA}>No se pudo preparar el PDF: completa la fecha y el inventario y guarda.</p>}</div>
+          <div className={guardando ? 'tw:opacity-50 tw:transition-opacity' : 'tw:transition-opacity'}>{pdf ? <VisorPdf base64={pdf} /> : cargandoPdf ? <PdfCargando /> : <p className={NOTA}>No se pudo preparar el PDF: completa la fecha y el inventario y guarda.</p>}</div>
         </Card>
       </div>
       <p className={`${NOTA} tw:mt-3`}>Se cobra del saldo de Portalfirma. Cuando firmen ambas partes, la propiedad queda «Arrendada». El texto es un borrador para que lo revise el notario.</p>
     </VentanaCuerpo>
     <VentanaPie>
       {sucio ? <span className="tw:mr-auto tw:text-xs tw:text-muted">Cambios sin guardar</span> : <span className="tw:mr-auto"><Badge tono="verde" icono="check" ajustar>Todo guardado</Badge></span>}
-      <Boton id="mCancel" variante="secundario" onClick={cerrarModal} disabled={enviando}>Cancelar</Boton>
       <Boton id="aeGuardar" variante="secundario" icono="save" cargando={guardando} disabled={!sucio || enviando} onClick={guardar}>Guardar y actualizar PDF</Boton>
-      <Boton id="mOk" icono="sign" disabled={sucio || invalido || guardando || enviando || !pdf} cargando={enviando} onClick={enviar} title={sucio ? 'Guarda los cambios antes de enviar' : undefined}>{enviando ? 'Enviando…' : 'Generar y enviar a firmar'}</Boton>
+      <Boton id="mOk" icono="sign" disabled={cargandoPdf || sucio || invalido || guardando || enviando || !pdf} cargando={enviando} onClick={enviar} title={sucio ? 'Guarda los cambios antes de enviar' : undefined}>{enviando ? 'Enviando…' : 'Generar y enviar a firmar'}</Boton>
+      <MenuMas id="aeMas" opciones={[
+        { id: 'aeDescargar', texto: 'Descargar PDF', icono: 'download', disabled: !pdf || guardando, alTocar: () => bajar(pdf, 'Acta de entrega.pdf', setError) },
+        { id: 'mCancel', texto: 'Cancelar', icono: 'x', disabled: enviando, alTocar: cerrarModal },
+      ]} />
     </VentanaPie>
   </>;
 }

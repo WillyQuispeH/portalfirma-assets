@@ -1,5 +1,5 @@
 // Ficha de la propiedad: cabecera con «volver» a la cartera y acciones, franja de resumen y pestañas (Resumen,
-// Propietario, Negocios, Firmas y documentos, Portales, Historial). Se abre con Inmo.abrirFicha(id)
+// Propietario, Negocios, Visitas, Firmas y documentos, Portales, Historial). Se abre con Inmo.abrirFicha(id)
 // (src/renderer/inmo.js), que la monta en #view-cartera, el mismo contenedor de la lista.
 // Hecha con el kit: Layout (cabecera con «volver» y acciones), Boton, Tabs, Card, Badge, ItemLista, ListaDatos,
 // LineaTiempo, Select, Input y Textarea.
@@ -23,6 +23,7 @@ import { direccion } from '../cartera/filtrar';
 import { precio } from './comun';
 import Resumen from './Resumen';
 import Propietario from './Propietario';
+import Visitas from './Visitas';
 import { Firmas, Historial, Negocios, Portales } from './Paneles';
 import { useFicha, type TFichaTab } from '../../../store/hooks/useFicha.hook';
 import { usePerfil } from '../../../store/hooks/usePerfil.hook';
@@ -139,6 +140,7 @@ export default function FichaPropiedad({ id, vez }: IFichaPropiedadProps) {
     ['resumen', 'Resumen'],
     ['propietario', 'Propietario', undefined, p.duenoVisible === false ? 'lock' : undefined],
     ['negocios', 'Negocios', abiertos || undefined],
+    ['visitas', 'Visitas'],
     ['firmas', 'Firmas y documentos', enFirma || undefined],
     ['portales', 'Portales'],
     ['historial', 'Historial'],
@@ -163,6 +165,7 @@ export default function FichaPropiedad({ id, vez }: IFichaPropiedadProps) {
       {pane('resumen', <Resumen p={p} irA={irA} version={version} />)}
       {pane('propietario', <Propietario p={p} />)}
       {pane('negocios', <Negocios p={p} />)}
+      {pane('visitas', <Visitas p={p} />)}
       {pane('firmas', <Firmas p={p} />)}
       {pane('portales', <Portales p={p} />)}
       {pane('historial', <Historial />)}

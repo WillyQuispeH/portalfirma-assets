@@ -26,7 +26,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     await w.evaluate((x) => window.Etapas.accion(x, () => {}), paso);
     await w.waitForSelector('#pasoEnviar'); ok(/Ver la carta y enviarla a firmar/.test(await txt('#pasoEnviar')), 'sin cartas enviadas, el paso ofrece «Ver la carta y enviarla a firmar»');
     await w.click('#pasoEnviar'); await w.waitForSelector('#coNombre', { timeout: 15000 });
-    ok(await w.inputValue('#coNombre') === 'Matías Serrano' && await w.inputValue('#coEmail') === 'matias@correo.cl' && await w.inputValue('#coVigencia') === '5', 'la ventana trae al arrendatario del negocio y la vigencia por defecto');
+    ok(await w.inputValue('#coNombre') === 'Matías Serrano' && await w.inputValue('#coEmail') === 'matias@correo.cl' && await w.inputValue('#coVigencia') === '3', 'la ventana trae al arrendatario del negocio y la vigencia por defecto');
     await shot('co1-carta.png');
 
     // sin guardar no se puede enviar; lo editado queda en la persona y en el negocio
@@ -45,6 +45,11 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     ok(ng2.firmas?.oferta?.operacion && ng2.firmas.oferta.estado === 'en_firma' && !ng2.firmas.reserva, 'la operación quedó ligada a la firma «oferta» del negocio (no a una etapa del embudo), en firma');
     const pasos1 = await call('etPasos', { negocioId: n.id }); const p1 = pasos1.etapas.flatMap((e) => e.pasos).find((x) => x.id === 'carta');
     ok(p1.e === 'pend' && p1.q === 'otro', 'el paso «Carta oferta» queda esperando la firma');
+    // desde la ficha del NEGOCIO (que solo trae el negocio, no la propiedad) el paso ya muestra el documento enviado
+    await w.evaluate((id) => window.Negocios.abrirNegocio(id), n.id); await w.waitForSelector('#ngEt .et-col');
+    await w.locator('#ngEt .et-go', { hasText: 'Carta oferta' }).first().click(); await w.waitForSelector('#pasoDocs');
+    await w.waitForSelector('#pasoDocs [data-doc-paso]', { timeout: 8000 }); ok(/Carta oferta/.test(await txt('#pasoDocs')), 'abierto desde la ficha del negocio, el paso muestra la carta que ya se envió (no «todavía no hay documentos»)');
+    await w.evaluate(() => window.closeModal());
     ok(!errs.length, 'sin errores de JavaScript' + (errs.length ? ': ' + errs.join(' | ') : ''));
     console.log('OK carta oferta');
   } catch (er) { console.error(er.message); await shot('carta-oferta-error.png').catch(() => {}); process.exitCode = 1; }

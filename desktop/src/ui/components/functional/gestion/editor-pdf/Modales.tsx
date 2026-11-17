@@ -5,7 +5,7 @@ import { useState, type InputHTMLAttributes, type ReactNode } from 'react';
 import Boton from '../../../ui/Boton';
 import Input from '../../../ui/Input';
 import Select from '../../../ui/Select';
-import { CAJA } from '../../../ui/Campo';
+import { CAJA_SUELTA } from '../../../ui/Campo';
 import { VentanaCabecera, VentanaCuerpo, VentanaPie } from '../../../ui/Ventana';
 import type { TTono } from '../../../ui/tonos';
 import { cerrarModal } from '../../../../utils/modal';
@@ -29,7 +29,7 @@ export function Opcion({ children, className, ...input }: InputHTMLAttributes<HT
   );
 }
 // caja pequeña dentro del texto de una opción (Dividir: «Cada [N] página(s)»)
-const CAJA_EN_LINEA = cx(CAJA, 'tw:inline-block tw:h-8 tw:mx-1 tw:align-middle');
+const CAJA_EN_LINEA = cx(CAJA_SUELTA, 'tw:inline-block tw:mx-1 tw:align-middle');
 
 const Cancelar = ({ texto = 'Cancelar', alCancelar }: { texto?: string; alCancelar?: () => void }) =>
   <Boton id="mCancel" variante="secundario" onClick={() => { cerrarModal(); alCancelar?.(); }}>{texto}</Boton>;

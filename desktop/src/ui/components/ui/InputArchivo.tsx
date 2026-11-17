@@ -33,7 +33,7 @@ export default function InputArchivo({ etiqueta, ayuda, icono = 'upload', accept
     <div
       id={idCampo}
       className={cx(
-        'tw:flex tw:items-center tw:gap-3 tw:rounded-control tw:border-2 tw:border-dashed tw:px-3 tw:py-2.5 tw:transition-colors tw:duration-100',
+        'tw:flex tw:items-center tw:gap-ui tw:rounded-control tw:border-2 tw:border-dashed tw:px-3 tw:py-2.5 tw:transition-colors tw:duration-100',
         encima ? 'tw:border-brand tw:bg-lav-soft' : 'tw:border-edge tw:bg-transparent',
         bloqueado ? 'tw:opacity-55' : 'tw:cursor-pointer tw:hover:bg-hover',
         className,

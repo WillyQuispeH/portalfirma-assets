@@ -20,6 +20,9 @@ export function usePublicacion() {
     interesadoResponder: s.interesadoResponder,
     portalGuardar: s.portalGuardar,
     portalExportarFeed: s.portalExportarFeed,
+    portalesGetAll: s.portalesGetAll,
+    portalRotarClave: s.portalRotarClave,
+    avisoAccion: s.avisoAccion,
     publicacionSincronizar: s.publicacionSincronizar,
   })));
 }

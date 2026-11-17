@@ -24,9 +24,9 @@ export function ErrorVentana({ id, texto }: { id: string; texto: string }) {
   return <p id={id} role="alert" className="error tw:m-0 tw:text-[13px] tw:text-err tw:empty:hidden">{texto}</p>;
 }
 
-/** dos campos lado a lado: el primero ocupa el resto, el segundo tiene ancho fijo */
+/** dos campos lado a lado (misma altura): el primero ocupa el resto, el segundo tiene ancho fijo */
 function EnLinea({ children }: { children: ReactNode }) {
-  return <div className="tw:flex tw:items-end tw:gap-2 tw:[&>*:first-child]:flex-1 tw:[&>*:first-child]:min-w-0">{children}</div>;
+  return <div className="tw:flex tw:items-stretch tw:gap-2 tw:[&>*:first-child]:flex-1 tw:[&>*:first-child]:min-w-0">{children}</div>;
 }
 
 // ---------- confirmaciones (modal-45 y modal-47) ----------
@@ -128,17 +128,18 @@ function FormNuevoNegocio({ tipo, propiedades, personas, etapas, propId: prop0, 
         <EnLinea>
           <Select etiqueta={venta ? 'Comprador' : 'Arrendatario'} id="nnCli" value={clienteId} onChange={(e) => setClienteId(e.target.value)} vacia="Elegir…"
             opciones={personas.map((c) => [c.id, c.texto])} />
-          <Boton id="nnPer" variante="secundario" icono="plus" title="Crear persona" aria-label="Crear persona" onClick={() => alCrearPersona(leer())} />
+          <Boton id="nnPer" variante="secundario" icono="plus" title="Crear persona" aria-label="Crear persona"
+            className="tw:h-14! tw:w-14 tw:px-0" onClick={() => alCrearPersona(leer())} />
         </EnLinea>
         <EnLinea>
           <Input etiqueta={venta ? 'Precio acordado' : 'Arriendo mensual acordado'} id="nnVal" type="number" step="any" value={valor} onChange={(e) => setValor(e.target.value)} />
-          <Select id="nnMon" aria-label="Moneda" clasesCampo="tw:w-[90px]" value={moneda} onChange={(e) => setMoneda(e.target.value)}
+          <Select etiqueta="Moneda" id="nnMon" clasesCampo="tw:w-[110px]" value={moneda} onChange={(e) => setMoneda(e.target.value)}
             opciones={[['UF', 'UF'], ['CLP', 'CLP'], ['USD', 'USD']]} />
         </EnLinea>
         <div className="tw:flex tw:flex-col tw:gap-1.5">
           <EnLinea>
             <Input etiqueta="Comisión" id="nnCom" type="number" step="any" value={com} onChange={(e) => setCom(e.target.value)} />
-            <Select id="nnComT" aria-label="Tipo de comisión" clasesCampo="tw:w-[130px]" value={comT} onChange={(e) => setComT(e.target.value)}
+            <Select etiqueta="Unidad" id="nnComT" clasesCampo="tw:w-[140px]" value={comT} onChange={(e) => setComT(e.target.value)}
               opciones={[['%', '%'], ['monto', 'monto fijo']]} />
           </EnLinea>
           <small className="tw:text-xs tw:text-muted">{venta ? 'Habitual: 2% + IVA' : 'Habitual: 50% del primer mes + IVA'}</small>
@@ -147,7 +148,7 @@ function FormNuevoNegocio({ tipo, propiedades, personas, etapas, propId: prop0, 
         <EnLinea>
           <Input etiqueta={<>Próxima acción <span className="tw:font-normal tw:text-muted">(opcional)</span></>} id="nnAcc" placeholder="Ej.: llamar para agendar visita"
             value={accion} onChange={(e) => setAccion(e.target.value)} />
-          <Input id="nnFec" type="date" aria-label="Fecha de la próxima acción" clasesCampo="tw:w-[150px]" value={fechaAcc} onChange={(e) => setFechaAcc(e.target.value)} />
+          <Input etiqueta="Fecha" id="nnFec" type="date" clasesCampo="tw:w-[168px]" value={fechaAcc} onChange={(e) => setFechaAcc(e.target.value)} />
         </EnLinea>
       </div>
       <ErrorVentana id="nnErr" texto={error} />

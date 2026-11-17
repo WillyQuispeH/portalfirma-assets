@@ -107,6 +107,35 @@ const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
     ok((await req('DELETE', `/eventos/${e2}`, null, cor)).s === 403, 'no borra un evento ajeno');
     ok((await req('DELETE', `/eventos/${e1}`, null, cor)).s === 200, 'pero sí uno suyo');
 
+    // ---- las visitas no se sobreponen (de una propiedad ni de un corredor)
+    r = await req('POST', '/propiedades', { titulo: `E2E Visitas ${SUF}`, tipo: 'departamento', venta: true, arriendo: true }, adm);
+    const prop2 = r.j; creados.props.push(prop2.id);
+    const F = '2026-12-05';
+    const vis = (o, tok) => { const id = nid('v'); creados.eventos.push(id); return req('PUT', `/eventos/${id}`, { tipo: 'visita', fecha: F, duracion: 60, ...o }, tok).then((x) => ({ ...x, id })); };
+    const v1 = await vis({ hora: '10:00', propId: prop.id, negocioId: n3 }, adm);
+    ok(v1.s === 200 && v1.j.corredorId === corId, 'una visita a las 10:00 (60 min) queda a cargo del corredor del negocio');
+    r = await vis({ hora: '10:30', propId: prop.id }, adm);
+    ok(r.s === 400 && r.j.code === 'CRUCE' && /de esta propiedad/.test(r.j.message), 'otra visita de la misma propiedad que se cruza: 400 CRUCE');
+    r = await vis({ hora: '10:30', propId: prop2.id, negocioId: n3 }, adm);
+    ok(r.s === 400 && r.j.code === 'CRUCE' && /Ese corredor ya tiene/.test(r.j.message), 'otra propiedad, mismo corredor y a la misma hora: 400 (el corredor no puede estar en dos visitas)');
+    r = await vis({ hora: '10:30', propId: prop2.id }, cor);
+    ok(r.s === 400 && /Ya tienes/.test(r.j.message), 'si es el propio corredor, el mensaje le habla a él');
+    r = await vis({ hora: '11:00', propId: prop.id }, cor);
+    ok(r.s === 200, 'justo cuando termina la visita anterior, otra cabe');
+    r = await vis({ hora: '10:30', propId: prop2.id }, adm);
+    ok(r.s === 200 && r.j.corredorId !== corId, 'el administrador (otro corredor) sí puede tener una visita a esa hora en otra propiedad');
+    r = await req('PUT', `/eventos/${nid('v')}`, { tipo: 'reunion', fecha: F, hora: '10:15', propId: prop.id }, cor); creados.eventos.push(r.j?.id);
+    ok(r.s === 200, 'una reunión a esa hora no se rechaza (la regla es solo entre visitas)');
+    const g1 = (await req('GET', `/eventos/${v1.id}`, null, adm)).j;
+    r = await req('PUT', `/eventos/${v1.id}`, { ...g1, notas: 'solo cambian las notas' }, adm);
+    ok(r.s === 200, 'editar algo que no es el horario no vuelve a revisar el cruce');
+    r = await req('PUT', `/eventos/${v1.id}`, { ...g1, hora: '10:45', version: r.j.version }, adm);
+    ok(r.s === 400 && r.j.code === 'CRUCE', 'reprogramar a un horario que se cruza: 400');
+    r = await req('PUT', `/eventos/${v1.id}`, { ...g1, estado: 'cancelado', version: (await req('GET', `/eventos/${v1.id}`, null, adm)).j.version }, adm);
+    ok(r.s === 200, 'cancelar la visita no se revisa');
+    r = await vis({ hora: '10:00', propId: prop.id }, cor);
+    ok(r.s === 200, 'y la visita cancelada libera su horario: se agenda otra justo donde estaba');
+
     // ---- importar lo que estaba en el JSON local de un equipo
     const viejos = [
       { id: nid('nimp'), tipo: 'venta', estado: 'abierto', etapa: 'promesa', propId: prop.id, clienteId: 'c-legado-1', corredorId: 'k-perfil-antiguo', tareas: { promesa: [true, false] }, creado: '2026-09-01T10:00:00.000Z' },

@@ -144,7 +144,7 @@ export default function Cartera({ filtros: filtrosIniciales }: ICarteraProps) {
             alTocar={(p) => (seleccion ? seleccionAlternar(p.id) : abrirFicha(p.id))} />
         </Card>
       ) : (
-        <div className="im-grid tw:grid tw:grid-cols-[repeat(auto-fill,minmax(268px,1fr))] tw:gap-4">
+        <div className="im-grid tw:grid tw:grid-cols-[repeat(auto-fill,minmax(268px,1fr))] tw:gap-ui">
           {lista.map((p) => (
             <PropiedadCard key={p.id} p={p} captacion={captaciones[p.id]} verCaptador={hayCorredores}
               modoSeleccion={!!seleccion} seleccionada={!!seleccion?.includes(p.id)}

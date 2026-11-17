@@ -10,6 +10,7 @@
 // #caClausulas, #caTipoFirma, #caTramite, #caGuardar, #caGuardarFirmantes, #caFirNombre-N, #caFirRut-N, #caFirTel-N, #caFirEmail-N, #mOk, #mCancel) los usan las pruebas.
 import { useState } from 'react';
 import Boton from '../../ui/Boton';
+import MenuMas from '../../ui/MenuMas';
 import Badge from '../../ui/Badge';
 import Card from '../../ui/Card';
 import Input from '../../ui/Input';
@@ -19,14 +20,19 @@ import { VentanaCabecera, VentanaCuerpo, VentanaPie } from '../../ui/Ventana';
 import { NOTA } from '../gestion/editor-pdf/Modales';
 import { ErrorVentana } from './VentanasAntiguas';
 import { cerrarModal } from '../../../utils/modal';
+import { toast } from '../../../utils/app';
+import { descargarPdf } from '../../../utils/pdf';
 import { correoValido, formatearRut, rutValido } from '../../../utils/rut';
-import VisorPdf from '../agenda/VisorPdf';
+import VisorPdf, { PdfCargando } from '../agenda/VisorPdf';
+import { usePdfInicial, type IPdfInicial } from '../agenda/usePdfInicial';
 
 export interface IContratoDatos {
   inicio: string; plazoMeses: string; renta: string; moneda: string; reajuste: string; avisoDias: string; diaPago: string; garantiaMeses: string; uso: string; clausulas: string;
+  /** cuenta donde se paga la renta (si falta, el contrato dice que el arrendador la indicará por escrito) */
+  cuenta: string;
 }
 /** quien firma: su ficha del CRM (se edita en esta ventana) */
-export interface IFirmantePersona { personaId: string; rol: string; nombre: string; rut: string; email: string; telefono: string }
+export interface IFirmantePersona { personaId: string; rol: string; nombre: string; rut: string; email: string; telefono: string; nacionalidad?: string; estadoCivil?: string; profesion?: string; direccion?: string }
 export interface IContratoFirma { tipoFirma: 'simple' | 'avanzada'; tramite: 'none' | 'legalization' }
 export interface IContratoArriendoProps {
   /** borrador (por defecto): se editan las condiciones y se guarda una VERSIÓN del contrato (con su PDF) para mandarla a revisión;
@@ -39,6 +45,8 @@ export interface IContratoArriendoProps {
   pdf?: string;
   /** lo que impidió armar el PDF (falta la fecha de inicio, el correo de un propietario…): se muestra al abrir y se corrige aquí mismo */
   errorInicial?: string;
+  /** el PDF que se está armando (o trayendo): la ventana se abre ya y la vista previa lo muestra al llegar */
+  pdfPromesa?: Promise<IPdfInicial>;
   datos: IContratoDatos;
   firma: IContratoFirma;
   propiedad: { codigo: string; titulo: string; direccion: string };
@@ -50,15 +58,17 @@ export interface IContratoArriendoProps {
 }
 
 const mensaje = (e: unknown) => (e instanceof Error ? e.message : String(e));
+/** guarda el PDF en el computador: firmar en Asset es opcional */
+const bajar = async (pdf: string, nombre: string, avisar: (m: string) => void) => { if (!pdf) return; try { if (await descargarPdf(pdf, nombre)) toast('PDF guardado.'); } catch (e) { avisar(mensaje(e)); } };
 const USOS: [string, string][] = [['habitacional', 'Vivienda (habitacional)'], ['comercial', 'Local comercial'], ['oficina', 'Oficina'], ['bodega', 'Bodega'], ['estacionamiento', 'Estacionamiento']];
 /** lo que le falta a un firmante para poder firmar (el RUT y el correo son obligatorios; el celular, no) */
 const faltaDe = (p: IFirmantePersona) => [!rutValido(p.rut) ? 'RUT' : '', !correoValido(p.email) ? 'correo' : ''].filter(Boolean);
 const REAJUSTES: [string, string][] = [['ipc_semestral', 'IPC cada 6 meses'], ['ipc_anual', 'IPC cada 12 meses'], ['uf', 'Renta en UF'], ['sin', 'Sin reajuste']];
 
-export function ContratoArriendo({ modo = 'borrador', versionN, alGuardarVersion, pdf: pdf0, errorInicial, datos, firma, propiedad, firmantes: firmantes0, alGuardar, alConfirmar }: IContratoArriendoProps) {
+export function ContratoArriendo({ modo = 'borrador', versionN, alGuardarVersion, pdf: pdf0, pdfPromesa, errorInicial, datos, firma, propiedad, firmantes: firmantes0, alGuardar, alConfirmar }: IContratoArriendoProps) {
   const [v, setV] = useState<IContratoDatos>(datos); const [f, setF] = useState<IContratoFirma>(firma);
   const [guardado, setGuardado] = useState<{ v: IContratoDatos; f: IContratoFirma }>({ v: datos, f: firma });
-  const [pdf, setPdf] = useState(pdf0 || '');
+  const { pdf, setPdf, cargando: cargandoPdf, errorCarga } = usePdfInicial(pdf0, pdfPromesa);
   const [fp, setFp] = useState<IFirmantePersona[]>(firmantes0); const [fpGuardado, setFpGuardado] = useState<IFirmantePersona[]>(firmantes0);
   const [abiertos, setAbiertos] = useState<Set<string>>(() => new Set(firmantes0.filter((p) => faltaDe(p).length).map((p) => p.personaId)));   // los incompletos se abren solos
   const [guardando, setGuardando] = useState(false); const [enviando, setEnviando] = useState(false);
@@ -117,6 +127,7 @@ export function ContratoArriendo({ modo = 'borrador', versionN, alGuardarVersion
                 <Input etiqueta="Aviso de término" id="caAviso" inputMode="numeric" sufijo="días" placeholder="60" {...campo('avisoDias')} />
                 <Input etiqueta="Garantía" id="caGarantia" inputMode="decimal" sufijo="meses" placeholder="1" error={v.garantiaMeses ? err.garantiaMeses : ''} {...campo('garantiaMeses')} />
               </div>
+              <Input etiqueta={<>Cuenta donde se paga la renta <span className="tw:font-normal tw:text-muted">(opcional)</span></>} id="caCuenta" autoComplete="off" placeholder="Cuenta corriente 00-123-45678-90, Banco de Chile" {...campo('cuenta')} />
               <Select etiqueta="Uso de la propiedad" id="caUso" ayuda="Para qué se arrienda: el contrato solo permite ese uso." opciones={USOS} {...campo('uso')} />
               <Textarea etiqueta={<>Cláusulas adicionales <span className="tw:font-normal tw:text-muted">(opcional)</span></>} id="caClausulas" rows={3} {...campo('clausulas')} />
             </div>
@@ -153,6 +164,10 @@ export function ContratoArriendo({ modo = 'borrador', versionN, alGuardarVersion
                           <Input etiqueta="RUT" id={`caFirRut-${i}`} autoComplete="off" placeholder="12.345.678-5" pendiente={!p.rut} error={p.rut && !rutValido(p.rut) ? 'El RUT no es válido' : ''} value={p.rut} onChange={(e) => cambiarFirm(p.personaId, 'rut', e.target.value)} />
                           <Input etiqueta="Celular" id={`caFirTel-${i}`} type="tel" autoComplete="off" placeholder="+56 9 1234 5678" value={p.telefono} onChange={(e) => cambiarFirm(p.personaId, 'telefono', e.target.value)} />
                           <div className="tw:col-span-2"><Input etiqueta="Correo (ahí recibe el enlace para firmar)" id={`caFirEmail-${i}`} type="email" autoComplete="off" pendiente={!p.email} error={p.email && !correoValido(p.email) ? 'Escribe un correo válido' : ''} value={p.email} onChange={(e) => cambiarFirm(p.personaId, 'email', e.target.value)} /></div>
+                          <Input etiqueta="Nacionalidad" id={`caFirNac-${i}`} autoComplete="off" placeholder="chilena" value={p.nacionalidad || ''} onChange={(e) => cambiarFirm(p.personaId, 'nacionalidad', e.target.value)} />
+                          <Input etiqueta="Estado civil" id={`caFirCivil-${i}`} autoComplete="off" placeholder="soltero(a), casado(a)…" value={p.estadoCivil || ''} onChange={(e) => cambiarFirm(p.personaId, 'estadoCivil', e.target.value)} />
+                          <Input etiqueta="Profesión u oficio" id={`caFirProf-${i}`} autoComplete="off" value={p.profesion || ''} onChange={(e) => cambiarFirm(p.personaId, 'profesion', e.target.value)} />
+                          <Input etiqueta="Domicilio" id={`caFirDom-${i}`} autoComplete="off" placeholder="Calle, número, comuna" value={p.direccion || ''} onChange={(e) => cambiarFirm(p.personaId, 'direccion', e.target.value)} />
                         </div>
                       )}
                     </li>
@@ -163,11 +178,11 @@ export function ContratoArriendo({ modo = 'borrador', versionN, alGuardarVersion
             </div>
           </Card>
 
-          <ErrorVentana id="caErr" texto={error} />
+          <ErrorVentana id="caErr" texto={error || errorCarga} />
         </div>
 
         <Card titulo="Vista previa" subtitulo={firmando ? 'Así se envía a firmar' : 'Borrador del contrato'} relleno={true} className="tw:min-w-0 tw:lg:sticky tw:lg:top-0">
-          <div className={guardando ? 'tw:opacity-50 tw:transition-opacity' : 'tw:transition-opacity'}>{pdf ? <VisorPdf base64={pdf} /> : <p className={NOTA}>No se pudo preparar el PDF: completa las condiciones y guarda.</p>}</div>
+          <div className={guardando ? 'tw:opacity-50 tw:transition-opacity' : 'tw:transition-opacity'}>{pdf ? <VisorPdf base64={pdf} /> : cargandoPdf ? <PdfCargando /> : <p className={NOTA}>No se pudo preparar el PDF: completa las condiciones y guarda.</p>}</div>
         </Card>
       </div>
       <p className={`${NOTA} tw:mt-3`}>{firmando ? 'Se cobra del saldo de Portalfirma y cada firmante recibe el enlace en su correo. Se firma exactamente el PDF aprobado.' : 'Al guardar la versión se archiva su PDF y se anulan las aprobaciones anteriores. Después la envías al propietario y al arrendatario por WhatsApp. El texto es un borrador para que lo revise el notario.'}</p>
@@ -175,16 +190,19 @@ export function ContratoArriendo({ modo = 'borrador', versionN, alGuardarVersion
     <VentanaPie>
       {firmando ? (sucioFirm ? <span className="tw:mr-auto tw:text-xs tw:text-muted">Cambios sin guardar</span> : <span className="tw:mr-auto"><Badge tono="verde" icono="check" ajustar>Versión {versionN} aprobada</Badge></span>)
         : sucio ? <span className="tw:mr-auto tw:text-xs tw:text-muted">Cambios sin guardar</span> : <span className="tw:mr-auto"><Badge tono="verde" icono="check" ajustar>Todo guardado</Badge></span>}
-      <Boton id="mCancel" variante="secundario" onClick={cerrarModal} disabled={enviando}>Cancelar</Boton>
       {firmando
         ? <>
           {sucioFirm && <Boton id="caGuardarFirmantes" variante="secundario" icono="save" cargando={guardando} disabled={enviando} onClick={guardar}>Guardar firmantes</Boton>}
-          <Boton id="mOk" icono="sign" disabled={enviando || !pdf || sucioFirm || incompletos.length > 0} cargando={enviando} onClick={enviar} title={incompletos.length ? `Falta el RUT o el correo de ${incompletos.map((p) => p.nombre).join(', ')}` : sucioFirm ? 'Guarda los datos de los firmantes antes de enviar' : undefined}>{enviando ? 'Enviando…' : 'Enviar a firmar'}</Boton>
+          <Boton id="mOk" icono="sign" disabled={cargandoPdf || enviando || !pdf || sucioFirm || incompletos.length > 0} cargando={enviando} onClick={enviar} title={incompletos.length ? `Falta el RUT o el correo de ${incompletos.map((p) => p.nombre).join(', ')}` : sucioFirm ? 'Guarda los datos de los firmantes antes de enviar' : undefined}>{enviando ? 'Enviando…' : 'Enviar a firmar'}</Boton>
         </>
         : <>
           <Boton id="caGuardar" variante="secundario" icono="save" cargando={guardando} disabled={!sucio || enviando} onClick={guardar}>Guardar y actualizar PDF</Boton>
-          <Boton id="mOk" icono="check" disabled={sucio || invalido || incompletos.length > 0 || guardando || enviando || !pdf} cargando={enviando} onClick={guardarVersion} title={sucio ? 'Guarda los cambios antes de guardar la versión' : incompletos.length ? `Falta el RUT o el correo de ${incompletos.map((p) => p.nombre).join(', ')}` : undefined}>{enviando ? 'Guardando…' : 'Guardar como versión'}</Boton>
+          <Boton id="mOk" icono="check" disabled={cargandoPdf || sucio || invalido || incompletos.length > 0 || guardando || enviando || !pdf} cargando={enviando} onClick={guardarVersion} title={sucio ? 'Guarda los cambios antes de guardar la versión' : incompletos.length ? `Falta el RUT o el correo de ${incompletos.map((p) => p.nombre).join(', ')}` : undefined}>{enviando ? 'Guardando…' : 'Guardar como versión'}</Boton>
         </>}
+      <MenuMas id="caMas" opciones={[
+        { id: 'caDescargar', texto: 'Descargar PDF', icono: 'download', disabled: !pdf || guardando, alTocar: () => bajar(pdf, 'Contrato de arriendo.pdf', setError) },
+        { id: 'mCancel', texto: 'Cancelar', icono: 'x', disabled: enviando, alTocar: cerrarModal },
+      ]} />
     </VentanaPie>
   </>;
 }

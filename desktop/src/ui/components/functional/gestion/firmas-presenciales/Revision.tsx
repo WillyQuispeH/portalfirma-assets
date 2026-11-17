@@ -12,6 +12,7 @@ import type { ReactNode } from 'react';
 import { cx } from '../../../../utils/cx';
 import { ALERTA, COLOR_ALERTA, MARCA, SW, SW_INPUT, SW_RIEL, seccion } from './estilos';
 
+import Boton from '../../../ui/Boton';
 // La materia: encabezado con ícono, nombre, coincidencia y precio
 const MATERIA = 'tw:rounded-card tw:py-[18px] tw:px-5 tw:mb-4 tw:bg-[radial-gradient(120%_140%_at_0%_0%,color-mix(in_srgb,#3d9cf0_9%,var(--card)),var(--card)_60%)] tw:[box-shadow:inset_0_0_0_1px_color-mix(in_srgb,var(--brand)_14%,transparent)]';
 const MATERIA_H = 'tw:flex tw:items-center tw:gap-3.5 tw:flex-wrap';
@@ -101,7 +102,7 @@ function Agregados() {
     {S.agregados.map((x, i) => (
       <div key={i} className={cx(ACTO, 'tw:[box-shadow:inset_0_0_0_1px_color-mix(in_srgb,#3f4fe6_22%,transparent)]')}><div className={ACTO_T}><b>{x.nombre}</b><span className={ACTO_CL}>Agregado por ti</span>
         <span className={ACTO_P}>{escritura && x.value && MT.BY[x.value] ? clp(MT.precio(x.value).monto) : 'informado'}</span>
-        <button className="ghost small" data-quitar={i} title="Quitar" onClick={() => S.escrituraQuitarAgregado(i)}><Icono nombre="x" tam={13} /></button></div>
+        <Boton variante="fantasma" tamano="sm" icono="x" data-quitar={i} title="Quitar" onClick={() => S.escrituraQuitarAgregado(i)} /></div>
         <q className={cita(true)}>{x.frase}</q></div>
     ))}
     <button className="link tw:self-start tw:inline-flex tw:items-center tw:gap-[5px] tw:text-[12.5px] tw:mt-1 tw:w-auto" id="esAddActo" onClick={() => abrirModal(<AgregarActo />, { clave: 'modal-107' })}><Icono nombre="plus" tam={13} /> Agregar un acto que no detectamos</button>
@@ -124,7 +125,7 @@ export function Ocultos() {
       {principales.length > 0 && !proto && (
         <div className="tw:flex tw:gap-2 tw:items-center tw:flex-wrap tw:text-[13px] tw:text-[#9b2c22] tw:bg-[color-mix(in_srgb,var(--err)_7%,var(--card))] tw:rounded-control tw:py-2.5 tw:px-3 tw:[&_span]:flex-1 tw:[&_span]:min-w-[220px] tw:[&_button]:w-auto tw:[&_button]:m-0"><Icono nombre="alert" tam={14} />
           <span>El escrito se presenta como <b>{declarada}</b>, pero su contenido corresponde a <b>{principales.map((x) => x.nombre).join(' y ')}</b>.</span>
-          {principales[0].value && <button className="ghost small" data-main={principales[0].value} onClick={() => { S.escrituraMateria(principales[0].value); toast('Materia principal actualizada'); }}>Usar {principales[0].nombre} como materia</button>}
+          {principales[0].value && <Boton variante="fantasma" tamano="sm" data-main={principales[0].value} onClick={() => { S.escrituraMateria(principales[0].value); toast('Materia principal actualizada'); }}>Usar {principales[0].nombre} como materia</Boton>}
         </div>
       )}
       {lista.map((x, i) => {
@@ -149,11 +150,11 @@ export function Observaciones() {
   const corregibles = !priv && al.some((x) => x.fix && x.fix.type !== 'cierre');
   return <>
     <div className={seccion(true)}><h3>Observaciones</h3>
-      {corregibles && <button className="primary small with-ic" id="esFixAll" onClick={() => { S.escrituraCorregirTodo(); toast('Correcciones aplicadas'); }}><Icono nombre="check" tam={14} /><span>Corregir todo lo sugerido</span></button>}</div>
+      {corregibles && <Boton tamano="sm" icono="check" id="esFixAll" onClick={() => { S.escrituraCorregirTodo(); toast('Correcciones aplicadas'); }}>Corregir todo lo sugerido</Boton>}</div>
     <div className="es-alerts tw:flex tw:flex-col tw:gap-1.5">
       {al.length ? al.map((x, i) => (
         <div key={(x.id || '') + i} className={cx(ALERTA, COLOR_ALERTA[x.sev] || COLOR_ALERTA.info, 'tw:[&_button]:w-auto tw:[&_button]:m-0 tw:[&_button]:shrink-0')}><Chip color={SEVERIDAD[x.sev][1]} clase={CHIP_ALERTA}>{SEVERIDAD[x.sev][0]}</Chip><span className="tw:flex-1">{x.text}</span>
-          {!priv && x.fix && x.fix.type !== 'cierre' && <button className="ghost small" data-fix={x.id} onClick={() => { S.escrituraCorregir(x.fix); toast('Corregido'); }}>Corregir</button>}</div>
+          {!priv && x.fix && x.fix.type !== 'cierre' && <Boton variante="fantasma" tamano="sm" data-fix={x.id} onClick={() => { S.escrituraCorregir(x.fix); toast('Corregido'); }}>Corregir</Boton>}</div>
       )) : <div className={cx(ALERTA, COLOR_ALERTA.ok)}><Chip color="#13804b" clase={CHIP_ALERTA}>Bien</Chip><span>No encontramos problemas en el documento.</span></div>}
     </div>
   </>;

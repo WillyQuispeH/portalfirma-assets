@@ -13,6 +13,38 @@ const fechaOk = (f) => /^\d{4}-\d{2}-\d{2}$/.test(String(f || '')) && !isNaN(Dat
 const porExt = (fuente, id) => lista().find((e) => e.ext?.fuente === fuente && e.ext?.id === id) || null;
 const horaOk = (h) => !h || /^([01]\d|2[0-3]):[0-5]\d$/.test(String(h));
 
+// Las visitas no se pueden sobreponer: ni las de una misma propiedad ni las de un mismo corredor (no puede estar en dos visitas a la
+// vez). Cuenta la hora de inicio y la duración (45 min si no se dijo); las canceladas no ocupan horario; las que no tienen hora, tampoco;
+// ni las reuniones y demás tipos. El servidor aplica la misma regla (api/src/agenda/eventos.ts): aquí se avisa antes, sin esperar la sincronización.
+// El corredor de una visita es el de su documento (lo pone el servidor al sincronizar); si aún no lo tiene, es el usuario de esta sesión.
+let yoFn = () => null;
+const configurar = (o = {}) => { if (o.yo) yoFn = o.yo; };
+const aMin = (h) => { const [a, b] = String(h).split(':').map(Number); return a * 60 + b; };
+const aHora = (m) => String(Math.floor(m / 60) % 24).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+const DUR_VISITA = 45;
+const corredorDe = (e) => (e.corredorId === undefined ? yoFn() : e.corredorId);
+/** la visita que se cruza con ese horario: { evento, por: 'propiedad' | 'corredor' } o null */
+function conflicto({ propId, corredorId, fecha, hora, duracion, ignorar }) {
+  if (!hora || !fechaOk(fecha)) return null;
+  const corr = corredorId === undefined ? yoFn() : corredorId;
+  const ini = aMin(hora); const fin = ini + (Number(duracion) || DUR_VISITA);
+  const cruzan = lista().filter((e) => e.id !== ignorar && e.tipo === 'visita' && e.estado !== 'cancelado' && e.fecha === fecha && e.hora
+    && ini < aMin(e.hora) + (Number(e.duracion) || DUR_VISITA) && aMin(e.hora) < fin);
+  const p = propId && cruzan.find((e) => e.propId === propId); if (p) return { evento: p, por: 'propiedad' };
+  const c = corr && cruzan.find((e) => corredorDe(e) === corr); return c ? { evento: c, por: 'corredor' } : null;
+}
+function revisarCruce(o) {
+  const r = conflicto(o); if (!r) return;
+  const c = r.evento; const rango = `${c.hora}–${aHora(aMin(c.hora) + (Number(c.duracion) || DUR_VISITA))}`;
+  if (r.por === 'propiedad') {
+    const con = (c.personaIds || []).map((id) => inmo.personaPorId(id)?.nombre).filter(Boolean)[0];
+    throw err(`Esa hora se cruza con otra visita de esta propiedad (${rango}${con ? ', con ' + con : ''}). Elige otro horario.`);
+  }
+  const p = c.propId ? inmo.todas().find((x) => x.id === c.propId) : null;
+  const yo = (o.corredorId === undefined ? yoFn() : o.corredorId) === yoFn();
+  throw err(`${yo ? 'Ya tienes' : 'Ese corredor ya tiene'} otra visita en ese horario (${rango}${p ? ', ' + p.codigo : ''}). Elige otro horario.`);
+}
+
 function vista(e) {
   const p = e.propId ? inmo.todas().find((x) => x.id === e.propId) : null;
   return { ...e, tipoTxt: TIPOS[e.tipo] || 'Evento', prop: p ? { id: p.id, codigo: p.codigo, titulo: p.titulo, direccion: p.direccion, comuna: p.comuna } : null,
@@ -34,6 +66,7 @@ function crear(o) {
   const p = o.propId ? inmo.obtener(o.propId) : null;
   const personas = [...new Set(o.personaIds || [])].map((id) => inmo.personaPorId(id)).filter(Boolean);
   if (tipo === 'visita' && !p) throw err('Una visita necesita la propiedad.');
+  if (tipo === 'visita' && !o.ext) revisarCruce({ propId: p.id, corredorId: o.corredorId || undefined, fecha: o.fecha, hora: o.hora, duracion: Number(o.duracion) || DUR_VISITA });   // las reservas que vienen de afuera (ext) ya están hechas: no se rechazan
   const e = { id: uid(), tipo, titulo: String(o.titulo || '').trim().slice(0, 120) || titulo({ tipo }, p, personas), fecha: o.fecha, hora: o.hora || null, duracion: Number(o.duracion) || (tipo === 'visita' ? 45 : 30),
     propId: p?.id || null, personaIds: personas.map((c) => c.id), negocioId: o.negocioId || null, lugar: String(o.lugar || (p ? [p.direccion, p.unidad ? 'depto. ' + p.unidad : '', p.comuna].filter(Boolean).join(', ') : '')).slice(0, 200),
     notas: String(o.notas || '').slice(0, 1000), estado: 'programado', orden: null, ext: o.ext || null, creado: now(), actualizado: now() };
@@ -47,6 +80,7 @@ function crear(o) {
 function actualizar(id, o) {
   const e = ev(id);
   const antes = `${e.fecha} ${e.hora || ''}`;
+  const antesDur = e.duracion; const antesEstado = e.estado;
   if ('fecha' in o) { if (!fechaOk(o.fecha)) throw err('Fecha no válida (AAAA-MM-DD).'); e.fecha = o.fecha; }
   if ('hora' in o) { if (!horaOk(o.hora)) throw err('Hora no válida (HH:MM).'); e.hora = o.hora || null; }
   if (e.confirmacion && `${e.fecha} ${e.hora || ''}` !== antes) delete e.confirmacion;   // otro día u hora: la confirmación anterior ya no vale
@@ -54,6 +88,10 @@ function actualizar(id, o) {
   if ('duracion' in o) e.duracion = Number(o.duracion) || e.duracion;
   if ('estado' in o) { if (!ESTADOS.includes(o.estado)) throw err('Estado no válido.'); e.estado = o.estado; }
   if ('orden' in o) e.orden = o.orden;
+  // al reprogramar (o reabrir) una visita, el nuevo horario tampoco puede cruzarse con otra de la misma propiedad
+  if (e.tipo === 'visita' && e.estado !== 'cancelado' && !e.ext && (`${e.fecha} ${e.hora || ''}` !== antes || e.duracion !== antesDur || antesEstado === 'cancelado')) {
+    try { revisarCruce({ propId: e.propId, corredorId: e.corredorId, fecha: e.fecha, hora: e.hora, duracion: e.duracion, ignorar: e.id }); } catch (x) { const [f, h] = antes.split(' '); e.fecha = f; e.hora = h || null; e.duracion = antesDur; e.estado = antesEstado; throw x; }
+  }
   e.actualizado = now();
   const txt = 'estado' in o && o.estado !== 'programado' ? `${TIPOS[e.tipo]} ${o.estado === 'hecho' ? 'realizada' : 'cancelada'}` : `${TIPOS[e.tipo]} reprogramada para ${e.fecha}${e.hora ? ' ' + e.hora : ''}`;
   inmo.registrar(e.id, txt, { ref2: e.propId }); if (e.propId) inmo.registrar(e.propId, txt, { ref2: e.id });
@@ -65,4 +103,4 @@ function borrar(id) { const l = lista(); const e = ev(id); l.splice(l.indexOf(e)
 async function obtener(id) { const v = vista(ev(id)); return { ...v, actividad: await inmo.actividadDe(id) }; } // el historial está en la base
 const ver = (id) => vista(ev(id));
 
-module.exports = { TIPOS, listar, crear, actualizar, borrar, obtener, ver, ligarNegocio, marcarConfirmacion, porExt: (f, id) => { const e = porExt(f, id); return e ? vista(e) : null; } };
+module.exports = { TIPOS, configurar, conflicto, listar, crear, actualizar, borrar, obtener, ver, ligarNegocio, marcarConfirmacion, porExt: (f, id) => { const e = porExt(f, id); return e ? vista(e) : null; } };

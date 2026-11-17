@@ -14,7 +14,7 @@ const OUT = process.env.SHOTS || __dirname;
     const modos = (process.env.TEMAS || 'light,dark').split(',');
     for (const t of modos) {
       await w.evaluate((x) => window.Tema.set(x), t); await w.waitForTimeout(300);
-      await w.click('#nav [data-view="agente"]'); await w.waitForSelector('#view-agente .ag.ag-full'); await w.waitForTimeout(700); await shot(`${t}-1-agente.png`);
+      await w.evaluate(() => window.Agente.vista()); await w.waitForSelector('#view-agente .ag.ag-full'); await w.waitForTimeout(700); await shot(`${t}-1-agente.png`);
       if (t === 'light' && modos.length > 1) continue;
       for (const [v, n] of [['inicio', 2], ['cartera', 3], ['negocios', 4], ['agenda', 5], ['publicaciones', 6], ['home', 8]]) { await w.click(`#nav [data-view="${v}"]`); await w.waitForTimeout(800); await shot(`${t}-${n}-${v}.png`); }
       await w.evaluate(() => window.Postventa.abrir('asistente')); await w.waitForSelector('#asPrev .pv-chat'); await w.waitForTimeout(300); await shot(`${t}-7-postventa.png`);

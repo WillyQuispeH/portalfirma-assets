@@ -5,25 +5,39 @@
 //   · derecha: el PDF tal como se enviará a firmar.
 // Enviar a firmar solo se puede con todo guardado: lo que se ve en el PDF es lo que firma el visitante.
 // La lógica (guardar en la persona y en la agenda, generar el PDF, enviar) está en src/renderer/agenda.js y llega en las props.
-// Los id (#ovNombre, #ovRut, #ovTel, #ovEmail, #ovDia, #ovHora, #ovGuardar, #mOk, #mCancel) los usan las pruebas.
+// Si al abrirla falta algo (p. ej. el correo del visitante), la ventana se abre igual con el aviso: se completa aquí y el PDF se arma al guardar.
+// Todas las variables del documento se editan aquí: visitante (nombre, RUT, nacionalidad, teléfono, correo), visita (día y hora) y condiciones
+// (operación, vigencia y garantía de seriedad); lo del visitante se guarda en su ficha. La propiedad se edita en su ficha.
+// Los id (#ovNombre, #ovRut, #ovNac, #ovTel, #ovEmail, #ovDia, #ovHora, #ovOp, #ovVig, #ovGar, #ovGuardar, #mOk, #mCancel) los usan las pruebas.
 import { useState } from 'react';
 import Boton from '../../ui/Boton';
+import MenuMas from '../../ui/MenuMas';
 import Badge from '../../ui/Badge';
 import Card from '../../ui/Card';
 import Input from '../../ui/Input';
+import Select from '../../ui/Select';
 import { VentanaCabecera, VentanaCuerpo, VentanaPie } from '../../ui/Ventana';
 import { NOTA } from '../gestion/editor-pdf/Modales';
 import { ErrorVentana } from '../negocios/VentanasAntiguas';
 import { cerrarModal } from '../../../utils/modal';
+import { toast } from '../../../utils/app';
+import { descargarPdf } from '../../../utils/pdf';
 import { correoValido, formatearRut, rutValido } from '../../../utils/rut';
-import VisorPdf from './VisorPdf';
+import VisorPdf, { PdfCargando } from './VisorPdf';
+import { usePdfInicial, type IPdfInicial } from './usePdfInicial';
 
-export interface IOrdenDatos { nombre: string; rut: string; email: string; telefono: string; fecha: string; hora: string }
+export interface IOrdenDatos { nombre: string; rut: string; email: string; telefono: string; nacionalidad: string; fecha: string; hora: string; operacion: 'venta' | 'arriendo'; vigencia: string; garantia: string }
 export interface IOrdenVisitaProps {
   titulo?: string;
   aviso?: string;
   pdf?: string;
-  visitante: Pick<IOrdenDatos, 'nombre' | 'rut' | 'email' | 'telefono'>;
+  /** lo que impidió armar el PDF (falta el correo, el RUT…): se muestra al abrir y se completa aquí mismo */
+  errorInicial?: string;
+  /** el PDF que se está armando (o trayendo): la ventana se abre ya y la vista previa lo muestra al llegar */
+  pdfPromesa?: Promise<IPdfInicial>;
+  visitante: Pick<IOrdenDatos, 'nombre' | 'rut' | 'email' | 'telefono' | 'nacionalidad'>;
+  /** las condiciones del documento: operación, vigencia (días hábiles) y garantía de seriedad */
+  condiciones?: Pick<IOrdenDatos, 'operacion' | 'vigencia' | 'garantia'>;
   visita: Pick<IOrdenDatos, 'fecha' | 'hora'>;
   propiedades: { codigo: string; titulo: string; direccion: string; precio?: string }[];
   /** guarda los cambios en su origen y devuelve el PDF nuevo (lanza el error si algo falla) */
@@ -32,17 +46,20 @@ export interface IOrdenVisitaProps {
 }
 
 const mensaje = (e: unknown) => (e instanceof Error ? e.message : String(e));
+/** guarda el PDF en el computador: firmar en Asset es opcional */
+const bajar = async (pdf: string, nombre: string, avisar: (m: string) => void) => { if (!pdf) return; try { if (await descargarPdf(pdf, nombre)) toast('PDF guardado.'); } catch (e) { avisar(mensaje(e)); } };
 const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 const SEM = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
 const diaTxt = (f: string) => { if (!/^\d{4}-\d{2}-\d{2}$/.test(f)) return 'sin fecha'; const d = new Date(f + 'T12:00:00'); return `${SEM[d.getDay()]} ${d.getDate()} ${MESES[d.getMonth()]}`; };
 
-export function ConfirmarOrden({ aviso, pdf: pdf0, visitante, visita, propiedades, alGuardar, alConfirmar }: IOrdenVisitaProps) {
-  const inicial: IOrdenDatos = { nombre: visitante.nombre || '', rut: visitante.rut || '', email: visitante.email || '', telefono: visitante.telefono || '', fecha: visita.fecha || '', hora: visita.hora || '' };
+export function ConfirmarOrden({ aviso, pdf: pdf0, pdfPromesa, errorInicial, visitante, condiciones, visita, propiedades, alGuardar, alConfirmar }: IOrdenVisitaProps) {
+  const inicial: IOrdenDatos = { nombre: visitante.nombre || '', rut: visitante.rut || '', email: visitante.email || '', telefono: visitante.telefono || '', nacionalidad: visitante.nacionalidad || '', fecha: visita.fecha || '', hora: visita.hora || '',
+    operacion: condiciones?.operacion || 'venta', vigencia: condiciones?.vigencia || '250', garantia: condiciones?.garantia || '$250.000' };
   const [v, setV] = useState<IOrdenDatos>(inicial);
   const [guardado, setGuardado] = useState<IOrdenDatos>(inicial);
-  const [pdf, setPdf] = useState(pdf0 || '');
+  const { pdf, setPdf, cargando: cargandoPdf, errorCarga, aviso: avisoCarga } = usePdfInicial(pdf0, pdfPromesa);
   const [guardando, setGuardando] = useState(false); const [enviando, setEnviando] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState(errorInicial || '');
   const sucio = JSON.stringify(v) !== JSON.stringify(guardado);
   const campo = (k: keyof IOrdenDatos) => ({ value: v[k], onChange: (e: { target: { value: string } }) => { setV((x) => ({ ...x, [k]: e.target.value })); setError(''); } });
 
@@ -52,6 +69,8 @@ export function ConfirmarOrden({ aviso, pdf: pdf0, visitante, visita, propiedade
     rut: !rutValido(v.rut) ? 'El RUT no es válido' : '',
     email: !correoValido(v.email) ? 'Escribe un correo válido: ahí recibe el enlace para firmar' : '',
     hora: v.hora && !/^([01]\d|2[0-3]):[0-5]\d$/.test(v.hora) ? 'Hora no válida' : '',
+    vigencia: !/^\d{1,3}$/.test(v.vigencia) || Number(v.vigencia) < 1 ? 'Días hábiles, en número' : '',
+    garantia: v.operacion === 'arriendo' && !v.garantia.trim() ? 'Escribe el monto de la garantía' : '',
   };
   const invalido = Object.values(err).some(Boolean);
 
@@ -59,7 +78,7 @@ export function ConfirmarOrden({ aviso, pdf: pdf0, visitante, visita, propiedade
     if (invalido) return setError('Corrige los datos marcados antes de guardar.');
     setGuardando(true); setError('');
     try {
-      const nuevo = { ...v, nombre: v.nombre.trim(), rut: formatearRut(v.rut), email: v.email.trim(), telefono: v.telefono.trim() };
+      const nuevo = { ...v, nombre: v.nombre.trim(), rut: formatearRut(v.rut), email: v.email.trim(), telefono: v.telefono.trim(), nacionalidad: v.nacionalidad.trim(), garantia: v.garantia.trim() };
       const r = await alGuardar(nuevo);
       setV(nuevo); setGuardado(nuevo); setPdf(r.pdf);
     } catch (e) { setError(mensaje(e)); }
@@ -77,8 +96,9 @@ export function ConfirmarOrden({ aviso, pdf: pdf0, visitante, visita, propiedade
               <Input etiqueta="Nombre completo" id="ovNombre" autoComplete="off" error={sucio || v.nombre ? err.nombre : ''} {...campo('nombre')} />
               <div className="tw:grid tw:grid-cols-2 tw:gap-3">
                 <Input etiqueta="RUT" id="ovRut" autoComplete="off" error={v.rut ? err.rut : ''} {...campo('rut')} onBlur={() => v.rut && rutValido(v.rut) && setV((x) => ({ ...x, rut: formatearRut(x.rut) }))} />
-                <Input etiqueta="Teléfono" id="ovTel" type="tel" autoComplete="off" placeholder="+56 9…" {...campo('telefono')} />
+                <Input etiqueta="Nacionalidad" id="ovNac" autoComplete="off" placeholder="Ej.: chilena" {...campo('nacionalidad')} />
               </div>
+              <Input etiqueta="Teléfono" id="ovTel" type="tel" autoComplete="off" placeholder="+56 9…" {...campo('telefono')} />
               <Input etiqueta="Correo" id="ovEmail" type="email" autoComplete="off" error={v.email ? err.email : ''} {...campo('email')} />
             </div>
           </Card>
@@ -87,6 +107,16 @@ export function ConfirmarOrden({ aviso, pdf: pdf0, visitante, visita, propiedade
             <div className="tw:grid tw:grid-cols-2 tw:gap-3">
               <Input etiqueta="Día" id="ovDia" type="date" {...campo('fecha')} />
               <Input etiqueta="Hora" id="ovHora" type="time" error={err.hora} {...campo('hora')} />
+            </div>
+          </Card>
+
+          <Card titulo="Condiciones de la orden" subtitulo="Lo que dice el documento">
+            <div className="tw:flex tw:flex-col tw:gap-3">
+              <Select etiqueta="Operación" id="ovOp" opciones={[['venta', 'Compra (venta)'], ['arriendo', 'Arriendo']]} {...campo('operacion')} />
+              <div className="tw:grid tw:grid-cols-2 tw:gap-3">
+                <Input etiqueta="Vigencia" id="ovVig" inputMode="numeric" sufijo="días hábiles" error={err.vigencia} {...campo('vigencia')} />
+                <Input etiqueta="Garantía de seriedad" id="ovGar" autoComplete="off" placeholder="$250.000" error={err.garantia} {...campo('garantia')} />
+              </div>
             </div>
           </Card>
 
@@ -101,20 +131,23 @@ export function ConfirmarOrden({ aviso, pdf: pdf0, visitante, visita, propiedade
             </ul>
           </Card>
 
-          <ErrorVentana id="ovErr" texto={error} />
+          <ErrorVentana id="ovErr" texto={error || errorCarga} />
         </div>
 
         <Card titulo="Vista previa" subtitulo="Así se envía a firmar" relleno={true} className="tw:min-w-0 tw:lg:sticky tw:lg:top-0">
-          <div className={guardando ? 'tw:opacity-50 tw:transition-opacity' : 'tw:transition-opacity'}>{pdf ? <VisorPdf base64={pdf} /> : <p className={NOTA}>No se pudo preparar el PDF.</p>}</div>
+          <div className={guardando ? 'tw:opacity-50 tw:transition-opacity' : 'tw:transition-opacity'}>{pdf ? <VisorPdf base64={pdf} /> : cargandoPdf ? <PdfCargando /> : <p className={NOTA}>No se pudo preparar el PDF.</p>}</div>
         </Card>
       </div>
-      {aviso && <p className={`${NOTA} tw:mt-3`}>{aviso}</p>}
+      {(aviso || avisoCarga) && <p className={`${NOTA} tw:mt-3`}>{aviso || avisoCarga}</p>}
     </VentanaCuerpo>
     <VentanaPie>
       {sucio ? <span className="tw:mr-auto tw:text-xs tw:text-muted">Cambios sin guardar</span> : <span className="tw:mr-auto"><Badge tono="verde" icono="check" ajustar>Todo guardado</Badge></span>}
-      <Boton id="mCancel" variante="secundario" onClick={cerrarModal} disabled={enviando}>Cancelar</Boton>
-      <Boton id="ovGuardar" variante="secundario" icono="save" cargando={guardando} disabled={!sucio || enviando} onClick={guardar}>Guardar y actualizar PDF</Boton>
-      <Boton id="mOk" icono="sign" disabled={sucio || invalido || guardando || enviando} cargando={enviando} onClick={enviar} title={sucio ? 'Guarda los cambios antes de enviar' : undefined}>{enviando ? 'Enviando…' : 'Generar y enviar a firmar'}</Boton>
+      <Boton id="ovGuardar" variante="secundario" icono="save" cargando={guardando} disabled={(!sucio && !!pdf) || enviando} onClick={guardar}>Guardar y actualizar PDF</Boton>
+      <Boton id="mOk" icono="sign" disabled={cargandoPdf || sucio || invalido || guardando || enviando} cargando={enviando} onClick={enviar} title={sucio ? 'Guarda los cambios antes de enviar' : undefined}>{enviando ? 'Enviando…' : 'Generar y enviar a firmar'}</Boton>
+      <MenuMas id="ovMas" opciones={[
+        { id: 'ovDescargar', texto: 'Descargar PDF', icono: 'download', disabled: !pdf || guardando, alTocar: () => bajar(pdf, 'Orden de visita.pdf', setError) },
+        { id: 'mCancel', texto: 'Cancelar', icono: 'x', disabled: enviando, alTocar: cerrarModal },
+      ]} />
     </VentanaPie>
   </>;
 }

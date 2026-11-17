@@ -19,7 +19,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     await w.evaluate(() => window.Inmo.importar()); await w.waitForSelector('text=Cartera actualizada', { timeout: 15000 }); await w.click('#mOk');
     await app.evaluate(() => { global.__waMock = { convs: [{ id: 'c9', contactId: 'k9', phone: '+56987276858', fullName: 'Jerónimo' }, { id: 'c2', contactId: 'k2', phone: '+56977770000', fullName: 'Cliente' }], msgs: { c9: [], c2: [] }, enviados: [], contactos: [] }; });
     // 1. pantalla: conectar el WhatsApp de la empresa y vincular el celular con un código
-    await w.click('#nav [data-view="agente"]'); await w.waitForSelector('#agWa'); await w.click('#agWa'); await w.waitForSelector('#waKey');
+    await w.evaluate(() => window.Agente.vista()); await w.waitForSelector('#agWa'); await w.click('#agWa'); await w.waitForSelector('#waKey');
     await w.fill('#waKey', 'pit-f0e1d2c3f0e1d2c3f0e1d2c3'); await w.fill('#waLoc', 'PlPVNYvbNWr6nrRB9VHG'); await w.click('#waKeyOk'); await w.waitForSelector('#waVin:not([disabled])');
     ok(true, 'paso 1: conecta el WhatsApp de la empresa (wechatia)');
     await w.click('#waVin'); await w.waitForSelector('.wa-cod b'); const cod = (await txt('.wa-cod b')).trim();

@@ -18,7 +18,7 @@ const FX = process.env.PF_ESCR_FX || '/home/claude/scratch/escr/fx2';
   const notaria = async (id = 'np-01') => { await w.click('[data-notsel]'); await w.waitForSelector('#nLista [data-nid]'); await w.click(`[data-nid="${id}"]`); await w.click('#nOk'); await w.waitForTimeout(500); };
   const pagar = async () => { await w.click('#esPrim'); await w.waitForSelector('#esAcc'); await w.check('#esAcc'); await w.click('#esPay'); await w.waitForSelector('.es-item.on:not([data-sel="draft"])', { timeout: 20000 }); await w.waitForTimeout(400); };
 
-  await w.click('[data-act="escr"]'); await w.waitForSelector('.es-layout');
+  await w.evaluate(() => window.Escrituras.open()); await w.waitForSelector('.es-layout'); // la tarjeta está oculta por ahora (OCULTAS en gestion/inicio/acciones.ts)
   ok(await w.$('.es-list') && (await w.$$('.es-card')).length === 3, 'diseño de lista + detalle; tres trámites');
   await w.screenshot({ path: path.resolve(__dirname, 'es0-tramites.png') });
 

@@ -15,6 +15,7 @@ import { close as cerrarAsistente, open as abrirAsistente } from '../asistente-l
 import { esMiembro } from '../../../../utils/app';
 import type { IDocumento } from '../../../../store/interfaces/editor.interface';
 
+import Boton from '../../../ui/Boton';
 const sinFoco = (e: React.MouseEvent) => e.preventDefault();
 export const modoPanel = (T: IDocumento) => (T.tpl?.mode === 'fill' ? 'fill' : T.ai?.open ? 'ai' : T.tpl?.mode === 'design' ? 'tpl' : 'edit');
 
@@ -82,12 +83,12 @@ function Formato({ T }: { T: IDocumento }) {
       <p className="hint">Se inserta en la página con un texto de ejemplo: empieza a escribir y se reemplaza.</p>
     </div>
     <div className="sec"><h4>Objetos</h4>
-      {sel ? <button className="secondary pbtn" id="pfDel" onMouseDown={sinFoco} onClick={() => M.removeOv(T.sel!)}>Quitar objeto seleccionado</button>
-        : T.multi.length > 1 ? <button className="secondary pbtn" id="pfDel" onMouseDown={sinFoco} onClick={() => M.removeOv(T.multi)}>Quitar los {T.multi.length} objetos seleccionados</button> : null}
+      {sel ? <Boton variante="secundario" className="pbtn" id="pfDel" onMouseDown={sinFoco} onClick={() => M.removeOv(T.sel!)}>Quitar objeto seleccionado</Boton>
+        : T.multi.length > 1 ? <Boton variante="secundario" className="pbtn" id="pfDel" onMouseDown={sinFoco} onClick={() => M.removeOv(T.multi)}>Quitar los {T.multi.length} objetos seleccionados</Boton> : null}
       <p className="hint">{TIPS[T.tool] || ''}</p>
     </div>
     <div className="sec"><h4>Documentos escaneados</h4>
-      <button className="primary pbtn with-ic" id="pfOcr" onMouseDown={sinFoco} onClick={ocrDialog}><Ic n="scanText" t={17} /><span>Reconocer texto (OCR)…</span></button>
+      <Boton className="pbtn" id="pfOcr" onMouseDown={sinFoco} onClick={ocrDialog}><Ic n="scanText" t={17} /><span>Reconocer texto (OCR)…</span></Boton>
       <p className="hint">Para fotocopias y escaneos: el texto se vuelve buscable y editable, y la app imita el tono del papel al reescribir.</p>
     </div>
   </>;

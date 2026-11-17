@@ -21,6 +21,7 @@
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "tunel": "node scripts/tunel.js",
+    "publica": "node scripts/publica.js",
     "db:generar": "prisma generate",
     "db:migrar": "node scripts/migrar.js",
     "db:estado": "prisma migrate status",
