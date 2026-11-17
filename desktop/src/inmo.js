@@ -244,6 +244,15 @@ for (const c of COLECCIONES) DOCS['reg:' + c] = { lista: () => (R.reg[c] ||= [])
 const registros = (c) => { if (!COLECCIONES.includes(c)) throw err('Colección desconocida: ' + c); return API ? (R.reg[c] ||= []) : null; };
 /** El siguiente número de una serie (folios): lo da el servidor, así dos equipos no repiten. */
 async function folio(serie, minimo) { const r = await asset().llamar('POST', '/contadores/' + serie, minimo != null ? { minimo } : {}); return r.valor; }
+// Lo guardado solo en este computador (de antes de la base) es de UNA corredora: la primera que inicia sesión aquí lo
+// reclama (store › duenoLocal). Otra corredora que inicie sesión en el mismo equipo NO lo recibe: cada corredora es
+// independiente y sus datos no se cruzan.
+function localEsDeEsta() {
+  const c = R.usuario?.corredoraId; if (!c) return false;
+  const st = require('./store'); const d = st.get('duenoLocal');
+  if (!d) { st.set('duenoLocal', c); return true; }
+  return d === c;
+}
 // lo que cada módulo sube de su archivo local antes de cargar (los registra con alCargar)
 const subidasAntes = [];
 const alCargar = (fn) => { subidasAntes.push(fn); };
@@ -562,10 +571,12 @@ async function cargarTodo() {
   R.props.length = 0; for (const x of a.items) { R.base.set('p:' + x.id, clonar(x)); R.props.push(conExtras(clonar(x))); }
   R.pers.length = 0; for (const x of b.items) { R.base.set('c:' + x.id, clonar(x)); R.pers.push(clonar(x)); }
   remapearLegado();
-  try { await subirNegociosEventos(); } catch (e) { console.warn('[inmo] negocios y eventos locales sin subir:', e.message); }
-  try { const t = await H.leads?.subirLocales?.(); if (t) H.avisar(t); } catch (e) { console.warn('[inmo] leads locales sin subir:', e.message); }
-  try { await subirFirmasLocales(H.historialLocal ? H.historialLocal() : []); } catch (e) { console.warn('[inmo] firmas locales sin subir:', e.message); }
-  for (const f of subidasAntes) { try { const t = await f(); if (t) H.avisar(t); } catch (e2) { console.warn('[inmo] datos locales sin subir:', e2.message); } }
+  if (localEsDeEsta()) {
+    try { await subirNegociosEventos(); } catch (e) { console.warn('[inmo] negocios y eventos locales sin subir:', e.message); }
+    try { const t = await H.leads?.subirLocales?.(); if (t) H.avisar(t); } catch (e) { console.warn('[inmo] leads locales sin subir:', e.message); }
+    try { await subirFirmasLocales(H.historialLocal ? H.historialLocal() : []); } catch (e) { console.warn('[inmo] firmas locales sin subir:', e.message); }
+    for (const f of subidasAntes) { try { const t = await f(); if (t) H.avisar(t); } catch (e2) { console.warn('[inmo] datos locales sin subir:', e2.message); } }
+  }
   const [n, e, ld, fi] = await Promise.all([traer('/negocios'), traer('/eventos'), traer('/leads'), traer('/firmas')]);
   const regs = await Promise.all(COLECCIONES.map((c) => traer('/registros/' + c)));
   R.negs.length = 0; for (const x of n.items) if (!x.eliminado) { R.base.set('n:' + x.id, clonar(x)); R.negs.push(clonar(x)); }
@@ -953,6 +964,7 @@ const mostrarCarpeta = (propId) => shell.openPath(docsDir(propId));
 // vez, en segundo plano, al iniciar sesión. Lo que no se pueda subir queda local y se reintenta en el próximo inicio.
 let migrando = null;
 function subirLocales() {
+  if (!localEsDeEsta()) return;
   migrando ||= (async () => {
     const ex = db().extrasProp || {}; let docs = 0; let fotos = 0;
     for (const id of Object.keys(ex)) {
@@ -1097,7 +1109,7 @@ function guardarConfig(parcial) {
 function ajusteCorredora(k) {
   const v = config()?.[k]; if (v !== undefined) return v;
   const st = require('./store'); const loc = st.get(k);
-  if (loc !== undefined && API && R.listo && R.usuario) { guardarConfig({ [k]: loc }); st.set(k, undefined); }
+  if (loc !== undefined && API && R.listo && R.usuario && localEsDeEsta()) { guardarConfig({ [k]: loc }); st.set(k, undefined); }
   return loc;
 }
 const guardarAjusteCorredora = (k, v) => { if (API && R.usuario) { guardarConfig({ [k]: v }); require('./store').set(k, undefined); } else require('./store').set(k, v); return v; };

@@ -1,8 +1,8 @@
 // WhatsApp programados con la cuenta de Asset: los envía el servidor a su hora (/v1/whatsapp/programados), aunque la
 // app esté cerrada, con la clave de wechatia de la corredora guardada en el servidor (/v1/whatsapp/conexion).
 // Este módulo:
-//  · programa (POST) y, antes, se asegura de que la corredora tenga la clave en el servidor: si no la tiene y este
-//    equipo sí, la sube (también cuando se cambia la clave en el equipo y al iniciar sesión);
+//  · programa (POST) si la corredora tiene la clave de wechatia en el servidor (la pone el administrador en
+//    Integraciones; este equipo ya no la sube solo, para no mezclar corredoras);
 //  · sube una vez los que estaban programados solo en este equipo (store › waProgramados);
 //  · cada 30 s trae los que cambiaron y, por cada resultado, hace lo que solo la app sabe (anotarlo en el lead,
 //    marcar el mensaje como propio para que el asistente no lo confunda con uno escrito a mano, avisar al ejecutivo):
@@ -38,10 +38,10 @@ function crear({ credenciales, alResultado, plantillaDe = () => null }) {
     if (!fresco && estadoClave && Date.now() - estadoEn < 5 * 60_000) return estadoClave;
     estadoClave = await asset().llamar('GET', '/whatsapp/conexion'); estadoEn = Date.now(); return estadoClave;
   }
-  /** ¿puede el servidor enviar? (si falta y este equipo tiene la clave, la sube) */
+  /** ¿puede el servidor enviar? La clave de wechatia es de cada corredora: solo se sube cuando el administrador la pone
+   *  (Integraciones), nunca sola. Si este equipo guardó la de OTRA corredora, subirla mezclaba las conversaciones. */
   async function listo() {
-    let e = await estado().catch(() => null);
-    if (!e?.conectado) e = await subirClave().catch(() => null);
+    const e = await estado().catch(() => null);
     return !!e?.conectado;
   }
 

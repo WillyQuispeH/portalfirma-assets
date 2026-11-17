@@ -1097,7 +1097,7 @@ inmo.alCargar(async () => { await waSrv.refrescarConexion(); try { await waSrv.e
 const waProg = require('./wa-programados').crear({ credenciales: () => reservas.credencialesWa(), alResultado: alProgramado, plantillaDe: plantillaProgramada });
 global.__waProg = waProg; global.__assetTool = (n) => assetTools.find((t) => t.name === n); // las pruebas e2e los usan (app.evaluate)
 // al iniciar sesión: la clave de este equipo al servidor (si la corredora aún no la tiene) y lo programado aquí, arriba
-inmo.alCargar(async () => { try { await waProg.subirClave(); } catch {} try { await waProg.subirLocales(); } catch (e) { console.warn('[programados] no se subieron los locales:', e.message); } return null; });
+inmo.alCargar(async () => { try { await waProg.subirLocales(); } catch (e) { console.warn('[programados] no se subieron los locales:', e.message); } return null; });
 let enviandoProgramados = false;
 setInterval(async () => {
   if (enviandoProgramados) return;   // 0.16.18 · una sola ronda a la vez (si no, los envíos lentos se repetían)
