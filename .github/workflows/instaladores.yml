@@ -122,7 +122,22 @@ jobs:
               [ -n "${!v}" ] || faltan="$faltan $v"
             done
             [ -z "$faltan" ] || { echo "::error::Hay certificado de Mac pero faltan los secretos:$faltan"; exit 1; }
-            export CSC_LINK="$MAC_CERT"
+            # llavero propio: electron-builder 25.1.8 usa la clave del .p12 como clave del llavero que él mismo crea con otra
+            # al azar y falla en «set-key-partition-list» («SecKeychainUnlock: passphrase not correct»). Sin CSC_LINK, busca
+            # la identidad en los llaveros del usuario.
+            kc="$RUNNER_TEMP/firma.keychain-db"
+            kcpw=$(uuidgen)
+            printf '%s' "$MAC_CERT" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+            security create-keychain -p "$kcpw" "$kc"
+            security set-keychain-settings -lut 21600 "$kc"
+            security unlock-keychain -p "$kcpw" "$kc"
+            security import "$RUNNER_TEMP/cert.p12" -k "$kc" -P "$CSC_KEY_PASSWORD" -T /usr/bin/codesign -T /usr/bin/productbuild
+            security set-key-partition-list -S apple-tool:,apple: -s -k "$kcpw" "$kc"
+            security list-keychains -d user -s "$kc" $(security list-keychains -d user | tr -d '"')
+            rm -f "$RUNNER_TEMP/cert.p12"
+            unset CSC_KEY_PASSWORD
+            security find-identity -v -p codesigning "$kc" | tee /tmp/identidades.txt
+            grep -q "Developer ID Application" /tmp/identidades.txt || { echo "::error::El .p12 no trae un certificado «Developer ID Application» con su clave privada"; exit 1; }
             construir -c.mac.notarize=true
             # el certificado debe ser «Developer ID Application»; con otro, electron-builder deja la app sin firmar
             app=$(ls -d dist/mac*/*.app | head -n 1)
