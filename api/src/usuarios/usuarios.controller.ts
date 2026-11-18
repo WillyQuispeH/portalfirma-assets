@@ -138,21 +138,7 @@ export class UsuariosController {
     return detalle(u);
   }
 
-  @Put(':id/clave')
-  @HttpCode(204)
-  async asignarClave(
-    @UsuarioActual() yo: UsuarioToken,
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body(new ZodPipe(claveEsquema)) b: z.infer<typeof claveEsquema>,
-  ) {
-    await this.deMiCorredora(yo, id);
-    await this.db.usuario.update({
-      where: { id },
-      data: { hashClave: await hashClave(b.clave), debeCambiarClave: true },
-    });
-    await this.cerrarSesiones(id);
-  }
-
+  // OJO: «yo/clave» va ANTES que «:id/clave»; si no, «yo» se toma por un id y cambiar tu propia clave falla
   @Put('yo/clave')
   @Roles('ADMIN', 'CORREDOR')
   @HttpCode(204)
@@ -173,5 +159,20 @@ export class UsuariosController {
       where: { usuarioId: yo.sub, revocadaEn: null, id: { not: yo.sid } },
       data: { revocadaEn: new Date() },
     });
+  }
+
+  @Put(':id/clave')
+  @HttpCode(204)
+  async asignarClave(
+    @UsuarioActual() yo: UsuarioToken,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodPipe(claveEsquema)) b: z.infer<typeof claveEsquema>,
+  ) {
+    await this.deMiCorredora(yo, id);
+    await this.db.usuario.update({
+      where: { id },
+      data: { hashClave: await hashClave(b.clave), debeCambiarClave: true },
+    });
+    await this.cerrarSesiones(id);
   }
 }
