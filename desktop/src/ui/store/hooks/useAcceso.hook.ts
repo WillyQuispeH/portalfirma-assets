@@ -6,6 +6,7 @@ export function useAcceso() {
   return useAccesoStore(useShallow((s) => ({
     estado: s.estado, usuario: s.usuario, error: s.error, enviando: s.enviando,
     accesoIngresar: s.accesoIngresar, accesoSalir: s.accesoSalir, accesoRestaurar: s.accesoRestaurar,
+    cambiandoClave: s.cambiandoClave, accesoPedirClave: s.accesoPedirClave, accesoCambiarClave: s.accesoCambiarClave,
   })));
 }
 

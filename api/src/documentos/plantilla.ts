@@ -41,7 +41,22 @@ function llenarCon(t: string, ctx: Contexto[]): string {
 }
 
 /** reemplaza las variables de un HTML */
-export const llenar = (html: string, datos: Contexto) => llenarCon(html.replace(/<!--[\s\S]*?-->/g, ''), [datos]);
+export const llenar = (html: string, datos: Contexto) =>
+  dentroDeEstilos(llenarCon(html.replace(/<!--[\s\S]*?-->/g, ''), [datos]));
+
+/**
+ * Dentro de <style> (p. ej. el pie de página de _base.css) las entidades HTML no se interpretan: «Pérez &amp; Cía»
+ * saldría tal cual. Ahí se deshace el escape y se protege lo que rompería el texto CSS (comillas y barras).
+ */
+const dentroDeEstilos = (html: string) =>
+  html.replace(/(<style[^>]*>)([\s\S]*?)(<\/style>)/gi, (_, a: string, css: string, b: string) => {
+    // «<» queda como el escape CSS \3C (así un «</style>» en un dato nunca cierra el estilo); la comilla doble, como simple
+    const limpio = css.replace(/"([^"\n]*)"/g, (_c, t: string) => {
+      const plano = t.replace(/&lt;/g, '\\3C ').replace(/&gt;/g, '>').replace(/&quot;/g, "'").replace(/&amp;/g, '&');
+      return `"${plano}"`;
+    });
+    return a + limpio + b;
+  });
 
 /** lee una plantilla de src/documentos/plantillas (en dist se copia al compilar, ver nest-cli.json) */
 export const cargarPlantilla = (nombre: string) => {

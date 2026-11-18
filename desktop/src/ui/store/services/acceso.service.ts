@@ -6,4 +6,5 @@ export const accesoService = {
   restaurar: () => apiCruda<IUsuarioAsset | null>('assetRestaurar'),
   ingresar: (email: string, clave: string) => apiCruda<IUsuarioAsset>('assetIngresar', email, clave),
   salir: () => apiCruda<boolean>('assetSalir'),
+  cambiarClave: (actual: string, nueva: string) => apiCruda<IUsuarioAsset>('assetCambiarClave', actual, nueva),
 };

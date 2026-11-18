@@ -505,7 +505,7 @@ export class PropiedadesService {
    */
   async importarConvecta(u: UsuarioToken) {
     soloAdmin(u, 'Importar la cartera');
-    const leidas = await this.convecta.propiedades();
+    const leidas = await this.convecta.propiedades(u.corredoraId);
     const usuarios = await this.db.usuario.findMany({
       where: { corredoraId: u.corredoraId, activo: true },
       select: { id: true, email: true },

@@ -5,8 +5,8 @@
 //  · POST /v1/mandatos-arriendo/enviar { propiedadId }: lo envía a firmar al/los propietario(s) con Portalfirma (cobra del
 //    saldo) y lo registra en la propiedad: el paso «Mandato firmado» de la captación lo sigue y se completa al firmarse.
 // Los datos salen de la ficha: el propietario (persona vinculada), el inmueble, el canon, y de ficha.* la publicación en
-// portales, la exclusividad, las mascotas y los meses de garantía. El representante de la corredora, si existe, de
-// corredora_config › representante (texto: «don Fulano, cédula de identidad número …»).
+// portales, la exclusividad, las mascotas y los meses de garantía. Los datos de la corredora (representante, RUT,
+// domicilio, logo) salen de documentos/corredora-doc.ts.
 import { Body, Controller, HttpCode, Injectable, Logger, Post } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
@@ -19,6 +19,7 @@ import { EnvioFirmaService } from '../documentos/envio-firma';
 import { cargarPlantilla, llenar } from '../documentos/plantilla';
 import { describir, unir } from '../documentos/comparecientes';
 import { hoy } from '../whatsapp/comun';
+import { datosCorredora } from '../documentos/corredora-doc';
 
 const SERIE = 'mandato_arriendo';
 const emailOk = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
@@ -43,13 +44,10 @@ export class MandatoArriendoService {
 
   /** valida y junta todo lo que lleva el mandato; { error } si falta algo */
   private async armar(u: UsuarioToken, propiedadId: string, paraFirma: boolean) {
-    const [prop, usuario, corredora, config] = await Promise.all([
+    const [prop, usuario, corredora] = await Promise.all([
       this.db.propiedad.findFirst({ where: { id: propiedadId, corredoraId: u.corredoraId, eliminadoEn: null } }),
       this.db.usuario.findUnique({ where: { id: u.sub } }),
-      this.db.corredora.findUnique({ where: { id: u.corredoraId }, select: { nombre: true, rut: true } }),
-      this.db.registro.findUnique({
-        where: { corredoraId_coleccion_id: { corredoraId: u.corredoraId, coleccion: 'corredora_config', id: 'corredora' } },
-      }),
+      datosCorredora(this.db, u.corredoraId),
     ]);
     if (!prop) return { error: 'No encontré la propiedad.' };
     if (!usuario) return { error: 'No encontré tu usuario.' };
@@ -68,7 +66,6 @@ export class MandatoArriendoService {
     }
     const f = (prop.ficha ?? {}) as Record<string, unknown>;
     const canon = Number(prop.precioArriendo) || 0;
-    const representante = String(((config?.datos ?? {}) as { representante?: string }).representante ?? '').trim();
     const garantia = Number(f.mesesGarantia);
     const mascotas = f.mascotas;
     return {
@@ -85,7 +82,7 @@ export class MandatoArriendoService {
         numero: numero.toLocaleString('es-CL'),
         fechaEmision: fechaLarga(hoy()),
         ciudad: prop.comuna || 'Santiago',
-        corredora: { nombre: corredora?.nombre ?? 'la corredora', rut: corredora?.rut ?? '', representante },
+        corredora,
         corredor: { nombre: usuario.nombre, email: usuario.email, telefono: usuario.telefono ?? '' },
         mandante: {
           nombre: unir(duenos.map((d) => d.persona.nombre)),

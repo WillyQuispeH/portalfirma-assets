@@ -28,6 +28,7 @@ import { PdfService } from '../documentos/pdf.service';
 import { EnvioFirmaService } from '../documentos/envio-firma';
 import { cargarPlantilla, llenar } from '../documentos/plantilla';
 import type { ActaVisita } from './acta-visita';
+import { datosCorredora } from '../documentos/corredora-doc';
 
 const COLECCION = 'actas_visita';
 const INTERES = { alto: 'Alto', medio: 'Medio', bajo: 'Bajo', sin_datos: 'Sin datos' } as const;
@@ -116,7 +117,7 @@ export class ActaFirmaService {
         ? this.db.propiedad.findFirst({ where: { id: propId, corredoraId: u.corredoraId, eliminadoEn: null } })
         : null,
       this.db.usuario.findUnique({ where: { id: u.sub } }),
-      this.db.corredora.findUnique({ where: { id: u.corredoraId }, select: { nombre: true, rut: true } }),
+      datosCorredora(this.db, u.corredoraId),
     ]);
     if (!persona) return { error: 'El visitante ya no existe.' };
     if (!prop) return { error: 'La propiedad del negocio ya no existe.' };
@@ -150,7 +151,7 @@ export class ActaFirmaService {
         fechaVisita: fechaLarga(a.fecha),
         fechaEmision: fechaLarga(new Date().toISOString().slice(0, 10)),
         orden: { texto: ordenTexto },
-        corredora: { nombre: corredora?.nombre ?? 'la corredora', rut: corredora?.rut ?? '' },
+        corredora,
         corredor: { nombre: usuario.nombre, email: usuario.email },
         visitante: { nombre: persona.nombre, rut, email: persona.email ?? '', telefono: persona.telefono ?? '' },
         propiedad: {

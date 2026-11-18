@@ -79,6 +79,8 @@ model Usuario {
   wechatiaId     String?              @map("wechatia_id")
   wechatiaNombre String?              @map("wechatia_nombre")
   ultimoIngreso  DateTime?            @map("ultimo_ingreso")
+  /// la clave la puso el administrador (o es la inicial): al entrar, la app le pide crear una propia
+  debeCambiarClave Boolean          @default(false) @map("debe_cambiar_clave")
   creadoEn       DateTime             @default(now()) @map("creado_en")
   actualizadoEn  DateTime             @updatedAt @map("actualizado_en")
   corredora      Corredora            @relation(fields: [corredoraId], references: [id], onDelete: Restrict)

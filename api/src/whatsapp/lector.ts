@@ -47,7 +47,6 @@ import { EvaluacionService } from './evaluacion';
 import { ConfirmacionVisitaService } from './confirmacion-visita';
 import { DocumentoRevisionService } from './documento-revision';
 import { telNorm } from './comun';
-import { numeroEmpresa } from './ejecutivo';
 
 const TURNO_MS = 3 * 60_000;
 const RAPIDO_MS = 10 * 60_000;
@@ -359,7 +358,7 @@ export class LectorService implements OnModuleInit, OnModuleDestroy {
       conectado: !!cx,
       clientesActivo: a?.clientesActivo ?? true,
       leadsActivo: a?.leadsActivo ?? true,
-      numeroEmpresa: numeroEmpresa(),
+      numeroEmpresa: await this.wa.numeroEmpresa(u.corredoraId),
       lectorEncendido: this.cadaMs > 0,
       ultimaLectura: a?.lectorEn?.toISOString() ?? null,
       error: a?.lectorError ?? null,

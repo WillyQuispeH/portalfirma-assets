@@ -254,6 +254,8 @@ async function cerrarSesionAsset() { try { await inmo.cerrar(); } catch {} equip
 handle('asset:restaurar', async () => sesionAsset(await asset.restaurar()));
 handle('asset:ingresar', async (email, clave) => { const u = await asset.ingresar(email, clave); if (yoAsset && yoAsset.id !== u.id) await cerrarSesionAsset(); return sesionAsset(u); });
 handle('asset:yo', async () => { const u = await asset.yo(); yoAsset = u; return u; });
+// cambiar la propia clave (obligatorio la primera vez: la clave inicial la puso el administrador)
+handle('asset:cambiarClave', async (actual, nueva) => { await asset.llamar('PUT', '/usuarios/yo/clave', { actual: String(actual || ''), nueva: String(nueva || '') }); const u = await asset.yo(); yoAsset = u; return u; });
 // al cerrar la sesión de Asset también se desconecta Portalfirma: en este equipo puede entrar otra persona
 handle('asset:salir', async () => {
   await cerrarSesionAsset(); // manda lo pendiente de la cartera antes de cerrar el token
@@ -1301,6 +1303,14 @@ const waAgente = require('./whatsapp-agente').crear({ store, wa: require('./post
     t.run = async (a) => { guard(a); if (['asset_atencion_clientes', 'asset_plantillas_whatsapp'].includes(t.name) && Object.keys(a || {}).some((k) => !/^(consultar|ver)$/.test(k))) permisos.permiso('fernanda'); const out = await run0(a); if (!out || typeof out !== 'object') return out; const ef = out.efectos; const r = permisos.limpiar(out); if (ef) r.efectos = ef; return r; }; } }
 handle('wa:estado', () => ({ ...waAgente.estado(), ...reservas.estadoWa() }));
 handle('wa:canales', () => waSrv.canales()); // pantalla Integraciones
+handle('wa:numero', (numero) => waSrv.guardarNumero(numero)); // el número de WhatsApp de la corredora (admin)
+// Convecta: la cuenta (clave de suscripción) de la corredora, guardada en el servidor; la conecta el administrador
+handle('cv:estado', () => (process.env.PF_MOCK === '1' ? { disponible: true, conectado: true, propia: true, admin: true } : asset.llamar('GET', '/convecta/conexion')));
+handle('cv:conectar', (clave) => asset.llamar('PUT', '/convecta/conexion', { clave: String(clave || '').trim() }));
+handle('cv:desconectar', () => asset.llamar('DELETE', '/convecta/conexion'));
+// los datos de la corredora que llevan los documentos (razón social, RUT, domicilio, representante, logo)
+handle('corredora:datos', () => asset.llamar('GET', '/corredora/datos'));
+handle('corredora:guardar', (o) => asset.llamar('PUT', '/corredora/datos', o || {}));
 // pantalla Configuración › WhatsApp: el número de la empresa, si el servidor está leyendo, y Sofía / Tomás / postventa.
 // En modo de prueba (sin la API) los interruptores quedan en este equipo.
 const ASIST_PRUEBA = { enServidor: false, lectorEncendido: false, numeroEmpresa: '+56 9 4497 5958', clientesActivo: true, leadsActivo: true, ultimaLectura: null, error: null };
@@ -1402,6 +1412,9 @@ handle('carta:enviar', (o) => cartaOferta.enviar(o || {}));
 const mandatoArriendo = require('./mandato-arriendo').crear({ inmo });   // mandato de arriendo: PDF del servidor, descargable sin firmar, y envío a firmar
 handle('mandato:vistaPrevia', (o) => mandatoArriendo.vistaPrevia(o || {}));
 handle('mandato:enviar', (o) => mandatoArriendo.enviar(o || {}));
+const mandatoVenta = require('./mandato-venta').crear({ inmo });   // mandato de venta: igual que el de arriendo (su propia serie de folio)
+handle('mandatoVenta:vistaPrevia', (o) => mandatoVenta.vistaPrevia(o || {}));
+handle('mandatoVenta:enviar', (o) => mandatoVenta.enviar(o || {}));
 const contratoArriendo = require('./contrato-arriendo').crear({ inmo, negocios, reservas, abrir: (u) => shell.openExternal(u) });   // contrato de arriendo: PDF del servidor y envío a firmar
 handle('contrato:vistaPrevia', (o) => contratoArriendo.vistaPrevia(o || {}));
 handle('contrato:enviar', (o) => contratoArriendo.enviar(o || {}));

@@ -3,10 +3,14 @@
 // etapa del embudo: al firmarse la propiedad queda «Arrendada» (lo hace la app con el aviso), pero el negocio sigue abierto hasta cobrar la comisión.
 //  · POST /v1/actas-entrega/vista-previa { negocioId }: el PDF (base64) tal como se enviaría (no envía).
 //  · POST /v1/actas-entrega/enviar { negocioId }: la envía a firmar y la registra.
-// Los datos salen de lo ya guardado en el negocio (ciclo.entrega: fecha, llaves, medidores, inventario, observaciones).
+// Los datos salen de lo ya guardado en el negocio (ciclo.entrega: ver el modelo en acta-entrega-datos.ts). Las fotos de cada
+// espacio están en R2 (colección «archivos_negocio» del negocio): al armar el PDF se bajan, se achican y entran incrustadas.
 import { Body, Controller, HttpCode, Injectable, Logger, Post } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
+import sharp from 'sharp';
 import { z } from 'zod';
+import { RegistrosService } from '../registros/registros';
+import { faltaEnEntrega, fotosParaPdf, varsActaEntrega, type EntregaDatos } from './acta-entrega-datos';
 import { PrismaService } from '../prisma/prisma.service';
 import { ZodPipe } from '../comun/zod.pipe';
 import { UsuarioActual, type UsuarioToken } from '../auth/usuario-actual';
@@ -16,22 +20,13 @@ import { PdfService } from '../documentos/pdf.service';
 import { EnvioFirmaService, type FirmanteEnvio } from '../documentos/envio-firma';
 import { cargarPlantilla, llenar } from '../documentos/plantilla';
 import { hoy } from '../whatsapp/comun';
+import { datosCorredora } from '../documentos/corredora-doc';
 
 const SERIE = 'acta_entrega';
 const emailOk = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
-const mayus = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-const fechaLarga = (f: string) =>
-  new Date(`${f}T12:00:00Z`).toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
-const ESTADO: Record<string, string> = { bueno: 'Bueno', regular: 'Regular', malo: 'Malo', na: 'No aplica' };
-const MEDIDOR: [string, string][] = [['luz', 'Electricidad'], ['agua', 'Agua'], ['gas', 'Gas']];
-
-interface EntregaDatos {
-  fecha?: string;
-  llaves?: string;
-  observaciones?: string;
-  medidores?: Record<string, { numero?: string; lectura?: string }>;
-  inventario?: { espacio?: string; estado?: string; nota?: string }[];
-}
+/** fotos ya achicadas (clave de R2 → data URL): al guardar y volver a ver el PDF no se bajan otra vez */
+const CACHE_FOTOS = new Map<string, string>();
+const CACHE_MAX = 300;
 
 type Firmante = FirmanteEnvio & { rol: string; personaId?: string };
 
@@ -43,7 +38,39 @@ export class ActaEntregaService {
     private readonly pdfs: PdfService,
     private readonly envio: EnvioFirmaService,
     private readonly actividad: ActividadService,
+    private readonly registros: RegistrosService,
   ) {}
+
+  /** las fotos del inventario como imágenes incrustadas (achicadas: el PDF debe pesar poco). Las que fallan no salen. */
+  private async imagenes(u: UsuarioToken, negocioId: string, claves: string[]) {
+    const out = new Map<string, string>();
+    const pendientes = claves.filter((c) => {
+      const v = CACHE_FOTOS.get(c);
+      if (v) out.set(c, v);
+      return !v;
+    });
+    for (let i = 0; i < pendientes.length; i += 6) {
+      await Promise.all(
+        pendientes.slice(i, i + 6).map(async (clave) => {
+          try {
+            const bytes = await this.registros.archivoBytes(u, 'archivos_negocio', negocioId, clave);
+            const jpg = await sharp(bytes)
+              .rotate()
+              .resize({ width: 900, height: 900, fit: 'inside', withoutEnlargement: true })
+              .jpeg({ quality: 70 })
+              .toBuffer();
+            const url = `data:image/jpeg;base64,${jpg.toString('base64')}`;
+            out.set(clave, url);
+            if (CACHE_FOTOS.size >= CACHE_MAX) CACHE_FOTOS.delete(CACHE_FOTOS.keys().next().value as string);
+            CACHE_FOTOS.set(clave, url);
+          } catch (e) {
+            this.log.warn(`foto del acta ${clave.slice(-40)}: ${(e as Error).message}`);
+          }
+        }),
+      );
+    }
+    return out;
+  }
 
   private async armar(u: UsuarioToken, negocioId: string) {
     const n = await buscarVisible(this.db.negocio, u, negocioId, 'El negocio');
@@ -54,7 +81,7 @@ export class ActaEntregaService {
       this.db.persona.findFirst({ where: { id: n.clienteId, corredoraId: u.corredoraId, eliminadoEn: null } }),
       this.db.propiedad.findFirst({ where: { id: n.propiedadId, corredoraId: u.corredoraId, eliminadoEn: null } }),
       this.db.usuario.findUnique({ where: { id: u.sub } }),
-      this.db.corredora.findUnique({ where: { id: u.corredoraId }, select: { nombre: true } }),
+      datosCorredora(this.db, u.corredoraId),
       this.db.propiedadPersona.findMany({
         where: { propiedadId: n.propiedadId, rol: 'propietario' },
         include: { persona: true },
@@ -77,14 +104,9 @@ export class ActaEntregaService {
     }
     const ciclo = ((n.datos ?? {}) as { ciclo?: { entrega?: EntregaDatos } }).ciclo ?? {};
     const k = ciclo.entrega ?? {};
-    if (!k.fecha || !/^\d{4}-\d{2}-\d{2}$/.test(k.fecha)) return { error: 'Falta la fecha de entrega.' };
-    const fecha = k.fecha;
-    const inventario = (k.inventario ?? []).filter((i) => String(i.espacio ?? '').trim());
-    if (!inventario.length) return { error: 'El inventario está vacío: agrega al menos un espacio o ítem.' };
-    const medidores = MEDIDOR.flatMap(([id, nombre]) => {
-      const m = k.medidores?.[id];
-      return m && (m.numero || m.lectura) ? [{ nombre, numero: String(m.numero ?? '').trim() || '—', lectura: String(m.lectura ?? '').trim() || '—' }] : [];
-    });
+    const faltaDato = faltaEnEntrega(k);
+    if (faltaDato) return { error: faltaDato };
+    const imagenes = await this.imagenes(u, n.id, fotosParaPdf(k));
     const firmantes: Firmante[] = [
       ...duenos.map((d) => ({
         rut: rutDe(d.persona), fullName: d.persona.nombre, email: d.persona.email ?? '', phone: d.persona.telefono || undefined,
@@ -97,28 +119,18 @@ export class ActaEntregaService {
       prop,
       usuario,
       firmantes,
-      vars: (numero: number) => ({
-        numero: numero.toLocaleString('es-CL'),
-        fechaEmision: fechaLarga(hoy()),
-        fechaEntrega: fechaLarga(fecha),
-        corredora: { nombre: corredora?.nombre ?? 'la corredora' },
-        arrendador: duenos.map((d) => `${d.persona.nombre}, RUT ${rutDe(d.persona)}`).join(', y '),
-        arrendatario: { nombre: arr.nombre, rut: rutDe(arr) },
-        propiedad: {
-          codigo: prop.codigo,
-          tipo: mayus(String(prop.tipo || '').replace(/_/g, ' ')),
-          direccion: [prop.direccion, prop.unidad ? `depto. ${prop.unidad}` : '', prop.comuna].filter(Boolean).join(', '),
-        },
-        llaves: String(k.llaves ?? '').trim() || 'No se registró la cantidad de llaves entregadas.',
-        hayMedidores: medidores.length > 0,
-        medidores,
-        inventario: inventario.map((i) => ({
-          espacio: String(i.espacio).trim(),
-          estado: ESTADO[String(i.estado ?? '')] ?? 'Bueno',
-          nota: String(i.nota ?? '').trim(),
-        })),
-        observaciones: String(k.observaciones ?? '').trim(),
-      }),
+      vars: (numero: number) =>
+        varsActaEntrega({
+          numero,
+          hoy: hoy(),
+          corredora,
+          duenos: duenos.map((d) => ({ nombre: d.persona.nombre, rut: rutDe(d.persona) })),
+          arrendatario: { nombre: arr.nombre, rut: rutDe(arr) },
+          propiedad: prop,
+          usuario: { nombre: usuario.nombre },
+          entrega: k,
+          imagenes,
+        }),
     };
   }
 

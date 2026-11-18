@@ -34,14 +34,35 @@ const TODAS = [prop(101), prop(102, { idType: 4, propertyTitle: 'Sitio en Colina
   await new Promise((r) => srv.listen(0, r)); const url = `http://127.0.0.1:${srv.address().port}/web/v1`;
   const cfg = (o) => ({ get: (k) => o[k] });
   try {
-    const cv = new ConvectaService(cfg({ CONVECTA_API_URL: url, CONVECTA_SUBSCRIPTION_KEY: 'clave-buena' }));
-    const leidas = await cv.propiedades();
+    // base falsa: la conexión de cada corredora (clave cifrada «en claro» con un cifrado falso)
+    const conexiones = new Map();
+    const db = { conexion: {
+      findUnique: async ({ where }) => conexiones.get(where.corredoraId_proveedor_dueno.corredoraId) ?? null,
+      upsert: async ({ where, create, update }) => { const k = where.corredoraId_proveedor_dueno.corredoraId; conexiones.set(k, { ...(conexiones.get(k) ?? create), ...update }); },
+      deleteMany: async ({ where }) => conexiones.delete(where.corredoraId),
+    } };
+    const cifrado = { cifrar: (t) => 'c:' + t, descifrar: (t) => t.slice(2) };
+    const nuevoCv = (o) => new ConvectaService(cfg({ CONVECTA_API_URL: url, ...o }), db, cifrado);
+    const admin = { sub: 'u1', corredoraId: 'A', rol: 'ADMIN' };
+    const cv = nuevoCv({});
+    const sinClave = await cv.propiedades('A').then(() => null, (e) => e.message);
+    ok(/Conecta primero la cuenta de Convecta/.test(sinClave), 'sin clave propia, la corredora no puede importar');
+    const mala = await cv.conectar(admin, 'clave-mala-123').then(() => null, (e) => e.message);
+    ok(/rechazó la clave/.test(mala) && !conexiones.has('A'), 'una clave rechazada no se guarda y se explica con claridad');
+    const noAdminCv = await cv.conectar({ ...admin, rol: 'CORREDOR' }, 'clave-buena').then(() => null, (e) => e.message);
+    ok(/administrador/.test(noAdminCv), 'solo el administrador conecta Convecta');
+    vistas.length = 0;
+    const est = await cv.conectar(admin, 'clave-buena');
+    ok(est.conectado && est.propia && conexiones.get('A').accesoCif === 'c:clave-buena', 'la clave se prueba y queda cifrada en la conexión de la corredora');
+    vistas.length = 0;
+    const leidas = await cv.propiedades('A');
     ok(leidas.length === 3 && vistas.length === 2, 'lee todas las páginas (2 llamadas, 3 propiedades)');
     ok(vistas.every((v) => v.metodo === 'POST' && v.ruta === '/web/v1/properties' && v.tam === '50' && v.clave === 'clave-buena'), 'POST /properties?pageNumber=N&pageSize=50 con la clave en la cabecera');
-    const sinClave = await new ConvectaService(cfg({ CONVECTA_API_URL: url })).propiedades().then(() => null, (e) => e.message);
-    ok(/no está configurado/.test(sinClave), 'sin clave en el servidor avisa que Convecta no está configurado');
-    const mala = await new ConvectaService(cfg({ CONVECTA_API_URL: url, CONVECTA_SUBSCRIPTION_KEY: 'mala' })).propiedades().then(() => null, (e) => e.message);
-    ok(/rechazó la clave/.test(mala), 'una clave rechazada se explica con claridad');
+    const otra = await cv.propiedades('B').then(() => null, (e) => e.message);
+    ok(/Conecta primero/.test(otra), 'otra corredora NO usa la clave de la primera');
+    const delServidor = nuevoCv({ CONVECTA_SUBSCRIPTION_KEY: 'clave-buena', CONVECTA_CORREDORA_ID: 'S' });
+    ok((await delServidor.propiedades('S')).length === 3, 'la clave del servidor sirve a CONVECTA_CORREDORA_ID');
+    ok(/Conecta primero/.test(await delServidor.propiedades('B').then(() => null, (e) => e.message)), '…y a ninguna otra corredora');
 
     const a = aPropiedadAsset(TODAS[0]);
     ok(a.codigo === 'CV-101' && a.tipo === 'departamento' && a.venta === true && a.arriendo === false, 'código CV-<id>, tipo y operación');
@@ -59,14 +80,14 @@ const TODAS = [prop(101), prop(102, { idType: 4, propertyTitle: 'Sitio en Colina
     const enviados = [];
     const svc = new PropiedadesService({ usuario: { findMany: async () => [{ id: 'u-ana', email: ' ana@correo.cl ' }, { id: 'u-otro', email: 'otro@x.cl' }] } }, {}, {}, cv);
     svc.importar = async (_u, { sistema, items }) => { enviados.push({ sistema, items }); return { nuevas: items.length, actualizadas: 0, sinCambios: 0, personas: 0, captadores: items.filter((i) => i.captadorId).length, total: items.length }; };
-    const r = await svc.importarConvecta({ sub: 'adm', corredoraId: 'c1', rol: 'ADMIN', sid: 's' });
+    const r = await svc.importarConvecta({ sub: 'adm', corredoraId: 'A', rol: 'ADMIN', sid: 's' });
     const items = enviados[0].items;
     ok(enviados[0].sistema === 'convecta' && items.length === 3, 'importa con el sistema «convecta»');
     ok(items[0].captadorId === 'u-ana', 'el correo coincide sin importar mayúsculas ni espacios → captador asignado');
     ok(items[1].captadorId === null && items[2].captadorId === null, 'sin coincidencia o sin correo queda sin captador');
     ok(items[2].archivada === true && items[0].archivada === false, 'la no visible llega archivada');
     ok(r.captadores === 1 && r.sinCaptador === 2 && r.sinCorredor.length === 2 && r.sinCorredor.some((f) => f.email === 'luis@otro.cl' && f.propiedades === 1), 'informa los correos que no existen en Asset');
-    const noAdmin = await svc.importarConvecta({ sub: 'x', corredoraId: 'c1', rol: 'CORREDOR', sid: 's' }).then(() => null, (e) => e.message);
+    const noAdmin = await svc.importarConvecta({ sub: 'x', corredoraId: 'A', rol: 'CORREDOR', sid: 's' }).then(() => null, (e) => e.message);
     ok(/administrador/.test(noAdmin), 'solo el administrador puede importar');
     console.log('OK');
   } finally { srv.close(); }

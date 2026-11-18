@@ -20,6 +20,7 @@ import {
   ForbiddenException,
   Get,
   Injectable,
+  Patch,
   Put,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -85,7 +86,10 @@ export interface CredWechatia {
 }
 
 /** los últimos 9 dígitos (+56 9 4497 5958 → 944975958) */
-const nueve = (t: unknown) => String(t ?? '').replace(/\D/g, '').slice(-9);
+const nueve = (t: unknown) =>
+  String(t ?? '')
+    .replace(/\D/g, '')
+    .slice(-9);
 
 interface Opciones {
   body?: unknown;
@@ -127,11 +131,29 @@ export interface MensajeWa {
   para?: string;
 }
 
+/** «+56 9 4497 5958» desde cualquier forma de escribirlo (9 dígitos, con 56, con espacios); null si no es un celular chileno */
+export const formatearNumero = (t: string | null | undefined): string | null => {
+  const d = (t ?? '').replace(/\D/g, '');
+  const n = d.length === 9 ? '56' + d : d;
+  return /^569\d{8}$/.test(n) ? `+56 9 ${n.slice(3, 7)} ${n.slice(7)}` : null;
+};
+const numeroEsquema = z
+  .string()
+  .trim()
+  .max(30)
+  .refine(
+    (t) => t === '' || !!formatearNumero(t),
+    'Escribe el celular de WhatsApp de la empresa, por ejemplo +56 9 1234 5678.',
+  );
+
 const conexionEsquema = z.object({
   token: z.string().trim().min(20, 'Esa clave es muy corta. Copia la clave completa de la integración.').max(4000),
   locationId: z.string().trim().min(4).max(100),
   base: z.url().optional(),
+  /** el número de WhatsApp de ESTA corredora en su subcuenta (solo se leen sus mensajes y se envía desde él) */
+  numero: numeroEsquema.optional(),
 });
+const numeroConexionEsquema = z.object({ numero: numeroEsquema });
 
 /** Cliente de wechatia para una corredora (una instancia por envío o ronda). */
 export class Wechatia {
@@ -318,7 +340,12 @@ export class Wechatia {
         (m) =>
           m.direction === 'inbound' &&
           new Date(m.dateAdded).getTime() > lim &&
-          this.esDeEsteNumero({ tipo: String(m.messageType || m.type || ''), de: m.from, para: m.to, direccion: 'entrante' }),
+          this.esDeEsteNumero({
+            tipo: String(m.messageType || m.type || ''),
+            de: m.from,
+            para: m.to,
+            direccion: 'entrante',
+          }),
       );
     } catch {
       return null;
@@ -461,10 +488,32 @@ export class WechatiaService {
   ) {
     this.produccion = config.get('NODE_ENV', { infer: true }) === 'production';
     this.numero = config.get('WA_NUMERO', { infer: true }) || '';
+    this.locationNumero = config.get('WA_LOCATION_ID', { infer: true }) || '';
     this.sufijo = config.get('WA_ETIQUETA_SUFIJO', { infer: true }) || '';
   }
+  /** WA_NUMERO: el número de la subcuenta de Portal Firma en este ambiente (comparte subcuenta con el de desarrollo) */
   private readonly numero: string;
+  /** WA_LOCATION_ID: la subcuenta a la que pertenece WA_NUMERO; a ninguna otra corredora se le aplica */
+  private readonly locationNumero: string;
   private readonly sufijo: string;
+
+  /**
+   * El número de WhatsApp de la corredora: el que guardó su administrador en la conexión; si no guardó uno, WA_NUMERO solo
+   * si su subcuenta es la de WA_LOCATION_ID. Sin número no se filtra nada y wechatia envía desde el número por defecto
+   * de la subcuenta (lo normal cuando la subcuenta tiene un solo número).
+   */
+  private numeroDeConexion(d: { locationId?: string; numero?: string }): string {
+    if (d.numero) return d.numero;
+    if (this.numero && this.locationNumero && d.locationId === this.locationNumero) return this.numero;
+    return '';
+  }
+
+  /** el número de la empresa para mostrar («+56 9 4497 5958»), o null si la corredora no lo ha indicado */
+  async numeroEmpresa(corredoraId: string): Promise<string | null> {
+    const c = await this.db.conexion.findUnique({ where: this.donde(corredoraId) });
+    if (!c) return null;
+    return formatearNumero(this.numeroDeConexion((c.datos ?? {}) as { locationId?: string; numero?: string }));
+  }
 
   private donde = (corredoraId: string) => ({
     corredoraId_proveedor_dueno: { corredoraId, proveedor: PROVEEDOR, dueno: DUENO },
@@ -474,13 +523,14 @@ export class WechatiaService {
   async credenciales(corredoraId: string): Promise<CredWechatia | null> {
     const c = await this.db.conexion.findUnique({ where: this.donde(corredoraId) });
     if (!c || c.estado !== 'activa' || !c.accesoCif) return null;
-    const d = (c.datos ?? {}) as { locationId?: string; base?: string };
+    const d = (c.datos ?? {}) as { locationId?: string; base?: string; numero?: string };
     if (!d.locationId) return null;
+    const numero = this.numeroDeConexion(d);
     return {
       token: this.cifrado.descifrar(c.accesoCif),
       locationId: d.locationId,
       ...(d.base && !this.produccion ? { base: d.base } : {}),
-      ...(this.numero ? { numero: this.numero } : {}),
+      ...(numero ? { numero } : {}),
       ...(this.sufijo ? { sufijoEtiqueta: this.sufijo } : {}),
     };
   }
@@ -500,10 +550,12 @@ export class WechatiaService {
 
   async estado(u: UsuarioToken) {
     const c = await this.db.conexion.findUnique({ where: this.donde(u.corredoraId) });
+    const d = (c?.datos ?? {}) as { locationId?: string; numero?: string };
     return {
       conectado: !!c && c.estado === 'activa',
       estado: c?.estado ?? null,
-      locationId: ((c?.datos ?? {}) as { locationId?: string }).locationId ?? null,
+      locationId: d.locationId ?? null,
+      numero: c ? formatearNumero(this.numeroDeConexion(d)) : null,
       conectadoEn: c?.conectadoEn ?? null,
       error: c?.ultimoError ?? null,
       puedeConectar: u.rol === 'ADMIN' || !c,
@@ -528,7 +580,16 @@ export class WechatiaService {
       expiraEn: null,
       cuentaId: b.locationId,
       ultimoError: null,
-      datos: { locationId: b.locationId, ...(b.base ? { base: b.base } : {}) },
+      datos: {
+        locationId: b.locationId,
+        ...(b.base ? { base: b.base } : {}),
+        // si no lo escribió, se conserva el que ya tenía (reconectar con otra clave no lo borra)
+        ...(b.numero
+          ? { numero: formatearNumero(b.numero) }
+          : (ya?.datos as { numero?: string } | null)?.numero
+            ? { numero: (ya!.datos as { numero: string }).numero }
+            : {}),
+      },
       conectadoPor: u.sub,
       conectadoEn: new Date(),
     };
@@ -605,6 +666,20 @@ export class WechatiaService {
     };
   }
 
+  /** el administrador indica (o borra, con '') el número de WhatsApp de su corredora sin volver a pegar la clave */
+  async guardarNumero(u: UsuarioToken, b: z.infer<typeof numeroConexionEsquema>) {
+    if (u.rol !== 'ADMIN')
+      throw new ForbiddenException('El número de WhatsApp de la empresa lo cambia el administrador.');
+    const c = await this.db.conexion.findUnique({ where: this.donde(u.corredoraId) });
+    if (!c) throw new BadRequestException('Primero conecta wechatia.');
+    const datos = { ...((c.datos ?? {}) as Record<string, unknown>) };
+    const numero = formatearNumero(b.numero);
+    if (numero) datos.numero = numero;
+    else delete datos.numero;
+    await this.db.conexion.update({ where: { id: c.id }, data: { datos: datos as Prisma.InputJsonObject } });
+    return this.estado(u);
+  }
+
   async desconectar(u: UsuarioToken) {
     if (u.rol !== 'ADMIN') throw new ForbiddenException('Desconectar el WhatsApp de la empresa es del administrador.');
     await this.db.conexion.deleteMany({ where: { corredoraId: u.corredoraId, proveedor: PROVEEDOR, dueno: DUENO } });
@@ -634,6 +709,14 @@ export class WechatiaController {
   @Put()
   conectar(@UsuarioActual() u: UsuarioToken, @Body(new ZodPipe(conexionEsquema)) b: z.infer<typeof conexionEsquema>) {
     return this.s.conectar(u, b);
+  }
+
+  @Patch('numero')
+  numero(
+    @UsuarioActual() u: UsuarioToken,
+    @Body(new ZodPipe(numeroConexionEsquema)) b: z.infer<typeof numeroConexionEsquema>,
+  ) {
+    return this.s.guardarNumero(u, b);
   }
 
   @Delete()

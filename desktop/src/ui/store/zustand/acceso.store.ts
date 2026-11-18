@@ -12,10 +12,24 @@ interface IAccesoState {
   accesoIngresar: (email: string, clave: string) => Promise<boolean>;
   accesoSalir: () => Promise<void>;
   accesoVencido: (aviso?: string) => void;
+  /** pantalla «Cambia tu clave»: obligatoria con debeCambiarClave; también se abre a pedido desde el menú */
+  cambiandoClave: boolean;
+  accesoPedirClave: (abrir: boolean) => void;
+  accesoCambiarClave: (actual: string, nueva: string) => Promise<boolean>;
 }
 
 export const useAccesoStore = create<IAccesoState>((set) => ({
-  estado: 'cargando', usuario: null, error: '', enviando: false,
+  estado: 'cargando', usuario: null, error: '', enviando: false, cambiandoClave: false,
+  accesoPedirClave: (abrir) => set({ cambiandoClave: abrir, error: '' }),
+  accesoCambiarClave: async (actual, nueva) => {
+    set({ enviando: true, error: '' });
+    try {
+      const r = await accesoService.cambiarClave(actual, nueva);
+      if (!r.ok || !r.data) { set({ error: r.error || 'No se pudo cambiar la clave.' }); return false; }
+      set({ usuario: r.data, cambiandoClave: false });
+      return true;
+    } finally { set({ enviando: false }); }
+  },
   accesoRestaurar: async () => {
     set({ estado: 'cargando', error: '' });
     const r = await accesoService.restaurar().catch((e: Error) => ({ ok: false, error: e.message, data: null }));
@@ -31,6 +45,6 @@ export const useAccesoStore = create<IAccesoState>((set) => ({
       return true;
     } finally { set({ enviando: false }); }
   },
-  accesoSalir: async () => { await accesoService.salir().catch(() => null); set({ estado: 'fuera', usuario: null, error: '' }); },
+  accesoSalir: async () => { await accesoService.salir().catch(() => null); set({ estado: 'fuera', usuario: null, error: '', cambiandoClave: false }); },
   accesoVencido: (aviso) => set({ estado: 'fuera', usuario: null, error: aviso || 'Tu sesión venció. Ingresa de nuevo.' }),
 }));

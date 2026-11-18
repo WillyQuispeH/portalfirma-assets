@@ -7,12 +7,18 @@ import type { ICanales, IIaEstado, IMlEstado } from '../interfaces/integraciones
 
 /** las conexiones con Google: la cuenta del usuario (calendario y Drive) y el Drive de la empresa */
 export interface IGoogleConexion { conectada: boolean; estado: string | null; cuenta: string | null; conectadoEn: string | null; error: string | null }
+/** la cuenta de Convecta de la corredora (de donde se importa la cartera) */
+export interface IConvectaEstado { disponible: boolean; conectado: boolean; propia: boolean; conectadoEn?: string | null; error?: string | null; admin: boolean }
 export interface IGoogleEstado { disponible: boolean; admin: boolean; usuario: IGoogleConexion; empresa: IGoogleConexion }
 
 export const integracionesService = {
   wechatia: () => apiCruda<IWaEstado>('waEstado'),
   conectarWechatia: (token: string, locationId: string) => apiCruda<IWaEstado>('pvClaveWa', { token, locationId }),
   canales: () => apiCruda<ICanales>('waCanales'),
+  guardarNumeroWa: (numero: string) => apiCruda('waNumero', numero),
+  convecta: () => apiCruda<IConvectaEstado>('cvEstado'),
+  convectaConectar: (clave: string) => apiCruda<IConvectaEstado>('cvConectar', clave),
+  convectaDesconectar: () => apiCruda<IConvectaEstado>('cvDesconectar'),
   ml: () => apiCruda<IMlEstado>('mlEstado'),
   mlConectar: () => apiCruda('mlConectar'),
   mlDesconectar: () => apiCruda('mlDesconectar'),

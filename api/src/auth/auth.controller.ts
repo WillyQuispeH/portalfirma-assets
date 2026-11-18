@@ -8,7 +8,7 @@ import { Publico, UsuarioActual, type UsuarioToken } from './usuario-actual';
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
-  /** POST /v1/auth/ingresar — máximo 5 intentos por minuto por IP. */
+  /** POST /v1/auth/ingresar — máximo 5 intentos por minuto por IP y correo (LimiteGuard). */
   @Publico()
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post('ingresar')

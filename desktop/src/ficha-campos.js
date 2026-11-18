@@ -102,6 +102,9 @@ const CAMPOS = [
   C('conservador', 'Conservador de Bienes Raíces', 'texto', 'legal', { voz: 'conservador, CBR de Santiago' }),
   C('cuentaPago', 'Cuenta donde se paga la renta', 'texto', 'legal', { si: (p) => !!p.arriendo, voz: 'cuenta bancaria del arrendador, cuenta corriente, banco para el arriendo' }),
   C('condicionesMandato', 'Otras condiciones del mandato', 'texto', 'legal', { si: (p) => !!p.arriendo, voz: 'condiciones especiales del mandato' }),
+  // mandato de venta (api/src/negocios/mandato-venta.ts): la comisión va como texto («2» o «2,5») para no perder los decimales
+  C('comisionVentaPct', 'Comisión de venta (% + IVA)', 'texto', 'legal', { si: (p) => !!p.venta, voz: 'comisión de venta, porcentaje de comisión' }),
+  C('condicionesMandatoVenta', 'Otras condiciones del mandato de venta', 'texto', 'legal', { si: (p) => !!p.venta, voz: 'condiciones especiales del mandato de venta' }),
   C('exclusividad', 'Exclusividad', 'bool', 'legal', { req: siempre }),
   C('publicarPortales', 'Publicar en portales y redes sociales', 'bool', 'legal', { voz: 'si quiere que se publique; si no, solo cartera' }),   // 0.16.15 · va en el mandato (si no se dice: sí)
   C('mesesGarantia', 'Meses de garantía que se pedirán', 'num', 'legal', { si: (p) => !!p.arriendo, voz: 'mes de garantía, meses de garantía, garantía' }),

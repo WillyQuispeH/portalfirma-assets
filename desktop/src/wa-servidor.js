@@ -30,6 +30,12 @@ function conectado() {
 }
 /** la cuenta de wechatia que tiene el SERVIDOR para esta corredora (no la que haya guardada en este equipo) */
 const locationIdServidor = () => conexion?.locationId || null;
+/** el número de WhatsApp de la corredora que guardó su administrador (o null) */
+const numeroServidor = () => conexion?.numero || null;
+async function guardarNumero(numero) {
+  conexion = await api('PATCH', '/whatsapp/conexion/numero', { numero: String(numero ?? '').trim() }); conexionEn = Date.now();
+  return conexion;
+}
 
 // ---------------------------------------------------------------- envíos
 async function enviar({ telefono, nombre = '', texto, revisar24 = true }) {
@@ -44,7 +50,7 @@ const estadoMensaje = (id) => api('GET', '/whatsapp/enviar/estado/' + encodeURIC
 let ejecutivo = null;
 const guardarEj = (e) => { if (e && typeof e === 'object') ejecutivo = e; return ejecutivo; };
 const ej = {
-  estado: () => ejecutivo || { activo: false, telefono: null, codigo: null, numeroEmpresa: '+56 9 4497 5958' },
+  estado: () => ejecutivo || { activo: false, telefono: null, codigo: null, numeroEmpresa: 'el WhatsApp de la empresa' },
   refrescar: async () => guardarEj(await api('GET', '/whatsapp/ejecutivo')),
   vincular: async (o = {}) => { const r = await api('POST', '/whatsapp/ejecutivo/vincular', o); await ej.refrescar().catch(() => {}); return r; },
   desvincular: async () => { await api('POST', '/whatsapp/ejecutivo/desvincular'); await ej.refrescar().catch(() => {}); return true; },
@@ -84,4 +90,4 @@ async function canales() {
   return api('GET', '/whatsapp/canales');
 }
 
-module.exports = { enApi, refrescarConexion, conectado, locationIdServidor, canales, enviar, plantilla, contacto, estadoMensaje, ejecutivo: ej, asistentes: at, observador: obs };
+module.exports = { enApi, refrescarConexion, conectado, locationIdServidor, numeroServidor, guardarNumero, canales, enviar, plantilla, contacto, estadoMensaje, ejecutivo: ej, asistentes: at, observador: obs };

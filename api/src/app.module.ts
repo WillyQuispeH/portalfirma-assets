@@ -1,7 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
-import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { LimiteGuard } from './comun/limite.guard';
 import { archivoEnv, validarEnv } from './config/env';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
@@ -13,7 +14,8 @@ import { PersonasController } from './personas/personas.controller';
 import { PersonasService } from './personas/personas.service';
 import { PropiedadesController } from './propiedades/propiedades.controller';
 import { PropiedadesService } from './propiedades/propiedades.service';
-import { ConvectaService } from './propiedades/convecta';
+import { ConvectaController, ConvectaService } from './propiedades/convecta';
+import { CorredoraDocController, CorredoraDocService } from './documentos/corredora-doc';
 import { FeedsController } from './propiedades/feeds';
 import { ArchivosModule } from './archivos/archivos';
 import { NegociosController, NegociosService } from './negocios/negocios';
@@ -48,6 +50,7 @@ import { EnvioFirmaService } from './documentos/envio-firma';
 import { CartaOfertaController, CartaOfertaService } from './negocios/carta-oferta';
 import { ContratoArriendoController, ContratoArriendoService } from './negocios/contrato-arriendo';
 import { MandatoArriendoController, MandatoArriendoService } from './negocios/mandato-arriendo';
+import { MandatoVentaController, MandatoVentaService } from './negocios/mandato-venta';
 import { ActaEntregaController, ActaEntregaService } from './negocios/acta-entrega';
 import { ActaFirmaController, ActaFirmaService } from './whatsapp/acta-firma';
 import { LeadsWaService } from './whatsapp/leads-wa';
@@ -65,13 +68,16 @@ import { LeadsEnvioController, PuenteService } from './whatsapp/puente';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, envFilePath: archivoEnv(), validate: validarEnv }),
-    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),
+    // por usuario (LimiteGuard): una app abierta pide avisos cada 3 s + sincronización; 300/min deja holgura
+    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 300 }]),
     PrismaModule,
     AuthModule,
     ActividadModule,
     ArchivosModule,
   ],
   controllers: [
+    CorredoraDocController,
+    ConvectaController,
     UsuariosController,
     SaludController,
     PropiedadesController,
@@ -106,6 +112,7 @@ import { LeadsEnvioController, PuenteService } from './whatsapp/puente';
     CartaOfertaController,
     ContratoArriendoController,
     MandatoArriendoController,
+    MandatoVentaController,
     ActaEntregaController,
     ActaFirmaController,
     ConfirmacionVisitaController,
@@ -113,9 +120,10 @@ import { LeadsEnvioController, PuenteService } from './whatsapp/puente';
   ],
   // el límite de intentos va antes que la sesión: un login fallido también cuenta
   providers: [
-    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_GUARD, useClass: LimiteGuard },
     PropiedadesService,
     ConvectaService,
+    CorredoraDocService,
     PersonasService,
     NegociosService,
     EventosService,
@@ -144,6 +152,7 @@ import { LeadsEnvioController, PuenteService } from './whatsapp/puente';
     CartaOfertaService,
     ContratoArriendoService,
     MandatoArriendoService,
+    MandatoVentaService,
     ActaEntregaService,
     ActaFirmaService,
     TranscripcionService,

@@ -29,7 +29,7 @@
 <body>
 
 <div class="enc">
-  <div class="marca">{{corredora.nombre}}<small>{{#corredora.rut}}RUT {{corredora.rut}}{{/corredora.rut}}</small></div>
+  <div class="marca">{{#corredora.logo}}<img class="logo" src="{{corredora.logo}}" alt="">{{/corredora.logo}}{{corredora.nombre}}<small>{{#corredora.rut}}RUT {{corredora.rut}}{{/corredora.rut}}{{#corredora.domicilio}} · {{corredora.domicilio}}{{/corredora.domicilio}}</small></div>
   <div class="meta"><b>Contrato Nº {{numero}}</b><br>{{ciudad}}, {{fechaEmision}}</div>
 </div>
 <div class="filete"></div>

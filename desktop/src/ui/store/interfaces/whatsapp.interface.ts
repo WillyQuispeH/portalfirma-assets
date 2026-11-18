@@ -5,6 +5,8 @@ export interface IWaEstado {
   conectado?: boolean;
   propia?: boolean; // con la clave de la integración privada
   locationId?: string;
+  /** el número de WhatsApp de la corredora («+56 9 …») que guardó su administrador */
+  numero?: string | null;
   // celular del usuario
   telefono?: string | null;
   codigo?: string | null; // código para vincular, mientras se espera el mensaje

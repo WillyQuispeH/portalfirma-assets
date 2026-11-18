@@ -20,6 +20,8 @@ export const usuarioPublico = (u: Usuario) => ({
   nombre: u.nombre,
   rol: u.rol,
   corredoraId: u.corredoraId,
+  /** la clave es la inicial o la puso el administrador: la app pide crear una propia antes de seguir */
+  debeCambiarClave: u.debeCambiarClave,
 });
 
 @Injectable()

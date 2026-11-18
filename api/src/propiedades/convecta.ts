@@ -1,13 +1,40 @@
 // Convecta: el ÚNICO origen desde donde se importa la cartera. Lee las propiedades de su API (POST /properties, paginado
-// por la URL: ?pageNumber=N&pageSize=50, el máximo) y las traduce al formato de Asset. La clave de suscripción vive solo
-// en el servidor (CONVECTA_SUBSCRIPTION_KEY): la app de escritorio nunca la ve.
-import { BadGatewayException, Injectable, ServiceUnavailableException } from '@nestjs/common';
+// por la URL: ?pageNumber=N&pageSize=50, el máximo) y las traduce al formato de Asset.
+// La clave de suscripción es de CADA corredora (cada una lee SU cuenta de Convecta): la pega su administrador en
+// Integraciones y queda cifrada en conexiones (proveedor «convecta»). La app de escritorio nunca la ve.
+// CONVECTA_SUBSCRIPTION_KEY del servidor sirve solo a la corredora CONVECTA_CORREDORA_ID (la clave original); ninguna
+// otra corredora la usa (si no, cualquier administrador traería la cartera de otra corredora).
+import {
+  BadGatewayException,
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  ForbiddenException,
+  Get,
+  Injectable,
+  Put,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { z } from 'zod';
 import type { Env } from '../config/env';
+import { PrismaService } from '../prisma/prisma.service';
+import { CifradoService } from '../conexiones/cifrado';
+import { UsuarioActual, type UsuarioToken } from '../auth/usuario-actual';
+import { ZodPipe } from '../comun/zod.pipe';
 import type { PropiedadEntrada } from './propiedades.esquemas';
 
-export interface ConvectaMoneda { name?: string | null; symbol?: string | null }
-export interface ConvectaMedia { url?: string | null; order?: number | null; type?: string | null; visibility?: number | null }
+export interface ConvectaMoneda {
+  name?: string | null;
+  symbol?: string | null;
+}
+export interface ConvectaMedia {
+  url?: string | null;
+  order?: number | null;
+  type?: string | null;
+  visibility?: number | null;
+}
 export interface ConvectaPropiedad {
   idProperty: number;
   idExternal?: string | null;
@@ -44,6 +71,7 @@ export interface ConvectaPropiedad {
 }
 
 export const SISTEMA_CONVECTA = 'convecta';
+const PROVEEDOR = 'convecta';
 const POR_PAGINA = 50; // máximo que acepta la API
 const MAX_PAGINAS = 200;
 
@@ -106,16 +134,19 @@ export function aPropiedadAsset(x: ConvectaPropiedad): PropiedadEntrada {
   const titulo = (x.propertyTitle ?? '').trim();
   const sufijo = titulo.match(/ en (.+)$/i)?.[1]?.trim();
   const comuna = COMUNAS[x.idBorough ?? -1];
-  const tipo =
-    TIPOS[x.idType ?? -1] ?? TIPO_POR_PALABRA.find(([r]) => r.test(titulo.toLowerCase()))?.[1] ?? 'casa';
+  const tipo = TIPOS[x.idType ?? -1] ?? TIPO_POR_PALABRA.find(([r]) => r.test(titulo.toLowerCase()))?.[1] ?? 'casa';
   const c = x.characteristics ?? {};
-  const imagenes = (x.propertyMedia ?? []).filter((m) => /^image$/i.test(m.type ?? '') && /^https?:\/\//.test(m.url ?? ''));
+  const imagenes = (x.propertyMedia ?? []).filter(
+    (m) => /^image$/i.test(m.type ?? '') && /^https?:\/\//.test(m.url ?? ''),
+  );
   const publicas = imagenes.filter((m) => m.visibility !== 0);
   const fotos = (publicas.length ? publicas : imagenes)
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
     .map((m) => String(m.url))
     .slice(0, 60);
-  const calle = [x.street, x.number].filter((v) => v !== null && v !== undefined && String(v).trim() && String(v) !== '0');
+  const calle = [x.street, x.number].filter(
+    (v) => v !== null && v !== undefined && String(v).trim() && String(v) !== '0',
+  );
   const lat = num(x.coordinatesLat);
   const lng = num(x.coordinatesLong);
   const venta = !!x.sale;
@@ -154,49 +185,149 @@ export function aPropiedadAsset(x: ConvectaPropiedad): PropiedadEntrada {
 @Injectable()
 export class ConvectaService {
   private readonly url: string;
-  private readonly clave: string;
+  /** la clave del servidor y la única corredora a la que sirve */
+  private readonly claveServidor: string;
+  private readonly corredoraServidor: string;
 
-  constructor(config: ConfigService<Env, true>) {
+  constructor(
+    config: ConfigService<Env, true>,
+    private readonly db: PrismaService,
+    private readonly cifrado: CifradoService,
+  ) {
     this.url = config.get('CONVECTA_API_URL', { infer: true }) ?? '';
-    this.clave = (config.get('CONVECTA_SUBSCRIPTION_KEY', { infer: true }) ?? '').trim();
+    this.claveServidor = (config.get('CONVECTA_SUBSCRIPTION_KEY', { infer: true }) ?? '').trim();
+    this.corredoraServidor = (config.get('CONVECTA_CORREDORA_ID', { infer: true }) ?? '').trim();
   }
 
-  get disponible() {
-    return !!(this.url && this.clave);
+  private donde = (corredoraId: string) => ({
+    corredoraId_proveedor_dueno: { corredoraId, proveedor: PROVEEDOR, dueno: 'corredora' },
+  });
+
+  /** la clave de Convecta de la corredora (la suya o, solo para CONVECTA_CORREDORA_ID, la del servidor) */
+  async claveDe(corredoraId: string): Promise<string | null> {
+    const c = await this.db.conexion.findUnique({ where: this.donde(corredoraId) });
+    if (c?.estado === 'activa' && c.accesoCif) return this.cifrado.descifrar(c.accesoCif);
+    if (this.claveServidor && this.corredoraServidor && corredoraId === this.corredoraServidor)
+      return this.claveServidor;
+    return null;
   }
 
-  /** Todas las propiedades de Convecta (páginas de 50). */
-  async propiedades(): Promise<ConvectaPropiedad[]> {
-    if (!this.disponible) {
-      throw new ServiceUnavailableException(
-        'Convecta no está configurado en el servidor (faltan CONVECTA_API_URL y CONVECTA_SUBSCRIPTION_KEY).',
-      );
+  async estado(u: UsuarioToken) {
+    const c = await this.db.conexion.findUnique({ where: this.donde(u.corredoraId) });
+    const propia = c?.estado === 'activa' && !!c.accesoCif;
+    return {
+      disponible: !!this.url,
+      conectado: propia || !!(await this.claveDe(u.corredoraId)),
+      propia,
+      conectadoEn: c?.conectadoEn ?? null,
+      error: c?.ultimoError ?? null,
+      admin: u.rol === 'ADMIN',
+    };
+  }
+
+  /** el administrador pega la clave de suscripción de SU cuenta de Convecta; se prueba antes de guardarla */
+  async conectar(u: UsuarioToken, clave: string) {
+    if (u.rol !== 'ADMIN')
+      throw new ForbiddenException('La cuenta de Convecta la conecta el administrador de la corredora.');
+    if (!this.url)
+      throw new ServiceUnavailableException('Convecta no está disponible en el servidor (falta CONVECTA_API_URL).');
+    await this.pagina(clave, 1, 1);
+    const datos = {
+      tipo: 'clave',
+      estado: 'activa',
+      accesoCif: this.cifrado.cifrar(clave),
+      renovarCif: null,
+      expiraEn: null,
+      cuentaId: null,
+      ultimoError: null,
+      datos: {},
+      conectadoPor: u.sub,
+      conectadoEn: new Date(),
+    };
+    await this.db.conexion.upsert({
+      where: this.donde(u.corredoraId),
+      create: { corredoraId: u.corredoraId, usuarioId: null, proveedor: PROVEEDOR, dueno: 'corredora', ...datos },
+      update: datos,
+    });
+    return this.estado(u);
+  }
+
+  async desconectar(u: UsuarioToken) {
+    if (u.rol !== 'ADMIN')
+      throw new ForbiddenException('La cuenta de Convecta la desconecta el administrador de la corredora.');
+    await this.db.conexion.deleteMany({
+      where: { corredoraId: u.corredoraId, proveedor: PROVEEDOR, dueno: 'corredora' },
+    });
+    return this.estado(u);
+  }
+
+  /** una página de la API de Convecta con esa clave */
+  private async pagina(
+    clave: string,
+    pag: number,
+    tam = POR_PAGINA,
+  ): Promise<{ items: ConvectaPropiedad[]; paginas: number }> {
+    let r: Response;
+    try {
+      r = await fetch(`${this.url}/properties?pageNumber=${pag}&pageSize=${tam}`, {
+        method: 'POST',
+        headers: { 'Ocp-Apim-Subscription-Key': clave, 'Content-Type': 'application/json' },
+        body: '{}',
+        signal: AbortSignal.timeout(30_000),
+      });
+    } catch {
+      throw new BadGatewayException('No se pudo conectar con Convecta. Intenta de nuevo en un momento.');
     }
+    if (r.status === 401 || r.status === 403)
+      throw new BadRequestException('Convecta rechazó la clave de suscripción.');
+    if (!r.ok) throw new BadGatewayException(`Convecta respondió con un error (${r.status}).`);
+    const j = (await r.json().catch(() => ({}))) as {
+      totalPages?: number;
+      items?: ConvectaPropiedad[];
+      data?: ConvectaPropiedad[];
+    };
+    return { items: j.items ?? j.data ?? [], paginas: Number(j.totalPages) || 1 };
+  }
+
+  /** Todas las propiedades de la cuenta de Convecta de la corredora (páginas de 50). */
+  async propiedades(corredoraId: string): Promise<ConvectaPropiedad[]> {
+    if (!this.url)
+      throw new ServiceUnavailableException('Convecta no está disponible en el servidor (falta CONVECTA_API_URL).');
+    const clave = await this.claveDe(corredoraId);
+    if (!clave)
+      throw new BadRequestException(
+        'Conecta primero la cuenta de Convecta de tu corredora en Configuración › Integraciones.',
+      );
     const todas = new Map<number, ConvectaPropiedad>();
     let paginas = 1;
     for (let pag = 1; pag <= paginas && pag <= MAX_PAGINAS; pag++) {
-      let r: Response;
-      try {
-        r = await fetch(`${this.url}/properties?pageNumber=${pag}&pageSize=${POR_PAGINA}`, {
-          method: 'POST',
-          headers: { 'Ocp-Apim-Subscription-Key': this.clave, 'Content-Type': 'application/json' },
-          body: '{}',
-          signal: AbortSignal.timeout(30_000),
-        });
-      } catch {
-        throw new BadGatewayException('No se pudo conectar con Convecta. Intenta de nuevo en un momento.');
-      }
-      if (!r.ok) {
-        throw new BadGatewayException(
-          r.status === 401 || r.status === 403
-            ? 'Convecta rechazó la clave de acceso del servidor.'
-            : `Convecta respondió con un error (${r.status}).`,
-        );
-      }
-      const j = (await r.json()) as { items?: ConvectaPropiedad[]; totalPages?: number };
-      paginas = Math.max(1, Number(j.totalPages) || 1);
-      for (const it of j.items ?? []) if (it?.idProperty) todas.set(it.idProperty, it);
+      const r = await this.pagina(clave, pag);
+      paginas = Math.max(1, r.paginas);
+      for (const it of r.items) if (it?.idProperty) todas.set(it.idProperty, it);
     }
     return [...todas.values()];
+  }
+}
+
+const conectarEsquema = z.object({ clave: z.string().trim().min(10, 'Esa clave es muy corta.').max(400) });
+
+/** GET/PUT/DELETE /v1/convecta/conexion — la cuenta de Convecta de la corredora (conectar y quitar: administrador) */
+@Controller('convecta/conexion')
+export class ConvectaController {
+  constructor(private readonly s: ConvectaService) {}
+
+  @Get()
+  estado(@UsuarioActual() u: UsuarioToken) {
+    return this.s.estado(u);
+  }
+
+  @Put()
+  conectar(@UsuarioActual() u: UsuarioToken, @Body(new ZodPipe(conectarEsquema)) b: z.infer<typeof conectarEsquema>) {
+    return this.s.conectar(u, b.clave);
+  }
+
+  @Delete()
+  desconectar(@UsuarioActual() u: UsuarioToken) {
+    return this.s.desconectar(u);
   }
 }

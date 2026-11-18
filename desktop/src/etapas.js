@@ -91,9 +91,11 @@ function crear({ agenda = null, formatos = null } = {}) {
         return { e: 'pend', q: 'tu', d: `Falta: ${b.faltanClave.slice(0, 5).join(', ')}${b.faltanClave.length > 5 ? ` y ${b.faltanClave.length - 5} más` : ''}.` };
       }
       case 'mandato': {
-        // mandato de arriendo que armó Asset (api/mandato-arriendo.ts): si ya se envió o se firmó, el paso lo sigue (con o sin formatos propios)
-        const fa = p ? firmaProp(p, /mandato de arriendo n/i) : null;
-        if (fa) return fa.estado === 'firmado' ? { e: 'ok', f: fa.firmado || fa.fecha } : { e: 'pend', q: 'otro', quien: 'la firma del propietario', d: `Mandato de arriendo enviado a firmar el ${fdm(fa.fecha)}${fa.operacion ? ' · operación ' + fa.operacion : ''}.` };
+        // mandato de arriendo o de venta que armó Asset (api/mandato-arriendo.ts y mandato-venta.ts): si ya se envió o se firmó, el paso
+        // lo sigue (con o sin formatos propios). Basta uno de los tipos que tiene la propiedad (firmado gana sobre enviado).
+        const reA = p?.venta && p?.arriendo ? /mandato de (arriendo|venta) n/i : p?.venta ? /mandato de venta n/i : /mandato de arriendo n/i;
+        const fa = p ? firmaProp(p, reA) : null;
+        if (fa) return fa.estado === 'firmado' ? { e: 'ok', f: fa.firmado || fa.fecha } : { e: 'pend', q: 'otro', quien: 'la firma del propietario', d: `${/venta/i.test(fa.plantilla || '') ? 'Mandato de venta' : 'Mandato de arriendo'} enviado a firmar el ${fdm(fa.fecha)}${fa.operacion ? ' · operación ' + fa.operacion : ''}.` };
         // 0.16.15 · con formatos propios: un mandato por operación (venta y/o arriendo); el paso dice qué falta o si está listo
         const fh = p && formatos?.activo() ? formatos.estadoHito(p, 'mandato') : null;
         if (fh) {

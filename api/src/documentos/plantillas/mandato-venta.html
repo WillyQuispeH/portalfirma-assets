@@ -1,0 +1,103 @@
+<!doctype html>
+<!--
+  MANDATO DE GESTIÓN DE VENTA de PortalFirma Asset. HTML normal: se edita el texto y el estilo aquí (el estilo común está en _base.css).
+  El contenido legal sigue el modelo «Mandato de gestión de venta» de la corredora. Las cláusulas con class="cl n" se numeran solas.
+  Variables entre llaves dobles (se reemplazan solas al generar el PDF):
+
+    {{numero}} {{fechaEmision}} {{ciudad}}
+    {{corredora.nombre}} {{corredora.rut}} {{corredora.representante}} (texto: «don Fulano, cédula de identidad número …»)
+    {{corredora.domicilio}} {{corredora.logo}}
+    {{mandante.nombre}} {{mandante.texto}} (con RUT, perfil y domicilio) {{mandante.rut}} {{mandante.email}} {{mandante.telefono}}
+    {{propiedad.codigo}} {{propiedad.tipo}} {{propiedad.direccion}} {{propiedad.comuna}} {{propiedad.supTotal}} {{propiedad.supUtil}} {{propiedad.rol}} {{propiedad.precio}}
+    {{comision.pct}} (p. ej. «2») {{comision.indemnizacion}} (el doble: «4»)
+    {{#publicar.si}}…{{/publicar.si}} {{#publicar.no}}…{{/publicar.no}}   {{#exclusividad.si}}…{{/exclusividad.si}} {{#exclusividad.no}}…{{/exclusividad.no}}
+    {{condiciones.otras}}
+  Un bloque  {{#algo}} … {{/algo}}  solo aparece si «algo» tiene valor.
+  Este documento NO lleva cajas de firma: Portalfirma agrega su propia hoja de firma al enviarlo.
+  Este texto debe revisarlo el notario: al cambiarlo, cambia lo que firma el mandante.
+-->
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Mandato de gestión de venta nº {{numero}}</title>
+<style>
+/*@base*/
+</style>
+</head>
+<body>
+
+<div class="enc">
+  <div class="marca">{{#corredora.logo}}<img class="logo" src="{{corredora.logo}}" alt="">{{/corredora.logo}}{{corredora.nombre}}<small>{{#corredora.rut}}RUT {{corredora.rut}}{{/corredora.rut}}{{#corredora.domicilio}} · {{corredora.domicilio}}{{/corredora.domicilio}}</small></div>
+  <div class="meta"><b>Mandato Nº {{numero}}</b><br>{{ciudad}}, {{fechaEmision}}</div>
+</div>
+<div class="filete"></div>
+<h1>Mandato de gestión de venta</h1>
+<div class="subtitulo">{{propiedad.tipo}} · {{propiedad.direccion}}</div>
+
+<div class="resumen">
+  <h3>Descripción del inmueble</h3>
+  <div class="grid">
+    <div class="dato"><span>Ubicación</span><b>{{propiedad.direccion}}</b></div>
+    <div class="dato"><span>Comuna</span><b>{{propiedad.comuna}}</b></div>
+    <div class="dato"><span>Superficie total</span><b>{{propiedad.supTotal}}</b></div>
+    <div class="dato"><span>Superficie útil</span><b>{{propiedad.supUtil}}</b></div>
+    <div class="dato"><span>Rol</span><b>{{propiedad.rol}}</b></div>
+    <div class="dato"><span>Precio referencial</span><b class="grande">{{propiedad.precio}}</b></div>
+  </div>
+</div>
+
+<p class="comparecencia">Don/doña <b>{{mandante.texto}}</b>, teléfono {{mandante.telefono}}, correo electrónico {{mandante.email}}, en adelante el <b>MANDANTE</b>, encarga a <b>{{corredora.nombre}}</b>, sociedad del giro de corretaje de propiedades{{#corredora.rut}}, RUT {{corredora.rut}}{{/corredora.rut}}{{#corredora.representante}}, representada por {{corredora.representante}}{{/corredora.representante}}{{#corredora.domicilio}}, con domicilio para estos efectos en {{corredora.domicilio}}{{/corredora.domicilio}}, en adelante el <b>CORREDOR</b>, la venta del inmueble descrito arriba (el «Inmueble»).</p>
+
+<section class="cl n"><h2>Declaraciones del mandante</h2>
+  <p>En este acto vengo en declarar y obligarme a lo siguiente:</p>
+  <ul class="sub">
+    <li><b>1)</b>Declaro ser dueño/a del Inmueble objeto de este encargo y no tener impedimento legal para celebrar actos y contratos al respecto.</li>
+    <li><b>2)</b>Declaro que toda la información entregada al CORREDOR es verdadera.</li>
+    <li><b>3)</b>Me obligo a proporcionar todos los antecedentes relativos al Inmueble que se requieran y autorizo al CORREDOR para solicitar los mismos por su propia cuenta.</li>
+    <li><b>4)</b>Autorizo al CORREDOR a tomar y publicar imágenes del Inmueble en los distintos portales y redes sociales, coordinar visitas, promocionar y realizar todas las gestiones necesarias para materializar la venta.</li>
+    <li><b>5)</b>El MANDANTE libera al CORREDOR de toda responsabilidad ante siniestro, mantención o cuidado del Inmueble.</li>
+  </ul>
+  <p>El MANDANTE será responsable de solicitar asesoramiento legal, tributario y/o contable.</p>
+</section>
+
+<section class="cl n"><h2>Comisión</h2>
+  <p>El MANDANTE pagará al CORREDOR una comisión de corretaje del <b>{{comision.pct}} % + IVA</b> sobre el monto final de la transacción. El pago correspondiente a {{corredora.nombre}} se documentará al momento de la suscripción de la promesa de compraventa, mediante cheque nominativo a nombre de {{corredora.nombre}} sin fecha, el cual quedará custodiado con instrucciones notariales y se entregará y pagará al CORREDOR una vez que se inscriba la compraventa en el Conservador de Bienes Raíces respectivo.</p>
+  <p>En caso de que la negociación derive en un contrato distinto, tales como arriendo, leasing, arriendo con opción u otro similar, el MANDANTE pagará al CORREDOR una comisión de corretaje del 2,0 % más IVA, calculado sobre el monto total del contrato.</p>
+  <p>El retraso en el pago por más de 20 días corridos devengará un interés por cada día de retraso equivalente al máximo convencional que permita la ley. El CORREDOR se reserva el derecho a cobrar comisión al respectivo comprador y/o hacer canje con otros corredores.</p>
+</section>
+
+<section class="cl n"><h2>Intermediación exclusiva con sus clientes</h2>
+  <p>El MANDANTE se obliga a no entenderse ni a vender la propiedad de forma directa a clientes del CORREDOR sin su intermediación y, en caso de que lo hiciera, pagará a título de indemnización el doble de la comisión acordada, es decir, el {{comision.indemnizacion}} % + IVA del monto total de la transacción. Son CLIENTES del CORREDOR las personas naturales o jurídicas que hayan firmado una orden de visita emitida por {{corredora.nombre}}, así mismo los terceros relacionados con las referidas personas naturales y/o jurídicas, aun cuando esta orden de venta no esté vigente al momento del cierre del negocio.</p>
+</section>
+
+<section class="cl n"><h2>Vigencia</h2>
+  <p>El presente mandato de venta tendrá una vigencia de 180 días, renovándose automática y sucesivamente por períodos iguales y sucesivos de 90 días cada uno, salvo que cualquiera de las partes manifieste por correo electrónico a la otra su voluntad de ponerle término. Estando en trámite una oferta por la propiedad no se podrá poner término a este mandato. Si alguno de los CLIENTES del CORREDOR o sus relacionados, dentro de los ciento ochenta días siguientes al término del contrato, cerraren con el MANDANTE alguno de los negocios descritos en el presente instrumento, el MANDANTE pagará al CORREDOR la totalidad de la comisión correspondiente.</p>
+</section>
+
+<section class="cl n"><h2>Publicidad y difusión</h2>
+  <p>El MANDANTE autoriza expresamente al CORREDOR a publicar y difundir la propiedad objeto del presente mandato en sus plataformas digitales y redes sociales, tales como Instagram, Facebook, TikTok, página web de {{corredora.nombre}}, entre otras que estime pertinentes, bajo su propia <b>línea editorial</b>, estética y criterios comunicacionales, sin que ello implique obligación de su parte de ajustarse a indicaciones específicas del MANDANTE respecto del contenido o estilo de las publicaciones.</p>
+  <p>La publicación se realizará en los plazos y momentos que {{corredora.nombre}} estime adecuados, considerando criterios técnicos y estratégicos, tales como el nivel de demanda del mercado, disponibilidad de contenidos y calendario de publicaciones.</p>
+  <p>Asimismo, se deja expresa constancia de que las propiedades entregadas en mandato con exclusividad tendrán prioridad en el orden de publicación, promoción y difusión, por sobre aquellas en modalidad de no exclusividad, sin perjuicio de la buena fe y diligencia que igualmente aplicará el CORREDOR a todas las gestiones encomendadas.</p>
+  <p><b>Exclusividad:</b> en caso de exclusividad, durante el período de 6 meses, el/la propietario/a se compromete a no solicitar los servicios de otra empresa de corretaje ni a realizar gestiones de venta/arriendo directa o indirecta del inmueble mencionado, ya sea personalmente o a través de terceros. Cualquier oferta de compra recibida será canalizada exclusivamente a través de {{corredora.nombre}}. En caso de incumplir este acuerdo, el/la propietario/a deberá abonar una penalización equivalente al doble de los honorarios acordados, más IVA.</p>
+
+  <table class="tabla">
+    <tr><th style="width:62%">Quiero que se publique en portales inmobiliarios y redes sociales</th><td><span class="caja-marca {{#publicar.si}}si{{/publicar.si}}"></span>SÍ &nbsp;&nbsp; <span class="caja-marca {{#publicar.no}}si{{/publicar.no}}"></span>NO</td></tr>
+    <tr><th style="width:62%">Quiero exclusividad</th><td><span class="caja-marca {{#exclusividad.si}}si{{/exclusividad.si}}"></span>SÍ &nbsp;&nbsp; <span class="caja-marca {{#exclusividad.no}}si{{/exclusividad.no}}"></span>NO</td></tr>
+  </table>
+  <p class="dest"><i>Nota: el MANDANTE entiende que, al no ser publicada la propiedad en los portales inmobiliarios, se hace más difícil encontrar al comprador.</i></p>
+</section>
+
+<section class="cl n"><h2>Domicilio y jurisdicción</h2>
+  <p>Para todos los efectos derivados del presente contrato, las partes fijan su domicilio en la ciudad de Santiago y se someten a la jurisdicción de sus tribunales ordinarios.</p>
+</section>
+
+{{#condiciones.otras}}<section class="cl"><h2>Condiciones especiales</h2>
+  <table class="tabla">
+    <tr><th>Otras condiciones</th><td class="pre">{{condiciones.otras}}</td></tr>
+  </table>
+</section>{{/condiciones.otras}}
+
+<div class="pie-legal">Documento emitido por {{corredora.nombre}}{{#corredora.rut}}, RUT {{corredora.rut}}{{/corredora.rut}}. Se firma electrónicamente con Portalfirma y queda disponible para su verificación.</div>
+
+</body>
+</html>

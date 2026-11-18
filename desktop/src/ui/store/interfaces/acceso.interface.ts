@@ -8,6 +8,8 @@ export interface IUsuarioAsset {
   rol: RolAsset;
   corredoraId: string;
   corredora: { id: string; nombre: string };
+  /** la clave es la inicial (o la puso el administrador): antes de seguir tiene que crear una propia */
+  debeCambiarClave?: boolean;
 }
 
 // cargando: revisando la sesión guardada · fuera: hay que ingresar · dentro: con sesión

@@ -21,6 +21,7 @@ import { EnvioFirmaService, type FirmanteEnvio } from '../documentos/envio-firma
 import { cargarPlantilla, llenar } from '../documentos/plantilla';
 import { hoy } from '../whatsapp/comun';
 import { describir, dominioDe, unir } from '../documentos/comparecientes';
+import { datosCorredora } from '../documentos/corredora-doc';
 
 const SERIE = 'contrato_arriendo';
 /** multa por cada atraso en el pago (modelo de contrato de la corredora) */
@@ -101,7 +102,7 @@ export class ContratoArriendoService {
       this.db.persona.findFirst({ where: { id: n.clienteId, corredoraId: u.corredoraId, eliminadoEn: null } }),
       this.db.propiedad.findFirst({ where: { id: n.propiedadId, corredoraId: u.corredoraId, eliminadoEn: null } }),
       this.db.usuario.findUnique({ where: { id: u.sub } }),
-      this.db.corredora.findUnique({ where: { id: u.corredoraId }, select: { nombre: true, rut: true } }),
+      datosCorredora(this.db, u.corredoraId),
       this.db.propiedadPersona.findMany({
         where: { propiedadId: n.propiedadId, rol: 'propietario' },
         include: { persona: true },
@@ -195,7 +196,7 @@ export class ContratoArriendoService {
         numero: numero.toLocaleString('es-CL'),
         fechaEmision: fechaLarga(hoy()),
         ciudad: prop.comuna || 'Santiago',
-        corredora: { nombre: corredora?.nombre ?? 'la corredora', rut: corredora?.rut ?? '' },
+        corredora,
         corredor: { nombre: usuario.nombre, email: usuario.email, telefono: usuario.telefono ?? '' },
         arrendador: {
           texto: unir(duenos.map((d) => describir(d.persona))),

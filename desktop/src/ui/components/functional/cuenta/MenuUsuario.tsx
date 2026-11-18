@@ -55,7 +55,7 @@ export default function MenuUsuario() {
 
 function Menu() {
   const { usuario, sesion, saldo, tokens: tk, drive, conectado, cuentaMenu, cuentaSalir } = useCuenta();
-  const { usuario: yo, accesoSalir } = useAcceso();
+  const { usuario: yo, accesoSalir, accesoPedirClave } = useAcceso();
   const pfu = usuario || {};
   const monto = usuario ? saldo : sesion?.balance;
   // cada acción cierra el menú primero
@@ -81,6 +81,7 @@ function Menu() {
         <button data-um="usuarios" onClick={ir(abrirUsuarios)}><Icono nombre="users" tam={15} /><span>{yo.rol === 'ADMIN' ? 'Usuarios de la corredora' : 'Equipo de la corredora'}</span></button>
         <button data-um="config" onClick={ir(() => abrirConfiguracion('general'))}><Icono nombre="sun" tam={15} /><span>Configuración</span></button>
         <button data-um="integraciones" onClick={ir(() => abrirConfiguracion('integraciones'))}><Icono nombre="link" tam={15} /><span>Integraciones</span></button>
+        <button data-um="clave" onClick={ir(() => accesoPedirClave(true))}><Icono nombre="lock" tam={15} /><span>Cambiar mi clave</span></button>
         <button data-um="ops" onClick={ir(abrirOperaciones)}><Icono nombre="listCheck" tam={15} /><span>Mis operaciones</span></button>
         <button data-um="drive" onClick={ir(verCuentaDrive)}><Icono nombre="drive" tam={15} /><span>Google Drive</span><small id="umDrive">{drive || ''}</small></button>
       </div>

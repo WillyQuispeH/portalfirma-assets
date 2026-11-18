@@ -1,65 +1,125 @@
 <!doctype html>
 <!--
-  ACTA DE ENTREGA E INVENTARIO de PortalFirma Asset. HTML normal: se edita el texto y el estilo aquí.
+  ACTA DE ENTREGA E INVENTARIO de PortalFirma Asset. HTML normal: se edita el texto y el estilo aquí (el estilo común está en _base.css).
+  El contenido sigue los modelos de la corredora «Acta de entrega de propiedad» e «Inventario habitacional». Las cláusulas con
+  class="cl n" se numeran solas. Los datos los arma src/negocios/acta-entrega-datos.ts (varsActaEntrega).
   Variables entre llaves dobles (se reemplazan solas al generar el PDF):
-    {{numero}} {{fechaEmision}} {{fechaEntrega}}
-    {{corredora.nombre}}
-    {{arrendador}} (propietarios con su RUT)   {{arrendatario.nombre}} {{arrendatario.rut}}
-    {{propiedad.codigo}} {{propiedad.tipo}} {{propiedad.direccion}}
-    {{llaves}}  {{observaciones}}
-    {{#hayMedidores}} … {{/hayMedidores}} y {{#medidores}} {{nombre}} {{numero}} {{lectura}} {{/medidores}}   (luz, agua, gas: los que tengan dato)
-    {{#inventario}} {{espacio}} {{estado}} {{nota}} {{/inventario}}   (una fila por espacio o ítem)
+
+    {{numero}} {{ciudad}} {{fechaEmision}} {{fechaEntrega}} {{gastosComunesDesde}}
+    {{corredora.nombre}} {{corredora.rut}} {{corredora.domicilio}} {{corredora.logo}}
+    {{entrega.nombre}} {{entrega.rut}}          quien entrega en representación de la corredora
+    {{arrendador}}                              propietarios con su RUT
+    {{arrendatario.nombre}} {{arrendatario.rut}}
+    {{propiedad.codigo}} {{propiedad.tipo}} {{propiedad.tipoMin}} {{propiedad.direccion}} {{propiedad.estacionamientos}} {{propiedad.bodega}}
+    {{#hayAccesos}}…{{/hayAccesos}} (hay lista o texto)  {{#hayListaAccesos}}…{{/hayListaAccesos}}
+    {{#accesos}} {{nombre}} {{cantidad}} {{/accesos}}  {{llaves}} (texto libre)
+    {{#hayMedidores}}…{{/hayMedidores}}  {{#medidores}} {{nombre}} {{numero}} {{lectura}} {{/medidores}}   (solo los que tienen dato)
+    {{#hayAspectos}}…{{/hayAspectos}}  {{#aspectos}} {{texto}} {{/aspectos}}   aspectos generales marcados
+    {{#inventario}} {{espacio}} {{estadoEspacio}} {{notaEspacio}}
+        {{#hayItems}}…{{/hayItems}}  {{#items}} {{nombre}} {{cantidad}} {{estado}} {{nota}} {{/items}} {{/inventario}}
+    {{#hayFotos}}…{{/hayFotos}}  {{#conFotos}} {{espacio}} {{#fotos}} {{src}} {{/fotos}} {{/conFotos}}   (imágenes ya incrustadas)
+    {{observaciones}}
   Un bloque  {{#algo}} … {{/algo}}  solo aparece si «algo» tiene valor.
   Este documento NO lleva cajas de firma: Portalfirma agrega su propia hoja de firma al enviarlo.
-  Este texto es un BORRADOR para que lo revise el notario.
+  Este texto debe revisarlo el notario: al cambiarlo, cambia lo que firman las partes.
 -->
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<title>Acta de entrega nº {{numero}}</title>
+<title>Acta de entrega e inventario nº {{numero}}</title>
 <style>
-  @page { size: A4; margin: 14mm 16mm 15mm; }
-  * { box-sizing: border-box; }
-  body { font-family: "Helvetica Neue", Arial, sans-serif; font-size: 10pt; line-height: 1.4; color: #1c2230; margin: 0; }
-  h1 { text-align: center; font-size: 15pt; margin: 0 0 3px; letter-spacing: .03em; }
-  .sub { text-align: center; color: #4a5266; font-size: 9.5pt; margin-bottom: 12px; }
-  h2 { font-size: 10pt; text-transform: uppercase; letter-spacing: .05em; margin: 12px 0 4px; color: #4a5266; }
-  p { margin: 0 0 6px; text-align: justify; }
-  table { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
-  th, td { border: 1px solid #cfd5e2; padding: 4px 7px; text-align: left; vertical-align: top; }
-  th { background: #f1f3f8; font-weight: 600; }
-  tr { page-break-inside: avoid; }
-  .cl { white-space: pre-wrap; }
+/*@base*/
+.recinto { margin: 0 0 12px; page-break-inside: avoid; }
+.recinto h3 { display: flex; justify-content: space-between; align-items: baseline; margin: 0 0 4px; padding-bottom: 3px; border-bottom: 1px solid var(--linea); font: 600 9pt "Helvetica Neue", Arial, sans-serif; letter-spacing: .08em; text-transform: uppercase; color: var(--acento); }
+.recinto h3 span { font-weight: 500; letter-spacing: .04em; text-transform: none; color: var(--suave); }
+.recinto p { margin: 0 0 5px; font-size: 9.6pt; }
+.tabla.inv th { width: auto; }
+.tabla.inv td.num { text-align: center; }
+.fotos { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 0 0 14px; }
+.fotos img { display: block; width: 100%; height: 62mm; object-fit: cover; border: 1px solid var(--linea); border-radius: 3px; }
+.foto-recinto { page-break-inside: avoid; }
+.foto-recinto h3 { margin: 0 0 5px; font: 600 8.6pt "Helvetica Neue", Arial, sans-serif; letter-spacing: .1em; text-transform: uppercase; color: var(--acento); }
+.anexo { page-break-before: always; }
 </style>
 </head>
 <body>
-<h1>ACTA DE ENTREGA E INVENTARIO</h1>
-<div class="sub">Nº {{numero}} · Entrega del {{fechaEntrega}} · Intermediado por {{corredora.nombre}}</div>
 
-<h2>Partes y propiedad</h2>
-<p>Arrendador: {{arrendador}}.<br>Arrendatario: {{arrendatario.nombre}}, RUT {{arrendatario.rut}}.<br>Propiedad: código {{propiedad.codigo}}, {{propiedad.tipo}}, {{propiedad.direccion}}.</p>
-<p>Las partes dejan constancia de que en la fecha indicada el Arrendador entrega al Arrendatario la propiedad individualizada, en el estado que se describe a continuación, y que el Arrendatario la recibe a su entera conformidad con lo aquí anotado.</p>
+<div class="enc">
+  <div class="marca">{{#corredora.logo}}<img class="logo" src="{{corredora.logo}}" alt="">{{/corredora.logo}}{{corredora.nombre}}<small>{{#corredora.rut}}RUT {{corredora.rut}}{{/corredora.rut}}{{#corredora.domicilio}} · {{corredora.domicilio}}{{/corredora.domicilio}}</small></div>
+  <div class="meta"><b>Acta Nº {{numero}}</b><br>{{ciudad}}, {{fechaEmision}}</div>
+</div>
+<div class="filete"></div>
+<h1>Acta de entrega e inventario</h1>
+<div class="subtitulo">{{propiedad.tipo}} · {{propiedad.direccion}}</div>
 
-<h2>Llaves</h2>
-<p>{{llaves}}</p>
+<div class="resumen">
+  <h3>Propiedad que se entrega</h3>
+  <div class="grid">
+    <div class="dato ancho"><span>Ubicación</span><b>{{propiedad.direccion}}</b></div>
+    <div class="dato"><span>Tipo</span><b>{{propiedad.tipo}}</b></div>
+    <div class="dato"><span>Código</span><b>{{propiedad.codigo}}</b></div>
+    {{#propiedad.estacionamientos}}<div class="dato"><span>Estacionamientos números</span><b>{{propiedad.estacionamientos}}</b></div>{{/propiedad.estacionamientos}}
+    {{#propiedad.bodega}}<div class="dato"><span>Bodega número</span><b>{{propiedad.bodega}}</b></div>{{/propiedad.bodega}}
+    <div class="dato"><span>Fecha de entrega</span><b>{{fechaEntrega}}</b></div>
+  </div>
+</div>
 
-{{#hayMedidores}}<h2>Medidores</h2>
-<table>
-  <tr><th>Servicio</th><th>N.º de medidor</th><th>Lectura</th></tr>
-  {{#medidores}}<tr><td>{{nombre}}</td><td>{{numero}}</td><td>{{lectura}}</td></tr>{{/medidores}}
-</table>{{/hayMedidores}}
+<p class="comparecencia">Con esta fecha, {{fechaEntrega}}, <b>{{entrega.nombre}}</b>{{#entrega.rut}}, RUT N.º {{entrega.rut}}{{/entrega.rut}}, en representación de <b>{{corredora.nombre}}</b>{{#corredora.rut}}, RUT {{corredora.rut}}{{/corredora.rut}}, entrega la propiedad en arriendo ubicada en {{propiedad.direccion}}, correspondiente a {{propiedad.tipoMin}}, de propiedad de {{arrendador}}, en adelante el <b>ARRENDADOR</b>.</p>
+<p>Recibe la propiedad <b>{{arrendatario.nombre}}</b>, RUT N.º {{arrendatario.rut}}, en adelante el <b>ARRENDATARIO</b>, en su entera y completa conformidad.</p>
+<p>Los que suscriben la presente acta dejan constancia de lo siguiente:</p>
 
-<h2>Inventario y estado</h2>
-<table>
-  <tr><th style="width:30%">Espacio o ítem</th><th style="width:16%">Estado</th><th>Observaciones</th></tr>
-  {{#inventario}}<tr><td>{{espacio}}</td><td>{{estado}}</td><td>{{nota}}</td></tr>{{/inventario}}
-</table>
+{{#hayAccesos}}<section class="cl n"><h2>Llaves de acceso</h2>
+  {{#hayListaAccesos}}<table class="tabla">
+    <tr><th style="width:62%">Llave, control o acceso</th><th>Cantidad entregada</th></tr>
+    {{#accesos}}<tr><td>{{nombre}}</td><td>{{cantidad}}</td></tr>{{/accesos}}
+  </table>{{/hayListaAccesos}}
+  {{#llaves}}<p class="pre">{{llaves}}</p>{{/llaves}}
+</section>{{/hayAccesos}}
 
-{{#observaciones}}<h2>Observaciones generales</h2>
-<p class="cl">{{observaciones}}</p>{{/observaciones}}
+<section class="cl n"><h2>Consumos</h2>
+  {{#hayMedidores}}<table class="tabla">
+    <tr><th style="width:40%">Medidor</th><th style="width:30%">N.º de medidor</th><th>Lectura</th></tr>
+    {{#medidores}}<tr><td>{{nombre}}</td><td>{{numero}}</td><td>{{lectura}}</td></tr>{{/medidores}}
+  </table>{{/hayMedidores}}
+  <p>Los gastos comunes serán exclusivamente de cargo del ARRENDATARIO desde el {{gastosComunesDesde}} en adelante.</p>
+  <p>Los gastos de consumo serán exclusivamente de cargo del ARRENDATARIO a partir de la lectura de los medidores antes indicada.</p>
+</section>
 
-<h2>Restitución</h2>
-<p>Al término del arrendamiento, el Arrendatario restituirá la propiedad en el mismo estado en que la recibe según esta acta, salvo el desgaste natural por el uso legítimo. La garantía se devolverá comparando el estado de restitución con este inventario.</p>
-<p>Esta acta se firma electrónicamente con Portalfirma.</p>
+{{#hayAspectos}}<section class="cl n"><h2>Aspectos generales</h2>
+  <ul class="lista">{{#aspectos}}<li>{{texto}}</li>{{/aspectos}}</ul>
+</section>{{/hayAspectos}}
+
+<section class="cl n"><h2>Inventario habitacional</h2>
+  <p>Se deja constancia del estado de cada recinto del inmueble y de sus elementos al momento de la entrega:</p>
+</section>
+{{#inventario}}<div class="recinto">
+  <h3>{{espacio}}<span>Estado general: {{estadoEspacio}}</span></h3>
+  {{#notaEspacio}}<p>{{notaEspacio}}</p>{{/notaEspacio}}
+  {{#hayItems}}<table class="tabla inv">
+    <tr><th style="width:30%">Elemento</th><th style="width:12%">Cantidad</th><th style="width:14%">Estado</th><th>Observaciones</th></tr>
+    {{#items}}<tr><td>{{nombre}}</td><td class="num">{{cantidad}}</td><td>{{estado}}</td><td>{{nota}}</td></tr>{{/items}}
+  </table>{{/hayItems}}
+</div>{{/inventario}}
+
+{{#observaciones}}<section class="cl n"><h2>Observaciones</h2>
+  <p class="pre">{{observaciones}}</p>
+</section>{{/observaciones}}
+
+<section class="cl n"><h2>Declaraciones</h2>
+  <p>El ARRENDATARIO recibe en su entera conformidad el inmueble que corresponde a {{propiedad.tipoMin}} ubicado en {{propiedad.direccion}}.</p>
+  <p>El ARRENDATARIO manifiesta recibir en buen estado y libre de cualquier daño el inmueble descrito en el inciso anterior, en buenas condiciones y completamente desocupado, salvo lo anotado en el inventario y las observaciones de esta acta.</p>
+  <p>El ARRENDATARIO manifiesta recibir el inmueble con todas sus cuentas pagadas al día, sin deuda alguna, incluyendo cuentas de luz, agua y gas.</p>
+</section>
+
+<div class="pie-legal">Documento emitido por {{corredora.nombre}}{{#corredora.rut}}, RUT {{corredora.rut}}{{/corredora.rut}}. Se firma electrónicamente con Portalfirma y queda disponible para su verificación.</div>
+
+{{#hayFotos}}<div class="anexo">
+  <div class="adicionales">Registro fotográfico</div>
+  <p>Fotografías tomadas al momento de la entrega, que forman parte integrante de esta acta.</p>
+  {{#conFotos}}<div class="foto-recinto"><h3>{{espacio}}</h3>
+    <div class="fotos">{{#fotos}}<img src="{{src}}" alt="">{{/fotos}}</div>
+  </div>{{/conFotos}}
+</div>{{/hayFotos}}
+
 </body>
 </html>

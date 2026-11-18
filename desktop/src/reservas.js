@@ -160,7 +160,7 @@ function crear({ store, inmo, agenda, est, mock = false, fetchFn = (...a) => fet
   }
   // clave propia de WhatsApp (integración «Postventa»): se prueba leyendo una conversación antes de guardarla
   const estadoWa = () => (srv.enApi()
-    ? { propia: !!store.getSecret('wechatiaWaToken'), conectado: srv.conectado(), locationId: srv.locationIdServidor(), enServidor: true }
+    ? { propia: !!store.getSecret('wechatiaWaToken'), conectado: srv.conectado(), locationId: srv.locationIdServidor(), numero: srv.numeroServidor(), enServidor: true }
     : { propia: !!store.getSecret('wechatiaWaToken'), conectado: !!(store.getSecret('wechatiaWaToken') || token()), locationId: locationId() });
   async function configurarWa({ token: tk, locationId: loc } = {}) {
     tk = String(tk || '').trim(); const c = { ...cfg() };

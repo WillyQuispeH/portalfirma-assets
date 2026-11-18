@@ -9,6 +9,7 @@
 // #cfgTabs [data-t], #cfgTema [data-tema], #cfgLuz [data-luz], #cfgMiWa, #cfgMiTel, #cfgVincular, #cfgCodigo, #cfgSofia, #cfgTomas.
 import { useEffect, useState, type ReactNode } from 'react';
 import Layout from '../../ui/Layout';
+import Corredora from './Corredora';
 import Tabs from '../../ui/Tabs';
 import Card from '../../ui/Card';
 import Switch from '../../ui/Switch';
@@ -25,9 +26,9 @@ import { IntegracionesContenido } from '../integraciones/Integraciones';
 import Usuarios from '../usuarios/Usuarios';
 import Metas from './Metas';
 
-export type TPestanaConfig = 'general' | 'whatsapp' | 'usuarios' | 'metas' | 'integraciones';
+export type TPestanaConfig = 'general' | 'corredora' | 'whatsapp' | 'usuarios' | 'metas' | 'integraciones';
 const pestanas = (admin: boolean): [TPestanaConfig, string, undefined, string][] => [
-  ['general', 'General', undefined, 'sun'], ['whatsapp', 'WhatsApp', undefined, 'whatsapp'], ['usuarios', admin ? 'Usuarios' : 'Equipo', undefined, 'users'],
+  ['general', 'General', undefined, 'sun'], ['corredora', 'Corredora', undefined, 'building'], ['whatsapp', 'WhatsApp', undefined, 'whatsapp'], ['usuarios', admin ? 'Usuarios' : 'Equipo', undefined, 'users'],
   ...(admin ? [['metas', 'Metas', undefined, 'chart'] as [TPestanaConfig, string, undefined, string]] : []), ['integraciones', 'Integraciones', undefined, 'link'],
 ];
 
@@ -101,7 +102,7 @@ function MiWhatsApp() {
     const t = setInterval(async () => { if (await waRevisarVinculo()) { clearInterval(t); toast('Celular vinculado.'); } }, 2000);
     return () => clearInterval(t);
   }, [codigo, waRevisarVinculo]);
-  const numero = e?.numeroEmpresa || '+56 9 4497 5958';
+  const numero = e?.numeroEmpresa || 'el WhatsApp de la empresa';
   const vincular = async () => {
     setOcupado(true);
     const err = await waVincular(yo?.nombre || cuentaPf?.namePerson || '', yo?.email || cuentaPf?.email || '');
@@ -200,7 +201,7 @@ export default function Configuracion({ pestana: inicial = 'general' }: { pestan
       subtitulo="Tus preferencias, tu WhatsApp, el equipo y las integraciones de la corredora."
       barra={<Tabs id="cfgTabs" dato="t" etiqueta="Secciones" opciones={pestanas(usuario?.rol === 'ADMIN')} valor={pestana} alCambiar={setPestana} />}
     >
-      {pestana === 'general' ? <General /> : pestana === 'whatsapp' ? <WhatsApp /> : pestana === 'usuarios' ? <Usuarios /> : pestana === 'metas' ? <Metas /> : <IntegracionesContenido />}
+      {pestana === 'general' ? <General /> : pestana === 'corredora' ? <Corredora /> : pestana === 'whatsapp' ? <WhatsApp /> : pestana === 'usuarios' ? <Usuarios /> : pestana === 'metas' ? <Metas /> : <IntegracionesContenido />}
     </Layout>
   );
 }

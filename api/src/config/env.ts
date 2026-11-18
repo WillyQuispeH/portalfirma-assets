@@ -56,6 +56,8 @@ const esquema = z.object({
    * sale desde ese número. Vacío = todos los números y el que elija wechatia (como antes).
    */
   WA_NUMERO: z.string().trim().optional(),
+  /** la subcuenta de wechatia (locationId) a la que pertenece WA_NUMERO: a ninguna otra corredora se le aplica ese número */
+  WA_LOCATION_ID: z.string().trim().optional(),
   /**
    * se agrega a la etiqueta que dispara cada flujo de plantilla en wechatia (p. ej. «-dev»): los flujos de desarrollo
    * («… (desarrollo)») envían la plantilla desde el número de desarrollo. Vacío en producción.
@@ -90,6 +92,8 @@ const esquema = z.object({
     .transform((u) => u.replace(/\/+$/, ''))
     .optional(),
   CONVECTA_SUBSCRIPTION_KEY: z.string().trim().optional(),
+  /** la única corredora que puede usar CONVECTA_SUBSCRIPTION_KEY; las demás conectan su propia clave en Integraciones */
+  CONVECTA_CORREDORA_ID: z.string().trim().optional(),
   /** solo fuera de producción: otras direcciones para la API y la autorización de Mercado Libre (las pruebas) */
   ML_API_URL: z.url().optional(),
   ML_AUTH_URL: z.url().optional(),

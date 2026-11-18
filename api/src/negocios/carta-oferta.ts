@@ -20,6 +20,7 @@ import { EnvioFirmaService } from '../documentos/envio-firma';
 import { cargarPlantilla, llenar } from '../documentos/plantilla';
 import { hoy } from '../whatsapp/comun';
 import { describir, dominioDe, perfilDe, unir } from '../documentos/comparecientes';
+import { datosCorredora } from '../documentos/corredora-doc';
 
 const SERIE = 'carta_oferta';
 /** la firma del negocio a la que se liga la carta: en la venta es la etapa «Oferta y reserva» (al firmarse, el negocio avanza solo); en el arriendo es «oferta», que no es una etapa del embudo: firmarla no mueve el negocio (la reserva se paga después) */
@@ -95,7 +96,7 @@ export class CartaOfertaService {
       this.db.persona.findFirst({ where: { id: n.clienteId, corredoraId: u.corredoraId, eliminadoEn: null } }),
       this.db.propiedad.findFirst({ where: { id: n.propiedadId, corredoraId: u.corredoraId, eliminadoEn: null } }),
       this.db.usuario.findUnique({ where: { id: u.sub } }),
-      this.db.corredora.findUnique({ where: { id: u.corredoraId }, select: { nombre: true, rut: true } }),
+      datosCorredora(this.db, u.corredoraId),
     ]);
     if (!persona) return { error: `El ${quien} del negocio ya no existe.` };
     if (!prop) return { error: 'La propiedad del negocio ya no existe.' };
@@ -170,7 +171,7 @@ export class CartaOfertaService {
         rol: venta
           ? { oferente: 'Comprador', contraparte: 'Vendedor' }
           : { oferente: 'Arrendatario', contraparte: 'Arrendador' },
-        corredora: { nombre: corredora?.nombre ?? 'la corredora', rut: corredora?.rut ?? '' },
+        corredora,
         corredor: { nombre: usuario.nombre, email: usuario.email, telefono: usuario.telefono ?? '' },
         oferente: {
           nombre: persona.nombre,

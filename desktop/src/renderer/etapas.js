@@ -172,6 +172,52 @@ async function mandatoArriendo(propId, despues) {
     }, { clave: 'modal-129', ancho: true });
   }, 'Para armar el mandato, inicia sesión con tu cuenta de Portalfirma.');
 }
+// ---------- mandato de venta: igual que el de arriendo (api/src/negocios/mandato-venta.ts); precio de venta y comisión desde la ficha ----------
+async function mandatoVenta(propId, despues) {
+  window.members(async () => {
+    const pdfPromesa = api('mandatoVentaVistaPrevia', { propiedadId: propId }).then((r) => ({ pdf: r.pdf || '' })); pdfPromesa.catch(() => {});
+    try { await cargar(); } catch {}
+    const p = propDe(propId) || {}; const f = p.ficha || {};
+    const personas = IM.data.personas || [];
+    const propietarios = (p.vinculos || []).filter((v) => v.rol === 'propietario').map((v) => personas.find((q) => q.id === v.personaId)).filter(Boolean);
+    const t = (x) => (x == null ? '' : String(x));
+    const datos = {
+      propietarios: propietarios.map((q) => ({ id: q.id, base: q, nombre: t(q.nombre), rut: t(q.rut), email: t(q.email), telefono: t(q.telefono), nacionalidad: t(q.nacionalidad) || 'chilena', estadoCivil: t(q.estadoCivil), profesion: t(q.profesion), direccion: t(q.direccion) })),
+      rol: t(p.rol), supTotal: t(p.supTotal), supUtil: t(p.supUtil), precio: t(p.precioVenta?.valor), moneda: p.precioVenta?.moneda || 'UF',
+      comision: t(f.comisionVentaPct), publicar: f.publicarPortales !== false, exclusividad: !!f.exclusividad, otras: t(f.condicionesMandatoVenta),
+    };
+    window.Ventanas.abrir('negocios.mandatoVenta', {
+      pdfPromesa, archivo: ('Mandato de venta ' + (p.codigo || '') + '.pdf').replace(/\s+\.pdf$/, '.pdf'),
+      propiedad: { codigo: p.codigo || '', titulo: p.titulo || '', direccion: [p.direccion, p.unidad ? 'depto. ' + p.unidad : '', p.comuna].filter(Boolean).join(', ') },
+      datos,
+      // guarda la propiedad (las personas ya las guardó la ventana) y pide el PDF de nuevo: el servidor lee lo ya guardado
+      alGuardar: async (v) => {
+        const n = (x) => (String(x).trim() === '' ? null : Number(String(x).replace(/\./g, '').replace(',', '.')));
+        const pc = String(v.comision).trim() === '' ? null : String(v.comision).trim().replace('.', ',');   // texto («2,5»): la ficha no pierde los decimales
+        await api('inmoPropGuardar', { id: propId, rol: v.rol.trim(), supTotal: n(v.supTotal), supUtil: n(v.supUtil), precioVenta: n(v.precio) ? { valor: n(v.precio), moneda: v.moneda } : null,
+          ficha: { publicarPortales: v.publicar, exclusividad: v.exclusividad, comisionVentaPct: pc, condicionesMandatoVenta: v.otras.trim() } });
+        try { await cargar(); } catch {}
+        return { pdf: (await api('mandatoVentaVistaPrevia', { propiedadId: propId })).pdf || '' };
+      },
+      alEnviar: async () => { const r = await api('mandatoVentaEnviar', { propiedadId: propId }); closeModal(); toast('Mandato de venta nº ' + r.numero + ' enviado a firmar: operación ' + r.operacion + '.', 5000); despues?.(r); },
+    }, { clave: 'modal-131', ancho: true });
+  }, 'Para armar el mandato, inicia sesión con tu cuenta de Portalfirma.');
+}
+// qué mandato abre el paso «Mandato firmado» (captación): solo arriendo → arriendo; solo venta → venta. Si se ofrece en venta Y arriendo:
+// manda el tipo de los negocios abiertos de la propiedad (si son de un solo tipo); si no, el que todavía no se ha enviado; si faltan
+// ambos (o ya están los dos), el de venta (su comisión cubre también un arriendo que derive del negocio).
+async function mandatoDe(q) {
+  if (!q) return null;
+  if (q.arriendo && !q.venta) return 'arriendo';
+  if (q.venta && !q.arriendo) return 'venta';
+  if (!q.venta || !q.arriendo) return null;
+  const negs = ((await api('negListar').catch(() => null))?.negocios || []).filter((n) => n.propId === q.id && n.estado === 'abierto');
+  const tipos = [...new Set(negs.map((n) => n.tipo))];
+  if (tipos.length === 1 && (tipos[0] === 'venta' || tipos[0] === 'arriendo')) return tipos[0];
+  const hay = (re) => (q.firmas || []).some((f) => re.test(f.plantilla || f.titulo || ''));
+  const v = hay(/mandato de venta n/i); const a = hay(/mandato de arriendo n/i);
+  return v && !a ? 'arriendo' : 'venta';
+}
 // ---------- contrato de arriendo ----------
 // Dos modos: 'borrador' (paso «Revisión del contrato»): se editan las condiciones, el servidor arma el PDF y se guarda como una VERSIÓN
 // (su PDF queda en los archivos del negocio) para mandarla a revisión; 'firma' (paso «Contrato firmado»): se envía a firmar el PDF de la
@@ -226,27 +272,22 @@ async function contratoArriendo(negocioId, despues, modo = 'borrador') {
   }, 'Para armar el contrato, inicia sesión con tu cuenta de Portalfirma.');
 }
 // ---------- acta de entrega e inventario: se llena en Asset y el servidor arma el PDF; al firmarse la propiedad queda «Arrendada» ----------
-const INVENTARIO_BASE = ['Living-comedor', 'Cocina', 'Dormitorio principal', 'Baño', 'Pisos y muros', 'Ventanas y puertas'];
+// los datos (y el inventario inicial con los espacios del modelo de la corredora) los arma la ventana: ActaEntrega.tsx › normalizarEntrega
 async function actaEntrega(negocioId, despues) {
   const n0 = await api('negObtener', negocioId).catch(() => null);
   if (!n0) return toast('No encontré el negocio.');
   if (!n0.cliente) return toast('Primero vincula al arrendatario del negocio (paso «Interesado registrado»).', 5000);
   window.members(async () => {
     const e = n0.ciclo?.entrega || {}; const p = (IM.data.propiedades || []).find((x) => x.id === n0.prop?.id) || n0.prop || {};
-    const datos = {
-      fecha: e.fecha || '', llaves: e.llaves || '', observaciones: e.observaciones || '',
-      medidores: { luz: { numero: e.medidores?.luz?.numero || '', lectura: e.medidores?.luz?.lectura || '' }, agua: { numero: e.medidores?.agua?.numero || '', lectura: e.medidores?.agua?.lectura || '' }, gas: { numero: e.medidores?.gas?.numero || '', lectura: e.medidores?.gas?.lectura || '' } },
-      inventario: (e.inventario?.length ? e.inventario : INVENTARIO_BASE.map((espacio) => ({ espacio, estado: 'bueno', nota: '' }))).map((i) => ({ espacio: i.espacio || '', estado: i.estado || 'bueno', nota: i.nota || '' })),
-    };
     // sin datos guardados no hay PDF todavía: la ventana se abre para llenarlos; con datos, el PDF se arma ahí mismo
     const pdfPromesa = e.fecha && e.inventario?.length ? api('entregaVistaPrevia', { negocioId }).then((r) => ({ pdf: r.pdf || '' })) : undefined; pdfPromesa?.catch(() => {});   // la ventana se abre ya: el documento se arma ahí mismo (o se trae, si ya existe) y la vista previa lo muestra al llegar
     const firmantes = [...dueñosDe(n0.prop?.id).map((q) => ({ rol: 'Arrendador', nombre: q.nombre })), { rol: 'Arrendatario', nombre: n0.cliente.nombre }];
     window.Ventanas.abrir('negocios.actaEntrega', {
-      pdfPromesa, datos, firmantes,
+      negocioId, pdfPromesa, entrega: e, firmantes,
       propiedad: { codigo: p.codigo || '', titulo: p.titulo || '', direccion: [p.direccion, p.unidad ? 'depto. ' + p.unidad : '', p.comuna].filter(Boolean).join(', ') },
       alGuardar: async (d) => {
         const base = JSON.parse(JSON.stringify((await api('negObtener', negocioId)).ciclo || {}));
-        base.entrega = { fecha: d.fecha, llaves: d.llaves.trim(), observaciones: d.observaciones.trim(), medidores: d.medidores, inventario: d.inventario.map((i) => ({ espacio: i.espacio.trim(), estado: i.estado, nota: i.nota.trim() })) };
+        base.entrega = d;   // ya viene limpio de la ventana (formato nuevo: accesos, medidores, espacios con ítems y fotos)
         await api('negGuardar', { id: negocioId, ciclo: base });
         const r = await api('entregaVistaPrevia', { negocioId });   // el servidor lee lo ya guardado
         try { await cargar(); } catch {}
@@ -278,7 +319,11 @@ async function accion(x, alTerminar) {
   const BLQ = { datos: 'esencial', portal: 'portal', legal: 'legal', equip: 'equip' };
   if (BLQ[id] && x.propId) return window.FichaBloques.abrir(x.propId, { bloque: BLQ[id], despues: alTerminar });
   if (id === 'comovisitar' && x.propId) return window.FichaBloques.abrir(x.propId, { bloque: 'visita', despues: alTerminar });
-  if (id === 'mandato' && x.propId && (() => { const q = (IM.data.propiedades || []).find((y) => y.id === x.propId); return q && q.arriendo && !q.venta; })()) return mandatoArriendo(x.propId, alTerminar);   // propiedad solo de arriendo: mandato de Asset (la venta sigue con sus formatos)
+  if (id === 'mandato' && x.propId) {   // mandato de Asset: de arriendo o de venta según la propiedad (ver mandatoDe)
+    const cual = await mandatoDe((IM.data.propiedades || []).find((y) => y.id === x.propId));
+    if (cual === 'arriendo') return mandatoArriendo(x.propId, alTerminar);
+    if (cual === 'venta') return mandatoVenta(x.propId, alTerminar);
+  }
   if (id === 'mandato' && x.propId) { const e = await api('fmtEstado').catch(() => null); const otro = () => documento(x, [/contrato de corretaje/i, /mandato/i, /^(?!.*visita).*corretaje/i], 'Mandato de corretaje', 'Contrato de corretaje');
     return e ? window.Formatos.abrir(x.propId, { hito: 'mandato', despues: alTerminar }, otro) : otro(); }
   if (id === 'mandato') return documento(x, [/contrato de corretaje/i, /mandato/i, /^(?!.*visita).*corretaje/i], 'Mandato de corretaje', 'Contrato de corretaje');

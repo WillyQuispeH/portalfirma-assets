@@ -2,6 +2,7 @@
 //  · GET /usuarios/equipo — todos: nombre, rol y contacto del equipo (para mostrar captadores y asignar leads).
 //  · GET, POST, PATCH /usuarios y PUT /usuarios/:id/clave — solo el administrador, dentro de su corredora.
 //  · PUT /usuarios/yo/clave — cada uno cambia su propia clave.
+// Una clave puesta por el administrador (al crear o al cambiarla) queda «por cambiar»: la app pide una propia al entrar.
 // Desactivar a alguien o cambiarle la clave cierra sus sesiones abiertas.
 import {
   BadRequestException,
@@ -101,6 +102,7 @@ export class UsuariosController {
           hashClave: await hashClave(b.clave),
           rol: b.rol ?? 'CORREDOR',
           telefono: b.telefono || null,
+          debeCambiarClave: true,
         },
       });
       return detalle(u);
@@ -144,7 +146,10 @@ export class UsuariosController {
     @Body(new ZodPipe(claveEsquema)) b: z.infer<typeof claveEsquema>,
   ) {
     await this.deMiCorredora(yo, id);
-    await this.db.usuario.update({ where: { id }, data: { hashClave: await hashClave(b.clave) } });
+    await this.db.usuario.update({
+      where: { id },
+      data: { hashClave: await hashClave(b.clave), debeCambiarClave: true },
+    });
     await this.cerrarSesiones(id);
   }
 
@@ -158,7 +163,11 @@ export class UsuariosController {
     const u = await this.db.usuario.findUniqueOrThrow({ where: { id: yo.sub } });
     if (!(await verificarClave(u.hashClave, b.actual)))
       throw new BadRequestException('La clave actual no es correcta.');
-    await this.db.usuario.update({ where: { id: yo.sub }, data: { hashClave: await hashClave(b.nueva) } });
+    if (b.nueva === b.actual) throw new BadRequestException('La clave nueva tiene que ser distinta de la actual.');
+    await this.db.usuario.update({
+      where: { id: yo.sub },
+      data: { hashClave: await hashClave(b.nueva), debeCambiarClave: false },
+    });
     // cierra las demás sesiones (la de este equipo sigue)
     await this.db.sesion.updateMany({
       where: { usuarioId: yo.sub, revocadaEn: null, id: { not: yo.sid } },

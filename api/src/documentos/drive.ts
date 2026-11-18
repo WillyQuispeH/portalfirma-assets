@@ -5,13 +5,14 @@
 //   Portalfirma Asset / Otros documentos / <tipo de documento> / <archivo>.pdf                      (sin propiedad)
 // Una carpeta por propiedad, dentro una por negocio, y dentro de cada una los documentos (el nombre del archivo dice cuál es).
 export const RAIZ_DRIVE = 'Portalfirma Asset';
-export type TTipoDriveDoc = 'Órdenes de visita' | 'Cartas oferta' | 'Mandatos de arriendo' | 'Contratos de arriendo' | 'Actas de entrega' | 'Actas de visita';
+export type TTipoDriveDoc = 'Órdenes de visita' | 'Cartas oferta' | 'Mandatos de arriendo' | 'Mandatos de venta' | 'Contratos de arriendo' | 'Actas de entrega' | 'Actas de visita';
 
 /** a qué documento corresponde el nombre con que se envió a firmar («Carta oferta nº 3»…); null si no se reconoce */
 export function tipoDeDocumento(nombre: string): TTipoDriveDoc | null {
   const n = nombre.toLowerCase();
   if (/orden de visita/.test(n)) return 'Órdenes de visita';
   if (/carta oferta/.test(n)) return 'Cartas oferta';
+  if (/mandato de venta/.test(n)) return 'Mandatos de venta';
   if (/mandato/.test(n)) return 'Mandatos de arriendo';
   if (/contrato de arriendo/.test(n)) return 'Contratos de arriendo';
   if (/acta de entrega/.test(n)) return 'Actas de entrega';

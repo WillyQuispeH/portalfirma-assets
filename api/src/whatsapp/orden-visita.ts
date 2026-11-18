@@ -28,6 +28,7 @@ import { esUuid } from '../comun/asignados';
 import { dvRut } from '../ia/transcripcion';
 import { normalizar } from '../comun/texto';
 import { hoy, norm } from './comun';
+import { datosCorredora, type DatosCorredora } from '../documentos/corredora-doc';
 
 export interface CtxOrden {
   corredoraId: string;
@@ -160,7 +161,7 @@ interface Armada {
   props: PropConFotos[];
   vis: Visitante;
   usuario: Usuario;
-  corredora: { nombre: string; rut: string | null };
+  corredora: DatosCorredora;
   op: 'venta' | 'arriendo';
   vigenciaDias: string;
   garantiaSeriedad: string;
@@ -320,10 +321,7 @@ export class OrdenVisitaService {
     }
     const usuario = await this.db.usuario.findUnique({ where: { id: c.usuarioId } });
     if (!usuario) return { error: 'No encontré tu usuario.' };
-    const corredora = await this.db.corredora.findUnique({
-      where: { id: c.corredoraId },
-      select: { nombre: true, rut: true },
-    });
+    const corredora = await datosCorredora(this.db, c.corredoraId);
 
     const vis = await this.visitante(c, a);
     if ('error' in vis) return { error: vis.error };
@@ -346,7 +344,7 @@ export class OrdenVisitaService {
       props,
       vis,
       usuario,
-      corredora: corredora ?? { nombre: 'la corredora', rut: null },
+      corredora,
       op,
       fecha,
       hora,
@@ -374,7 +372,7 @@ export class OrdenVisitaService {
     return llenar(cargarPlantilla('orden-visita'), {
       numero: numero.toLocaleString('es-CL'),
       fechaEmision: fechaLarga(hoy()),
-      corredora: { nombre: x.corredora.nombre, rut: x.corredora.rut ?? '' },
+      corredora: x.corredora,
       corredor: { nombre: x.usuario.nombre, email: x.usuario.email, telefono: x.usuario.telefono ?? '' },
       visitante: { nombre: x.vis.nombre, rut: x.vis.rut, email: x.vis.email, telefono: x.vis.telefono, nacionalidad: x.vis.nacionalidad ?? '' },
       visita: { fecha: fechaLarga(x.fecha), hora: x.hora ? `${x.hora} hrs.` : 'hora a coordinar' },

@@ -16,7 +16,7 @@ import Icono from '../../ui/Icono';
 import { useIntegraciones } from '../../../store/hooks/useIntegraciones.hook';
 import { useCuenta } from '../../../store/hooks/useCuenta.hook';
 import { useAcceso } from '../../../store/hooks/useAcceso.hook';
-import { integracionesService as svc, type IGoogleEstado } from '../../../store/services/integraciones.service';
+import { integracionesService as svc, type IConvectaEstado, type IGoogleEstado } from '../../../store/services/integraciones.service';
 import { refrescarCuenta } from '../cuenta/controlador';
 import { abrirConfiguracion } from './controlador';
 import { abrirPublicaciones, abrirUrl, pedirInicioSesion, toast } from '../../../utils/app';
@@ -84,7 +84,17 @@ export function IntegracionesContenido() {
     setOcupadoG(null);
     if (r.ok) { setGoogle(r.data ?? null); toast(listo); } else toast(r.error || 'No se pudo completar.', 6000);
   };
-  useEffect(() => { integCargar(); refrescarCuenta(); cargarPortales(); cargarGoogle(); }, [integCargar]);
+  // Convecta: la cuenta de la corredora de donde se importa la cartera (la clave queda en el servidor)
+  const [convecta, setConvecta] = useState<IConvectaEstado | null>(null); const [ocupadoCv, setOcupadoCv] = useState(false);
+  const [cvAbierto, setCvAbierto] = useState(false); const [cvClave, setCvClave] = useState('');
+  const cargarConvecta = () => { svc.convecta().then((r) => setConvecta(r.ok ? r.data ?? null : null)).catch(() => setConvecta(null)); };
+  const accionConvecta = async (fn: () => ReturnType<typeof svc.convectaDesconectar>, listo: string) => {
+    setOcupadoCv(true);
+    const r = await fn().catch((e: Error) => ({ ok: false, error: e.message, data: undefined }));
+    setOcupadoCv(false);
+    if (r.ok) { setConvecta(r.data ?? null); setCvAbierto(false); setCvClave(''); toast(listo); } else toast(r.error || 'No se pudo completar.', 6000);
+  };
+  useEffect(() => { integCargar(); refrescarCuenta(); cargarPortales(); cargarGoogle(); cargarConvecta(); }, [integCargar]);
 
   const accion = async (id: string, fn: () => Promise<{ ok: boolean; error?: string }>, listo?: string) => {
     const error = await integAccion(id, fn);
@@ -118,14 +128,38 @@ export function IntegracionesContenido() {
       <Card titulo="Mensajes y redes sociales"
         subtitulo="Llegan a través de wechatia: el servidor de Asset los lee y responden Sofía (leads), Tomás (clientes) y la postventa.">
         <Lista>
-          <Wechatia conectado={!!wechatia?.conectado} locationId={wechatia?.locationId} panel={canales?.panel ?? null} admin={admin}
+          <Wechatia conectado={!!wechatia?.conectado} locationId={wechatia?.locationId} numero={wechatia?.numero ?? null} panel={canales?.panel ?? null} admin={admin}
             ocupado={ocupado === 'wechatia'}
-            conectar={(token, loc) => accion('wechatia', () => svc.conectarWechatia(token, loc), 'wechatia conectado.')} />
+            conectar={(token, loc) => accion('wechatia', () => svc.conectarWechatia(token, loc), 'wechatia conectado.')}
+            guardarNumero={(n) => accion('wechatia', () => svc.guardarNumeroWa(n), n ? 'Número de WhatsApp guardado.' : 'Número de WhatsApp borrado.')} />
           {(canales?.canales ?? []).map((c) => (
             <Canal key={c.id} c={c} cuentaLista={!!wechatia?.conectado} local={!!canales?.local} />
           ))}
         </Lista>
         {canales?.error && <p className="tw:mt-3 tw:mb-0 tw:text-xs tw:text-muted">No se pudo leer la actividad de los canales: {canales.error}</p>}
+      </Card>
+
+      <Card titulo="Cartera">
+        <Lista>
+          <Fila id="convecta" logo={<Logo letra="C" color="#0f766e" />} nombre="Convecta"
+            detalle={!convecta?.disponible ? 'Todavía no está activado en el servidor de Asset.'
+              : convecta.conectado ? 'De aquí se importa la cartera (Cartera › Importar desde Convecta). Cada corredora usa su propia cuenta.'
+                : 'Pega la clave de suscripción de la cuenta de Convecta de tu corredora para importar su cartera.'}
+            estado={!convecta?.disponible ? 'no-disponible' : convecta.conectado ? 'conectado' : 'sin-conectar'}>
+            {convecta?.disponible && convecta.admin && (convecta.propia
+              ? <Boton tamano="sm" variante="fantasma" cargando={ocupadoCv} onClick={() => accionConvecta(svc.convectaDesconectar, 'Convecta desconectado.')}>Desconectar</Boton>
+              : <Boton tamano="sm" icono="link" onClick={() => setCvAbierto((x) => !x)}>Conectar</Boton>)}
+          </Fila>
+          {cvAbierto && convecta?.admin && (
+            <form className="tw:flex tw:flex-wrap tw:items-end tw:justify-end tw:gap-3 tw:pl-[52px]"
+              onSubmit={(e) => { e.preventDefault(); accionConvecta(() => svc.convectaConectar(cvClave.trim()), 'Convecta conectado.'); }}>
+              <Input id="cvClave" clasesCampo="tw:flex-1 tw:min-w-[220px]" etiqueta="Clave de suscripción de Convecta" type="password" autoComplete="off"
+                value={cvClave} onChange={(e) => setCvClave(e.target.value)} ayuda="La entrega Convecta («Ocp-Apim-Subscription-Key»). Se prueba antes de guardarla." />
+              <Boton variante="secundario" type="button" onClick={() => setCvAbierto(false)}>Cancelar</Boton>
+              <Boton type="submit" cargando={ocupadoCv} disabled={cvClave.trim().length < 10}>Guardar</Boton>
+            </form>
+          )}
+        </Lista>
       </Card>
 
       <Card titulo="Portales inmobiliarios">
@@ -205,13 +239,17 @@ export default function Integraciones() {
 
 // ---------------------------------------------------------------- wechatia y sus canales
 
-function Wechatia({ conectado, locationId, panel, admin, ocupado, conectar }: {
-  conectado: boolean; locationId?: string; panel: string | null; admin: boolean; ocupado: boolean;
+function Wechatia({ conectado, locationId, numero, panel, admin, ocupado, conectar, guardarNumero }: {
+  conectado: boolean; locationId?: string; numero: string | null; panel: string | null; admin: boolean; ocupado: boolean;
   conectar: (token: string, locationId: string) => void;
+  guardarNumero: (numero: string) => void;
 }) {
   const [abierto, setAbierto] = useState(false);
   const [token, setToken] = useState('');
   const [loc, setLoc] = useState(locationId || '');
+  const [editNum, setEditNum] = useState(false);
+  const [num, setNum] = useState(numero || '');
+  const numValido = !num.trim() || /^(\+?56)?9\d{8}$/.test(num.replace(/[\s.-]/g, ''));
   return <>
     <Fila id="wechatia" logo={<Logo letra="w" color="#16a34a" />} nombre="wechatia"
       detalle={conectado ? `La cuenta de mensajes de la corredora${locationId ? ' · ' + locationId : ''}` : 'La cuenta de mensajes de la corredora: sin ella no hay WhatsApp, Instagram ni Facebook.'}
@@ -229,6 +267,24 @@ function Wechatia({ conectado, locationId, panel, admin, ocupado, conectar }: {
         <Input clasesCampo="tw:w-[220px]" etiqueta="Id de la cuenta (location)" value={loc} onChange={(e) => setLoc(e.target.value)}
           ayuda="Está en la dirección del panel: …/location/XXXX/…" />
         <Boton type="submit" cargando={ocupado} disabled={token.trim().length < 20 || loc.trim().length < 4}>Guardar</Boton>
+      </form>
+    )}
+    {conectado && (
+      <Fila id="wechatia-numero" logo={<Logo icono="whatsapp" color="#25d366" />} nombre="Número de WhatsApp de la empresa"
+        detalle={numero ? `${numero} · Asset solo lee los WhatsApp que llegan a este número y envía desde él. Es el número al que los corredores vinculan su celular.`
+          : 'Sin indicar: Asset lee todos los WhatsApp de la cuenta y envía desde su número por defecto. Indícalo si la cuenta de wechatia tiene más de un número.'}
+        estado={numero ? 'conectado' : 'atencion'}>
+        {admin && <Boton tamano="sm" variante="fantasma" icono="edit" onClick={() => { setNum(numero || ''); setEditNum((x) => !x); }}>{numero ? 'Cambiar' : 'Indicar'}</Boton>}
+      </Fila>
+    )}
+    {conectado && editNum && admin && (
+      <form className="tw:flex tw:flex-wrap tw:items-end tw:justify-end tw:gap-3 tw:pl-[52px]"
+        onSubmit={(e) => { e.preventDefault(); guardarNumero(num.trim()); setEditNum(false); }}>
+        <Input id="waNumeroEmpresa" clasesCampo="tw:flex-1 tw:min-w-[220px]" etiqueta="Celular de WhatsApp de la empresa" value={num}
+          onChange={(e) => setNum(e.target.value)} placeholder="+56 9 1234 5678"
+          ayuda={numValido ? 'El número conectado en la cuenta de wechatia de la corredora. Déjalo vacío para no filtrar.' : 'Escribe un celular chileno: +56 9 y 8 dígitos.'} />
+        <Boton variante="secundario" type="button" onClick={() => setEditNum(false)}>Cancelar</Boton>
+        <Boton type="submit" cargando={ocupado} disabled={!numValido}>Guardar</Boton>
       </form>
     )}
   </>;

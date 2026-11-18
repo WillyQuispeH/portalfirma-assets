@@ -31,16 +31,8 @@ import { ActaVisitaService } from './acta-visita';
 const ABIERTO_MS = 60_000;
 /** «tu Asset está cerrado» a lo más cada tanto */
 const AVISO_CERRADO_MS = 30 * 60_000;
-/** el WhatsApp de la empresa (la línea conectada en wechatia): ahí escriben los clientes y los ejecutivos */
-/**
- * El número de WhatsApp de la empresa de ESTE ambiente («+56 9 4497 5958»): el de WA_NUMERO; si no está, el de producción.
- * Es el que se le muestra al corredor para vincular su celular y para escribirle a sus asistentes.
- */
-export const numeroEmpresa = (): string => {
-  const d = String(process.env.WA_NUMERO ?? '').replace(/\D/g, '');
-  const n = d.length === 9 ? '56' + d : d;
-  return /^569\d{8}$/.test(n) ? `+56 9 ${n.slice(3, 7)} ${n.slice(7)}` : '+56 9 4497 5958';
-};
+/** sin número indicado por la corredora: se le dice así al corredor */
+const SIN_NUMERO = 'el WhatsApp de la empresa';
 
 const vincularEsquema = z.object({
   nombre: z.string().trim().max(120).optional(),
@@ -77,14 +69,19 @@ export class EjecutivoService {
     private readonly actas: ActaVisitaService,
   ) {}
 
-  private vista(v: WaVinculo | null) {
+  /** el número de WhatsApp de la empresa de ESTA corredora («+56 9 4497 5958»): ahí escriben clientes y ejecutivos */
+  async numeroEmpresa(corredoraId: string): Promise<string> {
+    return (await this.wa.numeroEmpresa(corredoraId)) ?? SIN_NUMERO;
+  }
+
+  private vista(v: WaVinculo | null, numero: string) {
     const d = (v?.datos ?? {}) as DatosVinculo;
     return {
       activo: !!v?.activo,
       telefono: v?.telefono ?? null,
       codigo: v?.codigo ?? null,
       vinculado: v?.vinculadoEn?.toISOString() ?? null,
-      numeroEmpresa: d.numeroEmpresa || numeroEmpresa(),
+      numeroEmpresa: d.numeroEmpresa || numero,
       nombre: d.nombre ?? '',
       email: d.email ?? '',
       apodo: d.apodo ?? '',
@@ -92,7 +89,10 @@ export class EjecutivoService {
   }
 
   async estado(u: UsuarioToken) {
-    return this.vista(await this.db.waVinculo.findUnique({ where: { usuarioId: u.sub } }));
+    return this.vista(
+      await this.db.waVinculo.findUnique({ where: { usuarioId: u.sub } }),
+      await this.numeroEmpresa(u.corredoraId),
+    );
   }
 
   async vincular(u: UsuarioToken, b: z.infer<typeof vincularEsquema>) {
@@ -112,7 +112,7 @@ export class EjecutivoService {
           create: { usuarioId: u.sub, corredoraId: u.corredoraId, codigo, datos: datos },
           update: { codigo, datos: datos },
         });
-        return { codigo, numeroEmpresa: this.vista(v).numeroEmpresa };
+        return { codigo, numeroEmpresa: this.vista(v, await this.numeroEmpresa(u.corredoraId)).numeroEmpresa };
       } catch {
         // el código ya lo tiene otro de la corredora: otro número
       }
@@ -138,7 +138,7 @@ export class EjecutivoService {
       create: { usuarioId: u.sub, corredoraId: u.corredoraId, activo: false, datos: datos },
       update: { activo, datos: datos },
     });
-    return this.vista(r);
+    return this.vista(r, await this.numeroEmpresa(u.corredoraId));
   }
 
   /** la app abierta trae lo nuevo del celular (y con eso avisa que está abierta) */
@@ -363,7 +363,10 @@ export class EjecutivoController {
 
   @Get('equipo')
   async equipo(@UsuarioActual() u: UsuarioToken) {
-    return { items: await equipoVinculado(this.db, u.corredoraId), numeroEmpresa: numeroEmpresa() };
+    return {
+      items: await equipoVinculado(this.db, u.corredoraId),
+      numeroEmpresa: await this.s.numeroEmpresa(u.corredoraId),
+    };
   }
 
   @Post('pedir')
@@ -376,7 +379,7 @@ export class EjecutivoController {
       corredoraId: u.corredoraId,
       usuarioId: otro.id,
       tipo: 'wa_pedir_vinculo',
-      texto: `Vincula tu celular con tu equipo de Asset: abre Configuración › WhatsApp y asistentes › «Vincular mi celular» y manda el código por WhatsApp al ${numeroEmpresa()}.`,
+      texto: `Vincula tu celular con tu equipo de Asset: abre Configuración › WhatsApp y asistentes › «Vincular mi celular» y manda el código por WhatsApp al ${await this.s.numeroEmpresa(u.corredoraId)}.`,
     });
     return { ok: true };
   }
