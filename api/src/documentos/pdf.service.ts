@@ -33,6 +33,9 @@ export class PdfService implements OnModuleDestroy {
         executablePath: this.ruta(),
         headless: true,
         args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
+        // el contenedor es de solo lectura salvo /tmp: sin un HOME escribible Chromium no crea su perfil y no abre
+        // («Failed to create headless user data directory container»)
+        env: process.platform !== 'linux' ? undefined : { ...process.env, HOME: '/tmp', XDG_CONFIG_HOME: '/tmp', XDG_CACHE_HOME: '/tmp' } as Record<string, string>,
       })
       .then((b) => {
         b.on('disconnected', () => (this.nav = null));
