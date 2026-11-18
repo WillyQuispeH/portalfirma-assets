@@ -21,6 +21,8 @@ async function abrir(propId, { bloque = null, despues = null } = {}) {
       toast(r.guardado.length ? `Guardado: ${r.guardado.slice(0, 6).join(', ')}${r.guardado.length > 6 ? ` y ${r.guardado.length - 6} más` : ''}.` : 'No encontré datos de la ficha en ese texto.');
       return r.ficha;
     },
+    // «Leer desde la copia de dominio» (modal-150): reemplaza a esta ventana y, guarde o cancele, se vuelve a abrir la ficha en «Legal»
+    alLeerDominio: () => window.Ventanas.abrir('inmo.dominioCopia', { propiedadId: propId, alTerminar: () => abrir(propId, { bloque: 'legal', despues }) }, { clave: 'modal-150', ancho: true }),
     alCerrar: () => { closeModal(); despues?.(); },
   }, { clave: 'modal-20', ancho: true });
 }

@@ -12,7 +12,9 @@ export type TTipoDriveDoc =
   | 'Mandatos de venta'
   | 'Contratos de arriendo'
   | 'Actas de entrega'
-  | 'Actas de visita';
+  | 'Actas de visita'
+  | 'Escrituras de compraventa'
+  | 'Promesas de compraventa';
 
 /** a qué documento corresponde el nombre con que se envió a firmar («Carta oferta nº 3»…); null si no se reconoce */
 export function tipoDeDocumento(nombre: string): TTipoDriveDoc | null {
@@ -24,6 +26,8 @@ export function tipoDeDocumento(nombre: string): TTipoDriveDoc | null {
   if (/contrato de arriendo/.test(n)) return 'Contratos de arriendo';
   if (/acta de entrega/.test(n)) return 'Actas de entrega';
   if (/acta de visita/.test(n)) return 'Actas de visita';
+  if (/escritura de compraventa/.test(n)) return 'Escrituras de compraventa';
+  if (/promesa de compraventa/.test(n)) return 'Promesas de compraventa';
   return null;
 }
 

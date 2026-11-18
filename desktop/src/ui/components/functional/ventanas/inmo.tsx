@@ -7,6 +7,7 @@ import { Espera, Importada } from './inmo/Cartera';
 import { Publicar, Existentes } from './inmo/PortalInmobiliario';
 import { FichaCompleta } from './inmo/FichaCompleta';
 import { Reprogramar, MenuPaso } from './inmo/Etapas';
+import { DominioDesdeCopia } from '../ficha/DominioDesdeCopia';
 
 export const ventanas: TVentanas = {
   'inmo.propiedad': Propiedad, // modal-26 · inmo.js, formProp
@@ -17,4 +18,5 @@ export const ventanas: TVentanas = {
   'inmo.fichaCompleta': FichaCompleta, // modal-20 · ficha-bloques.js
   'inmo.reprogramar': Reprogramar, // modal-12 · etapas.js
   'inmo.menuPaso': MenuPaso, // modal-13 · etapas.js
+  'inmo.dominioCopia': DominioDesdeCopia, // modal-150 · ficha-bloques.js y etapas.js (leer la inscripción de dominio desde la copia)
 };

@@ -176,7 +176,7 @@ export function IntegracionesContenido() {
           </Fila>
           {portales.filter((x) => x.id !== 'pi').map((x) => (
             <Fila key={x.id} id={x.id} logo={<LogoPortal id={x.id} nombre={x.nombre} />} nombre={x.nombre}
-              detalle={x.listo ? `${x.estado}. Publicar y retirar avisos es entrar y salir de su feed.` : x.enTramite ? 'La integración está en trámite con el portal: el feed y los avisos en espera ya están listos.' : x.via === 'acuerdo' ? 'Requiere un acuerdo comercial con el portal; recibe el mismo feed.' : 'Activa la integración y pega el TOKEN cuando el portal lo entregue.'}
+              detalle={x.listo ? `${x.estado}. Publica y retira avisos desde Asset.` : x.enTramite ? 'Integración en proceso: te avisamos cuando puedas publicar.' : x.via === 'acuerdo' ? 'Requiere un acuerdo comercial con el portal.' : 'Activa la publicación y pega el código cuando el portal te lo entregue.'}
               estado={x.listo ? 'conectado' : x.enTramite ? 'en-tramite' : 'sin-conectar'}>
               <Boton tamano="sm" variante="secundario" icono="settings" disabled={!admin} title={admin ? undefined : 'Lo configura el administrador de la corredora'}
                 onClick={() => abrirPublicaciones('portales')}>Configurar</Boton>

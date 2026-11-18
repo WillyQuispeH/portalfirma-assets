@@ -9,6 +9,8 @@ import { ContratoArriendo } from '../negocios/ContratoArriendo';
 import { ActaEntrega } from '../negocios/ActaEntrega';
 import { MandatoArriendo } from '../negocios/MandatoArriendo';
 import { MandatoVenta } from '../negocios/MandatoVenta';
+import { PromesaCompraventa } from '../negocios/PromesaCompraventa';
+import { EscrituraCompraventa } from '../negocios/EscrituraCompraventa';
 import { NuevoContratista, NuevoReclamo } from '../postventa/VentanasAntiguas';
 
 export const ventanas: TVentanas = {
@@ -29,6 +31,8 @@ export const ventanas: TVentanas = {
   'negocios.actaEntrega': ActaEntrega, // modal-128
   'negocios.mandatoArriendo': MandatoArriendo, // modal-129
   'negocios.mandatoVenta': MandatoVenta, // modal-131
+  'negocios.promesaCompraventa': PromesaCompraventa, // modal-147
+  'negocios.escrituraCompraventa': EscrituraCompraventa, // modal-148
   // postventa.js
   'negocios.postventaContratista': NuevoContratista, // modal-53
   'negocios.postventaReclamo': NuevoReclamo, // modal-54

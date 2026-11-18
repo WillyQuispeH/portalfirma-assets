@@ -370,7 +370,7 @@ export class ActaVisitaService {
       where: { usuarioId: u.sub },
       data: { datos: { ...d, actaAbierta: { id, desde: new Date().toISOString() } } },
     });
-    const texto = `${firma('juanita')}\n📝 Acta de visita${p ? ' de ' + p.codigo : ''} abierta. Mándame por aquí el *audio* de la visita (o varios) y las *fotos*; las voy sumando al acta. Cuando termines, escribe *listo* y te mando el resumen.`;
+    const texto = `${firma('juanita', u.corredoraId)}\n📝 Acta de visita${p ? ' de ' + p.codigo : ''} abierta. Mándame por aquí el *audio* de la visita (o varios) y las *fotos*; las voy sumando al acta. Cuando termines, escribe *listo* y te mando el resumen.`;
     const r = await wa.enviarAContacto(v.contactId, texto);
     await this.enviados.registrar(u.corredoraId, v.telefono, { messageId: r.messageId, texto, enHilo: false });
     return { ok: true, telefono: v.telefono };
@@ -630,7 +630,7 @@ export class ActaVisitaService {
     }
     const decir = async (t: string) => {
       if (!cv.contactId) return;
-      const x = `${firma('juanita')}\n${t}`;
+      const x = `${firma('juanita', v.corredoraId)}\n${t}`;
       const r = await wa.enviarAContacto(cv.contactId, x);
       await this.enviados.registrar(v.corredoraId, cv.telefono, { messageId: r.messageId, texto: t, enHilo: false });
     };
@@ -908,7 +908,7 @@ export class ActaVisitaService {
     }
     const decir = async (t: string) => {
       if (!cv.contactId) return;
-      const texto = `${firma('juanita')}\n${t}`;
+      const texto = `${firma('juanita', v.corredoraId)}\n${t}`;
       const r = await wa.enviarAContacto(cv.contactId, texto);
       await this.enviados.registrar(v.corredoraId, cv.telefono, { messageId: r.messageId, texto: t, enHilo: false });
     };

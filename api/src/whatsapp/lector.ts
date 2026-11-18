@@ -46,6 +46,7 @@ import { PuenteService } from './puente';
 import { EvaluacionService } from './evaluacion';
 import { ConfirmacionVisitaService } from './confirmacion-visita';
 import { DocumentoRevisionService } from './documento-revision';
+import { AsistentesConfigService, type ConfigAsistentes } from './asistentes-config';
 import { telNorm } from './comun';
 
 const TURNO_MS = 3 * 60_000;
@@ -84,6 +85,7 @@ export class LectorService implements OnModuleInit, OnModuleDestroy {
     private readonly confirmacionVisita: ConfirmacionVisitaService,
     private readonly documentoRevision: DocumentoRevisionService,
     private readonly puente: PuenteService,
+    private readonly asistentes: AsistentesConfigService,
     config: ConfigService<Env, true>,
   ) {
     this.cadaMs = config.get('LECTOR_CADA_SEG', { infer: true }) * 1000;
@@ -157,16 +159,17 @@ export class LectorService implements OnModuleInit, OnModuleDestroy {
   /** lee las conversaciones de la corredora y reparte lo nuevo */
   async leer(wa: Wechatia, corredoraId: string) {
     const convs = await wa.conversaciones(50);
-    const ajustes = await this.db.waAjustes.findUnique({ where: { corredoraId } });
-    const clientesActivo = ajustes?.clientesActivo ?? true;
-    const leadsActivo = ajustes?.leadsActivo ?? true;
+    // lo que configuró la corredora (Configuración › Asistentes): interruptores, nombres, instrucciones y horario
+    const cfg = await this.asistentes.cargar(corredoraId);
+    const clientesActivo = cfg.atencion.activo;
+    const leadsActivo = cfg.leads.activo;
     const codigos = (await this.db.waVinculo.count({ where: { corredoraId, codigo: { not: null } } })) > 0;
-    const pv = await this.postventa.cargar(corredoraId);
+    const pv = await this.postventa.cargar(corredoraId, cfg);
     for (const cv of convs) {
       // Instagram, Facebook y correo sin teléfono: solo el observador
       if (canalDe(cv.tipo) && !cv.telefono) continue;
       try {
-        await this.conversacion(wa, corredoraId, cv, { clientesActivo, leadsActivo, codigos, pv });
+        await this.conversacion(wa, corredoraId, cv, { clientesActivo, leadsActivo, codigos, pv, cfg });
       } catch (e) {
         this.log.warn(`conversación ${cv.id}: ${(e as Error).message}`);
         if (e instanceof WechatiaError && e.codigo === 'CLAVE') throw e;
@@ -184,6 +187,7 @@ export class LectorService implements OnModuleInit, OnModuleDestroy {
       leadsActivo: boolean;
       codigos: boolean;
       pv: Awaited<ReturnType<PostventaWaService['cargar']>>;
+      cfg: ConfigAsistentes;
     },
   ) {
     const previa = await this.db.waConversacion.findUnique({
@@ -284,7 +288,7 @@ export class LectorService implements OnModuleInit, OnModuleDestroy {
     }
     // 6. una persona del CRM: Tomás
     if (cli) {
-      await this.atender(wa, corredoraId, cv, cli, nuevos, recientes);
+      await this.atender(wa, corredoraId, cv, cli, nuevos, recientes, o.cfg);
       return;
     }
     // 7. un número que nadie conoce: su lead nuevo, y Sofía (encendida) lo atiende
@@ -331,10 +335,12 @@ export class LectorService implements OnModuleInit, OnModuleDestroy {
     cli: NonNullable<Awaited<ReturnType<ClientesService['quien']>>>,
     nuevos: Parameters<ClientesService['manejar']>[4],
     recientes: Parameters<ClientesService['manejar']>[5],
+    cfg: ConfigAsistentes,
   ) {
     await this.rapido(corredoraId);
     try {
-      await this.clientes.manejar(wa, corredoraId, cv, cli, nuevos, recientes);
+      // el horario de atención y las instrucciones de la corredora se aplican dentro, antes de llamar a la IA
+      await this.clientes.manejar(wa, corredoraId, cv, cli, nuevos, recientes, cfg);
     } catch (e) {
       await this.ejecutivo
         .avisarResponsables(

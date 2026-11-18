@@ -35,12 +35,14 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
       await w.click('#cfgVincular'); await w.waitForSelector('#cfgCodigo');
       ok(/^ASSET \d{4}$/.test((await txt('#cfgCodigo')).trim()) && /4497 5958/.test(await txt('#cfgMiWa')), 'Vincular: da el código para mandarlo al número de la empresa');
     } else console.log('    (sin la conexión de prueba de wechatia: se omite el código)');
-    ok(/Sofía/.test(await txt('#view-integraciones')) && /Tomás/.test(await txt('#view-integraciones')), 'el administrador ve los asistentes con clientes');
-    const sofia = () => w.getAttribute('#cfgSofia', 'aria-checked');
-    ok(await sofia() === 'true', 'Sofía parte encendida');
-    await w.click('#cfgSofia'); await w.waitForTimeout(500);
-    ok(await sofia() === 'false' && (await w.evaluate(() => window.pf.waAsistentes())).data.leadsActivo === false, 'apagar a Sofía queda guardado');
-    await w.click('#cfgSofia'); await w.waitForTimeout(500); ok(await sofia() === 'true', 'y se vuelve a encender');
+    ok(!/Asistentes con clientes/.test(await txt('#view-integraciones')) && /Pedro/.test(await txt('#view-integraciones')), 'WhatsApp: tu celular y tu equipo; los asistentes con clientes se controlan en la pestaña Asistentes');
+    await w.click('#cfgTabs [data-t="asistentes"]'); await w.waitForSelector('#asAtencion');
+    const sofia = () => w.getAttribute('#asLeads', 'aria-checked');
+    ok(await sofia() === 'true', 'Interesados nuevos parte encendido');
+    await w.click('#asLeads'); await w.click('#asGuardar'); await w.waitForTimeout(600);
+    ok(await sofia() === 'false' && (await w.evaluate(() => window.pf.asistConfig())).data.leads.activo === false, 'apagar a los interesados nuevos queda guardado');
+    await w.click('#asLeads'); await w.click('#asGuardar'); await w.waitForTimeout(600); ok(await sofia() === 'true', 'y se vuelve a encender');
+    await w.click('#cfgTabs [data-t="whatsapp"]'); await w.waitForSelector('#cfgMiWa');
     await w.screenshot({ path: path.resolve(__dirname, 'cfg2-whatsapp.png'), fullPage: true });
     // Integraciones
     await w.click('#cfgTabs [data-t="integraciones"]'); await w.waitForSelector('[data-integracion="portalfirma"]');

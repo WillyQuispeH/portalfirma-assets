@@ -91,6 +91,8 @@ export class CartaOfertaService {
   private async armar(u: UsuarioToken, negocioId: string, conPropietario = false) {
     const n = await buscarVisible(this.db.negocio, u, negocioId, 'El negocio');
     const venta = n.tipo === 'venta';
+    // en una VENTA el vendedor siempre firma también (decisión de The Living, 2026-11-18); en arriendo es opcional
+    if (venta) conPropietario = true;
     const quien = venta ? 'comprador' : 'arrendatario';
     if (!n.clienteId) return { error: `El negocio no tiene ${quien}: vincúlalo en el paso «Interesado registrado».` };
     if (!n.propiedadId) return { error: 'El negocio no tiene propiedad.' };
@@ -273,6 +275,7 @@ export class CartaOfertaService {
       llenar(await this.plantillasDoc.html(u.corredoraId, 'carta-oferta'), x.vars(numero)),
     );
     const r = await this.envio.enviar({
+      plantilla: 'carta-oferta',
       corredoraId: u.corredoraId,
       pagadorRespaldo: x.usuario.email,
       usuarioId: u.sub,
@@ -313,7 +316,7 @@ export class CartaOfertaService {
             telefono: f.telefono,
             firmo: false,
           })) as Prisma.InputJsonValue,
-          datos: { formato: 'carta_oferta', hito: 'carta', numero, tipoFirma: 'simple', tramite: 'none' },
+          datos: { formato: 'carta_oferta', hito: 'carta', numero, tipoFirma: r.tipoFirma, tramite: r.tramite },
         },
         update: {},
       });
@@ -376,7 +379,7 @@ export class CartaOfertaService {
 
 const pedidoEsquema = z.object({
   negocioId: z.string().trim().min(1).max(80),
-  /** también firma el propietario (acepta la carta). Opcional: por defecto firma solo el oferente */
+  /** también firma el propietario (acepta la carta). En venta siempre firma; en arriendo es opcional */
   conPropietario: z.boolean().optional(),
 });
 

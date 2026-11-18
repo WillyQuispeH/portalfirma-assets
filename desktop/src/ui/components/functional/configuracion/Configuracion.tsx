@@ -1,21 +1,24 @@
 // Configuración (menú del usuario › Configuración): las preferencias y conexiones de Asset, en pestañas.
 //  · General: apariencia (tema) y la luz de la oficina (pantalla Hoy).
 //  · Plantillas: los textos de los documentos, por cláusula, con su versión y aprobación (plantillas/Plantillas.tsx).
-//  · WhatsApp: tu celular vinculado (cada usuario el suyo): verlo, cambiarlo con un código nuevo o desvincularlo, para
-//    hablar con tu equipo (Pedro, Juanita, Diego, Fernanda). El administrador además enciende o apaga a Sofía, Tomás y
-//    la postventa (si el servidor no responde, la tarjeta lo dice sin bloquear la pantalla).
+//  · WhatsApp: tu celular vinculado (cada usuario el suyo): verlo, cambiarlo con un código nuevo o desvincularlo, y a quién
+//    escribirle de tu equipo (Pedro, Juanita, Diego, Fernanda), a todo el ancho. Encender o apagar a los asistentes que
+//    atienden clientes se hace en la pestaña Asistentes.
+//  · Asistentes: nombre, instrucciones y horario de los asistentes de WhatsApp de la corredora (AsistentesConfig.tsx).
 //  · Usuarios (Equipo, para el corredor): el equipo de la corredora; el administrador agrega, edita y asigna claves.
 //  · Integraciones: Portalfirma, wechatia y sus canales, portales, Drive… (IntegracionesContenido).
 // Se monta en #view-integraciones (src/renderer/app.js: abrirConfiguracion(pestaña)). Marcas para las pruebas:
-// #cfgTabs [data-t], #cfgTema [data-tema], #cfgLuz [data-luz], #cfgMiWa, #cfgMiTel, #cfgVincular, #cfgCodigo, #cfgSofia, #cfgTomas.
+// #cfgTabs [data-t], #cfgTema [data-tema], #cfgLuz [data-luz], #cfgMiWa, #cfgMiTel, #cfgVincular, #cfgCodigo, #cfgEquipoWa.
 import { useEffect, useState, type ReactNode } from 'react';
 import Layout from '../../ui/Layout';
 import Corredora from './Corredora';
+import AsistentesConfig from './AsistentesConfig';
 import Plantillas from './plantillas/Plantillas';
 import DetallePlantilla from './plantillas/Detalle';
 import Tabs from '../../ui/Tabs';
 import Card from '../../ui/Card';
-import Switch from '../../ui/Switch';
+import ItemLista from '../../ui/ItemLista';
+import Badge from '../../ui/Badge';
 import Boton from '../../ui/Boton';
 import Icono from '../../ui/Icono';
 import { cx } from '../../../utils/cx';
@@ -29,9 +32,9 @@ import { IntegracionesContenido } from '../integraciones/Integraciones';
 import Usuarios from '../usuarios/Usuarios';
 import Metas from './Metas';
 
-export type TPestanaConfig = 'general' | 'corredora' | 'plantillas' | 'whatsapp' | 'usuarios' | 'metas' | 'integraciones';
+export type TPestanaConfig = 'general' | 'corredora' | 'plantillas' | 'whatsapp' | 'asistentes' | 'usuarios' | 'metas' | 'integraciones';
 const pestanas = (admin: boolean): [TPestanaConfig, string, undefined, string][] => [
-  ['general', 'General', undefined, 'sun'], ['corredora', 'Corredora', undefined, 'building'], ['plantillas', 'Plantillas', undefined, 'template'], ['whatsapp', 'WhatsApp', undefined, 'whatsapp'], ['usuarios', admin ? 'Usuarios' : 'Equipo', undefined, 'users'],
+  ['general', 'General', undefined, 'sun'], ['corredora', 'Corredora', undefined, 'building'], ['plantillas', 'Plantillas', undefined, 'template'], ['whatsapp', 'WhatsApp', undefined, 'whatsapp'], ['asistentes', 'Asistentes', undefined, 'sparkle'], ['usuarios', admin ? 'Usuarios' : 'Equipo', undefined, 'users'],
   ...(admin ? [['metas', 'Metas', undefined, 'chart'] as [TPestanaConfig, string, undefined, string]] : []), ['integraciones', 'Integraciones', undefined, 'link'],
 ];
 
@@ -84,10 +87,6 @@ function General() {
 
 // ---------------------------------------------------------------- WhatsApp
 
-interface IAsistentes {
-  enServidor?: boolean; lectorEncendido?: boolean; conectado?: boolean; numeroEmpresa?: string;
-  leadsActivo?: boolean; clientesActivo?: boolean; postventa?: boolean; ultimaLectura?: string | null; error?: string | null;
-}
 const fmtTel = (t?: string | null) => { const d = String(t || '').replace(/\D/g, ''); return d.length >= 11 ? `+${d.slice(0, 2)} ${d.slice(2, 3)} ${d.slice(3, 7)} ${d.slice(7)}` : t || ''; };
 
 /** tu celular vinculado (cada usuario el suyo): verlo, cambiarlo (con un código nuevo) o desvincularlo */
@@ -116,7 +115,8 @@ function MiWhatsApp() {
   const copiar = async () => { try { await navigator.clipboard.writeText(e?.codigo || ''); toast('Código copiado.'); } catch { /* sin portapapeles */ } };
 
   return (
-    <Card titulo="Mi WhatsApp" subtitulo="Vincula tu celular para hablar con tu equipo de Asset (Pedro, Juanita, Diego y Fernanda) por WhatsApp.">
+    <Card titulo="Mi WhatsApp" subtitulo="Vincula tu celular para hablar con tu equipo de asistentes por WhatsApp."
+      accion={listo ? <Badge tono={e?.conectado ? 'verde' : 'amarillo'} punto>{e?.conectado ? `Empresa conectada · ${numero}` : 'Empresa sin conectar'}</Badge> : undefined}>
       <div id="cfgMiWa" className="tw:flex tw:flex-col tw:gap-4">
         {!listo ? <p className="tw:m-0 tw:text-sm tw:text-muted">Cargando…</p>
           : !e?.conectado ? (
@@ -152,42 +152,40 @@ function MiWhatsApp() {
   );
 }
 
-/** los asistentes que atienden a los clientes (solo el administrador los cambia); si el servidor no responde, lo dice sin bloquear */
-function Asistentes() {
-  const [a, setA] = useState<IAsistentes | null>(null);
-  const [error, setError] = useState('');
-  const cargar = () => api<IAsistentes>('waAsistentes').then((r) => { setA(r); setError(''); }).catch((e: Error) => setError(e.message));
-  useEffect(() => { cargar(); }, []); // eslint-disable-line react-hooks/exhaustive-deps -- solo al abrir
-  const ajustar = async (o: Partial<Record<'leadsActivo' | 'clientesActivo' | 'postventa', boolean>>, listo: string) => {
-    setA((x) => ({ ...x, ...o }));
-    try { await api('waAsistentesAjustar', o); toast(listo); } catch (e) { toast((e as Error).message, 5000); }
-    cargar();
-  };
+/** a quién se le escribe (los asistentes del equipo de cada corredor) y qué hace cada uno */
+const EQUIPO: { id: 'pedro' | 'juanita' | 'diego' | 'fernanda'; nombre: string; area: string; ejemplo: string; icono: string }[] = [
+  { id: 'pedro', nombre: 'Pedro', area: 'Captación', ejemplo: '«Pedro, ¿cómo va la cartera?» · «Pedro, crea una propiedad en Providencia»', icono: 'house' },
+  { id: 'juanita', nombre: 'Juanita', area: 'Documentos', ejemplo: '«Juanita, prepárame la orden de visita para la PF-1001»', icono: 'sign' },
+  { id: 'diego', nombre: 'Diego', area: 'Seguimiento', ejemplo: '«Diego, ¿qué tengo para hoy?» · «Diego, ¿cómo va la firma 4424?»', icono: 'listCheck' },
+  { id: 'fernanda', nombre: 'Fernanda', area: 'Leads', ejemplo: '«Fernanda, ¿qué leads nuevos tengo?» · «Fernanda, responde a Ana»', icono: 'users' },
+];
+
+/** tu equipo de asistentes por WhatsApp: a quién escribirle y qué decirle (los nombres los define el administrador en Asistentes) */
+function EquipoWhatsApp({ vinculado }: { vinculado: boolean }) {
+  const [nombres, setNombres] = useState<Partial<Record<'pedro' | 'juanita' | 'diego' | 'fernanda', string>>>({});
+  useEffect(() => { api<{ equipo?: typeof nombres }>('asistConfig').then((c) => setNombres(c?.equipo ?? {})).catch(() => setNombres({})); }, []);
   return (
-    <Card titulo="Asistentes con clientes" subtitulo="Responden solos a quienes escriben al WhatsApp de la empresa. Solo el administrador los cambia.">
-      {error ? <p className="tw:m-0 tw:text-[13px] tw:text-muted">No se pudo leer cómo están ahora ({error}). Vuelve a intentarlo en un momento.</p> : (
-        <div className="tw:flex tw:flex-col tw:gap-3">
-          <Switch id="cfgSofia" activo={a?.leadsActivo ?? true} deshabilitado={!a} etiqueta="Sofía · leads"
-            descripcion="Atiende a los leads y a los números nuevos: toma sus datos, busca propiedades y agenda visitas."
-            alCambiar={(v) => ajustar({ leadsActivo: v }, v ? 'Sofía atiende a los leads.' : 'Sofía apagada: los leads los respondes tú.')} />
-          <Switch id="cfgTomas" activo={a?.clientesActivo ?? true} deshabilitado={!a} etiqueta="Tomás · clientes del CRM"
-            descripcion="Atiende a propietarios y clientes de tu CRM: dudas de sus propiedades y firmas."
-            alCambiar={(v) => ajustar({ clientesActivo: v }, v ? 'Tomás atiende a los clientes del CRM.' : 'Tomás apagado.')} />
-          <Switch id="cfgPostventa" activo={!!a?.postventa} deshabilitado={!a} etiqueta="Postventa · reclamos"
-            descripcion="Recibe y sigue los reclamos de garantía de los propietarios."
-            alCambiar={(v) => ajustar({ postventa: v }, v ? 'Respuesta automática de reclamos encendida.' : 'Respuesta automática de reclamos apagada.')} />
-        </div>
-      )}
+    <Card titulo="Tu equipo por WhatsApp"
+      subtitulo={vinculado ? 'Escríbele a quien necesites desde tu celular vinculado, por texto o con una nota de voz.' : 'Cuando vincules tu celular, podrás escribirles. También sirven las notas de voz.'}>
+      <div id="cfgEquipoWa" className="tw:flex tw:flex-col tw:divide-y tw:divide-line tw:[&>*]:py-3 tw:-my-3">
+        {EQUIPO.map((m) => {
+          const nombre = (nombres[m.id] || '').trim() || m.nombre;
+          return (
+            <ItemLista key={m.id} data-equipo={m.id} media={<span className="tw:inline-grid tw:place-items-center tw:size-10 tw:rounded-icono tw:bg-brand-soft tw:text-brand"><Icono nombre={m.icono} tam={20} /></span>}
+              titulo={<>{nombre} <span className="tw:font-normal tw:text-muted">· {m.area}</span></>} detalle={m.ejemplo} />
+          );
+        })}
+      </div>
     </Card>
   );
 }
 
 function WhatsApp() {
-  const { usuario: yo } = useAcceso();
+  const { estado: e } = useWhatsApp();
   return (
-    <div className="tw:flex tw:max-w-[760px] tw:flex-col tw:gap-5">
+    <div className="tw:grid tw:items-start tw:gap-5 tw:xl:grid-cols-2">
       <MiWhatsApp />
-      {yo?.rol === 'ADMIN' && <Asistentes />}
+      <EquipoWhatsApp vinculado={!!e?.telefono} />
     </div>
   );
 }
@@ -209,7 +207,7 @@ export default function Configuracion({ pestana: inicial = 'general' }: { pestan
       subtitulo="Tus preferencias, tu WhatsApp, el equipo y las integraciones de la corredora."
       barra={<Tabs id="cfgTabs" dato="t" etiqueta="Secciones" opciones={pestanas(usuario?.rol === 'ADMIN')} valor={pestana} alCambiar={setPestana} />}
     >
-      {pestana === 'general' ? <General /> : pestana === 'corredora' ? <Corredora /> : pestana === 'plantillas' ? <Plantillas alAbrir={setPlantilla} /> : pestana === 'whatsapp' ? <WhatsApp /> : pestana === 'usuarios' ? <Usuarios /> : pestana === 'metas' ? <Metas /> : <IntegracionesContenido />}
+      {pestana === 'general' ? <General /> : pestana === 'corredora' ? <Corredora /> : pestana === 'plantillas' ? <Plantillas alAbrir={setPlantilla} /> : pestana === 'whatsapp' ? <WhatsApp /> : pestana === 'asistentes' ? <AsistentesConfig /> : pestana === 'usuarios' ? <Usuarios /> : pestana === 'metas' ? <Metas /> : <IntegracionesContenido />}
     </Layout>
   );
 }

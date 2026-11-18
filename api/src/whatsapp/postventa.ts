@@ -12,6 +12,7 @@ import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { IaService } from './ia';
 import { EnviadosService } from './enviados';
+import { AsistentesConfigService, dentroDeHorario, mensajeFueraDeHorario, type ConfigAsistentes } from './asistentes-config';
 import type { Conversacion, MensajeWa, Wechatia } from './wechatia';
 import { norm, telNorm } from './comun';
 
@@ -199,6 +200,10 @@ interface Datos {
   unidades: J[];
   reclamos: J[];
   chats: Map<string, J>;
+  /** lo que la corredora configuró en Configuración › Asistentes (nombre, instrucciones, horario) */
+  asist: ConfigAsistentes['postventa'];
+  /** el nombre de la corredora: con él se presenta el asistente */
+  corredora: string;
 }
 
 @Injectable()
@@ -208,6 +213,7 @@ export class PostventaWaService {
     private readonly db: PrismaService,
     private readonly ia: IaService,
     private readonly enviados: EnviadosService,
+    private readonly asist: AsistentesConfigService,
   ) {}
 
   private async lista(corredoraId: string, coleccion: string) {
@@ -216,7 +222,7 @@ export class PostventaWaService {
   }
 
   /** lo de postventa de la corredora (null si la respuesta automática está apagada) */
-  async cargar(corredoraId: string): Promise<Datos | null> {
+  async cargar(corredoraId: string, ajustes?: ConfigAsistentes): Promise<Datos | null> {
     const cfg = await this.db.registro.findUnique({
       where: { corredoraId_coleccion_id: { corredoraId, coleccion: 'pv_config', id: 'config' } },
     });
@@ -225,7 +231,9 @@ export class PostventaWaService {
     const [proyectos, unidades, reclamos, chats] = await Promise.all(
       ['pv_proyectos', 'pv_unidades', 'pv_reclamos', 'pv_chats'].map((c) => this.lista(corredoraId, c)),
     );
-    return { config, proyectos, unidades, reclamos, chats: new Map(chats.map((c) => [c.id, c])) };
+    const asist = (ajustes ?? (await this.asist.cargar(corredoraId))).postventa;
+    const corredora = await this.asist.nombreCorredora(corredoraId);
+    return { config, proyectos, unidades, reclamos, chats: new Map(chats.map((c) => [c.id, c])), asist, corredora };
   }
 
   /** guarda un registro de postventa (la app lo ve al sincronizar) */
@@ -243,6 +251,10 @@ export class PostventaWaService {
     const p = { ...PERSONA, ...(d.config.persona || {}) } as Persona;
     for (const k of ['nombre', 'empresa', 'horario', 'firma', 'instrucciones'] as const)
       p[k] = String(p[k] || '').trim();
+    // lo de Configuración › Asistentes manda; y siempre se presenta de la corredora, por su nombre
+    if (d.asist?.nombre) p.nombre = d.asist.nombre;
+    if (d.asist?.instrucciones) p.instrucciones = d.asist.instrucciones;
+    if (!p.empresa && d.corredora) p.empresa = d.corredora;
     return p;
   }
 
@@ -414,6 +426,32 @@ export class PostventaWaService {
     return null;
   }
 
+  /** escribió fuera del horario: se anota en el chat y, con «avisar», recibe un mensaje fijo (una vez cada 4 horas) */
+  private async fueraDeHorario(wa: Wechatia, corredoraId: string, d: Datos, chat: J, nuevos: MensajeWa[]) {
+    chat.pv = true;
+    chat.actualizado = now();
+    chat.mensajes = [
+      ...(chat.mensajes || []),
+      ...nuevos.map((m) => ({ dir: 'in', texto: m.texto, fotos: m.adjuntos, fecha: m.fecha })),
+    ];
+    const reciente = chat.fueraAviso && Date.now() - new Date(chat.fueraAviso).getTime() < 4 * 3600_000;
+    if (d.asist.horario.fuera === 'avisar' && chat.contactId && !reciente) {
+      const texto = mensajeFueraDeHorario(d.asist, {
+        nombre: this.persona(d).nombre || 'el asistente de postventa',
+        corredora: d.corredora,
+        corredor: 'nuestro equipo de postventa',
+      });
+      const r = await wa.enviarAContacto(chat.contactId, texto);
+      await this.enviados.registrar(corredoraId, chat.telefono, { messageId: r.messageId, texto, enHilo: false });
+      chat.mensajes.push({ dir: 'out', texto, fecha: now() });
+      chat.fueraAviso = now();
+    }
+    chat.mensajes = chat.mensajes.slice(-60);
+    d.chats.set(chat.id, chat);
+    await this.guardar(corredoraId, 'pv_chats', chat);
+    return true;
+  }
+
   /**
    * Los mensajes nuevos de una conversación. Devuelve true si era de postventa (entonces nadie más la atiende);
    * false si no lo es (la atienden Sofía o Tomás).
@@ -430,6 +468,17 @@ export class PostventaWaService {
     chat.contactId = cv.contactId || chat.contactId;
     chat.telefono = cv.telefono || chat.telefono;
     chat.nombre = cv.nombre || chat.nombre;
+    // fuera del horario de la corredora: sin respuestas del asistente (lo de postventa queda anotado en su chat)
+    if (d.asist?.horario && !dentroDeHorario(d.asist.horario)) {
+      const unida = nuevos.map((m) => m.texto).join(' ');
+      const tel = telNorm(chat.telefono);
+      const esPv =
+        !!chat.pv ||
+        (!!tel && d.unidades.some((u) => telNorm(u.propietario?.telefono) === tel)) ||
+        PALABRAS_PV.test(norm(unida));
+      if (!esPv) return false;
+      return this.fueraDeHorario(wa, corredoraId, d, chat, nuevos);
+    }
     let era = false;
     for (const m of nuevos) {
       const resp = await this.responder(corredoraId, d, chat, m);

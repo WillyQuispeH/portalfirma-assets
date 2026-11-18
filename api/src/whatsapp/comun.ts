@@ -84,10 +84,17 @@ const EQUIPO: Record<string, { nombre: string; area: string }> = {
   diego: { nombre: 'Diego', area: 'Seguimiento' },
   fernanda: { nombre: 'Fernanda', area: 'Leads' },
 };
-/** «*Sofía* · Atención de leads» */
-export const firma = (id: string | null | undefined) => {
+/**
+ * Los nombres que cada corredora le puso a sus asistentes (Configuración › Asistentes): { tomas, pedro, juanita… } solo
+ * los que cambió. Los llena asistentes-config.ts cada vez que lee o guarda la configuración de la corredora.
+ */
+export const nombresAsistentes = new Map<string, Record<string, string>>();
+/** «*Sofía* · Atención de leads» (con `corredoraId`, el nombre que esa corredora le puso) */
+export const firma = (id: string | null | undefined, corredoraId?: string | null) => {
   const p = (id && (EQUIPO[id] || (ATENCION as Record<string, { nombre: string; area: string }>)[id])) || null;
-  return p ? `*${p.nombre}* · ${p.area}` : '';
+  if (!p) return '';
+  const propio = id && corredoraId ? nombresAsistentes.get(corredoraId)?.[id] : '';
+  return `*${propio || p.nombre}* · ${p.area}`;
 };
 
 export const esperar = (ms: number) => new Promise((r) => setTimeout(r, ms));

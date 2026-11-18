@@ -453,6 +453,7 @@ export class OrdenVisitaService {
     const bytes = await this.pdfs.pdf(await this.html(x, numero));
     const nombreArchivo = `Orden de visita nº ${numero} - ${p.codigo}.pdf`;
     const r = await this.envio.enviar({
+      plantilla: 'orden-visita',
       corredoraId: c.corredoraId,
       pagadorRespaldo: usuario.email,
       usuarioId: c.usuarioId,
@@ -471,11 +472,17 @@ export class OrdenVisitaService {
       ],
     });
     if ('error' in r) return { error: r.error };
-    return this.registrar(x, numero, r.operacion);
+    return this.registrar(x, numero, r.operacion, r.tipoFirma, r.tramite);
   }
 
   /** lo que queda anotado cuando la orden ya salió */
-  private async registrar(x: Armada, numero: number, operacion: number): Promise<Record<string, unknown>> {
+  private async registrar(
+    x: Armada,
+    numero: number,
+    operacion: number,
+    tipoFirma: string,
+    tramite: string,
+  ): Promise<Record<string, unknown>> {
     const { c, p, vis, usuario, fecha, hora } = x;
     try {
       const token = { sub: c.usuarioId, corredoraId: c.corredoraId, rol: usuario.rol, sid: '' };
@@ -529,7 +536,7 @@ export class OrdenVisitaService {
               firmo: false,
             },
           ] as Prisma.InputJsonValue,
-          datos: { formato: 'orden_visita', hito: 'orden', numero, tipoFirma: 'simple', tramite: 'none' },
+          datos: { formato: 'orden_visita', hito: 'orden', numero, tipoFirma, tramite },
         },
         update: {},
       });

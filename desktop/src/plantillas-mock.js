@@ -29,6 +29,9 @@ function crear() {
     ],
   };
   const r = { versiones: [], aprobacion: null };
+  // cómo se firma cada plantilla (por nombre; las que no se tocaron: firma simple, sin trámite)
+  const firmas = {};
+  const firmaDe = (n) => ({ ...(firmas[n] || { tipoFirma: 'simple', tramite: 'none' }) });
   const vigente = () => r.versiones[r.versiones.length - 1] || null;
   const estado = () => (!r.aprobacion || r.aprobacion.n !== (vigente()?.n ?? 0) ? 'borrador' : 'aprobada');
   const existe = (n) => { if (n !== BASE.nombre) throw new Error('Esa plantilla no existe.'); };
@@ -39,7 +42,7 @@ function crear() {
     existe(n); const v = vigente();
     return {
       nombre: BASE.nombre, titulo: BASE.titulo, descripcion: BASE.descripcion, puedeEditar: true, estado: estado(), version: v?.n ?? 0,
-      aprobacion: r.aprobacion, variables: BASE.variables,
+      aprobacion: r.aprobacion, firma: firmaDe(n), variables: BASE.variables,
       bloques: BASE.bloques.map((b) => ({ clave: b.clave, titulo: b.titulo, tipo: b.tipo, editable: b.base !== null, base: b.base,
         texto: b.base === null ? null : (v?.bloques[b.clave] ?? b.base), cambiado: b.base !== null && v?.bloques[b.clave] !== undefined })),
       versiones: r.versiones.map((x) => ({ n: x.n, nota: x.nota, porNombre: x.porNombre, en: x.en, cambiadas: Object.keys(x.bloques).length })).reverse(),
@@ -49,9 +52,17 @@ function crear() {
     lista: () => {
       const v = vigente();
       return { puedeEditar: true, items: [{ nombre: BASE.nombre, titulo: BASE.titulo, descripcion: BASE.descripcion, estado: estado(), version: v?.n ?? 0,
-        propia: !!v && Object.keys(v.bloques).length > 0, cambiadas: v ? Object.keys(v.bloques).length : 0, editables: 2, aprobacion: r.aprobacion, actualizada: v?.en ?? null }] };
+        propia: !!v && Object.keys(v.bloques).length > 0, cambiadas: v ? Object.keys(v.bloques).length : 0, editables: 2, aprobacion: r.aprobacion, firma: firmaDe(BASE.nombre), actualizada: v?.en ?? null }] };
     },
     detalle,
+    firmaDe,
+    /** PUT /plantillas/:nombre/firma: guarda cómo se firma (sin tocar el texto ni la aprobación); vale para cualquier nombre de plantilla */
+    firma: (n, o) => {
+      if (!['simple', 'avanzada'].includes(o.tipoFirma)) throw new Error('El tipo de firma no es válido.');
+      if (!['none', 'legalization'].includes(o.tramite)) throw new Error('El trámite no es válido.');
+      firmas[n] = { tipoFirma: o.tipoFirma, tramite: o.tramite };
+      return n === BASE.nombre ? detalle(n) : { nombre: n, firma: firmaDe(n) };
+    },
     guardar: (n, o) => {
       existe(n); const propios = {};
       for (const [clave, texto] of Object.entries(o.bloques || {})) {

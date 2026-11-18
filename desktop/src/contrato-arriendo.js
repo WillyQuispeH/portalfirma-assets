@@ -90,15 +90,15 @@ function crear({ inmo, negocios, abrir, reservas }) {
       return { ok: true, automatico, plantilla, persona: r.persona, fecha: fdmy(new Date().toISOString().slice(0, 10)) };
     },
     /** envía a firmar el contrato APROBADO por ambos: el PDF de la última versión */
-    async enviar({ negocioId, tipoFirma, tramite }) {
+    async enviar({ negocioId }) {
       const n = negocios.ver(negocioId); const v = aprobada(n);
       if (!v) throw err('Primero hay que aprobar el contrato: todos los firmantes deben aprobar la última versión en el paso «Revisión del contrato».');
       if (!v.archivo) throw err('La versión aprobada no tiene su PDF: guárdala con su archivo en el paso «Revisión del contrato».');
-      const cuerpo = { negocioId: String(negocioId), clave: v.archivo.clave, tipoFirma: tipoFirma === 'avanzada' ? 'avanzada' : 'simple', tramite: tramite === 'legalization' ? 'legalization' : 'none' };
+      const cuerpo = { negocioId: String(negocioId), clave: v.archivo.clave };   // cómo se firma (tipo y trámite) lo define la plantilla en el servidor: no se manda
       if (simulada()) {
         const op = 920000 + Math.floor(Math.random() * 9999);
         negocios.vincularFirma(negocioId, 'contrato', op);
-        inmo.agregarFirma({ operacion: op, plantilla: 'Contrato de arriendo nº 1', origen: 'asset', fecha: new Date().toISOString(), estado: 'en_firma', firmantes: [{ nombre: n.cliente?.nombre, rut: n.cliente?.rut, rol: 'Arrendatario', personaId: n.cliente?.id }], negocioId, tipoFirma: cuerpo.tipoFirma, tramite: cuerpo.tramite, versionClave: cuerpo.clave }, [n.prop?.id], `Contrato de arriendo enviado a firmar (operación ${op})`);
+        inmo.agregarFirma({ operacion: op, plantilla: 'Contrato de arriendo nº 1', origen: 'asset', fecha: new Date().toISOString(), estado: 'en_firma', firmantes: [{ nombre: n.cliente?.nombre, rut: n.cliente?.rut, rol: 'Arrendatario', personaId: n.cliente?.id }], negocioId, versionClave: cuerpo.clave }, [n.prop?.id], `Contrato de arriendo enviado a firmar (operación ${op})`);
         return { ok: true, enviada: true, operacion: op, numero: 1, indicacion: 'Contrato simulado (pruebas).', simulada: true, version: v.n, ...cuerpo };
       }
       const r = revisar(await api('POST', '/contratos-arriendo/enviar', cuerpo, ESPERA));

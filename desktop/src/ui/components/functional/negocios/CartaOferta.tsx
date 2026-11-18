@@ -6,7 +6,7 @@
 // Enviar a firmar solo se puede con todo guardado: lo que se ve en el PDF es lo que firma el oferente.
 // La lógica (guardar, generar el PDF, enviar) está en src/renderer/etapas.js (cartaOferta) y llega en las props.
 // Los id (#coNombre, #coRut, #coTel, #coEmail, #coMonto, #coMoneda, #coGarantia, #coPlazo, #coVigencia, #coCond,
-// #coGuardar, #mOk, #mCancel) los usan las pruebas.
+// #coGuardar, #coConProp (solo arriendo) / #coFirman (venta: firman comprador y vendedor), #mOk, #mCancel) los usan las pruebas.
 import { useState } from 'react';
 import Boton from '../../ui/Boton';
 import Badge from '../../ui/Badge';
@@ -24,6 +24,7 @@ import { toast } from '../../../utils/app';
 import { descargarPdf } from '../../../utils/pdf';
 import { correoValido, formatearRut, rutValido } from '../../../utils/rut';
 import DatosPersona, { faltaDePersona, guardarPersonaDoc, personaCambio, type IPersonaDoc } from './DatosPersona';
+import { AvisoDominio, type ICambiosFicha, type IDominioFicha } from './AvisoDominio';
 import VisorPdf, { PdfCargando } from '../agenda/VisorPdf';
 import { usePdfInicial, type IPdfInicial } from '../agenda/usePdfInicial';
 
@@ -46,20 +47,26 @@ export interface ICartaOfertaProps {
   propietarios?: IPersonaDoc[];
   /** guarda los cambios en su origen y devuelve el PDF nuevo (lanza el error si algo falla) */
   alGuardar: (d: ICartaDatos) => Promise<{ pdf: string }>;
-  /** op.conPropietario: el propietario también firma (acepta la carta) */
+  /** op.conPropietario: el propietario también firma (acepta la carta). En venta el vendedor siempre firma (true); en arriendo es opcional */
   alConfirmar: (op: { conPropietario: boolean }) => Promise<void>;
+  /** venta: la inscripción de dominio que tiene la ficha (si falta, el documento dice «en el Conservador de Bienes Raíces respectivo» y se avisa aquí) */
+  dominio?: IDominioFicha;
+  /** guarda la inscripción en la ficha de la propiedad y devuelve el PDF nuevo */
+  alGuardarDominio?: (c: ICambiosFicha) => Promise<{ pdf: string }>;
+  /** abre «Leer desde la copia de dominio» (reemplaza esta ventana y, al terminar, la vuelve a abrir) */
+  alLeerDominio?: () => void;
 }
 
 const mensaje = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
-export function CartaOferta({ pdf: pdf0, pdfPromesa, errorInicial, tipo, datos, propiedad, propietarios: propietarios0 = [], alGuardar, alConfirmar }: ICartaOfertaProps) {
+export function CartaOferta({ pdf: pdf0, pdfPromesa, errorInicial, tipo, datos, propiedad, propietarios: propietarios0 = [], alGuardar, alConfirmar, dominio, alGuardarDominio, alLeerDominio }: ICartaOfertaProps) {
   const [v, setV] = useState<ICartaDatos>(datos);
   const [props, setProps] = useState<IPersonaDoc[]>(propietarios0); const [propsGuardado, setPropsGuardado] = useState<IPersonaDoc[]>(propietarios0);
   const [guardado, setGuardado] = useState<ICartaDatos>(datos);
   const { pdf, setPdf, cargando: cargandoPdf, errorCarga } = usePdfInicial(pdf0, pdfPromesa);
   const [guardando, setGuardando] = useState(false); const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState(errorInicial || '');
-  const [conProp, setConProp] = useState(tipo === 'venta'); // el propietario acepta con su firma (opcional)
+  const [conProp, setConProp] = useState(tipo === 'venta'); // el propietario acepta con su firma: en venta siempre; en arriendo, opcional
   const sucio = JSON.stringify(v) !== JSON.stringify(guardado) || props.some((p, i) => personaCambio(p, propsGuardado[i]));
   const venta = tipo === 'venta';
   const campo = (k: keyof ICartaDatos) => ({ value: v[k], onChange: (e: { target: { value: string } }) => { setV((x) => ({ ...x, [k]: e.target.value })); setError(''); } });
@@ -143,7 +150,15 @@ export function CartaOferta({ pdf: pdf0, pdfPromesa, errorInicial, tipo, datos, 
             </div>
           </Card>
 
-          <Switch id="coConProp" activo={conProp} alCambiar={setConProp} etiqueta="También firma el propietario" descripcion={venta ? 'Acepta la oferta con su firma, en el mismo documento' : 'Acepta con su firma, en el mismo documento'} />
+          {venta && dominio && alGuardarDominio && (
+            <AvisoDominio dominio={dominio}
+              alGuardar={async (c) => { const r = await alGuardarDominio(c); setPdf(r.pdf); }}
+              alLeer={alLeerDominio} motivoLeer={sucio ? 'Guarda los cambios antes: esta ventana se vuelve a abrir' : guardando || enviando ? 'Espera un momento' : undefined} />
+          )}
+
+          {venta
+            ? <p id="coFirman" className={NOTA}>Firman el comprador y el vendedor.</p>
+            : <Switch id="coConProp" activo={conProp} alCambiar={setConProp} etiqueta="También firma el propietario" descripcion="Acepta con su firma, en el mismo documento" />}
 
           <ErrorVentana id="coErr" texto={error || errorCarga} />
         </div>
@@ -152,7 +167,7 @@ export function CartaOferta({ pdf: pdf0, pdfPromesa, errorInicial, tipo, datos, 
           <div className={guardando ? 'tw:opacity-50 tw:transition-opacity' : 'tw:transition-opacity'}>{pdf ? <VisorPdf base64={pdf} /> : cargandoPdf ? <PdfCargando /> : <p className={NOTA}>No se pudo preparar el PDF.</p>}</div>
         </Card>
       </div>
-      <p className={`${NOTA} tw:mt-3`}>Firmar en Asset es opcional: puedes descargar el PDF. Si lo envías, se cobra del saldo de Portalfirma y {conProp ? 'cada firmante recibe' : `el ${venta ? 'comprador' : 'arrendatario'} recibe`} el enlace en su correo. Cuando se firme, el negocio avanza solo.</p>
+      <p className={`${NOTA} tw:mt-3`}>Firmar en Asset es opcional: puedes descargar el PDF. Si lo envías, se cobra del saldo de Portalfirma y {venta ? 'el comprador y el vendedor reciben' : conProp ? 'cada firmante recibe' : 'el arrendatario recibe'} el enlace en su correo; el tipo de firma lo define la plantilla (Configuración › Plantillas). Cuando se firme, el negocio avanza solo.</p>
     </VentanaCuerpo>
     <VentanaPie>
       {sucio ? <span className="tw:mr-auto tw:text-xs tw:text-muted">Cambios sin guardar</span> : <span className="tw:mr-auto"><Badge tono="verde" icono="check" ajustar>Todo guardado</Badge></span>}

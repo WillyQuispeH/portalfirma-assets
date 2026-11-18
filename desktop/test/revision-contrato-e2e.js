@@ -104,12 +104,18 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
 
     // ---- se envía a firmar EXACTAMENTE la versión aprobada
     await w.evaluate(() => window.closeModal()); await abrir(xc); await w.waitForSelector(botonFirma); await w.click(botonFirma);
-    await w.waitForSelector('#caTipoFirma', { timeout: 15000 });
+    await w.waitForSelector('#caFirmaInfo', { timeout: 15000 });
     ok(await w.isDisabled('#caInicio') && await w.isDisabled('#caPlazo'), 'al enviar a firmar, las condiciones son de solo lectura (se firma lo aprobado)');
-    await w.selectOption('#caTipoFirma', 'avanzada'); await w.selectOption('#caTramite', 'legalization'); await w.click('#mOk');
-    await w.waitForFunction(() => !document.querySelector('#caTipoFirma'), null, { timeout: 15000 });
+    ok(!(await w.locator('#caTipoFirma').count()) && !(await w.locator('#caTramite').count()), 'ya no se elige el tipo de firma ni el trámite en la ventana del contrato');
+    ok(/Se firma con firma simple .se cambia en Configuración › Plantillas../.test(await w.innerText('#caFirmaInfo')), 'la ventana dice cómo se firma según la plantilla (por defecto: firma simple)');
+    await w.evaluate(() => window.closeModal());   // el administrador cambia la firma de la plantilla del contrato y la ventana lo muestra
+    await call('plFirma', 'contrato-arriendo', { tipoFirma: 'avanzada', tramite: 'legalization' });
+    await abrir(xc); await w.waitForSelector(botonFirma); await w.click(botonFirma); await w.waitForSelector('#caFirmaInfo', { timeout: 15000 });
+    ok(/Se firma con firma avanzada y legalización notarial .se cambia en Configuración › Plantillas../.test(await w.innerText('#caFirmaInfo')), 'cambiada la plantilla, la ventana dice «firma avanzada y legalización notarial»');
+    await w.click('#mOk');
+    await w.waitForFunction(() => !document.querySelector('#caFirmaInfo'), null, { timeout: 15000 });
     const n2 = await call('negObtener', n.id); const f = (await call('inmoListar')).propiedades.find((q) => q.id === pA.id).firmas?.find((z) => /Contrato de arriendo/.test(z.plantilla || ''));
-    ok(n2.firmas?.contrato?.operacion && f?.versionClave === n2.ciclo.contrato.versiones[1].archivo.clave && f.tipoFirma === 'avanzada' && f.tramite === 'legalization', 'el contrato enviado a firmar es el PDF de la V2 aprobada, con el tipo de firma y el trámite elegidos');
+    ok(n2.firmas?.contrato?.operacion && f?.versionClave === n2.ciclo.contrato.versiones[1].archivo.clave, 'el contrato enviado a firmar es el PDF de la V2 aprobada (el tipo de firma y el trámite los pone el servidor según la plantilla)');
     ok(!errs.length, 'sin errores de JavaScript' + (errs.length ? ': ' + errs.join(' | ') : ''));
     console.log('OK revisión y firma del contrato');
   } catch (er) { console.error(er.message); console.error(await w.evaluate(() => document.querySelector('#rcError, #caErr')?.textContent || '').catch(() => '')); await shot('rc-error.png').catch(() => {}); process.exitCode = 1; }

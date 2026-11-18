@@ -71,7 +71,7 @@ export class FotosWaService {
     const resto = nuevos.filter((m) => !conFotos.includes(m));
     const responder = async (t: string) => {
       if (!cv.contactId) return;
-      const texto = `${firma('pedro')}\n${t}`;
+      const texto = `${firma('pedro', v.corredoraId)}\n${t}`;
       const r = await wa.enviarAContacto(cv.contactId, texto);
       await this.enviados.registrar(v.corredoraId, cv.telefono, { messageId: r.messageId, texto: t, enHilo: false });
     };

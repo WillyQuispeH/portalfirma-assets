@@ -1311,6 +1311,10 @@ handle('cv:desconectar', () => asset.llamar('DELETE', '/convecta/conexion'));
 // los datos de la corredora que llevan los documentos (razón social, RUT, domicilio, representante, logo)
 handle('corredora:datos', () => asset.llamar('GET', '/corredora/datos'));
 handle('corredora:guardar', (o) => asset.llamar('PUT', '/corredora/datos', o || {}));
+// Configuración › Asistentes: nombre, instrucciones y horario de los asistentes de WhatsApp de la corredora (GET/PUT /v1/whatsapp/asistentes/config)
+const asMock = process.env.PF_MOCK === '1' ? require('./asistentes-mock').crear() : null;
+handle('asist:config', () => (asMock ? asMock.ver() : asset.llamar('GET', '/whatsapp/asistentes/config')));
+handle('asist:guardarConfig', (o) => (asMock ? asMock.guardar(o || {}) : asset.llamar('PUT', '/whatsapp/asistentes/config', o || {})));
 // Configuración › Plantillas: revisar, editar por cláusula y aprobar las plantillas de documentos (GET/PUT /v1/plantillas…).
 // En modo de prueba (PF_MOCK) responde una plantilla simulada en memoria.
 const plMock = process.env.PF_MOCK === '1' ? require('./plantillas-mock').crear() : null;
@@ -1321,6 +1325,9 @@ handle('pl:guardar', (n, o) => (plMock ? plMock.guardar(n, o || {}) : asset.llam
 handle('pl:previa', (n, bloques) => (plMock ? plMock.previa(n) : asset.llamar('POST', `${plRuta(n)}/vista-previa`, bloques ? { bloques } : {}, 60000)));
 handle('pl:aprobar', (n, o) => (plMock ? plMock.aprobar(n, o || {}) : asset.llamar('POST', `${plRuta(n)}/aprobar`, o || {})));
 handle('pl:restaurar', (n, version) => (plMock ? plMock.restaurar(n, Number(version) || 0) : asset.llamar('POST', `${plRuta(n)}/restaurar`, { version: Number(version) || 0 })));
+handle('pl:firma', (n, o) => (plMock ? plMock.firma(n, o || {}) : asset.llamar('PUT', `${plRuta(n)}/firma`, { tipoFirma: o?.tipoFirma, tramite: o?.tramite })));
+// cómo se firma una plantilla, para la ventana de un documento: { tipoFirma, tramite } (null si no se pudo leer)
+handle('pl:firmaDe', async (n) => { try { return plMock ? plMock.firmaDe(n) : ((await asset.llamar('GET', plRuta(n)))?.firma || null); } catch { return null; } });
 // pantalla Configuración › WhatsApp: el número de la empresa, si el servidor está leyendo, y Sofía / Tomás / postventa.
 // En modo de prueba (sin la API) los interruptores quedan en este equipo.
 const ASIST_PRUEBA = { enServidor: false, lectorEncendido: false, numeroEmpresa: '+56 9 4497 5958', clientesActivo: true, leadsActivo: true, ultimaLectura: null, error: null };
@@ -1425,6 +1432,12 @@ handle('mandato:enviar', (o) => mandatoArriendo.enviar(o || {}));
 const mandatoVenta = require('./mandato-venta').crear({ inmo });   // mandato de venta: igual que el de arriendo (su propia serie de folio)
 handle('mandatoVenta:vistaPrevia', (o) => mandatoVenta.vistaPrevia(o || {}));
 handle('mandatoVenta:enviar', (o) => mandatoVenta.enviar(o || {}));
+const escrituraCompraventa = require('./escritura-compraventa').crear({ inmo, negocios });   // borrador de escritura de compraventa (minuta para la notaría): PDF del servidor, descargable sin firmar
+handle('escritura:vistaPrevia', (o) => escrituraCompraventa.vistaPrevia(o || {}));
+handle('escritura:enviar', (o) => escrituraCompraventa.enviar(o || {}));
+const promesaCompraventa = require('./promesa-compraventa').crear({ inmo, negocios });   // promesa de compraventa de un negocio de venta: PDF del servidor, descargable sin firmar, y envío a firmar
+handle('promesa:vistaPrevia', (o) => promesaCompraventa.vistaPrevia(o || {}));
+handle('promesa:enviar', (o) => promesaCompraventa.enviar(o || {}));
 const contratoArriendo = require('./contrato-arriendo').crear({ inmo, negocios, reservas, abrir: (u) => shell.openExternal(u) });   // contrato de arriendo: PDF del servidor y envío a firmar
 handle('contrato:vistaPrevia', (o) => contratoArriendo.vistaPrevia(o || {}));
 handle('contrato:enviar', (o) => contratoArriendo.enviar(o || {}));
@@ -1563,9 +1576,20 @@ handle('inmo:nota', (ref, t) => inmo.nota(ref, t));
 handle('inmo:actividad', async (id) => permisos.limpiar(await inmo.actividadDe(id)));
 handle('inmo:actividadTodas', async (o) => permisos.limpiar(await inmo.actividadTodas(o || {})));
 handle('inmo:docAgregar', (id, paths, tipo) => inmo.agregarDocumentos(id, paths, tipo));
-handle('inmo:docElegir', async (id) => {
+handle('inmo:docElegir', async (id, tipo) => {
   const r = await dialog.showOpenDialog(win, { properties: ['openFile', 'multiSelections'], filters: [{ name: 'Documentos e imágenes', extensions: ['pdf', 'docx', 'doc', 'xlsx', 'jpg', 'jpeg', 'png', 'webp', 'heic'] }] });
-  return r.canceled ? null : inmo.agregarDocumentos(id, r.filePaths);
+  return r.canceled ? null : inmo.agregarDocumentos(id, r.filePaths, typeof tipo === 'string' && tipo ? tipo : undefined);
+});
+// «Leer desde la copia de dominio»: la API lee con IA la copia de dominio ya subida a la propiedad y PROPONE los datos (no guarda nada)
+handle('prop:leerDominio', async (propiedadId, documentoId) => {
+  if (process.env.PF_MOCK === '1') { // propuesta falsa y fija (pruebas)
+    const emision = new Date(Date.now() - 45 * 864e5).toISOString().slice(0, 10);
+    return { legible: true, fojas: '45678 vta', numeroInscripcion: '23456', anioInscripcion: '2015', conservador: 'Santiago', rol: '1234-56',
+      propietarios: [{ nombre: 'ROSA PEREZ MENA', rut: '11.111.111-1' }], deslindes: 'Norte: calle Larraín; Sur: lote 12.', vigente: true, emision,
+      alertas: ['Hipoteca a favor del Banco Estado, inscrita el 2019', 'Prohibición de enajenar a favor de un tercero'],
+      resumen: 'Inscripción de dominio a nombre de Rosa Pérez Mena, con una hipoteca vigente.' };
+  }
+  return asset.llamar('POST', `/propiedades/${encodeURIComponent(propiedadId)}/dominio-ia`, { documentoId }, 120000);
 });
 handle('inmo:docQuitar', (id, d) => inmo.quitarDocumento(id, d));
 handle('inmo:docAbrir', async (id, d) => { const p = await inmo.docPath(id, d); if (/\.(pdf|docx?|xlsx?|jpe?g|png|webp)$/i.test(p)) openInEditor([p]); else shell.openPath(p); return true; });

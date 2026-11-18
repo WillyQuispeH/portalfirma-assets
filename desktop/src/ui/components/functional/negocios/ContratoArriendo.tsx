@@ -1,13 +1,13 @@
 // modal-127: el contrato de arriendo de un negocio, listo para revisar y enviar a firmar (misma idea que la carta oferta, modal-125).
 //   · izquierda: las condiciones del contrato (inicio, plazo, renta, reajuste, aviso, uso de la propiedad, garantía en meses, cláusulas). Los codeudores NO se escriben aquí: son los avales que se evaluaron junto con el arrendatario y las
-//     opciones de firma (tipo de firma y trámite). «Guardar y actualizar PDF» las guarda en el negocio (ciclo.contrato.datos) y vuelve
+//     las condiciones de firma. «Guardar y actualizar PDF» las guarda en el negocio (ciclo.contrato.datos) y vuelve
 //     a generar el PDF. Los firmantes (propietarios, arrendatario, codeudor) salen de sus fichas.
 //   · derecha: el PDF tal como se enviará a firmar.
 // La lógica (guardar, generar el PDF, enviar) está en src/renderer/etapas.js (contratoArriendo) y llega en las props.
 // Los firmantes (propietarios, arrendatario y los avales que son codeudores) se editan AQUÍ MISMO (nombre, RUT, correo, celular): lo que
 // falta para firmar (el RUT o el correo de alguien) se corrige sin salir de la ventana; se guarda en la ficha de cada persona.
 // Los id (#caInicio, #caPlazo, #caRenta, #caReajuste, #caAviso, #caDia, #caGarantia (meses), #caUso, #caCodeudores,
-// #caClausulas, #caTipoFirma, #caTramite, #caGuardar, #caGuardarFirmantes, #caFirNombre-N, #caFirRut-N, #caFirTel-N, #caFirEmail-N, #mOk, #mCancel) los usan las pruebas.
+// #caClausulas, #caFirmaInfo (cómo se firma: viene de la plantilla, no se elige aquí), #caGuardar, #caGuardarFirmantes, #caFirNombre-N, #caFirRut-N, #caFirTel-N, #caFirEmail-N, #mOk, #mCancel) los usan las pruebas.
 import { useState } from 'react';
 import Boton from '../../ui/Boton';
 import MenuMas from '../../ui/MenuMas';
@@ -15,6 +15,7 @@ import Badge from '../../ui/Badge';
 import Card from '../../ui/Card';
 import Input from '../../ui/Input';
 import Select from '../../ui/Select';
+import { fraseFirma } from '../configuracion/plantillas/firma';
 import Textarea from '../../ui/Textarea';
 import { VentanaCabecera, VentanaCuerpo, VentanaPie } from '../../ui/Ventana';
 import { NOTA } from '../gestion/editor-pdf/Modales';
@@ -25,6 +26,7 @@ import { descargarPdf } from '../../../utils/pdf';
 import { correoValido, formatearRut, rutValido } from '../../../utils/rut';
 import VisorPdf, { PdfCargando } from '../agenda/VisorPdf';
 import { usePdfInicial, type IPdfInicial } from '../agenda/usePdfInicial';
+import { AvisoDominio, type ICambiosFicha, type IDominioFicha } from './AvisoDominio';
 
 export interface IContratoDatos {
   inicio: string; plazoMeses: string; renta: string; moneda: string; reajuste: string; avisoDias: string; diaPago: string; garantiaMeses: string; uso: string; clausulas: string;
@@ -36,7 +38,7 @@ export interface IFirmantePersona { personaId: string; rol: string; nombre: stri
 export interface IContratoFirma { tipoFirma: 'simple' | 'avanzada'; tramite: 'none' | 'legalization' }
 export interface IContratoArriendoProps {
   /** borrador (por defecto): se editan las condiciones y se guarda una VERSIÓN del contrato (con su PDF) para mandarla a revisión;
-   *  firma: se ve la versión APROBADA por el propietario y el arrendatario (solo lectura) y se envía a firmar con el tipo de firma y el trámite */
+   *  firma: se ve la versión APROBADA por el propietario y el arrendatario (solo lectura) y se envía a firmar como lo define la plantilla del contrato (Configuración › Plantillas) */
   modo?: 'borrador' | 'firma';
   /** firma: qué versión se firma */
   versionN?: number;
@@ -48,13 +50,20 @@ export interface IContratoArriendoProps {
   /** el PDF que se está armando (o trayendo): la ventana se abre ya y la vista previa lo muestra al llegar */
   pdfPromesa?: Promise<IPdfInicial>;
   datos: IContratoDatos;
-  firma: IContratoFirma;
+  /** cómo se firma, según la plantilla del contrato (solo se muestra; el servidor usa la de la plantilla). null: no se pudo leer */
+  firma?: IContratoFirma | null;
   propiedad: { codigo: string; titulo: string; direccion: string };
   /** quiénes firman: los propietarios, el arrendatario y los avales de la evaluación (codeudores), con los datos de su ficha */
   firmantes: IFirmantePersona[];
   /** guarda los cambios (condiciones en el negocio y datos de los firmantes en sus fichas) y devuelve el PDF nuevo (lanza el error si algo falla) */
-  alGuardar: (d: IContratoDatos, f: IContratoFirma, firmantes: IFirmantePersona[]) => Promise<{ pdf: string }>;
-  alConfirmar: (f: IContratoFirma) => Promise<void>;
+  alGuardar: (d: IContratoDatos, f: IContratoFirma | null, firmantes: IFirmantePersona[]) => Promise<{ pdf: string }>;
+  alConfirmar: () => Promise<void>;
+  /** borrador: la inscripción de dominio que tiene la ficha (si falta, el contrato dice «en el Conservador de Bienes Raíces respectivo» y se avisa aquí) */
+  dominio?: IDominioFicha;
+  /** guarda la inscripción (o la cuenta de pago) en la ficha de la propiedad y devuelve el PDF nuevo */
+  alGuardarDominio?: (c: ICambiosFicha) => Promise<{ pdf: string }>;
+  /** abre «Leer desde la copia de dominio» (reemplaza esta ventana y, al terminar, la vuelve a abrir) */
+  alLeerDominio?: () => void;
 }
 
 const mensaje = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -65,9 +74,9 @@ const USOS: [string, string][] = [['habitacional', 'Vivienda (habitacional)'], [
 const faltaDe = (p: IFirmantePersona) => [!rutValido(p.rut) ? 'RUT' : '', !correoValido(p.email) ? 'correo' : ''].filter(Boolean);
 const REAJUSTES: [string, string][] = [['ipc_semestral', 'IPC cada 6 meses'], ['ipc_anual', 'IPC cada 12 meses'], ['uf', 'Renta en UF'], ['sin', 'Sin reajuste']];
 
-export function ContratoArriendo({ modo = 'borrador', versionN, alGuardarVersion, pdf: pdf0, pdfPromesa, errorInicial, datos, firma, propiedad, firmantes: firmantes0, alGuardar, alConfirmar }: IContratoArriendoProps) {
-  const [v, setV] = useState<IContratoDatos>(datos); const [f, setF] = useState<IContratoFirma>(firma);
-  const [guardado, setGuardado] = useState<{ v: IContratoDatos; f: IContratoFirma }>({ v: datos, f: firma });
+export function ContratoArriendo({ modo = 'borrador', versionN, alGuardarVersion, pdf: pdf0, pdfPromesa, errorInicial, datos, firma, propiedad, firmantes: firmantes0, alGuardar, alConfirmar, dominio, alGuardarDominio, alLeerDominio }: IContratoArriendoProps) {
+  const [v, setV] = useState<IContratoDatos>(datos); const f = firma ?? null;
+  const [guardado, setGuardado] = useState<{ v: IContratoDatos; f: IContratoFirma | null }>({ v: datos, f: firma ?? null });
   const { pdf, setPdf, cargando: cargandoPdf, errorCarga } = usePdfInicial(pdf0, pdfPromesa);
   const [fp, setFp] = useState<IFirmantePersona[]>(firmantes0); const [fpGuardado, setFpGuardado] = useState<IFirmantePersona[]>(firmantes0);
   const [abiertos, setAbiertos] = useState<Set<string>>(() => new Set(firmantes0.filter((p) => faltaDe(p).length).map((p) => p.personaId)));   // los incompletos se abren solos
@@ -102,10 +111,10 @@ export function ContratoArriendo({ modo = 'borrador', versionN, alGuardarVersion
     setGuardando(false);
   };
   const guardarVersion = async () => { if (!alGuardarVersion) return; setEnviando(true); setError(''); try { await alGuardarVersion(); } catch (e) { setError(mensaje(e)); setEnviando(false); } };
-  const enviar = async () => { setEnviando(true); setError(''); try { await alConfirmar(f); } catch (e) { setError(mensaje(e)); setEnviando(false); } };
+  const enviar = async () => { setEnviando(true); setError(''); try { await alConfirmar(); } catch (e) { setError(mensaje(e)); setEnviando(false); } };
 
   return <>
-    <VentanaCabecera icono="sign" titulo={firmando ? 'Enviar el contrato a firmar' : 'Armar el contrato'} descripcion={firmando ? `Se firma la versión ${versionN ?? ''} aprobada por el propietario y el arrendatario: elige cómo se firma.` : 'Revisa las condiciones: el PDF se actualiza al guardar. Después se guarda como versión y se envía a revisión.'} cerrable={!enviando} />
+    <VentanaCabecera icono="sign" titulo={firmando ? 'Enviar el contrato a firmar' : 'Armar el contrato'} descripcion={firmando ? `Se firma la versión ${versionN ?? ''} aprobada por el propietario y el arrendatario.` : 'Revisa las condiciones: el PDF se actualiza al guardar. Después se guarda como versión y se envía a revisión.'} cerrable={!enviando} />
     <VentanaCuerpo>
       <div className="ov-doble tw:grid tw:grid-cols-1 tw:lg:grid-cols-[minmax(300px,380px)_1fr] tw:gap-4 tw:items-start">
         <div className="tw:flex tw:flex-col tw:gap-3">
@@ -134,11 +143,16 @@ export function ContratoArriendo({ modo = 'borrador', versionN, alGuardarVersion
           </Card>
 
           </fieldset>
-          {firmando && <Card titulo="Firma" subtitulo="Cómo se firma y si lleva trámite notarial">
-            <div className="tw:flex tw:flex-col tw:gap-3">
-              <Select etiqueta="Tipo de firma" id="caTipoFirma" opciones={[['simple', 'Firma simple'], ['avanzada', 'Firma avanzada']]} value={f.tipoFirma} onChange={(e) => setF((x) => ({ ...x, tipoFirma: e.target.value as IContratoFirma['tipoFirma'] }))} />
-              <Select etiqueta="Trámite" id="caTramite" opciones={[['none', 'Ninguno'], ['legalization', 'Legalizado ante notario']]} value={f.tramite} onChange={(e) => setF((x) => ({ ...x, tramite: e.target.value as IContratoFirma['tramite'] }))} />
-            </div>
+          {!firmando && dominio && alGuardarDominio && (
+            <AvisoDominio dominio={dominio} cuenta={v.cuenta}
+              alGuardar={async (c) => {
+                const r = await alGuardarDominio(c); setPdf(r.pdf || pdf);
+                if (c.cuentaPago) { const cuenta = c.cuentaPago; setV((x) => ({ ...x, cuenta })); setGuardado((g) => ({ ...g, v: { ...g.v, cuenta } })); }   // la cuenta queda en la ficha: el campo «Cuenta» de las condiciones ya no está sin guardar
+              }}
+              alLeer={alLeerDominio} motivoLeer={sucio ? 'Guarda los cambios antes: esta ventana se vuelve a abrir' : guardando || enviando ? 'Espera un momento' : undefined} />
+          )}
+          {firmando && <Card titulo="Firma" subtitulo="Lo define la plantilla del contrato">
+            <p id="caFirmaInfo" data-firma={firma?.tipoFirma} data-tramite={firma?.tramite} className="tw:m-0 tw:text-sm tw:leading-relaxed">{firma ? <>Se firma con <b>{fraseFirma(firma)}</b> (se cambia en Configuración › Plantillas).</> : <>Se firma como lo define la plantilla del contrato (se cambia en Configuración › Plantillas).</>}</p>
           </Card>}
 
           <Card titulo="Firmantes" subtitulo="Propietarios, arrendatario y codeudores (los avales de la evaluación): se editan aquí">

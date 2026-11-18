@@ -243,6 +243,7 @@ export class ActaFirmaService {
       ? `Acta de visita · orden nº ${x.orden.numero}`
       : `Acta de visita del ${x.a.fecha.slice(8, 10)}/${x.a.fecha.slice(5, 7)}`;
     const r = await this.envio.enviar({
+      plantilla: 'acta-visita',
       corredoraId: u.corredoraId,
       pagadorRespaldo: x.usuario.email,
       usuarioId: u.sub,
@@ -292,8 +293,8 @@ export class ActaFirmaService {
             hito: 'acta',
             actaId: x.a.id,
             ordenNumero: x.orden.numero,
-            tipoFirma: 'simple',
-            tramite: 'none',
+            tipoFirma: r.tipoFirma,
+            tramite: r.tramite,
           },
         },
         update: {},

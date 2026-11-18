@@ -37,7 +37,7 @@ const deTexto = (c: ICampo, x: string, moneda: string): TValor => {
   return x === '' ? null : x;
 };
 
-export function FichaCompleta({ ficha: inicial, tab: tabInicial, tipos, alGuardar, alListo, alCompletar, alCerrar }: {
+export function FichaCompleta({ ficha: inicial, tab: tabInicial, tipos, alGuardar, alListo, alCompletar, alLeerDominio, alCerrar }: {
   ficha: IFicha; tab: string; tipos: Record<string, string>;
   /** guarda la propiedad y devuelve la ficha recargada */
   alGuardar: (o: Record<string, unknown>) => Promise<IFicha>;
@@ -45,6 +45,8 @@ export function FichaCompleta({ ficha: inicial, tab: tabInicial, tipos, alGuarda
   alListo: () => void;
   /** completa la ficha con texto dictado y devuelve la ficha recargada */
   alCompletar: (texto: string) => Promise<IFicha>;
+  /** abre «Leer desde la copia de dominio» (modal-150); al terminar, ficha-bloques.js vuelve a abrir esta ficha en «Legal» */
+  alLeerDominio?: () => void;
   alCerrar: () => void;
 }) {
   const [fi, setFi] = useState(inicial); const [tab, setTab] = useState(tabInicial);
@@ -72,6 +74,7 @@ export function FichaCompleta({ ficha: inicial, tab: tabInicial, tipos, alGuarda
     } catch (e) { setErr((e as Error).message); return false; }
   }
   const irA = async (t: string) => { if (hayCambios && !(await guardar(false))) return; setTab(t); };
+  const leerDominio = async () => { if (hayCambios && !(await guardar(false))) return; alLeerDominio?.(); };   // lo escrito se guarda antes: esa ventana reemplaza a esta
   const completar = async () => {
     const t = dicta.trim(); if (!t) { document.getElementById('fbDicta')?.focus(); return; }
     if (hayCambios && !(await guardar(false))) return;
@@ -138,6 +141,12 @@ export function FichaCompleta({ ficha: inicial, tab: tabInicial, tipos, alGuarda
       </div>
       <div id="fbCuerpo" className="tw:flex tw:flex-col tw:gap-3">
         <p className="tw:m-0 tw:text-[12.5px] tw:text-muted">{b.d}{resumen}</p>
+        {tab === 'legal' && alLeerDominio && (
+          <div id="fbDominio" className="tw:flex tw:flex-wrap tw:items-center tw:justify-between tw:gap-3 tw:rounded-control tw:bg-lav-soft tw:px-3 tw:py-2.5">
+            <span className="tw:min-w-0 tw:flex-1 tw:text-[13px] tw:leading-snug tw:text-lav-softink">¿Tienes la copia de dominio vigente? Asset la lee y propone las fojas, el número, el año y el Conservador: tú confirmas antes de guardar.</span>
+            <Boton id="fbLeerDominio" variante="secundario" tamano="sm" icono="sparkle" onClick={leerDominio}>Leer desde la copia de dominio</Boton>
+          </div>
+        )}
         <div className="tw:grid tw:grid-cols-2 tw:lg:grid-cols-3 tw:gap-x-3 tw:gap-y-3 tw:items-end">
           {tab === 'esencial' && <>
             <Select id="fbp_tipo" clasesCampo="fb-c" etiqueta={<>Tipo de propiedad<b className="fb-clave">*</b></>} opciones={Object.entries(tipos)}

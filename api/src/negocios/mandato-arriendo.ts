@@ -171,6 +171,7 @@ export class MandatoArriendoService {
       llenar(await this.plantillasDoc.html(u.corredoraId, 'mandato-arriendo'), x.vars(numero)),
     );
     const r = await this.envio.enviar({
+      plantilla: 'mandato-arriendo',
       corredoraId: u.corredoraId,
       pagadorRespaldo: x.usuario.email,
       usuarioId: u.sub,
@@ -210,7 +211,7 @@ export class MandatoArriendoService {
             telefono: f.telefono,
             firmo: false,
           })) as Prisma.InputJsonValue,
-          datos: { formato: 'mandato_arriendo', hito: 'mandato', numero, tipoFirma: 'simple', tramite: 'none' },
+          datos: { formato: 'mandato_arriendo', hito: 'mandato', numero, tipoFirma: r.tipoFirma, tramite: r.tramite },
         },
         update: {},
       });

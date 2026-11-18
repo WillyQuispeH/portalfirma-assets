@@ -214,7 +214,7 @@ export class ConfirmacionVisitaService {
         k === 'confirma'
           ? `¡Gracias${c.nombre ? ', ' + c.nombre.split(/\s+/)[0] : ''}! Quedó confirmada tu visita del ${cuando}. ¡Nos vemos!`
           : `Entendido, le aviso al corredor para coordinar otro horario contigo.`;
-      const r = await wa.enviarAContacto(cv.contactId, `${firma('tomas')}\n${dicho}`);
+      const r = await wa.enviarAContacto(cv.contactId, `${firma('tomas', corredoraId)}\n${dicho}`);
       await this.enviados.registrar(corredoraId, cv.telefono, { messageId: r.messageId, texto: dicho, enHilo: false });
     }
     const aviso =

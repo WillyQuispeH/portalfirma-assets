@@ -1,0 +1,142 @@
+<!doctype html>
+<!--
+  BORRADOR DE ESCRITURA DE COMPRAVENTA de PortalFirma Asset. HTML normal: se edita el texto y el estilo aquí (el estilo común está en _base.css).
+  *** ES UN BORRADOR (MINUTA) PARA REVISIÓN LEGAL Y DE LA NOTARÍA: la escritura pública la otorga siempre una notaría. ***
+  Sirve para llevar los datos listos a la notaría; la firma en Portalfirma es opcional y solo deja constancia de que las partes
+  conocen y aprueban el borrador. Los textos son un modelo estándar chileno: debe revisarlos un abogado o el notario antes de usarlos.
+  Las cláusulas con class="cl n" se numeran solas («Primero», «Segundo»…): una cláusula condicional no descuadra la numeración.
+  Variables entre llaves dobles (se reemplazan solas al generar el PDF):
+
+    {{numero}} {{fechaEmision}} {{ciudad}}
+    {{corredora.nombre}} {{corredora.rut}} {{corredora.domicilio}} {{corredora.logo}}   {{corredor.nombre}} {{corredor.email}}
+    {{escritura.notaria}} («[Notaría]» si no se ha escrito)   {{escritura.fecha}} (fecha de la escritura, o «[fecha]»)
+    {{escritura.personerias}} (poderes o personería de quienes comparecen representados; si está vacío no sale la cláusula)
+    {{vendedor.nombre}} {{vendedor.texto}} (todos los vendedores con RUT, perfil y domicilio) {{vendedor.rut}} {{vendedor.repr}} {{vendedor.varios}} {{vendedor.lineas}} (lista: {{texto}})
+    {{comprador.nombre}} {{comprador.texto}} {{comprador.rut}} {{comprador.repr}} {{comprador.lineas}} (lista: {{texto}})
+    {{propiedad.codigo}} {{propiedad.tipo}} {{propiedad.direccion}} {{propiedad.comuna}} {{propiedad.rol}} {{propiedad.supTotal}} {{propiedad.supUtil}}
+    {{propiedad.incluye}} (estacionamiento, bodega…) {{propiedad.deslindes}} {{propiedad.dominio}} (inscripción de dominio) {{propiedad.conservador}} {{propiedad.copropiedad}}
+    {{precio.monto}} {{precio.largo}} («4.850 Unidades de Fomento») {{precio.uf}} (el precio es en UF)
+    {{pago.credito}} / {{pago.contado}} (una de las dos)  {{pago.modo}} {{pago.piePct}} {{pago.pie}} {{pago.saldoPct}} {{pago.saldo}} {{pago.banco}}
+    {{promesa.fecha}} {{promesa.notaria}} (si hubo promesa de compraventa)   {{entrega.cuando}}
+
+  Un bloque  {{#algo}} … {{/algo}}  solo aparece si «algo» tiene valor.
+  Este documento NO lleva cajas ni líneas de firma: Portalfirma agrega su propia hoja de firma al enviarlo.
+-->
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Borrador de escritura de compraventa nº {{numero}}</title>
+<style>
+/*@base*/
+</style>
+</head>
+<body>
+
+<div class="enc">
+  <div class="marca">{{#corredora.logo}}<img class="logo" src="{{corredora.logo}}" alt="">{{/corredora.logo}}{{corredora.nombre}}<small>{{#corredora.rut}}RUT {{corredora.rut}}{{/corredora.rut}}{{#corredora.domicilio}} · {{corredora.domicilio}}{{/corredora.domicilio}}</small></div>
+  <div class="meta"><b>Borrador Nº {{numero}}</b><br>{{ciudad}}, {{fechaEmision}}</div>
+</div>
+<div class="filete"></div>
+<h1>Escritura de compraventa</h1>
+<div class="subtitulo">{{escritura.notaria}} · {{propiedad.tipo}} · {{propiedad.direccion}}</div>
+
+<p class="dest"><i>Borrador de minuta para revisión legal y de la notaría. No es la escritura pública: esta solo la otorga la notaría, que puede ajustar el texto y debe verificar los títulos, certificados y poderes.</i></p>
+
+<div class="resumen">
+  <h3>Resumen de la operación</h3>
+  <div class="grid">
+    <div class="dato ancho"><span>Inmueble</span><b>{{propiedad.tipo}} · {{propiedad.direccion}}, {{propiedad.comuna}}</b></div>
+    <div class="dato"><span>Notaría</span><b>{{escritura.notaria}}</b></div>
+    <div class="dato"><span>Fecha de la escritura</span><b>{{escritura.fecha}}</b></div>
+    <div class="dato"><span>Precio</span><b class="grande">{{precio.monto}}</b></div>
+    <div class="dato"><span>Forma de pago</span><b>{{pago.modo}}</b></div>
+    {{#propiedad.rol}}<div class="dato"><span>Rol de avalúo</span><b>{{propiedad.rol}}</b></div>{{/propiedad.rol}}
+  </div>
+</div>
+
+<div class="partes">
+  <div class="parte">
+    <div class="rol">Vendedor</div>
+    <div class="nom">{{vendedor.nombre}}</div>
+    <div class="det">{{#vendedor.lineas}}{{texto}}<br>{{/vendedor.lineas}}</div>
+  </div>
+  <div class="parte">
+    <div class="rol">Comprador</div>
+    <div class="nom">{{comprador.nombre}}</div>
+    <div class="det">{{#comprador.lineas}}{{texto}}<br>{{/comprador.lineas}}</div>
+  </div>
+</div>
+
+<p class="comparecencia">En {{ciudad}}, República de Chile, a {{escritura.fecha}}, ante mí, notario público titular de la {{escritura.notaria}}, comparecen: por una parte, como vendedor, {{vendedor.texto}}{{#vendedor.repr}}, {{vendedor.repr}}{{/vendedor.repr}}, en adelante «el Vendedor»{{#vendedor.varios}} (todos ellos, en conjunto){{/vendedor.varios}}; y por otra parte, como comprador, {{comprador.texto}}{{#comprador.repr}}, {{comprador.repr}}{{/comprador.repr}}, en adelante «el Comprador»; los comparecientes son mayores de edad, acreditan su identidad con las cédulas citadas y exponen que han convenido el siguiente contrato de compraventa:</p>
+
+<section class="cl n"><h2>Antecedentes y propiedad</h2>
+  <p>El Vendedor es dueño del inmueble ubicado en {{propiedad.direccion}}, comuna de {{propiedad.comuna}}{{#propiedad.rol}}, Rol de avalúo número {{propiedad.rol}}{{/propiedad.rol}}{{#propiedad.supUtil}}, con una superficie útil de {{propiedad.supUtil}}{{/propiedad.supUtil}}{{#propiedad.supTotal}}, y una superficie total de {{propiedad.supTotal}}{{/propiedad.supTotal}}, en adelante «el Inmueble».</p>
+  {{#propiedad.incluye}}
+  <p>El Inmueble comprende además {{propiedad.incluye}}.</p>
+  {{/propiedad.incluye}}
+  {{#propiedad.deslindes}}
+  <p>Los deslindes del Inmueble, según sus títulos, son los siguientes: {{propiedad.deslindes}}</p>
+  {{/propiedad.deslindes}}
+  <p>El dominio del Inmueble se encuentra inscrito a nombre del Vendedor {{propiedad.dominio}}</p>
+</section>
+
+<section class="cl n"><h2>Compraventa</h2>
+  <p>Por el presente instrumento, el Vendedor vende, cede y transfiere al Comprador, quien compra, acepta y adquiere para sí, el Inmueble singularizado en la cláusula anterior.</p>
+  <p>La venta se hace como cuerpo cierto, en el estado en que actualmente se encuentra el Inmueble, que el Comprador declara conocer y aceptar, con todos sus derechos, usos, costumbres y servidumbres activas y pasivas, y con todo lo que de hecho y de derecho le corresponda{{#propiedad.copropiedad}}, incluidos los derechos que le corresponden en los bienes de dominio común, de acuerdo con la Ley Nº 21.442 sobre Copropiedad Inmobiliaria y el reglamento de copropiedad respectivo{{/propiedad.copropiedad}}.</p>
+</section>
+
+<section class="cl n"><h2>Precio y forma de pago</h2>
+  <p>El precio de la compraventa es la cantidad de <b>{{precio.largo}}</b>, en adelante «el Precio».</p>
+  {{#precio.uf}}
+  <p>El Precio se pagará en su equivalente en pesos, según el valor de la Unidad de Fomento a la fecha de cada pago.</p>
+  {{/precio.uf}}
+  {{#promesa.fecha}}
+  <p>La presente compraventa se otorga en cumplimiento de la promesa de compraventa de fecha {{promesa.fecha}}{{#promesa.notaria}}, otorgada ante {{promesa.notaria}}{{/promesa.notaria}}.</p>
+  {{/promesa.fecha}}
+  {{#pago.credito}}
+  <p>El Comprador pagará el Precio al Vendedor de la siguiente forma:</p>
+  <ul class="sub">
+    <li><b>i.</b>Un {{pago.piePct}} %, equivalente a {{pago.pie}}, mediante vale vista a favor del Vendedor, que queda en poder de la notaría con instrucciones de entregarlo al Vendedor una vez que el Inmueble se encuentre inscrito a nombre del Comprador en el Conservador de Bienes Raíces respectivo.</li>
+    <li><b>ii.</b>El {{pago.saldoPct}} % restante, equivalente a {{pago.saldo}}, con el producto del crédito hipotecario que {{pago.banco}} otorgará al Comprador, mediante vale vista a favor del Vendedor, que se le entregará una vez inscrito el Inmueble a nombre del Comprador y las garantías a favor de la institución financiera.</li>
+  </ul>
+  {{/pago.credito}}
+  {{#pago.contado}}
+  <p>El Comprador paga al Vendedor la totalidad del Precio al contado, en este acto, mediante vale vista o transferencia electrónica de fondos, que el Vendedor declara recibir a su entera satisfacción, otorgándole el más amplio y total recibo y carta de pago.</p>
+  {{/pago.contado}}
+  <p>Mientras el Precio no se encuentre íntegramente pagado, el Vendedor no renuncia a la acción resolutoria que pudiere corresponderle.</p>
+</section>
+
+<section class="cl n"><h2>Entrega material</h2>
+  <p>La entrega material del Inmueble se efectuará {{entrega.cuando}}, libre de ocupantes y con todas sus llaves, accesos y accesorios. Las contribuciones de bienes raíces, los gastos comunes y las cuentas de servicios se prorratearán entre las partes hasta el día de la entrega, quedando desde entonces de cargo del Comprador.</p>
+</section>
+
+<section class="cl n"><h2>Estado del inmueble y saneamiento</h2>
+  <p>El Vendedor declara que el Inmueble se encuentra libre de hipotecas, gravámenes, prohibiciones, embargos, litigios pendientes, medidas precautorias, arrendamientos y otros derechos reales o personales a favor de terceros, y se obliga al saneamiento de la evicción y de los vicios redhibitorios en conformidad a la ley.</p>
+  <p>Asimismo, declara que se encuentran pagados al día las contribuciones de bienes raíces, los gastos comunes, si los hubiere, y las cuentas de servicios básicos (agua, electricidad y gas) hasta la fecha de entrega, y que no tiene conocimiento de expropiaciones ni de otros trámites que afecten al Inmueble.</p>
+</section>
+
+<section class="cl n"><h2>Gastos</h2>
+  <p>Los gastos notariales de esta escritura, el costo de sus copias, los derechos del Conservador de Bienes Raíces por las inscripciones y los impuestos que correspondan a la compraventa serán de cargo del Comprador, salvo los impuestos que por ley deba pagar el Vendedor.</p>
+</section>
+
+{{#pago.credito}}<section class="cl n"><h2>Hipoteca y prohibición a favor de la institución financiera</h2>
+  <p>El Comprador declara que parte del Precio, equivalente a {{pago.saldo}}, se paga con un crédito hipotecario otorgado por {{pago.banco}}. Para garantizar dicho crédito, el Comprador constituirá a favor de la institución financiera primera hipoteca sobre el Inmueble y prohibición de gravar y enajenar, en la escritura que corresponda, las que se inscribirán en el Conservador de Bienes Raíces a continuación de la inscripción de dominio a nombre del Comprador.</p>
+  <p>El Vendedor toma conocimiento de lo anterior y consiente en ello, sin perjuicio de los derechos que esta escritura le otorga.</p>
+</section>{{/pago.credito}}
+
+<section class="cl n"><h2>Mandato para inscribir</h2>
+  <p>Las partes confieren mandato especial al portador de copia autorizada de esta escritura, para requerir y firmar las inscripciones, subinscripciones, anotaciones y cancelaciones que procedan en el {{propiedad.conservador}}, y para otorgar y firmar las escrituras de aclaración, rectificación o complementación que sean necesarias para subsanar errores u omisiones de cita, de deslindes, de cabida, de rol o de inscripción, sin necesidad de nueva intervención de las partes.</p>
+</section>
+
+{{#escritura.personerias}}<section class="cl n"><h2>Personería</h2>
+  <p>{{escritura.personerias}}</p>
+</section>{{/escritura.personerias}}
+
+<section class="cl n"><h2>Domicilio</h2>
+  <p>Para todos los efectos legales derivados de esta escritura, las partes fijan su domicilio en la comuna y ciudad de {{ciudad}} y se someten a la jurisdicción de sus tribunales ordinarios de justicia.</p>
+</section>
+
+<div class="pie-legal">Borrador de minuta preparado por {{corredora.nombre}}{{#corredora.rut}}, RUT {{corredora.rut}}{{/corredora.rut}}, atendido por {{corredor.nombre}} ({{corredor.email}}), para revisión de las partes, de su abogado y de la notaría. No constituye escritura pública. Si se firma con Portalfirma, la firma solo deja constancia de que las partes conocen y aprueban este borrador.</div>
+
+</body>
+</html>

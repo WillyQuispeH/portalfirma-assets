@@ -9,7 +9,7 @@ const { app } = require('electron');
 const store = require('./store');
 
 const DESARROLLO = 'http://localhost:3000/v1';
-const PRODUCCION = 'https://api-asset.portalfirma.cl/v1'; // la API de Asset (antes en asset.matchoncard.cl, que sigue activo para las versiones anteriores de la app)
+const PRODUCCION = 'https://api-asset.portalfirma.cl/v1'; // la API de Asset (antes en asset.matchoncard.cl, apagado el 2026-11-18: no había clientes con versiones anteriores)
 const CLAVE = 'assetSesion';
 
 const err = (m, code, status) => Object.assign(new Error(m), { code, status });

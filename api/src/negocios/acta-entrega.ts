@@ -187,6 +187,7 @@ export class ActaEntregaService {
       llenar(await this.plantillasDoc.html(u.corredoraId, 'acta-entrega'), x.vars(numero)),
     );
     const r = await this.envio.enviar({
+      plantilla: 'acta-entrega',
       corredoraId: u.corredoraId,
       pagadorRespaldo: x.usuario.email,
       usuarioId: u.sub,
@@ -228,7 +229,7 @@ export class ActaEntregaService {
             telefono: f.phone ?? '',
             firmo: false,
           })) as Prisma.InputJsonValue,
-          datos: { formato: 'acta_entrega', hito: 'entrega', numero, tipoFirma: 'simple', tramite: 'none' },
+          datos: { formato: 'acta_entrega', hito: 'entrega', numero, tipoFirma: r.tipoFirma, tramite: r.tramite },
         },
         update: {},
       });

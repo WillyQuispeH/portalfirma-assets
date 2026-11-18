@@ -20,6 +20,9 @@ async function bootstrap() {
   app.use('/v1/ia', json({ limit: '30mb' }));
   // el acta de visita recibe audios (hasta 25 MB) y fotos en base64
   app.use('/v1/actas-visita', json({ limit: '36mb' }));
+  // datos de la corredora (incluye el logo como imagen en base64, hasta ~550 KB) y plantillas (texto de todas las cláusulas)
+  app.use('/v1/corredora/datos', json({ limit: '1mb' }));
+  app.use('/v1/plantillas', json({ limit: '2mb' }));
   app.use(json({ limit: '100kb' }));
   app.use(urlencoded({ extended: true, limit: '100kb' }));
   app.setGlobalPrefix('v1');

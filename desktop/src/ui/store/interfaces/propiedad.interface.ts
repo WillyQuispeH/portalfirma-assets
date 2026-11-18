@@ -85,6 +85,8 @@ export interface IDocumentoPropiedad {
   id: string;
   nombre: string;
   fecha: string;
+  /** «Copia de dominio», «otro»… (lo que se eligió al subirlo) */
+  tipo?: string;
 }
 
 // documento generado desde una plantilla y enviado a firmar desde Asset

@@ -33,7 +33,7 @@ const POST = {
     { id: 'financiamiento', t: 'Financiamiento aprobado', a: 'Marcar como logrado', tipo: 'ok', tarea: ['promesa', 1] },
     { id: 'titulos', t: 'Estudio de títulos', a: 'Marcar como logrado', tipo: 'ok', tarea: ['promesa', 0] },
     { id: 'promesa', t: 'Promesa firmada', a: 'Enviar promesa a firmar', tipo: 'firma', etapa: 'promesa' },
-    { id: 'escritura', t: 'Escritura firmada', a: 'Enviar escritura a firmar', tipo: 'firma', etapa: 'escritura' },
+    { id: 'escritura', t: 'Escritura firmada', a: 'Preparar borrador de escritura', tipo: 'firma', etapa: 'escritura' },
     { id: 'inscripcion', t: 'Inscripción en el Conservador', a: 'Marcar como logrado', tipo: 'ok', tareas: ['inscripcion', [0, 1]] },
     { id: 'entrega', t: 'Entrega con acta', a: 'Enviar acta a firmar', tipo: 'firma', etapa: 'entrega' },
     { id: 'comision', t: 'Comisión cobrada', a: 'Marcar como logrado', tipo: 'ok', tarea: ['entrega', 1] },

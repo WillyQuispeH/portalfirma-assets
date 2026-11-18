@@ -35,7 +35,8 @@ export const CAJA_SUELTA = 'tw:m-0 tw:h-8 tw:px-2.5 tw:text-sm tw:text-text tw:b
   + 'tw:focus:bg-blue-soft tw:focus:border-b-brand tw:focus:outline-none tw:focus:ring-0 '
   + 'tw:placeholder:text-muted tw:disabled:opacity-60';
 
-const ETIQUETA = 'tw:block tw:m-0 tw:mb-0.5 tw:text-[11px] tw:font-medium tw:leading-tight tw:text-muted tw:pointer-events-none';
+// una sola línea: el texto del label no se parte en dos filas
+const ETIQUETA = 'tw:block tw:m-0 tw:mb-0.5 tw:text-[11px] tw:font-medium tw:leading-tight tw:whitespace-nowrap tw:text-muted tw:pointer-events-none';
 
 function Ok() {
   return (

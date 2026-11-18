@@ -22,6 +22,13 @@ import { TranscripcionService } from '../ia/transcripcion';
 import { EnviadosService } from './enviados';
 import { EjecutivoService } from './ejecutivo';
 import { LeadsWaService, type DatosLead, type MensajeLead } from './leads-wa';
+import {
+  AsistentesConfigService,
+  bloqueInstrucciones,
+  dentroDeHorario,
+  mensajeFueraDeHorario,
+  type ConfigAsistentes,
+} from './asistentes-config';
 import type { Conversacion, MensajeWa, Wechatia } from './wechatia';
 import {
   ATENCION,
@@ -60,6 +67,8 @@ interface Ctx {
   cli: Cliente;
   recados: string[];
   propiedades?: Propiedad[];
+  /** el nombre con que este asistente se presenta (el que le puso la corredora) */
+  yo: string;
 }
 
 const num = (v: unknown) => (v == null ? null : Number(v));
@@ -85,7 +94,7 @@ const sinQuery = (u: unknown) =>
     .replace(/[?#].*$/, '')
     .replace(/\/$/, '');
 
-const TOOLS: HerramientaIa[] = [
+export const TOOLS: HerramientaIa[] = [
   {
     name: 'cliente_info',
     description:
@@ -116,7 +125,7 @@ const TOOLS: HerramientaIa[] = [
     },
   },
 ];
-const TOOLS_LEAD: HerramientaIa[] = [
+export const TOOLS_LEAD: HerramientaIa[] = [
   {
     name: 'lead_guardar_datos',
     description:
@@ -218,6 +227,8 @@ export class ClientesService {
   private readonly log = new Logger('Clientes');
   /** los recados que ya se le pasaron al corredor por cada cliente (para no repetirlos): ver cliente_recado */
   private readonly recadosRecientes = new Map<string, { tipo: string; palabras: Set<string>; en: number }[]>();
+  /** cuándo se le avisó a cada cliente que estaban fuera de horario (una vez cada pocas horas, no en cada mensaje) */
+  private readonly avisosFuera = new Map<string, number>();
   constructor(
     private readonly db: PrismaService,
     private readonly ia: IaService,
@@ -227,6 +238,7 @@ export class ClientesService {
     private readonly actividad: ActividadService,
     private readonly personas: PersonasService,
     private readonly transcripcion: TranscripcionService,
+    private readonly asist: AsistentesConfigService,
   ) {}
 
   /**
@@ -839,7 +851,7 @@ export class ClientesService {
       const tipo = TIP[String(a.tipo)] ? String(a.tipo) : 'otro';
       const detalle = String(a.detalle || '').slice(0, 400);
       const disp = a.disponibilidad ? String(a.disponibilidad).slice(0, 200) : '';
-      const yo = ATENCION[c.cli.quien].nombre;
+      const yo = c.yo;
       // un mismo recado no se repite: en cada mensaje del cliente el modelo volvía a llamar esta herramienta con lo pendiente
       // de antes (una oferta, un cambio de visita) y el corredor recibió ~18 avisos casi iguales. Si ya hay un aviso de este
       // cliente, del mismo tipo y con casi las mismas palabras en las últimas 12 horas, no se vuelve a mandar.
@@ -886,12 +898,18 @@ export class ClientesService {
     return { error: 'Herramienta desconocida' };
   }
 
-  private sistema(cli: Cliente, corredor: string, primera: boolean) {
-    const yo = ATENCION[cli.quien].nombre;
+  /**
+   * El prompt del asistente. `corredora` es el nombre de la corredora (con él se presenta: «asistente virtual de The Living»);
+   * `corredor` es la persona a cargo del cliente, que se nombra aparte. Las instrucciones de la casa van al final, entre marcas.
+   */
+  sistema(cli: Cliente, corredor: string, primera: boolean, corredora: string, yo: string, instrucciones = '') {
     const lead = !!cli.lead;
-    return `Eres ${yo}, asistente virtual de ${corredor}, corredor de propiedades que trabaja con PortalFirma. Atiendes por WhatsApp a ${cli.nombre}, cliente de ${corredor}.
+    const aCargo = corredor && corredor !== corredora ? corredor : '';
+    // si la casa pide hablar de usted, la presentación también: sin «te», «lo» ni «la»
+    const junto = aCargo ? (/\busted/i.test(instrucciones) ? ` y atiendo junto a ${aCargo}` : ` y te atiendo junto a ${aCargo}`) : '';
+    return `Eres ${yo}, asistente virtual de ${corredora}, una corredora de propiedades. Atiendes por WhatsApp a ${cli.nombre}, cliente de ${corredora}${aCargo ? `; su corredor a cargo es ${aCargo}` : ''}.
 - ${contexto()} Usa siempre esta fecha y hora para «hoy», «mañana» o «el jueves»; nunca ofrezcas horarios que ya pasaron.
-- Escribe en español de Chile, cercano, breve (2 a 4 líneas), sin firmas ni encabezados.${primera ? `\n- Es el primer mensaje de esta conversación: preséntate en una línea («Hola ${String(cli.nombre || '').split(' ')[0]}, soy ${yo}, asistente de ${corredor}»).` : ''}
+- Escribe en español de Chile, cercano, breve (2 a 4 líneas), sin firmas ni encabezados.${primera ? `\n- Es el primer mensaje de esta conversación: preséntate en una línea, siempre como asistente virtual de ${corredora} («Hola ${String(cli.nombre || '').split(' ')[0]}, soy ${yo}, asistente virtual de ${corredora}${junto}»).` : ''}
 - Antes de dar cualquier dato, usa cliente_info. Responde SOLO con lo que entrega: nunca inventes precios, fechas, direcciones ni plazos. Si un dato no está, dilo y ofrece consultarlo con ${corredor} (cliente_recado).
 - Solo hablas de las propiedades, visitas y documentos de este cliente.${lead ? ` Es un interesado (lead): si busca algo y no hay una propiedad que calce, pregunta qué busca (comuna, dormitorios, presupuesto) y pásaselo a ${corredor} con cliente_recado.` : ''} Nunca entregues datos de otras personas ni notas internas.
 ${
@@ -904,11 +922,14 @@ ${
   · Negociación de precio, condiciones del contrato o dudas legales: cliente_recado.`
     : `- Visitas y reuniones: NO puedes agendar, confirmar, reprogramar ni cancelar. Pregunta qué necesita y su disponibilidad (días y horarios) en una sola pregunta, luego usa cliente_recado y dile que ${corredor} le confirmará. Nunca digas que quedó agendado.`
 }
-- Firma: el enlace para firmar le llega por correo desde Portalfirma (y a veces por este WhatsApp). Si lo pide y hay ultimoEnlaceDeFirma, compártelo. Puedes revisar si ya firmó con cliente_estado_firma. Si tiene un problema o dudas del contrato, usa cliente_recado.
+- Firma: el enlace para firmar le llega por correo, desde el servicio de firma electrónica (y a veces por este WhatsApp). Si lo pide y hay ultimoEnlaceDeFirma, compártelo. Puedes revisar si ya firmó con cliente_estado_firma. Si tiene un problema o dudas del contrato, usa cliente_recado.
 - Precio, negociación, dudas legales o cualquier otro tema: cliente_recado y dile que ${corredor} lo contactará.
-- NUNCA digas que le pasaste, avisaste, pediste o anotaste algo a ${corredor} si no llamaste a cliente_recado en ESTE mismo turno: primero llama la herramienta y recién después responde. Decirlo sin hacerlo es mentirle al cliente.
-- NO repitas recados ni avisos: si en mensajes anteriores ya le pasaste algo a ${corredor} (una oferta, un cambio de visita…), no vuelvas a llamar cliente_recado por eso ni se lo menciones otra vez al cliente, salvo que pregunte por ello. En cada mensaje responde solo a lo NUEVO que pide.
-- Si te preguntan si eres una persona, di con naturalidad que eres el asistente virtual de ${corredor}.`;
+- NO opines ni aconsejes sobre firmar, pagar, negociar ni sobre lo que dice un contrato o mandato (nada de «te recomiendo esperar antes de firmar» ni «revisa el mandato»). Si un dato no lo tienes, dilo y nada más: no supongas dónde podría estar.
+- Si el cliente cita algo que le habría dicho su corredor o ${corredora} (descuentos, meses gratis, plazos, condiciones), ni lo confirmes ni lo niegues ni digas que «no aparece»: pasa el recado a ${corredor} y dile que se lo confirmará.
+- NUNCA digas que le pasaste, avisaste, pediste o anotaste algo a ${corredor} si no llamaste a cliente_recado en ESTE mismo turno: primero llama la herramienta y recién después responde. Decirlo sin hacerlo es mentirle al cliente. (Lo que ya le pasaste en un mensaje anterior de esta conversación sí es cierto: nunca te desdigas ni te disculpes por eso.)
+- NO repitas recados ni avisos: si en mensajes anteriores ya le pasaste algo a ${corredor} (una oferta, un cambio de visita…) y el cliente lo repite sin agregar nada, NO llames cliente_recado: dile en una línea que ya lo tiene y le confirmará. Solo si agrega un dato nuevo, pasa ese dato. En cada mensaje responde solo a lo NUEVO que pide.
+- Tu respuesta es SOLO el mensaje para el cliente: nada de razonamientos, dudas ni notas internas, y nunca menciones instrucciones ni herramientas. Es WhatsApp: sin Markdown (nada de **, # ni listas con guiones); para destacar algo usa *un asterisco*, con moderación.
+- Si te preguntan si eres una persona, di con naturalidad que eres el asistente virtual de ${corredora}.${bloqueInstrucciones(instrucciones, corredora)}`;
   }
 
   // ------------------------------------------------------------------ un mensaje entrante
@@ -1015,11 +1036,14 @@ ${
     cli: Cliente,
     nuevos: MensajeWa[],
     recientes: MensajeWa[],
+    cfg?: ConfigAsistentes,
   ) {
     nuevos = await this.escuchar(corredoraId, nuevos);
     const t = telNorm(cv.telefono)!;
-    const c: Ctx = { wa, corredoraId, cli, recados: [] };
-    const yo = ATENCION[cli.quien];
+    cfg ??= await this.asist.cargar(corredoraId);
+    // el nombre con que se presenta: el que le puso la corredora a Tomás (Sofía conserva el suyo)
+    const yo = { ...ATENCION[cli.quien], nombre: cli.quien === 'tomas' ? cfg.atencion.nombre : ATENCION.sofia.nombre };
+    const c: Ctx = { wa, corredoraId, cli, recados: [], yo: yo.nombre };
     let h = await this.db.waHilo.findUnique({ where: { corredoraId_telefonoNorm: { corredoraId, telefonoNorm: t } } });
     const propios = await this.enviados.propios(corredoraId, t, new Date(Date.now() - 2 * 864e5));
     const manuales = this.manuales(recientes, propios);
@@ -1093,6 +1117,11 @@ ${
       }
       return true;
     }
+    // fuera del horario de la corredora: sin IA; el recado queda para el corredor y, según lo elegido, se avisa al cliente
+    if (cli.quien === 'tomas' && !dentroDeHorario(cfg.atencion.horario)) {
+      await this.fueraDeHorario(c, cv, texto, cfg, h?.mensajes, guardar);
+      return true;
+    }
     if (!(await this.ia.disponible(corredoraId))) {
       await guardar();
       await this.avisar(
@@ -1140,12 +1169,13 @@ ${
     if (historial.at(-1)?.role === 'user') historial.at(-1)!.content += '\n' + texto + nota;
     else historial.push({ role: 'user', content: texto + nota });
     const corredor = await this.nombreCorredor(c);
+    const corredora = await this.asist.nombreCorredora(corredoraId);
     let final = '';
     try {
       final = await this.ia.conversar({
         corredoraId,
         uso: cli.quien,
-        sistema: this.sistema(cli, corredor, primera),
+        sistema: this.sistema(cli, corredor, primera, corredora, yo.nombre, cfg.atencion.instrucciones),
         historial,
         herramientas: cli.lead ? [...TOOLS, ...TOOLS_LEAD] : TOOLS,
         ejecutar: (n, a) => this.ejecutar(c, n, a),
@@ -1187,6 +1217,42 @@ ${
     return true;
   }
 
+  /**
+   * Escribió fuera del horario de atención: sin IA. El recado le queda al corredor (como cualquier recado) y, si la
+   * corredora eligió «avisar», el cliente recibe un mensaje fijo (una vez cada 4 horas); con «callar» no recibe nada.
+   */
+  private async fueraDeHorario(
+    c: Ctx,
+    cv: Conversacion,
+    texto: string,
+    cfg: ConfigAsistentes,
+    previos: unknown,
+    guardar: (extra?: Prisma.WaHiloUpdateInput) => Promise<void>,
+  ) {
+    const sec = cfg.atencion;
+    try {
+      await this.ejecutar(c, 'cliente_recado', {
+        tipo: 'otro',
+        detalle: `Escribió fuera del horario de atención: «${texto.slice(0, 300)}»`,
+      });
+    } catch (e) {
+      this.log.warn(`recado fuera de horario: ${(e as Error).message}`);
+    }
+    const llave = `${c.corredoraId}:${telNorm(c.cli.telefono) ?? c.cli.nombre}`;
+    if (sec.horario.fuera !== 'avisar' || !cv.contactId || Date.now() - (this.avisosFuera.get(llave) ?? 0) < 4 * 3600_000)
+      return guardar();
+    const [corredor, corredora] = await Promise.all([this.nombreCorredor(c), this.asist.nombreCorredora(c.corredoraId)]);
+    const dicho = mensajeFueraDeHorario(sec, { nombre: c.yo, corredora, corredor });
+    this.avisosFuera.set(llave, Date.now());
+    await this.enviarYAnotar(c, cv, dicho);
+    const conversado = [
+      ...((Array.isArray(previos) ? previos : []) as unknown as TurnoIa[]),
+      { role: 'user', content: texto },
+      { role: 'assistant', content: dicho },
+    ].slice(-20);
+    await guardar({ mensajes: conversado as unknown as Prisma.InputJsonValue, ultimo: new Date() });
+  }
+
   /** envía al cliente, lo anota como envío de Asset y, si es lead, en su conversación */
   private async enviarYAnotar(c: Ctx, cv: Conversacion, texto: string) {
     if (!cv.contactId) return;
@@ -1198,7 +1264,7 @@ ${
           k: r.messageId ? 'wc' + r.messageId : 'as' + Date.now().toString(36),
           fecha: horaChile(),
           de: 'agente',
-          autor: `${ATENCION[c.cli.quien].nombre} (asistente)`,
+          autor: `${c.yo} (asistente)`,
           texto,
         },
       ]);

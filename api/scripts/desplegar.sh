@@ -54,5 +54,7 @@ if [ "\$estado" != healthy ]; then
   exit 1
 fi
 docker image prune -f >/dev/null
+# la caché de construcción crece con cada despliegue (llegó a 50 GB y al 84 % del disco): se borra lo de más de 3 días
+docker builder prune -f --filter until=72h >/dev/null 2>&1 || true
 echo "✓ API desplegada: \$(curl -s http://127.0.0.1:4570/v1/salud)"
 EOF

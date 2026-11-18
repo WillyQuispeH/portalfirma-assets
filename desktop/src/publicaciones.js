@@ -15,11 +15,11 @@ const xmlEsc = (s) => String(s ?? '').replace(/]]>/g, ']]]]><![CDATA[>');
 const cd = (s) => `<![CDATA[ ${xmlEsc(s)} ]]>`;
 
 const PORTALES = {
-  pi: { id: 'pi', nombre: 'Portal Inmobiliario', via: 'api', detalle: 'Publica por API y se ve también en Mercado Libre. Usa el paquete de publicaciones de la cuenta.', maxTitulo: 60 },
-  chilepropiedades: { id: 'chilepropiedades', nombre: 'Chilepropiedades', via: 'feed', detalle: 'Lee el feed de avisos una vez al día (de madrugada). La integración es gratis si la aprueban; el número de avisos depende del plan (desde $3.990 al mes por 30).', maxTitulo: 65, correo: 'integraciones@chilepropiedades.cl' },
-  broku: { id: 'broku', nombre: 'Broku', via: 'feed', enTramite: true, detalle: 'Portal inmobiliario con mapa de precios. La integración está en trámite: mientras Broku entrega su API, Asset deja el feed listo y los avisos en espera; al activarla, entran solos.', maxTitulo: 70, correo: null },
-  toctoc: { id: 'toctoc', nombre: 'TOCTOC', via: 'acuerdo', detalle: 'Recibe avisos de software de corredoras por acuerdo comercial. Se usa el mismo feed.', maxTitulo: 70 },
-  yapo: { id: 'yapo', nombre: 'Yapo', via: 'acuerdo', detalle: 'Requiere un acuerdo con su equipo comercial. Se usa el mismo feed.', maxTitulo: 70 },
+  pi: { id: 'pi', nombre: 'Portal Inmobiliario', via: 'api', detalle: 'Publica tus avisos desde Asset; también se ven en Mercado Libre y usan el paquete de publicaciones de tu cuenta.', maxTitulo: 60 },
+  chilepropiedades: { id: 'chilepropiedades', nombre: 'Chilepropiedades', via: 'feed', detalle: 'Actualiza los avisos una vez al día. La integración es gratis si la aprueban; el número de avisos depende del plan.', maxTitulo: 65, correo: 'integraciones@chilepropiedades.cl' },
+  broku: { id: 'broku', nombre: 'Broku', via: 'feed', enTramite: true, detalle: 'Portal con mapa de precios. Estamos coordinando la conexión; cuando esté lista, podrás publicar desde aquí.', maxTitulo: 70, correo: null },
+  toctoc: { id: 'toctoc', nombre: 'TOCTOC', via: 'acuerdo', detalle: 'Para publicar hace falta un acuerdo comercial con TOCTOC. Cuando esté firmado, lo activamos en Asset.', maxTitulo: 70 },
+  yapo: { id: 'yapo', nombre: 'Yapo', via: 'acuerdo', detalle: 'Para publicar hace falta un acuerdo con su equipo comercial. Cuando esté listo, lo activamos en Asset.', maxTitulo: 70 },
 };
 const TIPO_FEED = { casa: 'Casa', departamento: 'Departamento', oficina: 'Oficina', sitio: 'Sitio', local_comercial: 'Local Comercial', industrial: 'Terreno Industrial', agricola: 'Terreno Agricola', parcela: 'Parcela', estacionamiento: 'Estacionamiento', terreno_construccion: 'Terreno', bodega: 'Bodega' };
 const MONEDA_FEED = { UF: 'CLF', CLP: 'CLP', USD: 'USD' };

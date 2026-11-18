@@ -5,7 +5,7 @@ export interface IAprobacionPlantilla { revisor: string; nota: string; porNombre
 
 export interface IPlantillaItem {
   nombre: string; titulo: string; descripcion: string; estado: TEstadoPlantilla; version: number; propia: boolean;
-  cambiadas: number; editables: number; aprobacion: IAprobacionPlantilla | null; actualizada: string | null;
+  cambiadas: number; editables: number; aprobacion: IAprobacionPlantilla | null; actualizada: string | null; firma?: IFirmaPlantilla;
 }
 export interface IListaPlantillas { puedeEditar: boolean; items: IPlantillaItem[] }
 
@@ -14,5 +14,8 @@ export interface IVersionPlantilla { n: number; nota: string; porNombre: string;
 
 export interface IDetallePlantilla {
   nombre?: string; titulo: string; descripcion: string; puedeEditar: boolean; estado: TEstadoPlantilla; version: number;
-  aprobacion: IAprobacionPlantilla | null; variables: string[]; bloques: IBloquePlantilla[]; versiones: IVersionPlantilla[];
+  aprobacion: IAprobacionPlantilla | null; firma?: IFirmaPlantilla; variables: string[]; bloques: IBloquePlantilla[]; versiones: IVersionPlantilla[];
 }
+
+/** cómo se firma un documento hecho con la plantilla (legalization = legalización notarial de las firmas) */
+export interface IFirmaPlantilla { tipoFirma: 'simple' | 'avanzada'; tramite: 'none' | 'legalization' }

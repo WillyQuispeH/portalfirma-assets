@@ -693,7 +693,7 @@ export class EvaluacionService {
 
   private async decir(wa: Wechatia, corredoraId: string, cv: Conversacion, texto: string) {
     if (!cv.contactId) return;
-    const r = await wa.enviarAContacto(cv.contactId, `${firma('tomas')}\n${texto}`);
+    const r = await wa.enviarAContacto(cv.contactId, `${firma('tomas', corredoraId)}\n${texto}`);
     await this.enviados.registrar(corredoraId, cv.telefono, { messageId: r.messageId, texto, enHilo: false });
   }
 

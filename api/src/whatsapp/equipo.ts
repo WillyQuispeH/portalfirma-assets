@@ -21,7 +21,7 @@ import { normalizar } from '../comun/texto';
 import { IaService, type HerramientaIa, type TurnoIa } from './ia';
 import { EnviadosService } from './enviados';
 import type { Conversacion, MensajeWa, Wechatia } from './wechatia';
-import { contexto, diaSemana, firma, hoy, norm, sumarDias } from './comun';
+import { contexto, diaSemana, firma, hoy, nombresAsistentes, norm, sumarDias } from './comun';
 
 type TPersona = 'pedro' | 'juanita' | 'diego' | 'fernanda';
 const PERSONAS: Record<TPersona, { nombre: string; area: string; foco: string }> = {
@@ -210,12 +210,16 @@ export class EquipoService {
 
   /** a quién le habla: el personaje que nombra («Juanita, …», «mis documentos Juanita»; si nombra varios, el primero),
    *  o el de la última vez (Pedro si es la primera) */
-  private personaDe(texto: string, previa: unknown): TPersona {
+  private personaDe(texto: string, previa: unknown, corredoraId?: string): TPersona {
     const t = norm(texto);
     let mejor: { id: TPersona; en: number } | null = null;
     for (const id of Object.keys(PERSONAS) as TPersona[]) {
-      const m = new RegExp(`(^|[^a-z])${id}([^a-z]|$)`).exec(t);
-      if (m && (!mejor || m.index < mejor.en)) mejor = { id, en: m.index };
+      // se le puede hablar por su nombre de siempre o por el que le puso la corredora (Configuración › Asistentes)
+      const propio = corredoraId ? norm(nombresAsistentes.get(corredoraId)?.[id] ?? '').replace(/[^a-z0-9 ]/g, '').trim() : '';
+      for (const nombre of propio ? [id, propio] : [id]) {
+        const m = new RegExp(`(^|[^a-z])${nombre}([^a-z]|$)`).exec(t);
+        if (m && (!mejor || m.index < mejor.en)) mejor = { id, en: m.index };
+      }
     }
     if (mejor) return mejor.id;
     return previa && (previa as string) in PERSONAS ? (previa as TPersona) : 'pedro';
@@ -232,11 +236,11 @@ export class EquipoService {
     const { textos: dichos, avisos: avisosAudio } = await this.escuchar(v.corredoraId, nuevos);
     const texto = [escrito, ...dichos].filter(Boolean).join('\n');
     const datos = (v.datos ?? {}) as { persona?: string; hilos?: Record<string, TurnoIa[]>; nombre?: string };
-    const persona = this.personaDe(texto, datos.persona);
-    const p = PERSONAS[persona];
+    const persona = this.personaDe(texto, datos.persona, v.corredoraId);
+    const p = { ...PERSONAS[persona], nombre: nombresAsistentes.get(v.corredoraId)?.[persona] || PERSONAS[persona].nombre };
     const enviar = async (t: string) => {
       if (!cv.contactId) return;
-      const r = await wa.enviarAContacto(cv.contactId, `${firma(persona)}\n${t}`.slice(0, 3500));
+      const r = await wa.enviarAContacto(cv.contactId, `${firma(persona, v.corredoraId)}\n${t}`.slice(0, 3500));
       await this.enviados.registrar(v.corredoraId, cv.telefono, { messageId: r.messageId, texto: t, enHilo: false });
     };
     // lo que se entendió del audio, para que lo corrija si el micrófono o el ruido jugaron una mala pasada

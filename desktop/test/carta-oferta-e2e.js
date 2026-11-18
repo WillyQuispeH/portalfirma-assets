@@ -27,6 +27,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     await w.waitForSelector('#pasoEnviar'); ok(/Ver la carta y enviarla a firmar/.test(await txt('#pasoEnviar')), 'sin cartas enviadas, el paso ofrece «Ver la carta y enviarla a firmar»');
     await w.click('#pasoEnviar'); await w.waitForSelector('#coNombre', { timeout: 15000 });
     ok(await w.inputValue('#coNombre') === 'Matías Serrano' && await w.inputValue('#coEmail') === 'matias@correo.cl' && await w.inputValue('#coVigencia') === '3', 'la ventana trae al arrendatario del negocio y la vigencia por defecto');
+    ok(await w.locator('#coConProp').count() === 1 && !(await w.locator('#coFirman').count()), 'en arriendo el interruptor «También firma el propietario» sigue (la venta lo reemplaza por «Firman el comprador y el vendedor»)');
     await shot('co1-carta.png');
 
     // sin guardar no se puede enviar; lo editado queda en la persona y en el negocio

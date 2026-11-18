@@ -17,6 +17,7 @@ import { PropiedadesService } from './propiedades/propiedades.service';
 import { ConvectaController, ConvectaService } from './propiedades/convecta';
 import { CorredoraDocController, CorredoraDocService } from './documentos/corredora-doc';
 import { PlantillasDocController, PlantillasDocService } from './documentos/plantillas-doc';
+import { DominioIaController, DominioIaService } from './propiedades/dominio-ia';
 import { FeedsController } from './propiedades/feeds';
 import { ArchivosModule } from './archivos/archivos';
 import { NegociosController, NegociosService } from './negocios/negocios';
@@ -52,6 +53,8 @@ import { CartaOfertaController, CartaOfertaService } from './negocios/carta-ofer
 import { ContratoArriendoController, ContratoArriendoService } from './negocios/contrato-arriendo';
 import { MandatoArriendoController, MandatoArriendoService } from './negocios/mandato-arriendo';
 import { MandatoVentaController, MandatoVentaService } from './negocios/mandato-venta';
+import { EscrituraCompraventaController, EscrituraCompraventaService } from './negocios/escritura-compraventa';
+import { PromesaCompraventaController, PromesaCompraventaService } from './negocios/promesa-compraventa';
 import { ActaEntregaController, ActaEntregaService } from './negocios/acta-entrega';
 import { ActaFirmaController, ActaFirmaService } from './whatsapp/acta-firma';
 import { LeadsWaService } from './whatsapp/leads-wa';
@@ -64,6 +67,7 @@ import { ConfirmacionVisitaController, ConfirmacionVisitaService } from './whats
 import { DocumentoRevisionService } from './whatsapp/documento-revision';
 import { ActaVisitaController, ActaVisitaService } from './whatsapp/acta-visita';
 import { LectorController, LectorService } from './whatsapp/lector';
+import { AsistentesConfigController, AsistentesConfigService } from './whatsapp/asistentes-config';
 import { LeadsEnvioController, PuenteService } from './whatsapp/puente';
 
 @Module({
@@ -77,6 +81,7 @@ import { LeadsEnvioController, PuenteService } from './whatsapp/puente';
     ArchivosModule,
   ],
   controllers: [
+    DominioIaController,
     PlantillasDocController,
     CorredoraDocController,
     ConvectaController,
@@ -109,12 +114,15 @@ import { LeadsEnvioController, PuenteService } from './whatsapp/puente';
     EjecutivoController,
     ObservadorController,
     LectorController,
+    AsistentesConfigController,
     EvaluacionController,
     OrdenVisitaController,
     CartaOfertaController,
     ContratoArriendoController,
     MandatoArriendoController,
     MandatoVentaController,
+    EscrituraCompraventaController,
+    PromesaCompraventaController,
     ActaEntregaController,
     ActaFirmaController,
     ConfirmacionVisitaController,
@@ -127,6 +135,7 @@ import { LeadsEnvioController, PuenteService } from './whatsapp/puente';
     ConvectaService,
     CorredoraDocService,
     PlantillasDocService,
+    DominioIaService,
     PersonasService,
     NegociosService,
     EventosService,
@@ -156,6 +165,8 @@ import { LeadsEnvioController, PuenteService } from './whatsapp/puente';
     ContratoArriendoService,
     MandatoArriendoService,
     MandatoVentaService,
+    EscrituraCompraventaService,
+    PromesaCompraventaService,
     ActaEntregaService,
     ActaFirmaService,
     TranscripcionService,
@@ -169,6 +180,7 @@ import { LeadsEnvioController, PuenteService } from './whatsapp/puente';
     PostventaWaService,
     ObservadorService,
     LectorService,
+    AsistentesConfigService,
     PuenteService,
     EvaluacionService,
     ConfirmacionVisitaService,

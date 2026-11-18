@@ -2,6 +2,7 @@
 //   · pedirNotaVersion   (modal-141)  «Guardar versión»: nota opcional            → string | null (null = cancelar)
 //   · pedirAprobacion    (modal-142)  «Aprobar»: revisado por (obligatorio) y nota → { revisor, nota } | null
 //   · elegirVersion      (modal-143)  «Historial de versiones»: restaurar una      → número de versión | null
+//   · configurarFirma    (modal-149)  «Cómo se firma»: tipo de firma y legalización → { tipoFirma, tramite } | null
 // Las confirmaciones (confirmar de utils/app.ts) usan modal-144 (toda la plantilla a la base), modal-145 (restaurar una
 // versión) y modal-146 (salir con cambios sin guardar), en Detalle.tsx.
 import { useState, type FormEvent, type ReactElement } from 'react';
@@ -9,12 +10,13 @@ import { VentanaCabecera, VentanaCuerpo, VentanaPie } from '../../../ui/Ventana'
 import Boton from '../../../ui/Boton';
 import Input from '../../../ui/Input';
 import Textarea from '../../../ui/Textarea';
+import Select from '../../../ui/Select';
 import ItemLista from '../../../ui/ItemLista';
 import Badge from '../../../ui/Badge';
 import Icono from '../../../ui/Icono';
 import { abrirModal, cerrarModal } from '../../../../utils/modal';
 import { fechaHora } from '../../../../utils/formato';
-import type { IVersionPlantilla } from './tipos';
+import type { IFirmaPlantilla, IVersionPlantilla } from './tipos';
 
 function NotaVersion({ alResponder }: { alResponder: (nota: string | null) => void }) {
   const [nota, setNota] = useState('');
@@ -87,6 +89,29 @@ function Historial({ versiones, vigente, puedeEditar, alResponder }: { versiones
   </>;
 }
 
+function ConfigurarFirma({ firma, soloLectura, alResponder }: { firma: IFirmaPlantilla; soloLectura: boolean; alResponder: (f: IFirmaPlantilla | null) => void }) {
+  const [f, setF] = useState<IFirmaPlantilla>(firma);
+  const enviar = (e: FormEvent) => { e.preventDefault(); alResponder(f); };
+  const cambio = f.tipoFirma !== firma.tipoFirma || f.tramite !== firma.tramite;
+  return <>
+    <VentanaCabecera titulo="Cómo se firma" descripcion={soloLectura ? 'Solo el administrador de la corredora puede cambiarlo.' : 'Vale para todos los documentos que se arman con esta plantilla.'} icono="sign" onCerrar={() => alResponder(null)} />
+    <VentanaCuerpo>
+      <form id="plFirmaForm" onSubmit={enviar} className="tw:flex tw:flex-col tw:gap-3">
+        <Select id="plTipoFirma" etiqueta="Tipo de firma" disabled={soloLectura} value={f.tipoFirma} opciones={[['simple', 'Firma simple'], ['avanzada', 'Firma avanzada']]}
+          ayuda={f.tipoFirma === 'avanzada' ? 'Avanzada: se verifica la identidad de quien firma con certificado o Clave Única. Cuesta más en Portalfirma.' : 'Simple: quien firma confirma con un código que le llega por correo o al celular.'}
+          onChange={(e) => setF((x) => ({ ...x, tipoFirma: e.target.value as IFirmaPlantilla['tipoFirma'] }))} />
+        <Select id="plTramite" etiqueta="Legalización notarial" disabled={soloLectura} value={f.tramite} opciones={[['none', 'Sin trámite'], ['legalization', 'Con legalización notarial']]}
+          ayuda="Portalfirma coordina la legalización; tiene un costo adicional."
+          onChange={(e) => setF((x) => ({ ...x, tramite: e.target.value as IFirmaPlantilla['tramite'] }))} />
+      </form>
+    </VentanaCuerpo>
+    <VentanaPie>
+      <Boton id="mCancel" variante="secundario" onClick={() => alResponder(null)}>{soloLectura ? 'Cerrar' : 'Cancelar'}</Boton>
+      {!soloLectura && <Boton id="mOk" type="submit" form="plFirmaForm" icono="save" disabled={!cambio}>Guardar</Boton>}
+    </VentanaPie>
+  </>;
+}
+
 function preguntar<T>(dibujar: (fin: (r: T | null) => void) => ReactElement, clave: string): Promise<T | null> {
   return new Promise((resolver) => {
     const fin = (r: T | null) => { cerrarModal(); resolver(r); };
@@ -98,3 +123,4 @@ export const pedirNotaVersion = () => preguntar<string>((fin) => <NotaVersion al
 export const pedirAprobacion = (version: number) => preguntar<{ revisor: string; nota: string }>((fin) => <Aprobacion version={version} alResponder={fin} />, 'modal-142');
 export const elegirVersion = (versiones: IVersionPlantilla[], vigente: number, puedeEditar: boolean) =>
   preguntar<number>((fin) => <Historial versiones={versiones} vigente={vigente} puedeEditar={puedeEditar} alResponder={fin} />, 'modal-143');
+export const configurarFirma = (firma: IFirmaPlantilla, soloLectura: boolean) => preguntar<IFirmaPlantilla>((fin) => <ConfigurarFirma firma={firma} soloLectura={soloLectura} alResponder={fin} />, 'modal-149');

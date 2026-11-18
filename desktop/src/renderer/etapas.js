@@ -93,6 +93,10 @@ function extraPaso(x, alTerminar) {
     const dd = docsDeFirma(x, /carta oferta/i, () => cartaOferta(x.negocioId, () => alTerminar?.()), 'Ver la carta y enviarla a firmar');
     return { ...dd, etiquetaEnviar: dd.documentos.length ? 'Enviar una carta nueva' : 'Ver la carta y enviarla a firmar', alCambioDocs: alTerminar };
   }
+  if (id === 'promesa' && x.negocioId && x.tipo === 'firma') { // la promesa de compraventa la arma Asset (plantilla HTML → PDF en el servidor): se ve el PDF antes de enviarlo a firmar
+    const dd = docsDeFirma(x, /promesa de compraventa/i, () => promesaCompraventa(x.negocioId, () => alTerminar?.()), 'Ver la promesa y enviarla a firmar');
+    return { ...dd, etiquetaEnviar: dd.documentos.length ? 'Enviar una promesa nueva' : 'Ver la promesa y enviarla a firmar', alCambioDocs: alTerminar };
+  }
   if (id === 'contrato' && x.negocioId && x.tipo === 'firma') { // el contrato lo arma Asset (plantilla HTML → PDF en el servidor): se ve antes de enviarlo a firmar
     const dd = docsDeFirma(x, /contrato de arriendo/i, () => contratoArriendo(x.negocioId, () => alTerminar?.(), 'firma'), 'Enviar el contrato aprobado a firmar');
     return { ...dd, etiquetaEnviar: dd.documentos.length ? 'Enviar un contrato nuevo' : 'Enviar el contrato aprobado a firmar', alCambioDocs: alTerminar };
@@ -100,6 +104,10 @@ function extraPaso(x, alTerminar) {
   if (id === 'entrega' && x.negocioId && x.tipo === 'firma') { // el acta de entrega e inventario la arma Asset: se llena, se ve el PDF y se envía a firmar
     const dd = docsDeFirma(x, /acta de entrega/i, () => actaEntrega(x.negocioId, () => alTerminar?.()), 'Hacer el acta de entrega');
     return { ...dd, etiquetaEnviar: dd.documentos.length ? 'Enviar un acta nueva' : 'Hacer el acta de entrega', alCambioDocs: alTerminar };
+  }
+  if (id === 'escritura' && x.negocioId && x.tipo === 'firma') { // el borrador de escritura (minuta para la notaría) lo arma Asset: se llena, se ve el PDF, se descarga o se envía a firmar; «Marcar como logrado» sigue disponible
+    const dd = docsDeFirma(x, /escritura de compraventa/i, () => escrituraCompraventa(x.negocioId, () => alTerminar?.()), 'Preparar el borrador de escritura');
+    return { ...dd, etiquetaEnviar: dd.documentos.length ? 'Preparar un borrador nuevo' : 'Preparar el borrador de escritura', alCambioDocs: alTerminar };
   }
   if ((t === 'firma' || t === 'revisar') && x.etapaFirma && x.negocioId)
   { // modal-13: documentos generados + enviar a firmar (o revisar las firmas)
@@ -111,6 +119,12 @@ function extraPaso(x, alTerminar) {
 // los propietarios de una propiedad como los usan las ventanas de los documentos (sus datos se completan ahí mismo)
 const dueñosDe = (propId) => { const t = (x) => (x == null ? '' : String(x)); return (propDe(propId)?.vinculos || []).filter((v) => v.rol === 'propietario').map((v) => (window.Inmo._IM.data?.personas || []).find((q) => q.id === v.personaId)).filter(Boolean)
   .map((q) => ({ id: q.id, base: q, nombre: t(q.nombre), rut: t(q.rut), email: t(q.email), telefono: t(q.telefono), nacionalidad: t(q.nacionalidad) || 'chilena', estadoCivil: t(q.estadoCivil), profesion: t(q.profesion), direccion: t(q.direccion) })); };
+// la inscripción de dominio que tiene la ficha de la propiedad (si falta, los documentos dicen «en el Conservador de Bienes Raíces respectivo» y la ventana avisa)
+const dominioDe = (p) => { const t = (x) => (x == null ? '' : String(x)); const f = p?.ficha || {}; return { fojas: t(f.fojas), numero: t(f.numeroInscripcion), anio: t(f.anioInscripcion), conservador: t(f.conservador) }; };
+// «Leer desde la copia de dominio» (modal-150, ficha/DominioDesdeCopia.tsx) reemplaza la ventana del documento; al terminar (se guarde o no) se vuelve a abrir con los datos de la ficha
+const leerDominio = (propId, reabrir) => window.Ventanas.abrir('inmo.dominioCopia', { propiedadId: propId, alTerminar: () => reabrir() }, { clave: 'modal-150', ancho: true });
+// guarda en la ficha de la propiedad solo lo que se completó en la ventana del documento (inscripción de dominio o cuenta de pago)
+const guardarFichaDoc = async (propId, cambios) => { await api('inmoPropGuardar', { id: propId, ficha: cambios }); try { await cargar(); } catch {} };
 // ---------- carta oferta: Asset arma el PDF (plantilla HTML en el servidor); el corredor lo ve, lo ajusta y lo envía a firmar ----------
 // Lo editado se guarda en su origen (la persona del CRM y el negocio: monto, garantía, plazo, vigencia, condiciones) y el
 // servidor arma el PDF con lo ya guardado. Al firmarse, el negocio avanza solo.
@@ -120,10 +134,16 @@ async function cartaOferta(negocioId, despues) {
   if (!n0.cliente) return toast('Primero vincula al ' + (n0.tipo === 'venta' ? 'comprador' : 'arrendatario') + ' del negocio (paso «Interesado registrado»).', 5000);
   window.members(async () => {
     const pdfPromesa = api('cartaVistaPrevia', { negocioId }).then((r) => ({ pdf: r.pdf || '' })); pdfPromesa.catch(() => {});   // la ventana se abre ya: el documento se arma ahí mismo (o se trae, si ya existe) y la vista previa lo muestra al llegar
+    if (n0.tipo === 'venta') { try { await cargar(); } catch {} }   // venta: la ficha al día (la inscripción de dominio puede haberse completado o leído desde la copia)
     const per = (IM.data.personas || []).find((x) => x.id === n0.cliente.id) || n0.cliente; const p = (IM.data.propiedades || []).find((x) => x.id === n0.prop?.id) || n0.prop || {};
     const o = n0.oferta || {}; const fmt = (x) => (x ? Number(x).toLocaleString('es-CL', { maximumFractionDigits: 2 }) : '');
     window.Ventanas.abrir('negocios.cartaOferta', {
       pdfPromesa, tipo: n0.tipo === 'venta' ? 'venta' : 'arriendo',
+      ...(n0.tipo === 'venta' && n0.prop?.id ? {   // aviso «Falta la inscripción de dominio»: completarla ahí mismo o leerla de la copia de dominio
+        dominio: dominioDe(p),
+        alGuardarDominio: async (c) => { await guardarFichaDoc(n0.prop.id, c); return { pdf: (await api('cartaVistaPrevia', { negocioId })).pdf || '' }; },
+        alLeerDominio: () => leerDominio(n0.prop.id, () => cartaOferta(negocioId, despues)),
+      } : {}),
       datos: { nombre: per.nombre || '', rut: per.rut || '', email: per.email || '', telefono: per.telefono || '', nacionalidad: per.nacionalidad || 'chilena', estadoCivil: per.estadoCivil || '', profesion: per.profesion || '', direccion: per.direccion || '',
         monto: fmt(n0.valor?.valor), moneda: n0.valor?.moneda || 'UF', garantia: o.garantia || '', plazo: o.plazo || '', vigencia: o.vigencia || '3', condiciones: o.condiciones || '',
         piePct: o.piePct || '', promesaDias: o.promesaDias || '', escrituraDias: o.escrituraDias || '', seriedadUF: o.seriedadUF || '', comisionPct: o.comisionPct || '' },
@@ -203,6 +223,48 @@ async function mandatoVenta(propId, despues) {
     }, { clave: 'modal-131', ancho: true });
   }, 'Para armar el mandato, inicia sesión con tu cuenta de Portalfirma.');
 }
+// ---------- promesa de compraventa: Asset arma el PDF (plantilla HTML en el servidor); se ve, se puede DESCARGAR sin firmar o enviar a firmar al comprador y al vendedor ----------
+// Lo editado se guarda en su origen (cada persona en su ficha; la propiedad: rol e inscripción de dominio; el negocio: precio y condiciones de la
+// carta oferta, y lo propio de la promesa en n.ciclo.promesa) y el servidor arma el PDF con lo ya guardado. Al firmarse, el paso «Promesa firmada» y el negocio avanzan solos.
+async function promesaCompraventa(negocioId, despues) {
+  const n0 = await api('negObtener', negocioId).catch(() => null);
+  if (!n0) return toast('No encontré el negocio.');
+  if (n0.tipo !== 'venta') return toast('La promesa de compraventa es solo para negocios de venta.', 5000);
+  if (!n0.cliente) return toast('Primero vincula al comprador del negocio (paso «Interesado registrado»).', 5000);
+  window.members(async () => {
+    const pdfPromesa = api('promesaVistaPrevia', { negocioId }).then((r) => ({ pdf: r.pdf || '' })); pdfPromesa.catch(() => {});   // la ventana se abre ya: el documento se arma ahí mismo y la vista previa lo muestra al llegar
+    try { await cargar(); } catch {}   // la cartera al día: las personas y la propiedad pueden haber cambiado
+    const t = (x) => (x == null ? '' : String(x)); const fmt = (x) => (x ? Number(x).toLocaleString('es-CL', { maximumFractionDigits: 2 }) : '');
+    const per = (IM.data.personas || []).find((x) => x.id === n0.cliente.id) || n0.cliente; const p = propDe(n0.prop?.id) || n0.prop || {}; const f = p.ficha || {};
+    const o = n0.oferta || {}; const k = n0.ciclo?.promesa || {};
+    const comprador = { id: per.id, base: per, nombre: t(per.nombre), rut: t(per.rut), email: t(per.email), telefono: t(per.telefono), nacionalidad: t(per.nacionalidad) || 'chilena', estadoCivil: t(per.estadoCivil), profesion: t(per.profesion), direccion: t(per.direccion) };
+    const datos = {
+      comprador, vendedores: dueñosDe(n0.prop?.id),
+      rol: t(p.rol), fojas: t(f.fojas), numero: t(f.numeroInscripcion), anio: t(f.anioInscripcion), conservador: t(f.conservador),
+      monto: fmt(n0.valor?.valor), moneda: n0.valor?.moneda || 'UF', piePct: t(o.piePct), seriedadUF: t(o.seriedadUF), comisionPct: t(o.comisionPct),
+      saldoForma: k.saldoForma === 'contado' ? 'contado' : 'hipotecario', pagoNota: t(k.pagoNota),
+      escrituraDias: t(k.escrituraDias || o.escrituraDias), fechaEntrega: t(k.fechaEntrega), notaria: t(k.notaria), condiciones: t(k.condiciones),
+    };
+    window.Ventanas.abrir('negocios.promesaCompraventa', {
+      pdfPromesa, archivo: ('Promesa de compraventa ' + (p.codigo || '') + '.pdf').replace(/\s+\.pdf$/, '.pdf'),
+      propiedad: { codigo: p.codigo || '', titulo: p.titulo || '', direccion: [p.direccion, p.unidad ? 'depto. ' + p.unidad : '', p.comuna].filter(Boolean).join(', ') },
+      datos,
+      // guarda la propiedad y el negocio (las personas ya las guardó la ventana) y pide el PDF de nuevo: el servidor lee lo ya guardado
+      alGuardar: async (v) => {
+        if (n0.prop?.id) await api('inmoPropGuardar', { id: n0.prop.id, rol: v.rol, ficha: { fojas: v.fojas, numeroInscripcion: v.numero, anioInscripcion: v.anio, conservador: v.conservador } });
+        const actual = await api('negObtener', negocioId);
+        const ciclo = JSON.parse(JSON.stringify(actual.ciclo || {}));
+        ciclo.promesa = { escrituraDias: v.escrituraDias === '' ? '' : Number(v.escrituraDias), fechaEntrega: v.fechaEntrega, saldoForma: v.saldoForma, pagoNota: v.pagoNota, notaria: v.notaria, condiciones: v.condiciones };
+        await api('negGuardar', { id: negocioId, ciclo, valor: { valor: Number(String(v.monto).replace(/\./g, '').replace(',', '.')), moneda: v.moneda }, oferta: { ...(actual.oferta || {}), piePct: v.piePct, seriedadUF: v.seriedadUF, comisionPct: v.comisionPct } });
+        const r = await api('promesaVistaPrevia', { negocioId });   // el servidor lee lo ya guardado
+        try { await cargar(); } catch {}
+        return { pdf: r.pdf || '' };
+      },
+      // si falla, la ventana muestra el error y sigue abierta
+      alEnviar: async () => { const r = await api('promesaEnviar', { negocioId }); closeModal(); toast(`Promesa de compraventa nº ${r.numero} enviada a firmar: operación ${r.operacion}.`, 5000); despues?.(r); },
+    }, { clave: 'modal-147', ancho: true });
+  }, 'Para enviar la promesa de compraventa, inicia sesión con tu cuenta de Portalfirma.');
+}
 // qué mandato abre el paso «Mandato firmado» (captación): solo arriendo → arriendo; solo venta → venta. Si se ofrece en venta Y arriendo:
 // manda el tipo de los negocios abiertos de la propiedad (si son de un solo tipo); si no, el que todavía no se ha enviado; si faltan
 // ambos (o ya están los dos), el de venta (su comisión cubre también un arriendo que derive del negocio).
@@ -226,6 +288,7 @@ async function contratoArriendo(negocioId, despues, modo = 'borrador') {
   const n0 = await api('negObtener', negocioId).catch(() => null);
   if (!n0) return toast('No encontré el negocio.');
   if (!n0.cliente) return toast('Primero vincula al arrendatario del negocio (paso «Interesado registrado»).', 5000);
+  if (modo !== 'firma') { try { await cargar(); } catch {} }   // borrador: la ficha al día (la cuenta de pago y la inscripción de dominio pueden haberse completado)
   const k = n0.ciclo?.contrato || {}; const ultima = (k.versiones || []).slice(-1)[0];
   const p = (IM.data.propiedades || []).find((x) => x.id === n0.prop?.id) || n0.prop || {};
   const propiedad = { codigo: p.codigo || '', titulo: p.titulo || '', direccion: [p.direccion, p.unidad ? 'depto. ' + p.unidad : '', p.comuna].filter(Boolean).join(', ') };
@@ -245,11 +308,11 @@ async function contratoArriendo(negocioId, despues, modo = 'borrador') {
     if (!ultima.archivo) return toast(`La versión ${ultima.n} no tiene su PDF: guárdala con su archivo en el paso «Revisión del contrato».`, 6000);
     window.members(async () => {
       let pdfAprobado = ''; const pdfPromesa = api('contratoVersion', { negocioId, clave: ultima.archivo.clave }).then((r) => { pdfAprobado = r.pdf || ''; return { pdf: pdfAprobado }; }); pdfPromesa.catch(() => {});   // la ventana se abre ya: el documento se arma ahí mismo (o se trae, si ya existe) y la vista previa lo muestra al llegar
-      const firma0 = { tipoFirma: k.firma?.tipoFirma === 'avanzada' ? 'avanzada' : 'simple', tramite: k.firma?.tramite === 'legalization' ? 'legalization' : 'none' };
+      const firma0 = await api('plFirmaDe', 'contrato-arriendo').catch(() => null);   // cómo se firma lo define la plantilla del contrato (Configuración › Plantillas): aquí solo se muestra
       window.Ventanas.abrir('negocios.contratoArriendo', {
         modo: 'firma', versionN: ultima.n, pdfPromesa, firma: firma0, datos, propiedad, firmantes,
         alGuardar: async (_d, _f, nuevos) => { await guardarFirmantes(nuevos); return { pdf: pdfAprobado }; },
-        alConfirmar: async (f) => { const r = await api('contratoEnviar', { negocioId, tipoFirma: f.tipoFirma, tramite: f.tramite }); try { const b = JSON.parse(JSON.stringify((await api('negObtener', negocioId)).ciclo || {})); b.contrato ||= {}; b.contrato.firma = { tipoFirma: f.tipoFirma, tramite: f.tramite }; await api('negGuardar', { id: negocioId, ciclo: b }); } catch {} closeModal(); toast(`Contrato de arriendo (versión ${r.version}) enviado a firmar: operación ${r.operacion}.`, 5000); despues?.(r); },
+        alConfirmar: async () => { const r = await api('contratoEnviar', { negocioId }); closeModal(); toast(`Contrato de arriendo (versión ${r.version}) enviado a firmar: operación ${r.operacion}.`, 5000); despues?.(r); },
       }, { clave: 'modal-127', ancho: true });
     }, 'Para enviar el contrato, inicia sesión con tu cuenta de Portalfirma.');
     return;
@@ -257,7 +320,12 @@ async function contratoArriendo(negocioId, despues, modo = 'borrador') {
   window.members(async () => {
     const pdfPromesa = api('contratoVistaPrevia', { negocioId }).then((r) => ({ pdf: r.pdf || '' })); pdfPromesa.catch(() => {});   // la ventana se abre ya: el documento se arma ahí mismo (o se trae, si ya existe) y la vista previa lo muestra al llegar
     window.Ventanas.abrir('negocios.contratoArriendo', {
-      modo: 'borrador', pdfPromesa, firma: { tipoFirma: 'simple', tramite: 'none' }, datos, propiedad, firmantes,
+      modo: 'borrador', pdfPromesa, firma: null, datos, propiedad, firmantes,
+      ...(n0.prop?.id ? {   // avisos «Falta la inscripción de dominio» y «Falta la cuenta de pago»: completarlos ahí mismo (se guardan en la ficha) o leer el dominio de la copia
+        dominio: dominioDe(p),
+        alGuardarDominio: async (c) => { await guardarFichaDoc(n0.prop.id, c); return { pdf: (await api('contratoVistaPrevia', { negocioId })).pdf || '' }; },
+        alLeerDominio: () => leerDominio(n0.prop.id, () => contratoArriendo(negocioId, despues, 'borrador')),
+      } : {}),
       alGuardar: async (d, _f, nuevos) => {
         await guardarFirmantes(nuevos);   // primero los datos de los firmantes: el servidor arma el PDF con lo ya guardado en sus fichas
         const base = JSON.parse(JSON.stringify((await api('negObtener', negocioId)).ciclo || {})); base.contrato ||= {};
@@ -296,6 +364,56 @@ async function actaEntrega(negocioId, despues) {
       alConfirmar: async () => { const r = await api('entregaEnviar', { negocioId }); closeModal(); toast(`Acta de entrega nº ${r.numero} enviada a firmar: operación ${r.operacion}.`, 5000); despues?.(r); },
     }, { clave: 'modal-128', ancho: true });
   }, 'Para enviar el acta de entrega, inicia sesión con tu cuenta de Portalfirma.');
+}
+// ---------- borrador de escritura de compraventa (venta): minuta para la notaría; Asset arma el PDF en el servidor ----------
+// La escritura pública la otorga siempre una notaría: esto es un borrador que se ve, se ajusta, se descarga o (opcional) se envía a
+// firmar como aceptación del borrador. Lo editado se guarda en su origen (las personas del CRM y el negocio: precio, pie y
+// ciclo.escritura con notaría, fecha, banco, inscripción, deslindes y personería) y el servidor arma el PDF con lo ya guardado.
+async function escrituraCompraventa(negocioId, despues) {
+  const n0 = await api('negObtener', negocioId).catch(() => null);
+  if (!n0) return toast('No encontré el negocio.');
+  if (n0.tipo !== 'venta') return toast('El borrador de escritura de compraventa es solo para negocios de venta.', 5000);
+  if (!n0.cliente) return toast('Primero vincula al comprador del negocio (paso «Interesado registrado»).', 5000);
+  window.members(async () => {
+    const pdfPromesa = api('escrituraVistaPrevia', { negocioId }).then((r) => ({ pdf: r.pdf || '' })); pdfPromesa.catch(() => {});   // la ventana se abre ya: el documento se arma ahí mismo y la vista previa lo muestra al llegar
+    const per = (IM.data.personas || []).find((x) => x.id === n0.cliente.id) || n0.cliente; const p = propDe(n0.prop?.id) || n0.prop || {}; const f = p.ficha || {};
+    const e = n0.ciclo?.escritura || {}; const o = n0.oferta || {}; const t = (x) => (x == null ? '' : String(x)); const fmt = (x) => (x ? Number(x).toLocaleString('es-CL', { maximumFractionDigits: 2 }) : '');
+    const dia = (x) => (/^\d{4}-\d{2}-\d{2}/.test(t(x)) ? t(x).slice(0, 10) : '');   // las fechas de la ventana son AAAA-MM-DD
+    const pie = t(e.piePct || o.piePct);
+    const modo = e.modoPago === 'contado' || e.modoPago === 'credito' ? e.modoPago : Number(pie) >= 100 ? 'contado' : 'credito';
+    const aPers = (q) => ({ id: q.id, base: q, nombre: t(q.nombre), rut: t(q.rut), email: t(q.email), telefono: t(q.telefono), nacionalidad: t(q.nacionalidad) || 'chilena', estadoCivil: t(q.estadoCivil), profesion: t(q.profesion), direccion: t(q.direccion) });
+    // la inscripción de dominio: la de esta escritura si se escribió; si no, la de la ficha de la propiedad (así se completa una sola vez)
+    const ins = (k) => t(e[k]) || t(f[k]);
+    const datos = {
+      comprador: aPers(per), vendedores: dueñosDe(n0.prop?.id),
+      monto: fmt(n0.valor?.valor || p.precioVenta?.valor), moneda: n0.valor?.moneda || p.precioVenta?.moneda || 'UF', modoPago: modo, piePct: modo === 'contado' ? '' : pie, banco: t(e.banco),
+      notaria: t(e.notaria), ciudad: t(e.ciudad), fecha: dia(e.fecha), entregaFecha: dia(e.entregaFecha), promesaFecha: dia(e.promesaFecha), promesaNotaria: t(e.promesaNotaria),
+      fojas: ins('fojas'), numeroInscripcion: ins('numeroInscripcion'), anioInscripcion: ins('anioInscripcion'), conservador: ins('conservador'),
+      deslindes: t(e.deslindes), incluye: t(e.incluye), repVendedor: t(e.repVendedor), repComprador: t(e.repComprador), personerias: t(e.personerias),
+    };
+    window.Ventanas.abrir('negocios.escrituraCompraventa', {
+      pdfPromesa, archivo: ('Borrador de escritura de compraventa ' + (p.codigo || '') + '.pdf').replace(/\s+\.pdf$/, '.pdf'),
+      propiedad: { codigo: p.codigo || '', titulo: p.titulo || '', direccion: [p.direccion, p.unidad ? 'depto. ' + p.unidad : '', p.comuna].filter(Boolean).join(', '), rol: t(p.rol) },
+      datos,
+      // guarda el negocio (las personas ya las guardó la ventana) y pide el PDF de nuevo: el servidor lee lo ya guardado
+      alGuardar: async (v) => {
+        const actual = await api('negObtener', negocioId); const ciclo = JSON.parse(JSON.stringify(actual.ciclo || {}));
+        // de la inscripción solo se guarda lo que difiere de la ficha: si después cambia en la ficha, el borrador la sigue
+        const propia = (k) => (t(v[k]).trim() === t(f[k]).trim() ? '' : t(v[k]).trim());
+        ciclo.escritura = { notaria: v.notaria, ciudad: v.ciudad, fecha: v.fecha, entregaFecha: v.entregaFecha, modoPago: v.modoPago, banco: v.banco, promesaFecha: v.promesaFecha, promesaNotaria: v.promesaNotaria,
+          fojas: propia('fojas'), numeroInscripcion: propia('numeroInscripcion'), anioInscripcion: propia('anioInscripcion'), conservador: propia('conservador'),
+          deslindes: v.deslindes, incluye: v.incluye, repVendedor: v.repVendedor, repComprador: v.repComprador, personerias: v.personerias };
+        const cambios = { id: negocioId, ciclo, valor: { valor: Number(String(v.monto).replace(/\./g, '').replace(',', '.')), moneda: v.moneda } };
+        if (v.modoPago !== 'contado' && String(v.piePct).trim() !== '') cambios.oferta = { ...(actual.oferta || {}), piePct: v.piePct };   // la oferta se guarda completa (no se pierden la garantía, el plazo ni las condiciones)
+        await api('negGuardar', cambios);
+        const r = await api('escrituraVistaPrevia', { negocioId });   // el servidor lee lo ya guardado
+        try { await cargar(); } catch {}
+        return { pdf: r.pdf || '' };
+      },
+      // si falla, la ventana muestra el error y sigue abierta
+      alEnviar: async () => { const r = await api('escrituraEnviar', { negocioId }); closeModal(); toast(`Borrador de escritura nº ${r.numero} enviado a firmar: operación ${r.operacion}.`, 5000); despues?.(r); },
+    }, { clave: 'modal-148', ancho: true });
+  }, 'Para armar el borrador de escritura, inicia sesión con tu cuenta de Portalfirma.');
 }
 // ---------- acciones de un paso ----------
 // acciones del negocio abierto en pantalla (las deja negocios.js); si no es ese negocio, se abre

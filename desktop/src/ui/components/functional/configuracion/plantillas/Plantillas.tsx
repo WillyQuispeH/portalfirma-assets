@@ -8,7 +8,9 @@ import ItemLista from '../../../ui/ItemLista';
 import Icono from '../../../ui/Icono';
 import EstadoVacio from '../../../ui/EstadoVacio';
 import { api } from '../../../../utils/api';
+import Badge from '../../../ui/Badge';
 import EstadoPlantilla from './EstadoPlantilla';
+import { tipoFirmaTexto } from './firma';
 import type { IListaPlantillas } from './tipos';
 
 export default function Plantillas({ alAbrir }: { alAbrir: (nombre: string) => void }) {
@@ -30,7 +32,13 @@ export default function Plantillas({ alAbrir }: { alAbrir: (nombre: string) => v
                   titulo={p.titulo}
                   detalle={[p.descripcion, p.version ? `versión ${p.version}` : 'la base de Asset',
                     p.cambiadas ? (p.cambiadas === 1 ? '1 cláusula propia' : `${p.cambiadas} cláusulas propias`) : 'sin cláusulas propias'].filter(Boolean).join(' · ')}
-                  derecha={<EstadoPlantilla estado={p.estado} aprobacion={p.aprobacion} />} />
+                  derecha={<div className="tw:flex tw:flex-wrap tw:items-center tw:justify-end tw:gap-1.5">
+                    <span data-firma={p.firma?.tipoFirma || 'simple'} data-tramite={p.firma?.tramite || 'none'} className="tw:inline-flex tw:items-center tw:gap-1.5">
+                      <Badge tono="gris">{tipoFirmaTexto(p.firma)}</Badge>
+                      {p.firma?.tramite === 'legalization' && <Badge tono="gris">con legalización</Badge>}
+                    </span>
+                    <EstadoPlantilla estado={p.estado} aprobacion={p.aprobacion} />
+                  </div>} />
               ))}
         {lista && !lista.puedeEditar && <p className="tw:m-0 tw:px-3 tw:py-2 tw:text-[13px] tw:text-muted">Las plantillas las edita y aprueba el administrador de la corredora.</p>}
       </div>

@@ -1,7 +1,7 @@
 // CONTRATO DE ARRIENDO de un negocio, hecho por Asset: plantilla HTML propia (src/documentos/plantillas/contrato-arriendo.html) → PDF →
 // Portalfirma lo recibe y lo envía a firmar a los propietarios (arrendador), al arrendatario y a los codeudores (los avales que se evaluaron con el arrendatario).
 //  · POST /v1/contratos-arriendo/vista-previa { negocioId }: el PDF (base64) tal como se enviaría (no envía).
-//  · POST /v1/contratos-arriendo/enviar { negocioId, tipoFirma, tramite }: lo envía a firmar y lo registra, ligado a la etapa «contrato»
+//  · POST /v1/contratos-arriendo/enviar { negocioId, clave }: lo envía a firmar y lo registra, ligado a la etapa «contrato»
 //    del negocio. tipoFirma: simple | avanzada. tramite: none | legalization (legalizado ante notario).
 // Los datos salen de lo ya guardado: negocio (monto, ciclo.contrato.datos), personas y ficha de la propiedad.
 import { Body, Controller, HttpCode, Injectable, Logger, Post } from '@nestjs/common';
@@ -418,8 +418,6 @@ export class ContratoArriendoService {
     u: UsuarioToken,
     negocioId: string,
     clave: string,
-    tipoFirma: 'simple' | 'avanzada',
-    tramite: 'none' | 'legalization',
   ): Promise<Record<string, unknown>> {
     const x = await this.armar(u, negocioId);
     if ('error' in x) return { error: x.error };
@@ -431,20 +429,20 @@ export class ContratoArriendoService {
     }
     const numero = await this.tomarNumero(u.corredoraId);
     const r = await this.envio.enviar({
+      plantilla: 'contrato-arriendo',
       corredoraId: u.corredoraId,
       pagadorRespaldo: x.usuario.email,
       usuarioId: u.sub,
       drive: { tipo: 'Contratos de arriendo', propiedadId: x.prop.id, negocioId: x.n.id },
       bytes,
       nombreArchivo: `Contrato de arriendo nº ${numero} - ${x.prop.codigo}.pdf`,
-      protocolizacion: tramite,
       firmantes: x.firmantes.map((f) => ({
         rut: f.rut,
         fullName: f.fullName,
         email: f.email,
         phone: f.phone,
         alias: f.alias,
-        typeSign: tipoFirma,
+        typeSign: 'simple' as const, // el tipo real lo define la plantilla (Configuración › Plantillas)
       })),
     });
     if ('error' in r) return { error: r.error };
@@ -473,7 +471,7 @@ export class ContratoArriendoService {
             telefono: f.phone ?? '',
             firmo: false,
           })) as Prisma.InputJsonValue,
-          datos: { formato: 'contrato_arriendo', hito: 'contrato', numero, tipoFirma, tramite, versionClave: clave },
+          datos: { formato: 'contrato_arriendo', hito: 'contrato', numero, tipoFirma: r.tipoFirma, tramite: r.tramite, versionClave: clave },
         },
         update: {},
       });
@@ -519,7 +517,7 @@ export class ContratoArriendoService {
       operacion,
       numero,
       firmantes: x.firmantes.map((f) => ({ nombre: f.fullName, rol: f.rol, correo: f.email })),
-      indicacion: `El contrato de arriendo nº ${numero} se envió a firmar (operación ${operacion}) a ${total} persona${total === 1 ? '' : 's'}${tramite === 'legalization' ? ', con legalización notarial' : ''}. Se cobró del saldo de Portalfirma.`,
+      indicacion: `El contrato de arriendo nº ${numero} se envió a firmar (operación ${operacion}) a ${total} persona${total === 1 ? '' : 's'}${r.tramite === 'legalization' ? ', con legalización notarial' : ''}. Se cobró del saldo de Portalfirma.`,
     };
   }
 }
@@ -537,8 +535,9 @@ const revisionEsquema = z.object({
 const pedidoEsquema = z.object({
   negocioId: z.string().trim().min(1).max(80),
   clave: z.string().trim().min(3).max(300).optional(),
-  tipoFirma: z.enum(['simple', 'avanzada']).default('simple'),
-  tramite: z.enum(['none', 'legalization']).default('none'),
+  // (tipoFirma y tramite ya no se piden: los define la plantilla en Configuración › Plantillas)
+  tipoFirma: z.enum(['simple', 'avanzada']).optional(),
+  tramite: z.enum(['none', 'legalization']).optional(),
 });
 
 @Controller('contratos-arriendo')
@@ -557,7 +556,7 @@ export class ContratoArriendoController {
   enviar(@UsuarioActual() u: UsuarioToken, @Body(new ZodPipe(pedidoEsquema)) b: z.infer<typeof pedidoEsquema>) {
     if (!b.clave)
       return { error: 'Falta el contrato aprobado: primero se aprueba en el paso «Revisión del contrato».' };
-    return this.s.enviar(u, b.negocioId, b.clave, b.tipoFirma, b.tramite);
+    return this.s.enviar(u, b.negocioId, b.clave);
   }
 
   /** el PDF de una versión guardada (base64) */

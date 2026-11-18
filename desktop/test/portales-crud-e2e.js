@@ -26,13 +26,14 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     await w.click('#nav [data-view="publicaciones"]'); await w.waitForSelector('#pbTabs'); await w.click('#pbTabs [data-t="portales"]'); await w.waitForSelector('[data-po="broku"]'); await w.waitForSelector('[data-po="pi"]');
     const ids = await w.$$eval('[data-po]', (l) => l.map((e) => e.getAttribute('data-po')));
     ok(['pi', 'chilepropiedades', 'broku', 'toctoc', 'yapo'].every((i) => ids.includes(i)), 'hay una tarjeta por portal: ' + ids.join(', '));
-    ok(/En trámite|en trámite/.test(await txt('[data-po="broku"]')), 'Broku figura «Integración en trámite» mientras no responde');
+    ok(/En trámite|en trámite|Integración en proceso/.test(await txt('[data-po="broku"]')), 'Broku figura en trámite / en proceso mientras no responde');
+    ok(!!(await w.$('[data-po="broku"] [data-en-proceso]')), 'Broku muestra la capa «en proceso» (sin jerga técnica a la vista)');
     const url = await w.inputValue('[data-po="broku"] [data-url]');
-    ok(/\/feeds\/[^/]+\/broku\.xml$/.test(url), 'cada portal de feed muestra su dirección pública (la sirve la API): ' + url);
-    // activar Chilepropiedades y Broku: lo que se publique entra al feed
+    ok(/\/feeds\/[^/]+\/broku\.xml$/.test(url), 'el enlace del portal sigue en el DOM (bajo la capa): ' + url);
+    // activar Chilepropiedades y Broku: lo que se publique entra al feed (force: la capa de Broku tapa el interruptor)
     for (const id of ['chilepropiedades', 'broku']) {
-      await w.click(`[data-po="${id}"] [role="switch"]`); if (id === 'chilepropiedades') await w.fill('[data-po="chilepropiedades"] [data-token]', 'token-demo');
-      await w.click(`[data-po="${id}"] [data-save]`); await w.waitForSelector(`[data-po="${id}"].on`);
+      await w.click(`[data-po="${id}"] [role="switch"]`, { force: true }); if (id === 'chilepropiedades') await w.fill('[data-po="chilepropiedades"] [data-token]', 'token-demo');
+      await w.click(`[data-po="${id}"] [data-save]`, { force: true }); await w.waitForSelector(`[data-po="${id}"].on`);
     }
     ok(/Feed activo|Integración activa/.test(await txt('[data-po="broku"]')), 'al activar Broku deja de estar «en trámite»');
 

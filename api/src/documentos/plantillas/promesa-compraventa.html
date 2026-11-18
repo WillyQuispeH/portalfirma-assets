@@ -1,0 +1,154 @@
+<!doctype html>
+<!--
+  PROMESA DE COMPRAVENTA de PortalFirma Asset (negocios de VENTA). HTML normal: se edita el texto y el estilo aquí (el estilo común está en _base.css).
+
+  *** BORRADOR PARA REVISIÓN LEGAL ***  El texto sigue el uso habitual chileno (art. 1554 del Código Civil) y el modelo de la carta oferta
+  y aceptación de la corredora, pero NO lo ha revisado un abogado: debe revisarlo y aprobarlo antes de usarse con clientes reales.
+  Las cláusulas con class="cl n" se numeran solas («Primero», «Segundo»…): no escribas el número en el texto ni cites otras cláusulas por su
+  número (cítalas por su nombre), porque la numeración cambia si se agregan o se quitan cláusulas.
+
+  Variables entre llaves dobles (se reemplazan solas al generar el PDF):
+
+    {{numero}}  {{fechaEmision}}  {{ciudad}}
+    {{corredora.nombre}}  {{corredora.rut}}  {{corredora.domicilio}}  {{corredora.representante}}  {{corredora.logo}}   {{corredor.nombre}}  {{corredor.email}}  {{corredor.telefono}}
+    {{vendedor.texto}} (todos los propietarios, con RUT, perfil y domicilio)  {{vendedor.firma}} («Juan Pérez y Ana Soto»)  {{#vendedor.lineas}}{{texto}}{{/vendedor.lineas}}
+    {{comprador.nombre}}  {{comprador.rut}}  {{comprador.texto}}  {{comprador.perfil}}  {{comprador.domicilio}}  {{comprador.email}}  {{comprador.telefono}}
+    {{propiedad.codigo}}  {{propiedad.tipo}}  {{propiedad.direccion}}  {{propiedad.rol}}  {{propiedad.dominio}} (inscripción, si se conoce)  {{propiedad.superficie}}
+    {{precio.monto}} («UF 4.850»)  {{precio.montoLargo}} («4.850 Unidades de Fomento»)  {{#precio.enUF}}…{{/precio.enUF}} (el precio está en UF)
+    {{venta.piePct}} {{venta.pie}}  {{venta.saldoPct}} {{venta.saldo}}  {{venta.seriedad}} (garantía de seriedad)  {{venta.comisionPct}}
+    {{#pago.hipotecario}}…{{/pago.hipotecario}} (el saldo se paga con crédito hipotecario)   {{#pago.contado}}…{{/pago.contado}} (el saldo se paga al contado)   {{pago.nota}}
+    {{escritura.dias}} (días corridos para firmar la escritura)
+    {{#entrega.conFecha}}…{{entrega.fecha}}…{{/entrega.conFecha}}   {{#entrega.sinFecha}}…{{/entrega.sinFecha}}
+    {{#notaria.hay}}…{{notaria.nombre}}…{{/notaria.hay}}   {{#notaria.sin}}…{{/notaria.sin}}
+    {{condiciones.otras}}
+
+  Un bloque  {{#algo}} … {{/algo}}  solo aparece si «algo» tiene valor.
+  Este documento NO lleva cajas ni líneas de firma: Portalfirma agrega su propia hoja de firma al enviarlo (firman el comprador y el vendedor).
+-->
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Promesa de compraventa nº {{numero}}</title>
+<style>
+/*@base*/
+</style>
+</head>
+<body>
+
+<div class="enc">
+  <div class="marca">{{#corredora.logo}}<img class="logo" src="{{corredora.logo}}" alt="">{{/corredora.logo}}{{corredora.nombre}}<small>{{#corredora.rut}}RUT {{corredora.rut}}{{/corredora.rut}}{{#corredora.domicilio}} · {{corredora.domicilio}}{{/corredora.domicilio}}</small></div>
+  <div class="meta"><b>Promesa Nº {{numero}}</b><br>{{ciudad}}, {{fechaEmision}}</div>
+</div>
+<div class="filete"></div>
+<h1>Promesa de compraventa</h1>
+<div class="subtitulo">propiedad {{propiedad.codigo}} · {{propiedad.tipo}}</div>
+
+<div class="resumen">
+  <h3>Resumen de la promesa</h3>
+  <div class="grid">
+    <div class="dato ancho"><span>Inmueble</span><b>{{propiedad.tipo}} · {{propiedad.direccion}}</b></div>
+    <div class="dato"><span>Precio de la compraventa</span><b class="grande">{{precio.monto}}</b></div>
+    <div class="dato"><span>Plazo para firmar la escritura</span><b>{{escritura.dias}} días corridos desde esta promesa</b></div>
+    <div class="dato"><span>Pie ({{venta.piePct}} %)</span><b>{{venta.pie}}</b></div>
+    <div class="dato"><span>Saldo ({{venta.saldoPct}} %)</span><b>{{venta.saldo}}</b></div>
+    <div class="dato"><span>Garantía de seriedad</span><b>{{venta.seriedad}}</b></div>
+    {{#propiedad.rol}}<div class="dato"><span>Rol de avalúo</span><b>{{propiedad.rol}}</b></div>{{/propiedad.rol}}
+  </div>
+</div>
+
+<div class="partes">
+  <div class="parte">
+    <div class="rol">Promitente vendedor</div>
+    <div class="nom">{{vendedor.firma}}</div>
+    <div class="det">{{#vendedor.lineas}}{{texto}}<br>{{/vendedor.lineas}}</div>
+  </div>
+  <div class="parte">
+    <div class="rol">Promitente comprador</div>
+    <div class="nom">{{comprador.nombre}}</div>
+    <div class="det">RUT {{comprador.rut}}{{#comprador.perfil}} · {{comprador.perfil}}{{/comprador.perfil}}{{#comprador.domicilio}}<br>{{comprador.domicilio}}{{/comprador.domicilio}}<br>{{comprador.email}}{{#comprador.telefono}} · {{comprador.telefono}}{{/comprador.telefono}}</div>
+  </div>
+</div>
+
+<p class="comparecencia">En {{ciudad}}, a {{fechaEmision}}, comparecen: por una parte, como promitente vendedor, {{vendedor.texto}}, en adelante, e indistintamente, «el Promitente Vendedor»; y por la otra, como promitente comprador, {{comprador.texto}}, en adelante «el Promitente Comprador»; ambos mayores de edad, quienes acreditan su identidad con las cédulas citadas y exponen que han acordado celebrar la siguiente promesa de compraventa, la que se rige por las cláusulas que siguen.</p>
+
+<section class="cl n"><h2>Inmueble</h2>
+  <p>El Promitente Vendedor es dueño del inmueble ubicado en {{propiedad.direccion}}{{#propiedad.rol}}, Rol de avalúo {{propiedad.rol}}{{/propiedad.rol}}{{#propiedad.superficie}}, de una superficie aproximada de {{propiedad.superficie}}{{/propiedad.superficie}}, en adelante «el Inmueble», con todos sus derechos, usos, costumbres y servidumbres, y con todo lo que de hecho y por derecho le corresponde.</p>
+  <p>El dominio del Inmueble se encuentra inscrito a nombre del Promitente Vendedor {{propiedad.dominio}}</p>
+</section>
+
+<section class="cl n"><h2>Promesa de compraventa</h2>
+  <p>Por el presente instrumento, el Promitente Vendedor promete vender, ceder y transferir al Promitente Comprador, y este promete comprar y adquirir para sí, el Inmueble individualizado en la cláusula anterior, en el estado en que actualmente se encuentra y que el Promitente Comprador declara conocer y aceptar, por haberlo visitado por intermedio de la corredora de propiedades {{corredora.nombre}}{{#corredora.rut}}, RUT {{corredora.rut}}{{/corredora.rut}}.</p>
+  <p>La compraventa prometida, en adelante «el Contrato Prometido», se celebrará por escritura pública y conforme a lo estipulado en esta promesa. Las partes declaran que el Contrato Prometido queda especificado de tal manera que solo falta la suscripción de la escritura pública, su inscripción en el Conservador de Bienes Raíces respectivo y la tradición del Inmueble.</p>
+</section>
+
+<section class="cl n"><h2>Precio</h2>
+  <p>El precio de la compraventa prometida es la suma de <b>{{precio.montoLargo}}</b>, en adelante «el Precio»{{#precio.enUF}}, que se pagará en su equivalente en pesos según el valor de la Unidad de Fomento a la fecha de la firma de la escritura de compraventa{{/precio.enUF}}.</p>
+</section>
+
+<section class="cl n"><h2>Forma de pago</h2>
+  <p>El Promitente Comprador pagará el Precio al Promitente Vendedor de la siguiente forma:</p>
+  <ul class="sub">
+    <li><b>i.</b>Un {{venta.piePct}} %, equivalente a {{venta.pie}}, mediante vale vista, a la fecha de la firma de la escritura de compraventa. Dicho vale vista quedará con instrucciones notariales para ser entregado al Promitente Vendedor una vez que el Inmueble se encuentre debidamente inscrito a nombre del Promitente Comprador en el Conservador de Bienes Raíces respectivo.</li>
+    <li><b>ii.</b>{{#pago.hipotecario}}El {{venta.saldoPct}} % restante, equivalente a {{venta.saldo}}, mediante un crédito hipotecario otorgado por una institución financiera de la plaza. El Promitente Comprador se obliga a tramitar diligentemente dicho crédito y a entregar oportunamente a la institución financiera los antecedentes que esta le exija.{{/pago.hipotecario}}{{#pago.contado}}El {{venta.saldoPct}} % restante, equivalente a {{venta.saldo}}, al contado, mediante vale vista o transferencia electrónica de fondos a la fecha de la firma de la escritura de compraventa, con instrucciones notariales para su entrega al Promitente Vendedor una vez inscrito el Inmueble a nombre del Promitente Comprador.{{/pago.contado}}</li>
+  </ul>
+  {{#pago.nota}}
+  <p>{{pago.nota}}</p>
+  {{/pago.nota}}
+</section>
+
+<section class="cl n"><h2>Plazo para firmar la escritura</h2>
+  <p>Las partes se obligan a suscribir la escritura pública de compraventa en un plazo máximo de <b>{{escritura.dias}} días corridos</b> contados desde la fecha de esta promesa. Este plazo podrá prorrogarse únicamente por acuerdo escrito de ambas partes.</p>
+  <p>La escritura se otorgará {{#notaria.hay}}ante {{notaria.nombre}}{{/notaria.hay}}{{#notaria.sin}}ante el Notario Público que las partes designen de común acuerdo{{/notaria.sin}}. Las partes se obligan a concurrir a su firma y a entregar oportunamente todos los antecedentes y documentos que se requieran para otorgarla e inscribirla.</p>
+</section>
+
+<section class="cl n"><h2>Garantía de seriedad y cláusula penal</h2>
+  <p>A fin de garantizar el cumplimiento fiel y oportuno de las obligaciones que esta promesa establece, las partes se obligan a dejar con instrucciones notariales, al momento de suscribirse esta promesa, un cheque nominativo y sin fecha, a nombre de la contraparte, por el equivalente en pesos a {{venta.seriedad}}.</p>
+  <p>Dichas instrucciones notariales establecerán que, si alguna de las partes se retractare de suscribir la escritura de compraventa dentro del plazo señalado, la parte incumplidora perderá la cantidad estipulada en garantía en beneficio de la parte diligente, a título de cláusula penal. La parte diligente podrá, a su elección, exigir en cambio el cumplimiento forzado de lo prometido, con indemnización de perjuicios.</p>
+</section>
+
+<section class="cl n"><h2>Entrega material del Inmueble</h2>
+  <p>{{#entrega.conFecha}}El Promitente Vendedor entregará materialmente el Inmueble al Promitente Comprador el día {{entrega.fecha}}{{/entrega.conFecha}}{{#entrega.sinFecha}}El Promitente Vendedor entregará materialmente el Inmueble al Promitente Comprador en la fecha en que la compraventa quede inscrita a nombre de este en el Conservador de Bienes Raíces respectivo{{/entrega.sinFecha}}, desocupado, libre de ocupantes y con sus llaves, y al día en el pago de contribuciones, gastos comunes y consumos de servicios básicos hasta esa fecha. De la entrega se dejará constancia en un acta firmada por ambas partes.</p>
+</section>
+
+<section class="cl n"><h2>Títulos, gravámenes y saneamiento</h2>
+  <p>El Promitente Vendedor declara que el Inmueble se encuentra libre de hipotecas, embargos, prohibiciones, litigios pendientes, usufructos, derechos reales de terceros y contratos de arrendamiento o comodato, y que no existen deudas pendientes que lo afecten. Si existiere alguna hipoteca o gravamen, se obliga a alzarlo a su costo antes de la firma de la escritura de compraventa o con cargo al Precio, conforme a las instrucciones que dejen las partes.</p>
+  <p>Será condición esencial para la celebración del Contrato Prometido que los títulos del Inmueble se encuentren ajustados a derecho. Para ello, el Promitente Vendedor pondrá a disposición del Promitente Comprador los siguientes documentos, y la corredora {{corredora.nombre}} colaborará en su obtención:</p>
+  <ul class="sub">
+    <li><b>a)</b>Copia de dominio vigente, con certificado de hipotecas, gravámenes, interdicciones y prohibiciones, emitidos por el Conservador de Bienes Raíces respectivo.</li>
+    <li><b>b)</b>Certificados municipales de número y de no expropiación, y certificado de no expropiación del Serviu.</li>
+    <li><b>c)</b>Certificado de avalúo fiscal y de deuda de contribuciones, emitidos por el Servicio de Impuestos Internos.</li>
+    <li><b>d)</b>Certificado de deuda de gastos comunes y cuentas de servicios básicos al día.</li>
+  </ul>
+  <p>El Promitente Vendedor responderá del saneamiento de la evicción y de los vicios ocultos del Inmueble conforme a la ley. Si alguna de las partes estuviere casada bajo el régimen de sociedad conyugal o el Inmueble fuere bien familiar, se obliga a presentar las autorizaciones y consentimientos necesarios para otorgar la escritura.</p>
+</section>
+
+<section class="cl n"><h2>Gastos e impuestos</h2>
+  <p>Los gastos notariales de esta promesa y de su carta de instrucciones serán pagados por mitades iguales entre las partes. Los gastos de la escritura de compraventa, de su carta de instrucciones y de la inscripción en el Conservador de Bienes Raíces, y los impuestos que correspondan, serán de cargo del Promitente Comprador. Los gastos de alzamiento de gravámenes, si los hubiere, serán de cargo del Promitente Vendedor.</p>
+</section>
+
+<section class="cl n"><h2>Comisión de corretaje</h2>
+  <p>Las partes reconocen que esta operación se realiza por intermedio de la corredora de propiedades {{corredora.nombre}}{{#corredora.rut}}, rol único tributario número {{corredora.rut}}{{/corredora.rut}}, a quien corresponde una comisión del {{venta.comisionPct}} % más IVA del Precio de parte de cada una de ellas.</p>
+  <p>Para ello, cada parte dejará con instrucciones notariales, al momento de la firma de esta promesa, un cheque sin fecha a nombre de {{corredora.nombre}} por el equivalente en pesos al {{venta.comisionPct}} % más IVA del Precio, a la fecha de firma de la promesa. Dicha comisión será exigible contra la inscripción del Inmueble a nombre del Promitente Comprador o de quien este designe en el Conservador de Bienes Raíces respectivo, presentando copia de dominio vigente. Esta cláusula constituye una estipulación a favor de la corredora, quien podrá aceptarla y exigir su cumplimiento.</p>
+  <p>Si alguna de las partes se retractare de suscribir la escritura de compraventa, deberá pagar además a la corredora la comisión de corretaje total acordada.</p>
+</section>
+
+{{#condiciones.otras}}<section class="cl n"><h2>Condiciones adicionales</h2>
+  <p class="pre">{{condiciones.otras}}</p>
+</section>{{/condiciones.otras}}
+
+<section class="cl n"><h2>Protocolización e instrucciones notariales</h2>
+  <p>Las partes acuerdan que esta promesa será protocolizada ante Notario Público, para otorgar fe pública y formalizar legalmente el compromiso de compraventa del Inmueble, y otorgarán la carta de instrucciones notariales que contenga los cheques, la garantía de seriedad y la comisión de corretaje a que se refieren las cláusulas anteriores.</p>
+</section>
+
+<section class="cl n"><h2>Domicilio y jurisdicción</h2>
+  <p>Para todos los efectos derivados de esta promesa, las partes fijan su domicilio en la ciudad de Santiago de Chile y se someten a la competencia de sus tribunales ordinarios de justicia.</p>
+</section>
+
+<section class="cl n"><h2>Ejemplares</h2>
+  <p>La presente promesa se otorga en dos ejemplares del mismo tenor y fecha, quedando uno en poder de cada parte, y se firma electrónicamente mediante Portalfirma. Cada parte recibe una copia del documento firmado, el que queda disponible para su verificación.</p>
+</section>
+
+<div class="pie-legal">Documento emitido por {{corredora.nombre}}{{#corredora.rut}}, RUT {{corredora.rut}}{{/corredora.rut}}, atendido por {{corredor.nombre}} ({{corredor.email}}). Se firma electrónicamente con Portalfirma y queda disponible para su verificación.</div>
+
+</body>
+</html>

@@ -1357,14 +1357,17 @@ html[data-theme="dark"] .pv-chat .in { background: #202c33; } html[data-theme="d
 .im-gal { position: relative; } .im-gdrive { position: absolute; right: 10px; bottom: 10px; margin: 0; width: auto; display: inline-flex; align-items: center; gap: 6px; background: var(--card); box-shadow: 0 2px 8px rgba(20,30,80,.15); }
 
 /* ---- Agente por WhatsApp (0.13) ---- */
+.wa-ag { display: flex; flex-direction: column; gap: var(--ui-gap); }
 .wa-ag h2 { display: flex; align-items: center; gap: 8px; } .wa-ag h2 svg { color: #1faa59; }
-.wa-paso { display: flex; gap: 12px; padding: 14px; border-radius: var(--ui-radio-card); border: 1px solid var(--line); margin: 10px 0; background: var(--card); }
-.wa-paso.ok { border-color: color-mix(in srgb, var(--ok) 35%, var(--line)); } .wa-paso.off { opacity: .5; pointer-events: none; }
-.wa-paso > div { flex: 1; display: flex; flex-direction: column; gap: 6px; } .wa-paso small { color: var(--muted); }
-.wa-n { width: 26px; height: 26px; flex: none; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 12px; background: var(--bg); border: 2px solid var(--line); }
+.wa-paso { display: flex; gap: 12px; padding: 16px; border-radius: var(--ui-radio-card); border: 1px solid var(--line); border-bottom-width: 3px; border-bottom-color: var(--ui-edge-b, var(--line)); margin: 0; background: var(--card); }
+.wa-paso.ok { border-color: color-mix(in srgb, var(--ok) 40%, var(--line)); border-bottom-color: color-mix(in srgb, var(--ok) 55%, var(--line)); background: color-mix(in srgb, var(--ok) 6%, var(--card)); }
+.wa-paso.off { opacity: .48; pointer-events: none; }
+.wa-paso small { color: var(--muted); display: block; line-height: 1.45; }
+.wa-n { width: 28px; height: 28px; flex: none; border-radius: var(--ui-radio-icono); display: grid; place-items: center; font-weight: 700; font-size: 12px; background: var(--bg); border: 2px solid var(--line); color: var(--muted); }
 .wa-paso.ok .wa-n { background: var(--ok); border-color: var(--ok); color: #fff; }
-.wa-f { display: flex; gap: 8px; flex-wrap: wrap; } .wa-f input { flex: 1; min-width: 180px; margin: 0; } .wa-f button { margin: 0; width: auto; }
-.wa-cod { display: flex; align-items: center; gap: 12px; } .wa-cod b { font: 700 26px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .06em; padding: 8px 16px; border-radius: var(--ui-radio); background: var(--brand-soft); color: var(--brand); }
+.wa-f { display: flex; gap: var(--ui-gap); flex-wrap: wrap; align-items: center; } .wa-f input { flex: 1; min-width: 180px; margin: 0; } .wa-f button { margin: 0; width: auto; }
+.wa-cod { display: flex; flex-wrap: wrap; align-items: center; gap: var(--ui-gap); }
+.wa-cod b { font: 700 28px/1.15 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .08em; padding: 12px 18px; border-radius: var(--ui-radio-control); background: color-mix(in srgb, #25d366 14%, var(--card)); color: #128c4a; border: 1px solid color-mix(in srgb, #25d366 35%, var(--line)); }
 .wa-num { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; margin-top: 8px; } .wa-num input { margin: 0; max-width: 260px; }
 
 /* ---------- Leads (0.14): bandeja + conversación tipo WhatsApp + ficha ---------- */

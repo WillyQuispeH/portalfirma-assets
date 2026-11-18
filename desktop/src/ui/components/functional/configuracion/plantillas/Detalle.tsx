@@ -4,9 +4,10 @@
 //    fichas y partes condicionales; nunca ve el formato guardado, lo arma formatoClausula.ts), «Probar» arma la vista previa con los cambios sin guardarlos, «Guardar versión» crea una versión nueva y «Aprobar»
 //    registra la revisión del abogado o notario. En «⋯»: historial (restaurar), volver todo a la base y descargar el PDF.
 //  · Los demás la ven y prueban, sin editar.
-// API: pl:detalle / pl:guardar / pl:previa / pl:aprobar / pl:restaurar (src/main.js → /v1/plantillas…).
+// «Configurar la firma…» (en «⋯», modal-149): tipo de firma y legalización notarial de los documentos de esta plantilla (solo el administrador cambia).
+// API: pl:detalle / pl:guardar / pl:previa / pl:aprobar / pl:restaurar / pl:firma (src/main.js → /v1/plantillas…).
 // Ids para pruebas: #plDetalle, #plBack, [data-clausula], #plTexto (el editor; ids de su barra en EditorClausula), #plVerBase, #plVolverBase, #plProbar,
-// #plGuardar, #plAprobar, #plMas, #plHistorialBtn, #plBaseTodo, #plDescargar, #plVista.
+// #plFirmaBtn, #plFirmaResumen, #plTipoFirma, #plTramite, #plGuardar, #plAprobar, #plMas, #plHistorialBtn, #plBaseTodo, #plDescargar, #plVista.
 import { useCallback, useEffect, useMemo, useState, type KeyboardEvent, type PointerEvent as PointerEventR, type ReactNode } from 'react';
 import Layout, { MIGA_INICIO } from '../../../ui/Layout';
 import Card from '../../../ui/Card';
@@ -22,7 +23,8 @@ import { fecha } from '../../../../utils/formato';
 import { cx } from '../../../../utils/cx';
 import EstadoPlantilla from './EstadoPlantilla';
 import EditorClausula from './EditorClausula';
-import { elegirVersion, pedirAprobacion, pedirNotaVersion } from './ventanas';
+import { configurarFirma, elegirVersion, pedirAprobacion, pedirNotaVersion } from './ventanas';
+import { FIRMA_BASE, resumenFirma } from './firma';
 import type { IDetallePlantilla } from './tipos';
 
 const textosDe = (d: IDetallePlantilla) => Object.fromEntries(d.bloques.filter((b) => b.editable).map((b) => [b.clave, b.texto ?? '']));
@@ -181,6 +183,13 @@ export default function Detalle({ nombre, alVolver }: { nombre: string; alVolver
     if (await confirmar({ titulo: 'Volver toda la plantilla a la base', texto: 'Todas las cláusulas vuelven al **texto común de Asset**. Se guarda como una versión nueva: puedes recuperar la actual desde el historial.',
       nota: hayCambios ? 'Los cambios sin guardar se pierden.' : '', boton: 'Volver a la base', peligro: true, clave: 'modal-144' })) await restaurar(0);
   };
+  const firmaConf = async () => {
+    const nueva = await configurarFirma(d.firma ?? FIRMA_BASE, !editar); if (!nueva || !editar) return;
+    setOcupado(true);   // la firma no cambia el texto: se actualiza el detalle sin rearmar la vista previa ni perder lo escrito
+    try { const x = await api<IDetallePlantilla>('plFirma', nombre, nueva); setD((p) => (p ? { ...p, firma: x.firma ?? nueva } : p)); toast('Se guardó cómo se firma.'); }
+    catch (e) { toast((e as Error).message, 7000); }
+    setOcupado(false);
+  };
   const descargar = async () => {
     try {
       const r = await api<{ pdf: string }>('plPrevia', nombre, hayCambios ? textos : undefined);
@@ -195,6 +204,7 @@ export default function Detalle({ nombre, alVolver }: { nombre: string; alVolver
     ...(editar && principal !== 'aprobar' ? [{ id: 'plAprobar', texto: d.estado === 'aprobada' ? 'Volver a aprobar' : 'Aprobar', icono: 'check', disabled: hayCambios || ocupado, title: hayCambios ? 'Guarda los cambios antes de aprobar.' : undefined, alTocar: aprobar }] : []),
     { id: 'plHistorialBtn', texto: 'Historial de versiones', icono: 'clock', disabled: ocupado, alTocar: historial },
     ...(editar ? [{ id: 'plBaseTodo', texto: 'Volver toda la plantilla a la base', icono: 'undo', disabled: ocupado || (!hayCambios && !d.bloques.some((x) => x.cambiado)), alTocar: baseTodo }] : []),
+    { id: 'plFirmaBtn', texto: editar ? 'Configurar la firma…' : 'Ver cómo se firma…', icono: 'sign', disabled: ocupado, alTocar: firmaConf },
     { id: 'plDescargar', texto: 'Descargar PDF de muestra', icono: 'download', alTocar: descargar },
   ];
 
@@ -208,6 +218,7 @@ export default function Detalle({ nombre, alVolver }: { nombre: string; alVolver
   const subtitulo = (
     <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
       <EstadoPlantilla estado={d.estado} aprobacion={d.aprobacion} />
+      <span id="plFirmaResumen" data-firma={d.firma?.tipoFirma || 'simple'} data-tramite={d.firma?.tramite || 'none'}>{resumenFirma(d.firma)}</span>
       <span>{d.version ? `versión ${d.version}` : 'la base de Asset'}{d.versiones[0] && d.version ? ` · ${d.versiones[0].porNombre} · ${fecha(d.versiones[0].en)}` : ''}</span>
     </div>
   );

@@ -20,14 +20,14 @@ function vacios(t, ctx, faltan) {
     if (Array.isArray(v)) { if (!v.length) faltan.add('#' + k); v.forEach((it) => vacios(dentro, [...ctx, it], faltan)); }
     else if (v && typeof v === 'object') vacios(dentro, [...ctx, v], faltan);
     else if (v) vacios(dentro, ctx, faltan);
-    else if (!/^(operacion\.venta|esArriendo|publicar\.no|exclusividad\.no|corredora\.logo)$/.test(k)) faltan.add('#' + k); // alternativas excluyentes
+    else if (!/^(operacion\.venta|esArriendo|publicar\.no|exclusividad\.no|corredora\.logo|pago\.contado|entrega\.sinFecha|notaria\.sin)$/.test(k)) faltan.add('#' + k); // alternativas excluyentes
     return '';
   });
   resto.replace(/\{\{([\w.]+)\}\}/g, (_, k) => { const v = buscar(ctx, k); if (v == null || v === '') faltan.add(k); return ''; });
   return faltan;
 }
 
-ok(PLANTILLAS_DOC.length === 7, 'hay 7 plantillas');
+ok(PLANTILLAS_DOC.length >= 7 && PLANTILLAS_DOC.some((p) => p.nombre === 'escritura-compraventa'), 'hay al menos 7 plantillas (incluye el borrador de escritura de compraventa)');
 for (const p of PLANTILLAS_DOC) {
   const datos = muestra(p.nombre);
   const plantilla = cargarPlantilla(p.nombre);

@@ -5,6 +5,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { PortalfirmaService } from '../conexiones/portalfirma';
 import { GoogleService, type IRefDrive } from '../conexiones/google';
+import { configFirma } from './plantillas-doc';
 
 export interface FirmanteEnvio {
   rut: string;
@@ -86,10 +87,22 @@ export class EnvioFirmaService {
     bytes: Buffer;
     nombreArchivo: string;
     firmantes: FirmanteEnvio[];
-    /** trámite notarial: none (por defecto) o legalization (legalizado) */
+    /** trámite notarial: none (por defecto) o legalization (legalizado). Con `plantilla`, lo define la plantilla */
     protocolizacion?: 'none' | 'legalization';
-  }): Promise<{ operacion: number } | { error: string }> {
+    /**
+     * la plantilla del documento (orden-visita, mandato-venta…): su configuración de firma (Configuración › Plantillas) decide el
+     * tipo de firma de TODOS los firmantes y si lleva legalización; reemplaza lo que venga en `firmantes` y `protocolizacion`
+     */
+    plantilla?: string;
+  }): Promise<{ operacion: number; tipoFirma: 'simple' | 'avanzada'; tramite: 'none' | 'legalization' } | { error: string }> {
     try {
+      const cfg = o.plantilla
+        ? await configFirma(this.db, o.corredoraId, o.plantilla)
+        : {
+            tipoFirma: o.firmantes.some((f) => f.typeSign === 'avanzada') ? ('avanzada' as const) : ('simple' as const),
+            tramite: o.protocolizacion ?? ('none' as const),
+          };
+      const firmantes = o.plantilla ? o.firmantes.map((f) => ({ ...f, typeSign: cfg.tipoFirma })) : o.firmantes;
       const ing = await this.herramienta(
         o.corredoraId,
         { source: 'base64', base64: o.bytes.toString('base64'), filename: o.nombreArchivo },
@@ -109,8 +122,8 @@ export class EnvioFirmaService {
         {
           document_id: docId,
           email: await this.pagadorDe(o.corredoraId, o.pagadorRespaldo),
-          protocolization: o.protocolizacion ?? 'none',
-          signatories: o.firmantes.map((f) => ({
+          protocolization: cfg.tramite,
+          signatories: firmantes.map((f) => ({
             rut: f.rut,
             fullName: f.fullName,
             email: f.email,
@@ -137,7 +150,7 @@ export class EnvioFirmaService {
           ref: o.drive,
         })
         .catch(() => null);
-      return { operacion };
+      return { operacion, tipoFirma: cfg.tipoFirma, tramite: cfg.tramite };
     } catch (e) {
       const m = (e as { response?: { codigo?: string } }).response;
       if (m?.codigo === 'NECESITA_CONEXION')

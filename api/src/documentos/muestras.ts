@@ -33,6 +33,18 @@ export const PLANTILLAS_DOC: { nombre: string; titulo: string; descripcion: stri
       'El encargo del propietario a la corredora para publicar y vender su propiedad, con precio y comisión.',
   },
   {
+    nombre: 'promesa-compraventa',
+    titulo: 'Promesa de compraventa',
+    descripcion:
+      'La promesa que firman comprador y vendedor tras la carta oferta aceptada: precio, forma de pago, plazo de la escritura, garantía y comisión.',
+  },
+  {
+    nombre: 'escritura-compraventa',
+    titulo: 'Borrador de escritura de compraventa',
+    descripcion:
+      'La minuta de la escritura de compraventa para llevar a la notaría (la escritura pública la otorga siempre una notaría); comprador y vendedor pueden firmar el borrador.',
+  },
+  {
     nombre: 'acta-entrega',
     titulo: 'Acta de entrega e inventario',
     descripcion:
@@ -293,6 +305,118 @@ const MUESTRAS: Record<string, () => Record<string, unknown>> = {
     publicar: { si: true, no: false },
     exclusividad: { si: true, no: false },
     condiciones: { otras: 'Se vende con estacionamiento y bodega.' },
+  }),
+
+  'promesa-compraventa': () => ({
+    numero: '2',
+    fechaEmision: '18 de noviembre de 2026',
+    ciudad: 'Las Condes',
+    corredora: corredora(),
+    corredor: corredor(),
+    vendedor: {
+      nombre: 'Rosa Propietaria',
+      firma: 'Rosa Propietaria',
+      texto:
+        'Rosa Propietaria, chilena, casada, cédula de identidad número 9.876.543-2, con domicilio en Av. Ejemplo 3000, Las Condes',
+      lineas: [{ texto: 'RUT 9.876.543-2 · chilena, casada · Av. Ejemplo 3000, Las Condes · rosa@ejemplo.cl' }],
+    },
+    comprador: {
+      nombre: 'Matías Ejemplo',
+      rut: '7.654.321-6',
+      email: 'matias@ejemplo.cl',
+      telefono: '+56 9 1111 2222',
+      perfil: 'chileno, soltero, ingeniero',
+      domicilio: 'Calle Ficticia 567, Providencia',
+      texto:
+        'Matías Ejemplo, chileno, soltero, ingeniero, cédula de identidad número 7.654.321-6, con domicilio en Calle Ficticia 567, Providencia',
+    },
+    propiedad: {
+      codigo: 'PF-2001',
+      tipo: 'Departamento',
+      direccion: 'Av. Ejemplo 3000, depto. 504, Las Condes',
+      rol: '1234-56',
+      superficie: '80 m²',
+      dominio:
+        'a Fojas 1234 Número 5678, correspondiente al Registro de Propiedad del año 2015 del Conservador de Bienes Raíces de Santiago.',
+    },
+    precio: { monto: 'UF 4.850', montoLargo: '4.850 Unidades de Fomento', enUF: true },
+    venta: {
+      piePct: '20',
+      pie: '970 Unidades de Fomento',
+      saldoPct: '80',
+      saldo: '3.880 Unidades de Fomento',
+      seriedad: '100 Unidades de Fomento',
+      comisionPct: '2',
+    },
+    pago: { hipotecario: true, contado: false, nota: 'El saldo se pagará una vez inscrita la hipoteca a favor del banco.' },
+    escritura: { dias: '90' },
+    entrega: { conFecha: true, sinFecha: false, fecha: '15 de febrero de 2027' },
+    notaria: { hay: true, sin: false, nombre: 'la Notaría de don Pedro Ejemplo, de Santiago' },
+    condiciones: { otras: 'Se vende con estacionamiento E-12 y bodega B-30.\nSe incluyen las cortinas del living.' },
+  }),
+
+  // borrador de escritura de compraventa: con crédito hipotecario, dos vendedores, promesa y personería (la variante más completa)
+  'escritura-compraventa': () => ({
+    numero: '2',
+    fechaEmision: '18 de noviembre de 2026',
+    ciudad: 'Santiago',
+    corredora: corredora(),
+    corredor: corredor(),
+    escritura: {
+      notaria: '45ª Notaría de Santiago, de don Pedro Ejemplo',
+      fecha: '15 de enero de 2027',
+      personerias:
+        'La personería de doña Ana Apoderada para representar a Inmobiliaria Ejemplo SpA consta en la escritura pública de fecha 3 de marzo de 2024, otorgada ante la notaría de don Pedro Ejemplo, documento que el notario autorizante tiene a la vista y que no se inserta por ser conocido de las partes.',
+    },
+    vendedor: {
+      nombre: 'Rosa Propietaria y Juan Ejemplo',
+      texto:
+        'Rosa Propietaria, chilena, casada, cédula de identidad número 9.876.543-2, con domicilio en Av. Ejemplo 3000, Las Condes, y Juan Ejemplo, chileno, casado, ingeniero, cédula de identidad número 2.222.222-2, con domicilio en Av. Ejemplo 3000, Las Condes',
+      rut: '9.876.543-2 y 2.222.222-2',
+      repr: 'ambos representados por doña Ana Apoderada, cédula de identidad número 8.111.111-1, según mandato que se señala más adelante',
+      varios: true,
+      lineas: [
+        { texto: 'RUT 9.876.543-2 · chilena, casada · Av. Ejemplo 3000, Las Condes' },
+        { texto: 'RUT 2.222.222-2 · chileno, casado, ingeniero · Av. Ejemplo 3000, Las Condes' },
+      ],
+    },
+    comprador: {
+      nombre: 'Matías Ejemplo',
+      texto:
+        'Matías Ejemplo, chileno, soltero, ingeniero, cédula de identidad número 7.654.321-6, con domicilio en Calle Ficticia 567, Providencia',
+      rut: '7.654.321-6',
+      repr: 'representado por don Pedro Apoderado, cédula de identidad número 6.111.111-1',
+      lineas: [{ texto: 'RUT 7.654.321-6 · chileno, soltero, ingeniero · Calle Ficticia 567, Providencia' }],
+    },
+    propiedad: {
+      codigo: 'PF-2001',
+      tipo: 'Departamento',
+      direccion: 'Av. Ejemplo 3000, depto. 504',
+      comuna: 'Las Condes',
+      rol: '1234-56',
+      supTotal: '95 m²',
+      supUtil: '80 m²',
+      incluye: '1 estacionamiento y 1 bodega',
+      deslindes:
+        'Norte, con Calle Ficticia; Sur, con Av. Ejemplo; Oriente, con el departamento 505; Poniente, con el pasillo común.',
+      dominio:
+        'a Fojas 1234 Número 5678, correspondiente al Registro de Propiedad del año 2015 del Conservador de Bienes Raíces de Santiago.',
+      conservador: 'Conservador de Bienes Raíces de Santiago',
+      copropiedad: true,
+    },
+    precio: { monto: 'UF 4.850', largo: '4.850 Unidades de Fomento', uf: true },
+    pago: {
+      credito: true,
+      contado: false,
+      modo: 'Pie y crédito hipotecario (Banco Ejemplo)',
+      piePct: '20',
+      pie: '970 Unidades de Fomento',
+      saldoPct: '80',
+      saldo: '3.880 Unidades de Fomento',
+      banco: 'Banco Ejemplo',
+    },
+    promesa: { fecha: '20 de noviembre de 2026', notaria: 'la Notaría de don Pedro Ejemplo, de Santiago' },
+    entrega: { cuando: 'el 1 de febrero de 2027' },
   }),
 
   'acta-entrega': () => ({

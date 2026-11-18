@@ -6,6 +6,7 @@
 //  · PUT  /v1/plantillas/:nombre               { bloques: {clave: texto}, nota } → nueva versión (admin)
 //  · POST /v1/plantillas/:nombre/vista-previa  { bloques? } → PDF de muestra (datos de ejemplo + datos reales de la corredora)
 //  · POST /v1/plantillas/:nombre/aprobar       { revisor, nota } → aprueba la versión vigente (admin)
+//  · PUT  /v1/plantillas/:nombre/firma         { tipoFirma: simple|avanzada, tramite: none|legalization } → cómo se firma (admin)
 //  · POST /v1/plantillas/:nombre/restaurar     { version } → vuelve a una versión anterior (0 = la base) como versión nueva
 //
 // Los documentos se arman siempre con la versión vigente (la última guardada). La aprobación queda anotada con quién
@@ -48,6 +49,26 @@ interface Version {
   /** huella del archivo base cuando se guardó */
   base: string;
 }
+/** cómo se firma el documento de esta plantilla (lo define el administrador por plantilla) */
+export interface ConfigFirma {
+  tipoFirma: 'simple' | 'avanzada';
+  /** none = sin trámite · legalization = legalización notarial de las firmas */
+  tramite: 'none' | 'legalization';
+}
+export const FIRMA_POR_DEFECTO: ConfigFirma = { tipoFirma: 'simple', tramite: 'none' };
+
+/** la configuración de firma de una plantilla en esa corredora (simple y sin trámite si no la cambió) */
+export async function configFirma(db: PrismaService, corredoraId: string, nombre: string): Promise<ConfigFirma> {
+  const r = await db.registro.findUnique({
+    where: { corredoraId_coleccion_id: { corredoraId, coleccion: COLECCION, id: nombre } },
+  });
+  const f = ((r?.datos ?? {}) as { firma?: Partial<ConfigFirma> }).firma ?? {};
+  return {
+    tipoFirma: f.tipoFirma === 'avanzada' ? 'avanzada' : 'simple',
+    tramite: f.tramite === 'legalization' ? 'legalization' : 'none',
+  };
+}
+
 interface Aprobacion {
   n: number;
   base: string;
@@ -60,6 +81,7 @@ interface Aprobacion {
 interface Registro {
   versiones?: Version[];
   aprobacion?: Aprobacion | null;
+  firma?: ConfigFirma;
 }
 type Estado = 'aprobada' | 'borrador' | 'revisar';
 
@@ -73,6 +95,10 @@ const aprobarEsquema = z.object({
   nota: z.string().trim().max(500).optional(),
 });
 const restaurarEsquema = z.object({ version: z.number().int().min(0) });
+const firmaEsquema = z.object({
+  tipoFirma: z.enum(['simple', 'avanzada']),
+  tramite: z.enum(['none', 'legalization']),
+});
 
 @Injectable()
 export class PlantillasDocService {
@@ -133,6 +159,7 @@ export class PlantillasDocService {
           cambiadas: v ? Object.keys(v.bloques).length : 0,
           editables: bloquesDe(base).filter((b) => b.texto !== null).length,
           aprobacion: r.aprobacion ?? null,
+          firma: { ...FIRMA_POR_DEFECTO, ...(r.firma ?? {}) },
           actualizada: v?.en ?? null,
         };
       }),
@@ -150,6 +177,7 @@ export class PlantillasDocService {
       estado: this.estado(r, huella(base)),
       version: v?.n ?? 0,
       aprobacion: r.aprobacion ?? null,
+      firma: { ...FIRMA_POR_DEFECTO, ...(r.firma ?? {}) },
       variables: [...variablesDe(base)].sort(),
       bloques: bloquesDe(base).map((b) => ({
         clave: b.clave,
@@ -247,6 +275,20 @@ export class PlantillasDocService {
     return this.detalle(u, nombre);
   }
 
+  /** el administrador define cómo se firma esta plantilla (tipo de firma y legalización); no cambia el texto ni su aprobación */
+  async guardarFirma(u: UsuarioToken, nombre: string, b: z.infer<typeof firmaEsquema>) {
+    this.existe(nombre);
+    if (u.rol !== 'ADMIN') throw new ForbiddenException('La firma de cada plantilla la define el administrador de la corredora.');
+    const r = await this.registro(u.corredoraId, nombre);
+    const datos = { ...r, firma: { tipoFirma: b.tipoFirma, tramite: b.tramite } } as unknown as Prisma.InputJsonObject;
+    await this.db.registro.upsert({
+      where: this.donde(u.corredoraId, nombre),
+      create: { corredoraId: u.corredoraId, coleccion: COLECCION, id: nombre, creadoPorId: u.sub, datos },
+      update: { datos, version: { increment: 1 } },
+    });
+    return this.detalle(u, nombre);
+  }
+
   async aprobar(u: UsuarioToken, nombre: string, b: z.infer<typeof aprobarEsquema>) {
     this.existe(nombre);
     if (u.rol !== 'ADMIN') throw new ForbiddenException('La aprobación la registra el administrador de la corredora.');
@@ -327,6 +369,15 @@ export class PlantillasDocController {
     @Body(new ZodPipe(aprobarEsquema)) b: z.infer<typeof aprobarEsquema>,
   ) {
     return this.s.aprobar(u, nombre, b);
+  }
+
+  @Put(':nombre/firma')
+  firma(
+    @UsuarioActual() u: UsuarioToken,
+    @Param('nombre') nombre: string,
+    @Body(new ZodPipe(firmaEsquema)) b: z.infer<typeof firmaEsquema>,
+  ) {
+    return this.s.guardarFirma(u, nombre, b);
   }
 
   @Post(':nombre/restaurar')

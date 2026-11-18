@@ -80,6 +80,22 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     await w.click('#modalCard #mOk'); await w.waitForFunction(() => /versión 2/.test(document.querySelector('#plDetalle').innerText));
     ok(/Sin aprobar/.test(await txt('#plDetalle')) && !/Propia/.test(await txt('#plDetalle [role="list"]')), 'volver a la base crea la versión 2, sin aprobar ni cláusulas propias');
 
+    // cómo se firma: por defecto simple y sin trámite; «Configurar la firma…» (modal-149) la cambia sin tocar el texto ni la versión
+    ok(/Firma simple · sin trámite/.test(await txt('#plFirmaResumen')), 'el detalle muestra «Firma simple · sin trámite» junto al estado');
+    await w.click('#plMas'); await w.click('#plFirmaBtn'); await w.waitForSelector('#plTipoFirma', { state: 'attached' }); ok(await clave() === 'modal-149', 'Configurar la firma: ventana modal-149');
+    ok(/código que le llega|código/i.test(await txt('#modalCard')) && /costo adicional/.test(await txt('#modalCard')), 'la ventana explica qué es cada firma y que la legalización tiene costo');
+    ok(await w.isDisabled('#modalCard #mOk'), 'Guardar queda apagado mientras no se cambia nada');
+    await w.selectOption('#plTipoFirma', 'avanzada'); await w.selectOption('#plTramite', 'legalization');
+    await w.waitForFunction(() => /Clave Única/.test(document.querySelector('#modalCard').innerText));
+    await w.screenshot({ path: path.resolve(__dirname, 'pd5-firma.png') });
+    await w.click('#modalCard #mOk'); await w.waitForFunction(() => /Firma avanzada · con legalización notarial/.test(document.querySelector('#plFirmaResumen')?.innerText || ''));
+    ok(/versión 2/.test(await txt('#plDetalle')) && /Sin aprobar/.test(await txt('#plDetalle')), 'cambiar la firma no crea versión ni cambia la aprobación');
+    const guardadaF = await w.evaluate(() => window.pf.plDetalle('orden-visita')).then((r) => (r.data || r).firma);
+    ok(guardadaF.tipoFirma === 'avanzada' && guardadaF.tramite === 'legalization', 'la firma queda guardada en la plantilla');
+    await w.click('#plMas'); await w.click('#plFirmaBtn'); await w.waitForSelector('#plTipoFirma', { state: 'attached' });
+    ok(await w.inputValue('#plTipoFirma') === 'avanzada' && await w.inputValue('#plTramite') === 'legalization' && await w.isDisabled('#modalCard #mOk'), 'al reabrir la ventana se ve lo guardado');
+    await w.click('#modalCard #mCancel'); await w.waitForFunction(() => !document.querySelector('#plTipoFirma'));
+
     // un dato inexistente ya no se puede insertar desde el editor; si igual llega uno (pegado como texto), la API lo rechaza
     await w.click('[data-clausula="objeto"]'); await w.waitForSelector('#plTexto .ProseMirror');
     await w.click('#plTexto .ProseMirror'); await w.keyboard.press('Control+End'); await w.keyboard.press('Enter'); await w.keyboard.type('Otro texto {{dato.inventado}}');
@@ -89,6 +105,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     ok(true, 'salir con cambios sin guardar pide confirmar (modal-146)');
     await w.click('#modalCard #mOk'); await w.waitForSelector('#cfgPlantillas');
     ok(/versión 2/.test(await txt('#cfgPlantillas')), 'vuelve a la lista, actualizada');
+    ok(/Firma avanzada/.test(await txt('#cfgPlantillas [data-plantilla="orden-visita"]')) && /con legalización/.test(await txt('#cfgPlantillas [data-plantilla="orden-visita"]')), 'la lista muestra «Firma avanzada» y «con legalización»');
     await w.screenshot({ path: path.resolve(__dirname, 'pd1-lista.png') });
     ok(!errs.length, 'sin errores en la página' + (errs.length ? ': ' + errs.join(' | ') : ''));
     console.log('\nPLANTILLAS OK');

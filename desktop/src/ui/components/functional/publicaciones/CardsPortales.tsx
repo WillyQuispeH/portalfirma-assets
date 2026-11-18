@@ -17,6 +17,7 @@ import { ModalConfirmar } from '../../ui/Modal';
 import { api } from '../../../utils/api';
 import { toast, vincularAvisosExistentes } from '../../../utils/app';
 import { fechaHora } from '../../../utils/formato';
+import { cx } from '../../../utils/cx';
 import { usePublicacion } from '../../../store/hooks/usePublicacion.hook';
 import { useCartera } from '../../../store/hooks/useCartera.hook';
 import { LogoPortal, VIA } from './comun';
@@ -36,6 +37,19 @@ function Titulo({ id, nombre, via }: { id: string; nombre: string; via: string }
       <LogoPortal id={id} nombre={nombre} />
       <span className="tw:flex tw:min-w-0 tw:flex-col"><span>{nombre}</span><small className="tw:text-xs tw:font-normal tw:text-muted">{via}</small></span>
     </span>
+  );
+}
+
+/** capa sobre tarjetas que aún no se pueden usar: lenguaje claro, sin jerga técnica */
+function CapaEnProceso({ titulo, texto }: { titulo: string; texto: string }) {
+  return (
+    <div data-en-proceso className="tw:absolute tw:inset-0 tw:z-10 tw:flex tw:items-center tw:justify-center tw:rounded-card tw:bg-card/80 tw:p-6 tw:text-center tw:backdrop-blur-[2px]">
+      <div className="tw:flex tw:max-w-[280px] tw:flex-col tw:items-center tw:gap-ui">
+        <Badge tono="amarillo" punto>En proceso</Badge>
+        <p className="tw:m-0 tw:text-[15px] tw:font-bold tw:leading-snug tw:text-text">{titulo}</p>
+        <p className="tw:m-0 tw:text-sm tw:leading-relaxed tw:text-muted">{texto}</p>
+      </div>
+    </div>
   );
 }
 
@@ -92,8 +106,8 @@ export function TarjetaPortalInmobiliario({ cuenta }: { cuenta: ReturnType<typeo
   const desconectar = async () => { await api('mlDesconectar'); toast('Cuenta desconectada. Los avisos siguen publicados.'); actualizar(); };
 
   return (
-    <div data-po="pi" className={e.conectada ? 'on' : undefined}>
-      <Card className={MARCO} titulo={<Titulo id="pi" nombre="Portal Inmobiliario" via="Mercado Libre · API" />}
+    <div data-po="pi" className={cx('tw:relative tw:h-full', e.conectada && 'on')}>
+      <Card className={MARCO} titulo={<Titulo id="pi" nombre="Portal Inmobiliario" via="Cuenta de la corredora" />}
         accion={<Badge tono={e.conectada ? 'verde' : 'gris'} punto>{e.conectada ? 'Cuenta conectada' : 'Sin conectar'}</Badge>}
         pie={(
           <div className={PIE}>
@@ -105,17 +119,17 @@ export function TarjetaPortalInmobiliario({ cuenta }: { cuenta: ReturnType<typeo
               </>
             ) : (
               <Boton id="poCon" icono="link" disabled={!e.configurada} cargando={ocupado === 'conectar'} onClick={conectar}>
-                {ocupado === 'conectar' ? 'Esperando la autorización en Mercado Libre…' : 'Conectar cuenta de la corredora'}
+                {ocupado === 'conectar' ? 'Esperando la autorización…' : 'Conectar cuenta de la corredora'}
               </Boton>
             )}
           </div>
         )}>
         <div className={CUERPO}>
           <p className="tw:m-0 tw:text-sm tw:text-muted">
-            {e.conectada ? 'Publica, actualiza, pausa y finaliza los avisos por la API; se ven también en Mercado Libre y usan el paquete de publicaciones de la cuenta.'
-              : 'Cada corredora conecta su propia cuenta de Mercado Libre. Ahí debe estar activada como inmobiliaria y tener un paquete de publicación contratado.'}
+            {e.conectada
+              ? 'Publica, actualiza, pausa y cierra tus avisos desde Asset. Se ven también en Mercado Libre y usan el paquete de publicaciones de tu cuenta.'
+              : 'Conecta la cuenta de tu corredora. Debe estar registrada como inmobiliaria y tener un paquete de publicación.'}
           </p>
-          {!e.configurada && <p role="alert" className="tw:m-0 tw:text-sm tw:text-yellow-softink"><b>Falta registrar la app de PortalFirma en Mercado Libre.</b> Lo hace PortalFirma una sola vez (ver PORTAL-INMOBILIARIO.md).</p>}
           {e.conectada && (
             <ListaDatos datos={[
               ['Cuenta', `${e.cuenta?.nickname ?? ''}${e.cuenta?.email ? ' · ' + e.cuenta.email : ''}`],
@@ -126,30 +140,57 @@ export function TarjetaPortalInmobiliario({ cuenta }: { cuenta: ReturnType<typeo
           )}
         </div>
       </Card>
+      {!e.configurada && (
+        <CapaEnProceso
+          titulo="Conexión en preparación"
+          texto="PortalFirma está dejando lista esta conexión. Cuando esté disponible, podrás vincular la cuenta de tu corredora desde aquí."
+        />
+      )}
     </div>
   );
 }
 
 // ---------------------------------------------------------------- portales de feed (Chilepropiedades, Broku, TOCTOC, Yapo)
 
+function mensajeEnProceso(x: IPortal): { titulo: string; texto: string } {
+  if (x.enTramite) {
+    return {
+      titulo: 'Integración en proceso',
+      texto: `Estamos coordinando con ${x.nombre} para conectar tu corredora. Cuando esté lista, podrás publicar desde aquí.`,
+    };
+  }
+  if (x.via === 'acuerdo') {
+    return {
+      titulo: 'Acuerdo pendiente',
+      texto: `Para publicar en ${x.nombre} hace falta un acuerdo comercial. Cuando esté firmado, lo activamos en Asset.`,
+    };
+  }
+  return {
+    titulo: 'Integración en proceso',
+    texto: `Pronto podrás publicar en ${x.nombre} desde Asset.`,
+  };
+}
+
 export function TarjetaPortalFeed({ x, feed, url }: { x: IPortal; feed: number; url?: string }) {
   const { portalGuardar, portalExportarFeed, portalRotarClave } = usePublicacion();
   const [activo, setActivo] = useState(x.listo);
   const [token, setToken] = useState('');
   const [cambiarClave, setCambiarClave] = useState(false);
-  const copiar = () => { if (url) navigator.clipboard.writeText(url).then(() => toast('Dirección del feed copiada.'), () => toast(url, 8000)); };
+  const enProceso = !x.listo && !!(x.enTramite || x.via === 'acuerdo');
+  const capa = enProceso ? mensajeEnProceso(x) : null;
+  const copiar = () => { if (url) navigator.clipboard.writeText(url).then(() => toast('Enlace copiado.'), () => toast(url, 8000)); };
   return (
-    <div data-po={x.id} className={x.listo ? 'on' : undefined}>
+    <div data-po={x.id} className={cx('tw:relative tw:h-full', x.listo && 'on')}>
       <Card className={MARCO} titulo={<Titulo id={x.id} nombre={x.nombre} via={VIA[x.via]} />}
         accion={<Badge tono={x.listo ? 'verde' : x.enTramite ? 'amarillo' : 'gris'} punto>{x.estado}</Badge>}
         pie={(
           <div className={PIE}>
             <Boton data-save onClick={async () => { const r = await portalGuardar(x.id, x.nombre, { activo, feedUrl: x.feedUrl || '', ...(token.trim() ? { token: token.trim() } : {}) }); if (!r.error) setToken(''); aviso(r); }}>Guardar</Boton>
             <MenuMas etiqueta={`Más acciones de ${x.nombre}`} opciones={[
-              { id: `po-exp-${x.id}`, texto: 'Exportar feed a un archivo', icono: 'download', alTocar: async () => aviso(await portalExportarFeed(x.id)) },
+              { id: `po-exp-${x.id}`, texto: 'Descargar avisos a un archivo', icono: 'download', alTocar: async () => aviso(await portalExportarFeed(x.id)) },
               ...(url ? [
-                { id: `po-cop-${x.id}`, texto: 'Copiar la dirección', icono: 'link', alTocar: copiar },
-                { id: `po-rot-${x.id}`, texto: 'Cambiar la clave de los feeds', icono: 'rotateR', alTocar: () => setCambiarClave(true) },
+                { id: `po-cop-${x.id}`, texto: 'Copiar el enlace del portal', icono: 'link', alTocar: copiar },
+                { id: `po-rot-${x.id}`, texto: 'Renovar el enlace de los portales', icono: 'rotateR', alTocar: () => setCambiarClave(true) },
               ] : []),
             ]} />
           </div>
@@ -157,25 +198,26 @@ export function TarjetaPortalFeed({ x, feed, url }: { x: IPortal; feed: number; 
         <div className={CUERPO}>
           <p className="tw:m-0 tw:text-sm tw:text-muted">{x.detalle}</p>
           <ListaDatos datos={[
-            ['En el feed', `${feed} ${feed === 1 ? 'aviso' : 'avisos'}`],
+            ['Avisos', `${feed} ${feed === 1 ? 'publicado' : 'publicados'}`],
             ['Activa desde', x.desde ? new Date(x.desde).toLocaleDateString('es-CL') : null],
-            ['Seguimiento', x.id === 'chilepropiedades' ? (x.token ? 'Conectado con el TOKEN' : 'Falta el TOKEN') : null],
+            ['Código del portal', x.id === 'chilepropiedades' ? (x.token ? 'Guardado' : 'Pendiente') : null],
           ]} />
           <Switch id={`po-act-${x.id}`} activo={activo} alCambiar={setActivo}
-            etiqueta={x.enTramite ? 'Integración confirmada por el portal' : x.via === 'acuerdo' ? 'Acuerdo comercial activo' : 'Integración activada por el portal'}
-            descripcion={activo ? 'Los avisos que publiques salen en el feed.' : 'Apagada: lo que publiques queda «en espera» y entra solo al activarla.'} />
+            etiqueta={x.enTramite ? 'Portal listo para publicar' : x.via === 'acuerdo' ? 'Acuerdo comercial activo' : 'Publicación activada'}
+            descripcion={activo ? 'Los avisos que publiques aparecerán en este portal.' : 'Apagada: lo que publiques queda en espera hasta que la actives.'} />
           {x.id === 'chilepropiedades' && (
-            <Input data-token type="password" autoComplete="off" value={token} onChange={(e) => setToken(e.target.value)} placeholder={x.token ? '••••••• (guardado)' : 'Pega aquí el TOKEN'}
-              etiqueta="TOKEN de seguimiento" ayuda="Lo entrega el portal: trae estado, visitas e interesados." />
+            <Input data-token type="password" autoComplete="off" value={token} onChange={(e) => setToken(e.target.value)} placeholder={x.token ? '••••••• (guardado)' : 'Pega el código que te entregó el portal'}
+              etiqueta="Código del portal" ayuda="Te lo entrega Chilepropiedades para traer visitas e interesados." />
           )}
           {url
-            ? <Input data-url readOnly value={url} onFocus={(e) => e.currentTarget.select()} icono="link" etiqueta="Dirección del feed" ayuda="Se la entregas al portal; es secreta." />
-            : <p className="tw:m-0 tw:text-[13px] tw:text-muted">La dirección del feed la ve y la entrega el administrador de la corredora.</p>}
+            ? <Input data-url readOnly value={url} onFocus={(e) => e.currentTarget.select()} icono="link" etiqueta="Enlace para el portal" ayuda="Entrégaselo al portal; es privado de tu corredora." />
+            : <p className="tw:m-0 tw:text-[13px] tw:text-muted">El enlace lo ve y lo entrega el administrador de la corredora.</p>}
         </div>
       </Card>
+      {capa && <CapaEnProceso titulo={capa.titulo} texto={capa.texto} />}
       <ModalConfirmar abierto={cambiarClave} onCerrar={() => setCambiarClave(false)} clave="modal-139" peligro icono="alert"
-        titulo="¿Cambiar la clave de los feeds?" textoConfirmar="Cambiar la clave"
-        mensaje="Las direcciones actuales de todos los portales dejan de funcionar al instante. Después tendrás que entregar las nuevas a cada portal."
+        titulo="¿Renovar el enlace de los portales?" textoConfirmar="Renovar el enlace"
+        mensaje="Los enlaces actuales de todos los portales dejan de funcionar al instante. Después tendrás que entregar los nuevos a cada portal."
         onConfirmar={async () => { aviso(await portalRotarClave()); setCambiarClave(false); }} />
     </div>
   );
@@ -215,4 +257,4 @@ export function GrillaPortales({ cuenta }: { cuenta: ReturnType<typeof useCuenta
 }
 
 /** el aviso de pie de página, el mismo en las dos pantallas */
-export const NOTA_PORTALES = 'Chilepropiedades lee el feed una vez al día y su integración es gratis si la aprueban; no permite publicar ni borrar por API, así que publicar y retirar en Asset es entrar y salir del feed. Broku está en trámite. TOCTOC y Yapo publican con acuerdo comercial y reciben el mismo feed. El detalle de cada aviso (publicar, pausar, retirar, eliminar) está en Publicaciones › Avisos.';
+export const NOTA_PORTALES = 'Chilepropiedades actualiza una vez al día y su integración es gratis si la aprueban. Broku está en proceso de conexión. TOCTOC y Yapo requieren un acuerdo comercial. El detalle de cada aviso (publicar, pausar, retirar) está en Publicaciones › Avisos.';

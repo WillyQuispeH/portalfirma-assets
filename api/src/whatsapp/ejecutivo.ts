@@ -22,7 +22,7 @@ import { UsuarioActual, type UsuarioToken } from '../auth/usuario-actual';
 import { AvisosService } from '../avisos/avisos';
 import { WechatiaService, type Conversacion, type MensajeWa, type Wechatia } from './wechatia';
 import { EnviadosService } from './enviados';
-import { firma, norm, telNorm } from './comun';
+import { firma, nombresAsistentes, norm, telNorm } from './comun';
 import { EquipoService } from './equipo';
 import { FotosWaService } from './fotos-wa';
 import { ActaVisitaService } from './acta-visita';
@@ -54,7 +54,12 @@ interface DatosVinculo {
   numeroEmpresa?: string;
 }
 
-const MENU = `Tu equipo:\n• *Pedro* · Captación\n• *Juanita* · Documentos\n• *Diego* · Seguimiento\n• *Fernanda* · Leads\nEscribe el nombre de quien necesitas. También puedes mandar audios.`;
+/** el menú del equipo, con los nombres que la corredora les puso (Configuración › Asistentes) */
+const menu = (corredoraId: string) => {
+  const n = (id: 'pedro' | 'juanita' | 'diego' | 'fernanda', base: string) =>
+    nombresAsistentes.get(corredoraId)?.[id] || base;
+  return `Tu equipo:\n• *${n('pedro', 'Pedro')}* · Captación\n• *${n('juanita', 'Juanita')}* · Documentos\n• *${n('diego', 'Diego')}* · Seguimiento\n• *${n('fernanda', 'Fernanda')}* · Leads\nEscribe el nombre de quien necesitas. También puedes mandar audios.`;
+};
 
 @Injectable()
 export class EjecutivoService {
@@ -212,7 +217,7 @@ export class EjecutivoService {
       });
     const d = (v.datos ?? {}) as DatosVinculo;
     if (cv.contactId) {
-      const texto = `Listo, este celular quedó conectado a PortalFirma Asset${d.nombre ? ' de ' + d.nombre : ''}.\n\n${MENU}`;
+      const texto = `Listo, este celular quedó conectado a PortalFirma Asset${d.nombre ? ' de ' + d.nombre : ''}.\n\n${menu(v.corredoraId)}`;
       const r = await wa.enviarAContacto(cv.contactId, texto);
       await this.enviados.registrar(v.corredoraId, cv.telefono, { messageId: r.messageId, texto, enHilo: false });
     }
@@ -279,7 +284,7 @@ export class EjecutivoService {
     alEnviar?: (messageId: string | null) => Promise<void>,
   ) {
     const v = await this.db.waVinculo.findUnique({ where: { usuarioId } });
-    const t = como ? `${firma(como)}\n${texto}` : texto;
+    const t = como ? `${firma(como, corredoraId)}\n${texto}` : texto;
     if (v?.activo && v.contactId) {
       try {
         const cli = wa ?? (await this.wa.cliente(corredoraId));
