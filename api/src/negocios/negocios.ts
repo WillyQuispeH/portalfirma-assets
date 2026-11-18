@@ -93,6 +93,14 @@ export class NegociosService {
       throw new BadRequestException('El cliente del negocio no existe.');
     if (o.corredorId && !ref.usuarios.has(o.corredorId))
       throw new BadRequestException('Ese corredor no es de tu corredora.');
+    // REGLA: todo negocio tiene una propiedad y un interesado (comprador o arrendatario). Uno nuevo no se crea sin ellos y
+    // a uno que los tiene no se los puedes quitar. Los negocios antiguos que quedaron sin alguno se pueden seguir editando
+    // mientras no cambien ese dato (la app los muestra para completarlos).
+    const quien = o.tipo === 'venta' ? 'comprador' : 'arrendatario';
+    if (!o.propId && (!previa || previa.propiedadId))
+      throw new BadRequestException('Todo negocio necesita una propiedad: elige la propiedad del negocio.');
+    if (!o.clienteId && (!previa || previa.clienteId))
+      throw new BadRequestException(`Todo negocio necesita su interesado: elige al ${quien}.`);
     // el corredor: lo nuevo queda suyo y no lo reasigna; el administrador decide (sin dato, se mantiene)
     const corredorId = !esAdmin(u)
       ? (previa?.corredorId ?? u.sub)

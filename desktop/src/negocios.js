@@ -88,6 +88,9 @@ const ver = (id) => vista(neg(id));
 function guardar(o) {
   const tipo = o.tipo === 'arriendo' ? 'arriendo' : 'venta';
   const datos = {};
+  // REGLA: todo negocio tiene una propiedad y un interesado; no se pueden quitar (solo cambiar por otra/otro)
+  if (o.id && 'propId' in o && !o.propId) throw err('Todo negocio necesita una propiedad: no se puede quitar.');
+  if (o.id && 'clienteId' in o && !o.clienteId) throw err(`Todo negocio necesita su ${tipo === 'venta' ? 'comprador' : 'arrendatario'}: no se puede quitar.`);
   if ('propId' in o) { if (o.propId) { const p = inmo.obtener(o.propId); if (!(tipo === 'venta' ? p.venta : p.arriendo)) throw err(`La propiedad no está en ${tipo}. Márcala en su ficha primero.`); } datos.propId = o.propId || null; }
   if ('clienteId' in o) datos.clienteId = o.clienteId || null;
   if ('valor' in o) datos.valor = o.valor && o.valor.valor !== '' && o.valor.valor != null ? { valor: Number(o.valor.valor), moneda: ['UF', 'CLP', 'USD'].includes(o.valor.moneda) ? o.valor.moneda : 'UF' } : null;

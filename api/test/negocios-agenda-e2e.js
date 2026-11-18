@@ -58,7 +58,12 @@ const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
     ok(r.s === 200 && r.j.corredorId === corId, 'el corredor no puede reasignar su negocio');
 
     const n2 = nid('n'); creados.negocios.push(n2);
-    r = await req('PUT', `/negocios/${n2}`, { tipo: 'arriendo', etapa: 'interes', propId: prop.id }, adm);
+    // REGLA: todo negocio tiene propiedad e interesado
+    ok((await req('PUT', `/negocios/${nid('n')}`, { tipo: 'venta', etapa: 'interes', clienteId: cli.id }, cor)).s === 400, 'sin propiedad no se crea un negocio: 400');
+    ok((await req('PUT', `/negocios/${nid('n')}`, { tipo: 'arriendo', etapa: 'interes', propId: prop.id }, cor)).s === 400, 'sin interesado no se crea un negocio: 400');
+    ok((await req('PUT', `/negocios/${n1}`, { ...v2, clienteId: null }, cor)).s === 400, 'no se le quita el interesado a un negocio: 400');
+    ok((await req('PUT', `/negocios/${n1}`, { ...v2, propId: null }, cor)).s === 400, 'no se le quita la propiedad a un negocio: 400');
+    r = await req('PUT', `/negocios/${n2}`, { tipo: 'arriendo', etapa: 'interes', propId: prop.id, clienteId: cli.id }, adm);
     ok(r.s === 200 && r.j.corredorId === null, 'el administrador crea uno sin corredor');
     let lc = (await req('GET', '/negocios', null, cor)).j.items.map((x) => x.id);
     ok(lc.includes(n1) && !lc.includes(n2), 'el corredor ve solo los suyos');

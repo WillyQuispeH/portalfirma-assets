@@ -430,6 +430,8 @@ function docsDeFirma(x, re, enviar, etiqueta) {
 }
 async function accion(x, alTerminar) {
   const t = x.tipo; const id = x.pasoId || x.id; x.alTerminar = alTerminar; engancharAgente();
+  if (x.negocioId && !x.propId) { const ng = await api('negObtener', x.negocioId).catch(() => null); x.propId = ng?.prop?.id || ng?.propId || x.propId; }   // el paso llegó sin la propiedad: se busca en el negocio
+  if (id === 'orden' && !x.propId) return toast('No encuentro la propiedad de este negocio: abre el negocio y vincúlala antes de hacer la orden de visita.', 6000);
   if (x.negocioId) { try { await cargar(); } catch {} }   // la cartera al día: los documentos y firmas de cada paso salen de ahí (si no, un documento recién enviado aparece como «todavía no hay»)
   if ((t === 'visita' || t === 'aceptacion' || t === 'pago' || t === 'revision' || t === 'post') && x.negocioId) return menuPaso(x, alTerminar);   // modal-13: agendar, confirmar, reprogramar y marcar la visita, todo adentro
   if (x.accion === 'Reprogramar' || x.accion === 'Reintentar') return reprogramar(x, alTerminar);
@@ -536,7 +538,7 @@ function columnas(r, a, mas) {
 async function bloque(host, { negocioId, propId, alCambiar, compacto = false, foco = false } = {}) {
   let r; try { r = await api('etPasos', { negocioId, propId }); } catch (e) { host.innerHTML = `<p class="error">${esc(e.message)}</p>`; return; }
   propId = propId || r.propId || undefined;   // en la ficha de un negocio solo se pasa el negocio: los documentos de cada paso se buscan en la propiedad del negocio
-  if (negocioId && !propId) propId = (await api('negObtener', negocioId).catch(() => null))?.prop?.id || propId; // los pasos de un negocio necesitan su propiedad (orden de visita, documentos)
+  if (negocioId && !propId) { const ng = await api('negObtener', negocioId).catch(() => null); propId = ng?.prop?.id || ng?.propId || propId; } // los pasos de un negocio necesitan su propiedad (orden de visita, documentos)
   if (!host.isConnected) return; // mientras tanto se cerró la ficha o el negocio (o React la volvió a dibujar)
   const clave = negocioId || propId; const a = r.actual; const abiertas = bloque._abiertas[clave] ||= {}; const mas = bloque._mas[clave] ||= {};
   const recargar = () => (alCambiar ? alCambiar() : bloque(host, { negocioId, propId }));

@@ -28,7 +28,7 @@ const GUIA = {
   asset_crear_persona: { dominio: 'PERSONAS', cuando: 'hay que agregar una persona nueva al CRM (necesita el nombre; el RUT es opcional)', no: 'un interesado que llegó por un portal, Instagram o un referido (asset_crear_lead) ni buscar a alguien que puede existir (asset_buscar_personas primero)', canal: 'chat-y-whatsapp' },
   asset_vincular_persona: { dominio: 'PERSONAS', cuando: 'una persona del CRM pasa a ser propietario, arrendatario, comprador, codeudor o interesado de una propiedad', canal: 'chat-y-whatsapp' },
   // ---------------- negocios ----------------
-  asset_crear_negocio: { dominio: 'NEGOCIOS', cuando: 'empieza un negocio de venta o arriendo entre una propiedad y un cliente', canal: 'chat-y-whatsapp' },
+  asset_crear_negocio: { dominio: 'NEGOCIOS', cuando: 'empieza un negocio de venta o arriendo entre una propiedad y un cliente (los dos son obligatorios: sin propiedad o sin interesado no se crea; si la persona no existe, asset_crear_persona primero)', canal: 'chat-y-whatsapp' },
   asset_mover_negocio: { dominio: 'NEGOCIOS', cuando: 'piden pasar un negocio a otra etapa (visita, reserva, evaluación, contrato, entrega…)', no: 'cambiar el estado comercial de la propiedad (asset_cambiar_estado)', canal: 'chat-y-whatsapp' },
   asset_tarea_negocio: { dominio: 'NEGOCIOS', cuando: 'marcan o desmarcan una tarea de la etapa actual del negocio', canal: 'chat-y-whatsapp' },
   asset_proxima_accion: { dominio: 'NEGOCIOS', cuando: 'definen qué hay que hacer después en un negocio y para cuándo', canal: 'chat-y-whatsapp' },
