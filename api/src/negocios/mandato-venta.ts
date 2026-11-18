@@ -103,7 +103,8 @@ export class MandatoVentaService {
         numero: numero.toLocaleString('es-CL'),
         fechaEmision: fechaLarga(hoy()),
         ciudad: prop.comuna || 'Santiago',
-        corredora,
+        // en venta firma el representante de venta (si la corredora tiene uno distinto)
+        corredora: { ...corredora, representante: corredora.representanteVenta },
         corredor: { nombre: usuario.nombre, email: usuario.email, telefono: usuario.telefono ?? '' },
         mandante: {
           nombre: unir(duenos.map((d) => d.persona.nombre)),

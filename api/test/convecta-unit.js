@@ -27,8 +27,8 @@ const TODAS = [prop(101), prop(102, { idType: 4, propertyTitle: 'Sitio en Colina
       const u = new URL(req.url, 'http://x'); vistas.push({ metodo: req.method, ruta: u.pathname, pag: u.searchParams.get('pageNumber'), tam: u.searchParams.get('pageSize'), clave: req.headers['ocp-apim-subscription-key'] });
       if (req.headers['ocp-apim-subscription-key'] !== 'clave-buena') { res.writeHead(401); return res.end('{}'); }
       const pag = Number(u.searchParams.get('pageNumber'));
-      const items = pag === 1 ? TODAS.slice(0, 2) : TODAS.slice(2); // 2 páginas
-      res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ items, totalPages: 2, totalRecords: 3, pageNumber: pag, pageSize: 2 }));
+      const items = TODAS.slice(pag - 1, pag); // 3 páginas de 1
+      res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(pag === 1 ? { items, totalPages: 3, totalRecords: 3, pageNumber: pag, pageSize: 1 } : { items })); // como Convecta: el total solo en la 1ª página
     });
   });
   await new Promise((r) => srv.listen(0, r)); const url = `http://127.0.0.1:${srv.address().port}/web/v1`;
@@ -56,7 +56,7 @@ const TODAS = [prop(101), prop(102, { idType: 4, propertyTitle: 'Sitio en Colina
     ok(est.conectado && est.propia && conexiones.get('A').accesoCif === 'c:clave-buena', 'la clave se prueba y queda cifrada en la conexión de la corredora');
     vistas.length = 0;
     const leidas = await cv.propiedades('A');
-    ok(leidas.length === 3 && vistas.length === 2, 'lee todas las páginas (2 llamadas, 3 propiedades)');
+    ok(leidas.length === 3 && vistas.length === 3, 'lee todas las páginas aunque el total venga solo en la primera (3 llamadas, 3 propiedades)');
     ok(vistas.every((v) => v.metodo === 'POST' && v.ruta === '/web/v1/properties' && v.tam === '50' && v.clave === 'clave-buena'), 'POST /properties?pageNumber=N&pageSize=50 con la clave en la cabecera');
     const otra = await cv.propiedades('B').then(() => null, (e) => e.message);
     ok(/Conecta primero/.test(otra), 'otra corredora NO usa la clave de la primera');

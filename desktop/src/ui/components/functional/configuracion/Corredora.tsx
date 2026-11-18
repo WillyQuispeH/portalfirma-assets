@@ -12,7 +12,8 @@ import { toast } from '../../../utils/app';
 
 interface IDatosCorredora {
   nombreFantasia: string; razonSocial: string; rut: string; domicilio: string;
-  representanteNombre: string; representanteRut: string; representante: string; logo: string; puedeEditar: boolean;
+  representanteNombre: string; representanteRut: string; representante: string;
+  representanteVentaNombre: string; representanteVentaRut: string; logo: string; puedeEditar: boolean;
 }
 
 const LOGO_MAX = 400 * 1024;
@@ -43,7 +44,8 @@ export default function Corredora() {
     try {
       const x = await api<IDatosCorredora>('corredoraGuardar', {
         razonSocial: t('razonSocial'), rut: t('rut'), domicilio: t('domicilio'),
-        representanteNombre: t('representanteNombre'), representanteRut: t('representanteRut'), logo,
+        representanteNombre: t('representanteNombre'), representanteRut: t('representanteRut'),
+        representanteVentaNombre: t('representanteVentaNombre'), representanteVentaRut: t('representanteVentaRut'), logo,
       });
       setD(x); setLogo(x.logo || ''); setVez((v) => v + 1); toast('Datos de la corredora guardados.');
     } catch (e) { toast((e as Error).message, 6000); }
@@ -66,6 +68,9 @@ export default function Corredora() {
           <Input id="ccRepNombre" name="representanteNombre" etiqueta="Representante legal" defaultValue={d.representanteNombre} placeholder="don Nombre Apellido" disabled={ro}
             ayuda={!d.representanteNombre && d.representante ? `Hoy los documentos dicen: «${d.representante}».` : 'Quien firma en nombre de la corredora (mandatos y contratos).'} />
           <Input id="ccRepRut" name="representanteRut" etiqueta="RUT del representante" defaultValue={d.representanteRut} placeholder="12.345.678-9" disabled={ro} />
+          <Input id="ccRepVNombre" name="representanteVentaNombre" etiqueta="Representante para venta (opcional)" defaultValue={d.representanteVentaNombre} placeholder="Si en las ventas firma otra persona" disabled={ro}
+            ayuda="Firma el mandato de venta. Vacío = el mismo representante de arriba." />
+          <Input id="ccRepVRut" name="representanteVentaRut" etiqueta="RUT del representante para venta" defaultValue={d.representanteVentaRut} placeholder="12.345.678-9" disabled={ro} />
         </div>
         <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-4">
           <span className="tw:inline-grid tw:place-items-center tw:h-16 tw:w-44 tw:rounded-control tw:bg-bg">

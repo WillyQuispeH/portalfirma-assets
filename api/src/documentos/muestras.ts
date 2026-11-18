@@ -59,6 +59,9 @@ const corredora = (): DatosCorredora => ({
   representanteNombre: 'don Juan Pérez',
   representanteRut: '1.111.111-1',
   representante: 'don Juan Pérez, cédula de identidad número 1.111.111-1',
+  representanteVentaNombre: '',
+  representanteVentaRut: '',
+  representanteVenta: 'don Juan Pérez, cédula de identidad número 1.111.111-1',
   logo: '',
 });
 
@@ -139,6 +142,7 @@ const MUESTRAS: Record<string, () => Record<string, unknown>> = {
       firma: 'Rosa Propietaria',
       texto:
         'Rosa Propietaria, chilena, casada, cédula de identidad número 9.876.543-2, domiciliada en Av. Ejemplo 3000, Las Condes',
+      lineas: [{ texto: 'RUT 9.876.543-2 · chilena, casada · Av. Ejemplo 3000, Las Condes · rosa@ejemplo.cl' }],
     },
     propietario: 'Rosa Propietaria',
     propiedad: {
@@ -181,6 +185,7 @@ const MUESTRAS: Record<string, () => Record<string, unknown>> = {
       texto:
         'Rosa Propietaria, cédula de identidad número 9.876.543-2, y Juan Ejemplo, cédula de identidad número 2.222.222-2',
       firma: 'Rosa Propietaria y Juan Ejemplo',
+      rut: '9.876.543-2 y 2.222.222-2',
       email: 'rosa@ejemplo.cl',
       domicilio: 'Av. Ejemplo 3000, Las Condes',
       cuentaTxt: 'en la cuenta corriente número 00-000-00000-00 del Banco Ejemplo, a nombre de Rosa Propietaria',

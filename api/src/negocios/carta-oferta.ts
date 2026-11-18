@@ -193,12 +193,16 @@ export class CartaOfertaService {
           nombre: propietario,
           firma: propietario,
           texto: duenos.length ? unir(duenos.map((d) => describir(d.persona))) : propietario,
+          // una línea por propietario para la tarjeta (sin repetir el nombre, igual que la del oferente)
+          lineas: duenos
+            .map((d) => [d.persona.rutFormato || d.persona.rut ? `RUT ${d.persona.rutFormato || d.persona.rut}` : '', perfilDe(d.persona), d.persona.direccion ?? '', d.persona.email ?? ''].filter(Boolean).join(' · '))
+            .map((texto) => ({ texto })),
         },
         propietario,
         propiedad: {
           codigo: prop.codigo,
           tipo: mayus(String(prop.tipo || '').replace(/_/g, ' ')),
-          direccion: [prop.direccion, prop.unidad ? `depto. ${prop.unidad}` : '', prop.comuna, prop.region]
+          direccion: [prop.direccion, prop.unidad ? `depto. ${prop.unidad}` : '', prop.comuna]
             .filter(Boolean)
             .join(', '),
           precioLista: precioLista && Number(precioLista) ? monto(Number(precioLista), monedaLista ?? 'UF') : '',

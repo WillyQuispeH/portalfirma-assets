@@ -17,7 +17,7 @@ body { margin: 0; font-variant-numeric: lining-nums; color: var(--tinta); font-f
 /* ---------- encabezado ---------- */
 .enc { display: flex; justify-content: space-between; align-items: flex-end; padding-bottom: 9px; border-bottom: 1px solid var(--tinta); }
 .marca { font: 600 11pt "Helvetica Neue", Arial, sans-serif; letter-spacing: .32em; text-transform: uppercase; }
-.marca .logo { display: block; max-height: 15mm; max-width: 55mm; margin-bottom: 4px; object-fit: contain; }
+.marca .logo { display: block; max-height: 22mm; max-width: 70mm; margin: -3mm 0 2px -2mm; object-fit: contain; }
 .marca small { display: block; margin-top: 3px; font: 400 7.5pt "Helvetica Neue", Arial, sans-serif; letter-spacing: .08em; color: var(--suave); text-transform: none; }
 .meta { text-align: right; font: 8.5pt "Helvetica Neue", Arial, sans-serif; color: var(--suave); line-height: 1.45; }
 .meta b { color: var(--tinta); font-weight: 600; }

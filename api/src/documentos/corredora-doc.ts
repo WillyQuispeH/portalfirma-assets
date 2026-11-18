@@ -27,6 +27,11 @@ export interface DatosCorredora {
   representanteRut: string;
   /** texto para los comparecientes: «don Fulano, cédula de identidad número 1.111.111-1» */
   representante: string;
+  /** quien firma por la corredora en los documentos de VENTA (mandato de venta); vacío = el mismo representante */
+  representanteVentaNombre: string;
+  representanteVentaRut: string;
+  /** texto del representante para venta (o el general si no hay uno propio) */
+  representanteVenta: string;
   logo: string;
 }
 
@@ -52,6 +57,11 @@ export async function datosCorredora(db: PrismaService, corredoraId: string): Pr
   const representante = repNombre
     ? `${repNombre}${repRut ? `, cédula de identidad número ${formatoRut(repRut)}` : ''}`
     : String(((antigua?.datos ?? {}) as { representante?: string }).representante ?? '').trim(); // texto antiguo
+  const vNombre = s('representanteVentaNombre');
+  const vRut = s('representanteVentaRut');
+  const representanteVenta = vNombre
+    ? `${vNombre}${vRut ? `, cédula de identidad número ${formatoRut(vRut)}` : ''}`
+    : representante;
   const razonSocial = s('razonSocial');
   return {
     nombre: razonSocial || c?.nombre || 'la corredora',
@@ -62,6 +72,9 @@ export async function datosCorredora(db: PrismaService, corredoraId: string): Pr
     representanteNombre: repNombre,
     representanteRut: repRut ? formatoRut(repRut) : '',
     representante,
+    representanteVentaNombre: vNombre,
+    representanteVentaRut: vRut ? formatoRut(vRut) : '',
+    representanteVenta,
     logo: s('logo'),
   };
 }
@@ -91,6 +104,8 @@ const guardarEsquema = z.object({
   domicilio: texto(300),
   representanteNombre: texto(160),
   representanteRut: rut,
+  representanteVentaNombre: texto(160),
+  representanteVentaRut: rut,
   logo: z
     .string()
     .max(LOGO_MAX, 'El logo es muy pesado: usa una imagen de menos de 400 KB.')
@@ -124,7 +139,7 @@ export class CorredoraDocService {
     const donde = { corredoraId_coleccion_id: { corredoraId: u.corredoraId, ...CONFIG } };
     const previo = await this.db.registro.findUnique({ where: donde });
     const datos = { ...((previo?.datos ?? {}) as Record<string, unknown>) };
-    for (const k of ['razonSocial', 'domicilio', 'representanteNombre', 'representanteRut', 'logo'] as const)
+    for (const k of ['razonSocial', 'domicilio', 'representanteNombre', 'representanteRut', 'representanteVentaNombre', 'representanteVentaRut', 'logo'] as const)
       if (b[k] !== undefined) datos[k] = b[k];
     await this.db.registro.upsert({
       where: donde,

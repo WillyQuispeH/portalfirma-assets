@@ -156,6 +156,13 @@ type Visitante = {
   nacionalidad?: string;
 };
 /** todo lo necesario para el documento, ya validado */
+/** corta en la última palabra completa y agrega «…» (la descripción de la propiedad no queda cortada a mitad de frase) */
+const recortar = (t: string, max: number) => {
+  if (t.length <= max) return t;
+  const c = t.slice(0, max).replace(/[\s,;:.\-–]+\S*$/, '');
+  return c.replace(/[\s,;:.\-–]+$/, '') + '…';
+};
+
 interface Armada {
   c: CtxOrden;
   p: PropConFotos;
@@ -285,7 +292,7 @@ export class OrdenVisitaService {
       direccion: [x.direccion, x.unidad ? `depto. ${x.unidad}` : '', x.comuna].filter(Boolean).join(', '),
       operacion: op === 'arriendo' ? 'Arriendo' : 'Venta',
       precio: (op === 'arriendo' ? pa || pv : pv || pa) ?? '',
-      descripcion: (x.descripcion ?? '').replace(/\s+/g, ' ').trim().slice(0, 320),
+      descripcion: recortar((x.descripcion ?? '').replace(/\s+/g, ' ').trim(), 320),
       foto: (await this.imagenDe(x)) ?? '',
       rasgos,
     };

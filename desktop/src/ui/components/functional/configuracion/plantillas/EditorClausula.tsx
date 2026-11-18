@@ -286,13 +286,8 @@ export default function EditorClausula({ id, tipo, texto, variables = [], soloLe
           </p>
         ) : null)
         : (
-          <div className="tw:flex tw:items-center tw:gap-2">
-            {partes.prefijo && (
-              <span title="Numeración de la cláusula" className="tw:shrink-0 tw:font-[Georgia,'Times_New_Roman',serif] tw:text-[15px] tw:italic tw:text-muted">{prefijoLegible(partes.prefijo)}</span>
-            )}
-            <Input id="plTitulo" etiqueta="Título de la cláusula" clasesCampo="tw:flex-1 tw:min-w-0" value={partes.resto}
-              onChange={(e) => cambiarTitulo(e.target.value.replace(/[\r\n]/g, ' '))} />
-          </div>
+          <Input id="plTitulo" etiqueta="Título de la cláusula" value={partes.resto}
+            onChange={(e) => cambiarTitulo(e.target.value.replace(/[\r\n]/g, ' '))} />
         ))}
       <div className={cx('tw:flex tw:flex-col tw:rounded-control',
         !soloLectura && 'tw:border-0 tw:border-b-2 tw:border-solid tw:border-b-edge tw:bg-gray-soft tw:transition-colors tw:focus-within:border-b-brand')}>

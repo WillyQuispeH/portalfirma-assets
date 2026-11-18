@@ -286,7 +286,7 @@ export class ConvectaService {
       items?: ConvectaPropiedad[];
       data?: ConvectaPropiedad[];
     };
-    return { items: j.items ?? j.data ?? [], paginas: Number(j.totalPages) || 1 };
+    return { items: j.items ?? j.data ?? [], paginas: Number(j.totalPages) || 0 };
   }
 
   /** Todas las propiedades de la cuenta de Convecta de la corredora (páginas de 50). */
@@ -299,10 +299,12 @@ export class ConvectaService {
         'Conecta primero la cuenta de Convecta de tu corredora en Configuración › Integraciones.',
       );
     const todas = new Map<number, ConvectaPropiedad>();
+    // Convecta informa totalPages SOLO en la primera página (las siguientes no lo traen): se guarda el mayor visto y,
+    // por si acaso, se sigue mientras una página venga llena. (Antes se pisaba con 1 y de 178 se importaban 100.)
     let paginas = 1;
     for (let pag = 1; pag <= paginas && pag <= MAX_PAGINAS; pag++) {
       const r = await this.pagina(clave, pag);
-      paginas = Math.max(1, r.paginas);
+      paginas = Math.max(paginas, r.paginas, r.items.length >= POR_PAGINA ? pag + 1 : 0);
       for (const it of r.items) if (it?.idProperty) todas.set(it.idProperty, it);
     }
     return [...todas.values()];

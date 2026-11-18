@@ -219,10 +219,11 @@ export class ContratoArriendoService {
         arrendador: {
           texto: unir(duenos.map((d) => describir(d.persona))),
           firma: unir(duenos.map((d) => d.persona.nombre)),
+          rut: unir(duenos.map((d) => rutDe(d.persona))),
           email: unir(duenos.map((d) => d.persona.email ?? '')),
           domicilio: unir(duenos.map((d) => d.persona.direccion ?? '')),
           cuentaTxt: cuentaPago
-            ? `en la cuenta ${cuentaPago}, a nombre del Arrendador`
+            ? `en la cuenta ${cuentaPago.replace(/^cuenta\s+/i, '')}, a nombre del Arrendador`
             : 'en la cuenta que el Arrendador indique por escrito',
         },
         arrendatario: {
@@ -252,7 +253,7 @@ export class ContratoArriendoService {
           // «el departamento número 1502, ubicado en…, de una superficie aproximada de 85 m², compuesto por…»
           descripcion: [
             `${String(prop.tipo || 'inmueble').replace(/_/g, ' ')}${prop.unidad ? ` número ${prop.unidad}` : ''}`,
-            `ubicado en ${[prop.direccion, prop.comuna, prop.region].filter(Boolean).join(', ') || 'la dirección indicada'}`,
+            `ubicado en ${[prop.direccion, prop.comuna].filter(Boolean).join(', ') || 'la dirección indicada'}`,
             prop.supTotal || prop.supUtil
               ? `de una superficie aproximada de ${Number(prop.supUtil || prop.supTotal).toLocaleString('es-CL')} m²`
               : '',
