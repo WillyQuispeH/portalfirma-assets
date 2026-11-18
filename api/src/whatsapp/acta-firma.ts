@@ -26,9 +26,10 @@ import { ActividadService } from '../comun/actividad.service';
 import { PersonasService } from '../personas/personas.service';
 import { PdfService } from '../documentos/pdf.service';
 import { EnvioFirmaService } from '../documentos/envio-firma';
-import { cargarPlantilla, llenar } from '../documentos/plantilla';
+import { llenar } from '../documentos/plantilla';
 import type { ActaVisita } from './acta-visita';
 import { datosCorredora } from '../documentos/corredora-doc';
+import { PlantillasDocService } from '../documentos/plantillas-doc';
 
 const COLECCION = 'actas_visita';
 const INTERES = { alto: 'Alto', medio: 'Medio', bajo: 'Bajo', sin_datos: 'Sin datos' } as const;
@@ -62,6 +63,7 @@ export class ActaFirmaService {
   private readonly log = new Logger('ActaFirma');
   constructor(
     private readonly db: PrismaService,
+    private readonly plantillasDoc: PlantillasDocService,
     private readonly pdfs: PdfService,
     private readonly envio: EnvioFirmaService,
     private readonly actividad: ActividadService,
@@ -190,7 +192,7 @@ export class ActaFirmaService {
     };
     // sin RUT o correo del visitante no se arma el PDF, pero se devuelven los datos para completarlos en la ventana
     if (x.falta) return { error: x.falta, ...datos };
-    const bytes = await this.pdfs.pdf(llenar(cargarPlantilla('acta-visita'), x.vars));
+    const bytes = await this.pdfs.pdf(llenar(await this.plantillasDoc.html(u.corredoraId, 'acta-visita'), x.vars));
     return {
       ok: true,
       pdf: bytes.toString('base64'),
@@ -236,7 +238,7 @@ export class ActaFirmaService {
     const x = await this.armar(u, id);
     if ('error' in x) return { error: x.error };
     if (x.falta) return { error: x.falta };
-    const bytes = await this.pdfs.pdf(llenar(cargarPlantilla('acta-visita'), x.vars));
+    const bytes = await this.pdfs.pdf(llenar(await this.plantillasDoc.html(u.corredoraId, 'acta-visita'), x.vars));
     const nombre = x.orden.numero
       ? `Acta de visita · orden nº ${x.orden.numero}`
       : `Acta de visita del ${x.a.fecha.slice(8, 10)}/${x.a.fecha.slice(5, 7)}`;

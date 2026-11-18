@@ -106,12 +106,11 @@ function iaFalsa() {
     ok(true, 'en Leads aparece «Valentina Paz» (llegó por Instagram)');
     await w.click('#ldItems .ld-it:has-text("Valentina Paz")'); await w.waitForSelector('#ldChB .ld-m', { timeout: 15000 });
     ok(/Providencia/.test(await txt('#ldChB')) && (await w.$$('#ldChB .ld-m.in')).length === 2 && (await w.$$('#ldChB .ld-m.out')).length === 1, 'su conversación se ve completa: 2 mensajes de ella y 1 del corredor');
-    ok(/Instagram/.test(await txt('.ld-ch-h')) && /Solo lectura/.test(await txt('.ld-ch-h')), 'marcada como Instagram y de solo lectura');
+    // la cabecera lleva el chip de Instagram con su usuario; ya no es «Solo lectura»: ahora se le puede responder por Instagram desde Leads
+    ok(/@vale\.paz/.test(await txt('.ld-ch-h')), 'marcada como Instagram (chip con @vale.paz)');
     ok(/6543/.test(await w.inputValue('#ldFicha [data-k="telefono"]')) && await w.inputValue('#ldFicha [data-k="b_operacion"]') === 'arriendo', 'la ficha trae el celular que dio y que busca arriendo');
     await shot(w, 'igv1-lead.png');
-    await w.click('#ldCuentas'); await w.waitForSelector('#ldObs', { timeout: 10000 });
-    const tObs = await txt('#ldObs').catch(() => ''); ok(/llegan solos/.test(tObs) && !(await w.$('#ldObsOn')), 'en «Cuentas e historial» no hay nada que activar: dice que Instagram llega solo · «' + tObs.slice(0, 120) + '»');
-    await shot(w, 'igv2-cuentas.png'); await w.click('#mCancel');
+    // (0.18.13: se quitó «Cuentas e historial»; que no haya nada que activar ya lo verifica GET /whatsapp/observador arriba)
 
     // ---- 4) ella vuelve a escribir: entra solo el mensaje nuevo
     dm(cv, 'inbound', '¿Puedo verlo el sábado a las 11?', 0);

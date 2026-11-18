@@ -18,9 +18,10 @@ import { buscarVisible } from '../comun/asignados';
 import { ActividadService } from '../comun/actividad.service';
 import { PdfService } from '../documentos/pdf.service';
 import { EnvioFirmaService, type FirmanteEnvio } from '../documentos/envio-firma';
-import { cargarPlantilla, llenar } from '../documentos/plantilla';
+import { llenar } from '../documentos/plantilla';
 import { hoy } from '../whatsapp/comun';
 import { datosCorredora } from '../documentos/corredora-doc';
+import { PlantillasDocService } from '../documentos/plantillas-doc';
 
 const SERIE = 'acta_entrega';
 const emailOk = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
@@ -35,6 +36,7 @@ export class ActaEntregaService {
   private readonly log = new Logger('ActaEntrega');
   constructor(
     private readonly db: PrismaService,
+    private readonly plantillasDoc: PlantillasDocService,
     private readonly pdfs: PdfService,
     private readonly envio: EnvioFirmaService,
     private readonly actividad: ActividadService,
@@ -109,10 +111,23 @@ export class ActaEntregaService {
     const imagenes = await this.imagenes(u, n.id, fotosParaPdf(k));
     const firmantes: Firmante[] = [
       ...duenos.map((d) => ({
-        rut: rutDe(d.persona), fullName: d.persona.nombre, email: d.persona.email ?? '', phone: d.persona.telefono || undefined,
-        alias: 'arrendador', rol: 'Arrendador', personaId: d.persona.id,
+        rut: rutDe(d.persona),
+        fullName: d.persona.nombre,
+        email: d.persona.email ?? '',
+        phone: d.persona.telefono || undefined,
+        alias: 'arrendador',
+        rol: 'Arrendador',
+        personaId: d.persona.id,
       })),
-      { rut: rutDe(arr), fullName: arr.nombre, email: arr.email ?? '', phone: arr.telefono || undefined, alias: 'arrendatario', rol: 'Arrendatario', personaId: arr.id },
+      {
+        rut: rutDe(arr),
+        fullName: arr.nombre,
+        email: arr.email ?? '',
+        phone: arr.telefono || undefined,
+        alias: 'arrendatario',
+        rol: 'Arrendatario',
+        personaId: arr.id,
+      },
     ];
     return {
       n,
@@ -151,7 +166,10 @@ export class ActaEntregaService {
     const x = await this.armar(u, negocioId);
     if ('error' in x) return { error: x.error };
     const bytes = await this.pdfs.pdf(
-      llenar(cargarPlantilla('acta-entrega'), x.vars(await this.numeroSiguiente(u.corredoraId))),
+      llenar(
+        await this.plantillasDoc.html(u.corredoraId, 'acta-entrega'),
+        x.vars(await this.numeroSiguiente(u.corredoraId)),
+      ),
     );
     return {
       ok: true,
@@ -165,7 +183,9 @@ export class ActaEntregaService {
     const x = await this.armar(u, negocioId);
     if ('error' in x) return { error: x.error };
     const numero = await this.tomarNumero(u.corredoraId);
-    const bytes = await this.pdfs.pdf(llenar(cargarPlantilla('acta-entrega'), x.vars(numero)));
+    const bytes = await this.pdfs.pdf(
+      llenar(await this.plantillasDoc.html(u.corredoraId, 'acta-entrega'), x.vars(numero)),
+    );
     const r = await this.envio.enviar({
       corredoraId: u.corredoraId,
       pagadorRespaldo: x.usuario.email,
@@ -174,7 +194,12 @@ export class ActaEntregaService {
       bytes,
       nombreArchivo: `Acta de entrega nº ${numero} - ${x.prop.codigo}.pdf`,
       firmantes: x.firmantes.map((f) => ({
-        rut: f.rut, fullName: f.fullName, email: f.email, phone: f.phone, alias: f.alias, typeSign: 'simple' as const,
+        rut: f.rut,
+        fullName: f.fullName,
+        email: f.email,
+        phone: f.phone,
+        alias: f.alias,
+        typeSign: 'simple' as const,
       })),
     });
     if ('error' in r) return { error: r.error };
@@ -195,7 +220,13 @@ export class ActaEntregaService {
           enviadoPorId: u.sub,
           total,
           firmantes: x.firmantes.map((f) => ({
-            nombre: f.fullName, rut: f.rut, rol: f.rol, personaId: f.personaId, email: f.email, telefono: f.phone ?? '', firmo: false,
+            nombre: f.fullName,
+            rut: f.rut,
+            rol: f.rol,
+            personaId: f.personaId,
+            email: f.email,
+            telefono: f.phone ?? '',
+            firmo: false,
           })) as Prisma.InputJsonValue,
           datos: { formato: 'acta_entrega', hito: 'entrega', numero, tipoFirma: 'simple', tramite: 'none' },
         },
@@ -210,8 +241,22 @@ export class ActaEntregaService {
       });
       const texto = `Acta de entrega nº ${numero} enviada a firmar a ${total} personas (operación ${operacion})`;
       await this.actividad.registrar([
-        { corredoraId: u.corredoraId, entidadTipo: 'negocio' as const, entidadId: x.n.id, ref2: x.prop.id, texto, usuarioId: u.sub },
-        { corredoraId: u.corredoraId, entidadTipo: 'propiedad' as const, entidadId: x.prop.id, ref2: x.n.id, texto, usuarioId: u.sub },
+        {
+          corredoraId: u.corredoraId,
+          entidadTipo: 'negocio' as const,
+          entidadId: x.n.id,
+          ref2: x.prop.id,
+          texto,
+          usuarioId: u.sub,
+        },
+        {
+          corredoraId: u.corredoraId,
+          entidadTipo: 'propiedad' as const,
+          entidadId: x.prop.id,
+          ref2: x.n.id,
+          texto,
+          usuarioId: u.sub,
+        },
       ]);
     } catch (e) {
       this.log.error(`acta de entrega enviada pero sin registrar del todo: ${(e as Error).message}`);

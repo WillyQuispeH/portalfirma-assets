@@ -27,6 +27,7 @@ function conectar(input, { inicial = {}, alElegir } = {}) {
   };
   const cerrarLista = () => { lista.classList.add('hidden'); lista.innerHTML = ''; S.items = []; S.i = -1; };
   const mostrar = (items, tipo) => {
+    clearTimeout(S.cierre); // un cierre pendiente (blur al tocar «Buscar») no debe borrar los resultados que acaban de llegar
     S.items = items; S.i = -1; S.tipo = tipo;
     if (!items.length) { lista.innerHTML = '<p class="dr-vac">Sin resultados. Revisa la calle y el número, o escríbela tal cual.</p>'; lista.classList.remove('hidden'); return; }
     lista.innerHTML = items.map((x, i) => `<button type="button" data-i="${i}">${icon('pin', 13)}<span><b>${esc(x.principal || x.direccion)}</b><small>${esc(x.secundario || [x.comuna, x.region].filter(Boolean).join(', '))}</small></span></button>`).join('')
@@ -53,7 +54,7 @@ function conectar(input, { inicial = {}, alElegir } = {}) {
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); S.i = (S.i + (e.key === 'ArrowDown' ? 1 : -1) + S.items.length) % S.items.length; lista.querySelectorAll('[data-i]').forEach((b) => b.classList.toggle('on', Number(b.dataset.i) === S.i)); }
     else if (e.key === 'Enter') { e.preventDefault(); elegir(S.i < 0 ? 0 : S.i); } else if (e.key === 'Escape') { e.stopPropagation(); cerrarLista(); }
   });
-  input.addEventListener('blur', () => setTimeout(cerrarLista, 150));
+  input.addEventListener('blur', () => { clearTimeout(S.cierre); S.cierre = setTimeout(cerrarLista, 150); });
   bus.onclick = async () => { bus.disabled = true; try { mostrar(await api('dirBuscar', input.value), 'osm'); input.focus(); } catch (e) { pintarPie(`<span class="dr-err">${esc(e.message)}</span>`); } finally { bus.disabled = false; } };
 
   function activar() {

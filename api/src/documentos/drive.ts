@@ -5,7 +5,14 @@
 //   Portalfirma Asset / Otros documentos / <tipo de documento> / <archivo>.pdf                      (sin propiedad)
 // Una carpeta por propiedad, dentro una por negocio, y dentro de cada una los documentos (el nombre del archivo dice cuál es).
 export const RAIZ_DRIVE = 'Portalfirma Asset';
-export type TTipoDriveDoc = 'Órdenes de visita' | 'Cartas oferta' | 'Mandatos de arriendo' | 'Mandatos de venta' | 'Contratos de arriendo' | 'Actas de entrega' | 'Actas de visita';
+export type TTipoDriveDoc =
+  | 'Órdenes de visita'
+  | 'Cartas oferta'
+  | 'Mandatos de arriendo'
+  | 'Mandatos de venta'
+  | 'Contratos de arriendo'
+  | 'Actas de entrega'
+  | 'Actas de visita';
 
 /** a qué documento corresponde el nombre con que se envió a firmar («Carta oferta nº 3»…); null si no se reconoce */
 export function tipoDeDocumento(nombre: string): TTipoDriveDoc | null {
@@ -21,7 +28,12 @@ export function tipoDeDocumento(nombre: string): TTipoDriveDoc | null {
 }
 
 /** un nombre de carpeta válido: sin barras ni saltos de línea y de largo razonable */
-const limpio = (t: string) => t.replace(/[\\/\r\n]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80);
+const limpio = (t: string) =>
+  t
+    .replace(/[\\/\r\n]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 80);
 
 /** la ruta de carpetas (dentro de la raíz) para un documento de una propiedad y, si lo tiene, de su negocio */
 export function rutaDrive(

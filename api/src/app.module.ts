@@ -16,6 +16,7 @@ import { PropiedadesController } from './propiedades/propiedades.controller';
 import { PropiedadesService } from './propiedades/propiedades.service';
 import { ConvectaController, ConvectaService } from './propiedades/convecta';
 import { CorredoraDocController, CorredoraDocService } from './documentos/corredora-doc';
+import { PlantillasDocController, PlantillasDocService } from './documentos/plantillas-doc';
 import { FeedsController } from './propiedades/feeds';
 import { ArchivosModule } from './archivos/archivos';
 import { NegociosController, NegociosService } from './negocios/negocios';
@@ -76,6 +77,7 @@ import { LeadsEnvioController, PuenteService } from './whatsapp/puente';
     ArchivosModule,
   ],
   controllers: [
+    PlantillasDocController,
     CorredoraDocController,
     ConvectaController,
     UsuariosController,
@@ -124,6 +126,7 @@ import { LeadsEnvioController, PuenteService } from './whatsapp/puente';
     PropiedadesService,
     ConvectaService,
     CorredoraDocService,
+    PlantillasDocService,
     PersonasService,
     NegociosService,
     EventosService,

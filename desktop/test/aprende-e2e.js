@@ -22,7 +22,8 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     await shot('ap3-negocios-portales.png');
 
     // Aprende
-    await w.click('#helpFab'); await w.waitForSelector('#hpAprende');
+    // la ayuda ya no tiene botón flotante: se abre desde el menú de la cuenta («Ayuda y guías»)
+    await w.click('#account'); await w.click('[data-um="help"]'); await w.waitForSelector('#hpAprende');
     ok(/Gestión inmobiliaria/.test(await txt('#helpPanel')), 'la ayuda tiene guías de gestión inmobiliaria');
     await w.fill('#hpQ', 'como muevo un negocio de etapa'); await w.waitForTimeout(400); ok(/Negocios/.test(await txt('#hpRes')), 'el buscador de la ayuda encuentra la guía de negocios');
     await w.click('#hpAprende'); await w.waitForSelector('.ap-grid');

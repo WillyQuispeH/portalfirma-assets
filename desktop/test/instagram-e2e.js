@@ -50,12 +50,8 @@ async function zipIg(extra = []) {
     await w.waitForSelector('#view-agente .ag.ag-full', { timeout: 15000 });
     await w.click('#nav [data-view="leads"]'); await w.waitForSelector('.ld-vacio');
     ok(!!(await w.$('#ldIg2')), 'la bandeja vacía ofrece importar el historial de Instagram');
-    // panel de cuentas e historial
-    await w.click('#ldCuentas'); await w.waitForSelector('.ld-cuentas');
-    const p = await txt('.ld-cuentas');
-    ok(/Instagram · historial de mensajes/.test(p) && /WhatsApp · chat exportado/.test(p) && /En vivo desde wechatia/.test(p), 'panel «Cuentas e historial»: Instagram, WhatsApp y en vivo');
-    await shot('ig0-cuentas.png');
-    await w.click('#ldCtaIg'); await w.waitForSelector('.ld-ol');
+    // 0.18.13 · ya no existe el panel «Cuentas e historial» (#ldCuentas): las instrucciones se abren con «Historial de Instagram» (#ldIg2)
+    await w.click('#ldIg2'); await w.waitForSelector('.ld-ol');
     const ins = await txt('.ld-cuentas');
     ok(/Centro de cuentas/.test(ins) && /Descargar tu información/.test(ins) && /Mensajes/.test(ins) && /JSON/.test(ins) && /dueño de la cuenta/.test(ins), 'instrucciones paso a paso para que el dueño descargue sus mensajes (solo Mensajes, JSON)');
     await shot('ig1-instrucciones.png');
@@ -76,18 +72,19 @@ async function zipIg(extra = []) {
     await w.fill('#ldIgCuenta', '@thelivingprop'); await w.check('#ldIgAut'); await w.click('#mOk');
     await w.waitForSelector('#ldChB .ld-m', { timeout: 20000 });
     ok((await w.$$('#ldItems .ld-it')).length === 3, 'quedan 3 leads (uno por conversación)');
-    await w.click('#ldItems .ld-it:has-text("Camila Rojas")'); await w.waitForSelector('#ldFicha .ld-perfil', { timeout: 10000 });
+    await w.click('#ldItems .ld-it:has-text("Camila Rojas")'); await w.waitForFunction(() => /Perfil/.test(document.querySelector('#ldFicha')?.textContent || ''), null, { timeout: 10000 });
     const ch = await txt('#ldChB');
     ok(/Ñuñoa/.test(ch) && !/Ã/.test(ch) && !/Reaccionó/.test(ch), 'la conversación se lee bien');
     ok((await w.$$('#ldChB .ld-m.in')).length === 4 && (await w.$$('#ldChB .ld-m.out')).length === 1 && !!(await w.$('#ldChB img[src^="pffoto://l/"]')), 'cliente a la izquierda, la corredora a la derecha y la foto incluida');
     ok(await w.inputValue('#ldFicha [data-k="email"]') === 'camila.rojas@gmail.com' && /7777/.test(await w.inputValue('#ldFicha [data-k="telefono"]')), 'la IA anota correo y celular que dio en el chat');
     ok(await w.inputValue('#ldFicha [data-k="b_operacion"]') === 'arriendo' && await w.inputValue('#ldFicha [data-k="b_dormitorios"]') === '3', 'y lo que busca');
-    ok(/familia/.test(await txt('#ldFicha .ld-perfil')) && /@camilarojas/.test(await txt('#ldFicha .ld-igc')) && /Instagram/.test(await txt('.ld-ch-h')), 'perfil del cliente, su usuario y el origen Instagram');
+    // la cabecera del chat lleva el chip de Instagram con el usuario (@camilarojas) en vez de la palabra «Instagram»
+    ok(/Perfil ?[^]*familia/.test(await txt('#ldFicha')) && /Instagram · @camilarojas/.test(await txt('#ldFicha')) && /@camilarojas/.test(await txt('.ld-ch-h')), 'perfil del cliente, su usuario y el origen Instagram');
     await shot('ig3-lead.png');
     // se registra quién autorizó
-    await w.click('#ldCuentas'); await w.waitForSelector('.ld-cons');
-    ok(/@thelivingprop/.test(await txt('.ld-cons')) && /3 conversaciones/.test(await txt('.ld-cons')), 'queda registrada la autorización: cuenta, quién, cuándo y cuántas');
-    await w.click('#mCancel');
+    // (el panel que la mostraba se quitó en 0.18.13: se revisa el registro directamente)
+    const cons = await w.evaluate(() => window.pf.leadsConsentimientos()).then((r) => JSON.stringify(r?.data ?? r));
+    ok(/@thelivingprop/.test(cons) && /"conversaciones":3/.test(cons), 'queda registrada la autorización: cuenta, quién, cuándo y cuántas');
     // otra descarga más adelante: solo lo nuevo
     const zip2 = path.join(tmp, 'instagram-2.zip'); fs.writeFileSync(zip2, await zipIg([['c', '¿Podemos ir a verlo el sábado?']]));
     await w.setInputFiles('#ldFileIg', zip2); await w.waitForSelector('.ld-igimp');

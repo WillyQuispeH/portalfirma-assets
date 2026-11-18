@@ -1,5 +1,5 @@
 // Genera test/fixtures/contrato_prueba.pdf: contrato de prestación de servicios ficticio, de varias páginas.
-// Uso: npx electron test/make-contrato-fixture.js
+// Uso: npx electron test/herramientas/make-contrato-fixture.js
 // Lo usan plantillas-e2e, asistente-e2e, detectar-e2e y clientes-e2e. Textos que esas pruebas (y el modo de prueba de la IA, src/ai.js) esperan:
 //  - primer párrafo con «Santiago», «2 de octubre de 2026», «comparecen:», JUAN PEREZ SOTO / 11.111.111-1 (Prestador) y MARIA GONZALEZ ROJAS / 22.222.222-2 (Cliente);
 //  - «servicios de asesoria al CLIENTE» y «El precio sera de $500.000 ... mensuales» (errores a propósito que corrige el Asistente);
@@ -32,5 +32,5 @@ app.whenReady().then(async () => {
   </body></html>`;
   await w.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
   const pdf = await w.webContents.printToPDF({ pageSize: 'Letter', margins: { marginType: 'custom', top: 0.9, bottom: 0.9, left: 1, right: 1 }, generateTaggedPDF: false });
-  const dest = process.env.PF_FIXTURE_OUT || path.join(__dirname, 'fixtures', 'contrato_prueba.pdf'); fs.writeFileSync(dest, pdf); console.log('ok', pdf.length); app.quit();
+  const dest = process.env.PF_FIXTURE_OUT || path.join(__dirname, '..', 'fixtures', 'contrato_prueba.pdf'); fs.writeFileSync(dest, pdf); console.log('ok', pdf.length); app.quit();
 });

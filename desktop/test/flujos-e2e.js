@@ -27,7 +27,7 @@ const pdfText = async (file) => { const doc = await pdfjs.getDocument({ data: ne
   ok(await w.$$eval('.fl-model', (l) => l.length) >= 19, 'biblioteca con los modelos de Portalfirma');
   await w.fill('#flQ', 'pagaré'); await sleep(200);
   await w.click('.fl-model:has-text("Mandato Irrevocable")'); await w.waitForSelector('#flDrop');
-  ok(/Mandato Irrevocable/.test(await w.textContent('[data-cabecera]')), 'paso 2: nómina, con el modelo elegido');
+  ok(/Mandato Irrevocable/.test(await w.textContent('#view-flujos [data-cabecera]')), 'paso 2: nómina, con el modelo elegido');
   const r = await w.evaluate((f) => window.pf.flujosReadNomina(f), nom1); ok(r.ok && r.data.rows.length === 5, 'lee la nómina CSV (5 filas)');
   await w.evaluate((n) => window.Flujos._setNomina(n), r.data); await w.waitForSelector('#flNext');
   await w.screenshot({ path: path.resolve(__dirname, 'fl1-nomina.png') });

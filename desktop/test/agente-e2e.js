@@ -13,17 +13,24 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
   const decir = async (t) => { const n = (await w.$$('.ag-msg.bot')).length; await w.fill('#agQ', t); await w.press('#agQ', 'Enter'); if (await w.isVisible('#mOk').catch(() => false)) await w.click('#mOk'); return n; };
   const respuesta = async (n) => { await w.waitForFunction((k) => document.querySelectorAll('.ag-msg.bot').length > k, n, { timeout: 15000 }); await w.waitForTimeout(150); return ultimo(); };
   try {
-    await w.setViewportSize({ width: 1500, height: 920 }); await w.waitForSelector('.hub-card'); await w.waitForTimeout(500);
-    await w.evaluate(() => window.studio.goHome()); await w.waitForTimeout(300);
+    await w.setViewportSize({ width: 1500, height: 920 }); // la app abre en el Agente: se va al inicio documental (.hub-card) para probar el panel lateral
+    await w.waitForFunction(() => window.studio && window.Inmo, null, { timeout: 15000 }); await w.waitForTimeout(500);
+    await w.evaluate(() => window.studio.goHome()); await w.waitForSelector('.hub-card'); await w.waitForTimeout(300);
     ok(await w.isVisible('#agBtn'), 'botón «Agente» en la barra');
     await w.click('#agBtn'); await w.waitForSelector('#agDrawer:not(.hidden)');
-    ok((await w.$$('.ag-sug button')).length >= 4, 'panel lateral con sugerencias');
+    ok((await w.$$('#agDrawer [data-inicio]')).length >= 4, 'panel lateral con sugerencias'); // ahora acciones rápidas [data-inicio]
     await w.screenshot({ path: path.resolve(__dirname, 'ag1-panel.png') });
 
     let n = await decir('¿Cuál es mi saldo?'); let r = await respuesta(n);
     ok(/247\.424/.test(r) && /Saldo/.test(await txt('.ag-tool.ok')), 'consulta: usa la herramienta de saldo sin pedir confirmación');
 
-    await w.click('#agMore'); await w.click('#agTools'); await w.waitForSelector('.ag-tl > div'); ok((await w.$$('.ag-tl > div')).length === 13, 'dispone de las 13 herramientas del MCP'); await w.click('#agOk');
+    await w.click('#agMore'); await w.click('#agTools'); await w.waitForSelector('.ag-tl > div');
+    { // la lista ahora suma las herramientas de Asset a las 13 del MCP de Portalfirma
+      const ids = await w.$$eval('.ag-tl > div code', (x) => x.map((e) => e.textContent));
+      const mcp = ['get_partner_session', 'ingest_document_tools', 'search_document_content', 'extract_signers_document_tools', 'send_to_sign_document_tools', 'process_detail_get_by_operation', 'operation_get_operation_by_rut', 'operation_get_operation_by_phone', 'operation_manage_signing_tools', 'sign_documents_cds_massive_tools', 'wallet_manage_balance_tools', 'template_manage_tools', 'property_manage_tools'];
+      ok(mcp.every((t) => ids.includes(t)), `dispone de las 13 herramientas del MCP (${ids.length} en total)`);
+    }
+    await w.click('#agOk');
 
     n = await decir('Haz una recarga de saldo'); await w.waitForSelector('[data-conf]');
     ok(/Recargar saldo por \$10\.000/.test(await txt('[data-conf]')), 'recarga: pide confirmación con el detalle');
@@ -59,10 +66,10 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     await w.click('#agMore'); await w.click('#agLog'); await w.waitForSelector('.ag-tl > div'); ok((await w.$$('.ag-tl > div')).length >= 5, 'pantalla de actividad'); await w.click('#agOk');
     await w.screenshot({ path: path.resolve(__dirname, 'ag3-cds.png') });
 
-    await w.click('#agNew'); await w.waitForTimeout(200); ok(await w.isVisible('.ag-empty') && !(await w.$('.ag-chip')), 'nueva conversación');
+    await w.click('#agMore'); await w.click('#agReset'); await w.waitForTimeout(200); // «Nueva conversación» pasó al menú «⋯» ok(await w.isVisible('.ag-empty') && !(await w.$('.ag-chip')), 'nueva conversación');
     await w.click('#agClose'); await w.evaluate(() => window.studio.goHome()); await w.click('#agBtn'); await w.waitForSelector('#agQ');
     await w.fill('#agQ', '¿Quién falta por firmar en la operación 4424?'); n = 0; await w.press('#agQ', 'Enter');
-    r = await respuesta(0); ok(await w.isVisible('#agDrawer') && /Detalle de operación/.test(await txt('#agBody')), 'desde la barra abre el agente y consulta la operación');
+    r = await respuesta(0); ok(await w.isVisible('#agDrawer') && /Seguimiento de firma/.test(await txt('#agBody')) && /4424/.test(r), 'desde la barra abre el agente y consulta la operación');
     const tk = await w.evaluate(async () => (await window.pf.aiWallet()).data); ok(tk.balance < 5, `cobra tokens del asistente (saldo ${tk.balance})`);
     ok(!errs.length, 'sin errores de JavaScript' + (errs.length ? ': ' + errs.join(' | ') : ''));
     console.log('OK agente');

@@ -43,11 +43,15 @@ function reunir(opciones: TOpcion[] | undefined, vacia: string | undefined, chil
   const add = (v: string, t: string) => { if (visto.has(v)) return; visto.add(v); out.push([v, t]); };
   if (vacia !== undefined) add('', vacia);
   for (const [v, t] of opciones || []) add(v, t);
-  Children.forEach(children, (n) => {
-    if (!isValidElement(n) || n.type !== 'option') return;
+  // las <option> dentro de un <optgroup> también cuentan (se listan en orden, sin el título del grupo)
+  const recorrer = (hijos: ReactNode) => Children.forEach(hijos, (n) => {
+    if (!isValidElement(n)) return;
+    if (n.type === 'optgroup') return recorrer((n as ReactElement<{ children?: ReactNode }>).props.children);
+    if (n.type !== 'option') return;
     const p = (n as ReactElement<{ value?: string | number; children?: ReactNode }>).props;
     add(String(p.value ?? ''), textoDe(p.children));
   });
+  recorrer(children);
   return out;
 }
 

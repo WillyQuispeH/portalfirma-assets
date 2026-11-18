@@ -52,7 +52,11 @@ const dentroDeEstilos = (html: string) =>
   html.replace(/(<style[^>]*>)([\s\S]*?)(<\/style>)/gi, (_, a: string, css: string, b: string) => {
     // «<» queda como el escape CSS \3C (así un «</style>» en un dato nunca cierra el estilo); la comilla doble, como simple
     const limpio = css.replace(/"([^"\n]*)"/g, (_c, t: string) => {
-      const plano = t.replace(/&lt;/g, '\\3C ').replace(/&gt;/g, '>').replace(/&quot;/g, "'").replace(/&amp;/g, '&');
+      const plano = t
+        .replace(/&lt;/g, '\\3C ')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, "'")
+        .replace(/&amp;/g, '&');
       return `"${plano}"`;
     });
     return a + limpio + b;

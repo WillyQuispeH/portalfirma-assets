@@ -33,7 +33,8 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     ok(/Diego/.test(pd) && /Seguimiento/.test(pd) && /Reprogramar/.test(pd) && /canceló la visita/.test(pd), 'tocar un pendiente abre a quien le toca (Diego) con su lista real y la acción «Reprogramar»');
     ok(await w.evaluate(() => document.querySelector('.of-pj-diego').classList.contains('sel') && window.OfLienzo.pausado('diego')), 'el personaje elegido se detiene y se ilumina');
     await w.waitForTimeout(600); ok(await w.$('.of-panel'), 'el panel sigue abierto'); await shot('of2-diego.png');
-    await w.click('.of-panel button:has-text("Reprogramar")'); await w.waitForSelector('#rpF'); ok(true, '«Reprogramar» abre su ventana, sin pasar por el Agente'); await w.click('#mCancel');
+    await w.click('.of-panel button:has-text("Reprogramar")'); // la visita de un negocio ahora se reprograma dentro de la ventana del paso (modal-13 › PasoVisita), no en #rpF
+    await w.waitForSelector('#pvForm, #pvLista'); ok(true, '«Reprogramar» abre su ventana, sin pasar por el Agente'); await w.evaluate(() => closeModal()); await w.waitForTimeout(300);
     // escritorios clicables: el de Pedro
     await w.$eval('[data-esc="pedro"]', (b) => b.click()); await w.waitForFunction(() => /Pedro/.test(document.querySelector('.of-panel')?.textContent || ''));
     ok(/Captación/.test(await txt('.of-panel')) && /Ver la cartera/.test(await txt('.of-panel')), 'el escritorio de Pedro abre su panel (Captación)');

@@ -16,27 +16,43 @@ import { UsuarioActual, type UsuarioToken } from '../auth/usuario-actual';
 import { ActividadService } from '../comun/actividad.service';
 import { PdfService } from '../documentos/pdf.service';
 import { EnvioFirmaService } from '../documentos/envio-firma';
-import { cargarPlantilla, llenar } from '../documentos/plantilla';
+import { llenar } from '../documentos/plantilla';
 import { describir, unir } from '../documentos/comparecientes';
 import { hoy } from '../whatsapp/comun';
 import { datosCorredora } from '../documentos/corredora-doc';
+import { PlantillasDocService } from '../documentos/plantillas-doc';
 
 const SERIE = 'mandato_arriendo';
 const emailOk = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 const mayus = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const fechaLarga = (f: string) =>
-  new Date(`${f}T12:00:00Z`).toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+  new Date(`${f}T12:00:00Z`).toLocaleDateString('es-CL', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
 const monto = (v: number, m: string) =>
-  m === 'UF' ? `UF ${v.toLocaleString('es-CL')}` : m === 'USD' ? `US$ ${v.toLocaleString('es-CL')}` : `$${v.toLocaleString('es-CL')}`;
+  m === 'UF'
+    ? `UF ${v.toLocaleString('es-CL')}`
+    : m === 'USD'
+      ? `US$ ${v.toLocaleString('es-CL')}`
+      : `$${v.toLocaleString('es-CL')}`;
 const m2 = (v: unknown) => (v != null && Number(v) > 0 ? `${Number(v).toLocaleString('es-CL')} m²` : '');
 /** un campo sí/no de la ficha: si no se dijo nada, vale el valor por defecto */
-const sino = (v: unknown, base: boolean) => (v === true || v === 'true' || v === 'si' || v === 'sí' ? true : v === false || v === 'false' || v === 'no' ? false : base);
+const sino = (v: unknown, base: boolean) =>
+  v === true || v === 'true' || v === 'si' || v === 'sí'
+    ? true
+    : v === false || v === 'false' || v === 'no'
+      ? false
+      : base;
 
 @Injectable()
 export class MandatoArriendoService {
   private readonly log = new Logger('MandatoArriendo');
   constructor(
     private readonly db: PrismaService,
+    private readonly plantillasDoc: PlantillasDocService,
     private readonly pdfs: PdfService,
     private readonly envio: EnvioFirmaService,
     private readonly actividad: ActividadService,
@@ -56,7 +72,8 @@ export class MandatoArriendoService {
       where: { propiedadId: prop.id, rol: 'propietario' },
       include: { persona: true },
     });
-    if (!duenos.length) return { error: 'La propiedad no tiene propietario en su ficha: vincúlalo para armar el mandato.' };
+    if (!duenos.length)
+      return { error: 'La propiedad no tiene propietario en su ficha: vincúlalo para armar el mandato.' };
     for (const d of duenos) {
       const rut = d.persona.rutFormato || d.persona.rut || '';
       if (!rut) return { error: `${d.persona.nombre} no tiene RUT en su ficha: agrégalo para armar el mandato.` };
@@ -104,7 +121,8 @@ export class MandatoArriendoService {
         publicar: { si: sino(f.publicarPortales, true), no: !sino(f.publicarPortales, true) },
         exclusividad: { si: sino(f.exclusividad, false), no: !sino(f.exclusividad, false) },
         condiciones: {
-          mascotas: mascotas === undefined || mascotas === null || mascotas === '' ? '' : sino(mascotas, false) ? 'Sí' : 'No',
+          mascotas:
+            mascotas === undefined || mascotas === null || mascotas === '' ? '' : sino(mascotas, false) ? 'Sí' : 'No',
           garantiaMeses: Number.isFinite(garantia) && garantia > 0 ? String(garantia) : '',
           otras: String(f.condicionesMandato ?? '').trim(),
         },
@@ -129,7 +147,12 @@ export class MandatoArriendoService {
   async vistaPrevia(u: UsuarioToken, propiedadId: string): Promise<Record<string, unknown>> {
     const x = await this.armar(u, propiedadId, false);
     if ('error' in x) return { error: x.error };
-    const bytes = await this.pdfs.pdf(llenar(cargarPlantilla('mandato-arriendo'), x.vars(await this.numeroSiguiente(u.corredoraId))));
+    const bytes = await this.pdfs.pdf(
+      llenar(
+        await this.plantillasDoc.html(u.corredoraId, 'mandato-arriendo'),
+        x.vars(await this.numeroSiguiente(u.corredoraId)),
+      ),
+    );
     return {
       ok: true,
       pdf: bytes.toString('base64'),
@@ -144,7 +167,9 @@ export class MandatoArriendoService {
     const x = await this.armar(u, propiedadId, true);
     if ('error' in x) return { error: x.error };
     const numero = await this.tomarNumero(u.corredoraId);
-    const bytes = await this.pdfs.pdf(llenar(cargarPlantilla('mandato-arriendo'), x.vars(numero)));
+    const bytes = await this.pdfs.pdf(
+      llenar(await this.plantillasDoc.html(u.corredoraId, 'mandato-arriendo'), x.vars(numero)),
+    );
     const r = await this.envio.enviar({
       corredoraId: u.corredoraId,
       pagadorRespaldo: x.usuario.email,

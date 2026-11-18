@@ -21,7 +21,7 @@ import { EnvioFirmaService } from '../documentos/envio-firma';
 import { PersonasService } from '../personas/personas.service';
 import { ActividadService } from '../comun/actividad.service';
 import { PdfService } from '../documentos/pdf.service';
-import { cargarPlantilla, llenar } from '../documentos/plantilla';
+import { llenar } from '../documentos/plantilla';
 import { ZodPipe } from '../comun/zod.pipe';
 import { UsuarioActual, type UsuarioToken } from '../auth/usuario-actual';
 import { esUuid } from '../comun/asignados';
@@ -29,6 +29,7 @@ import { dvRut } from '../ia/transcripcion';
 import { normalizar } from '../comun/texto';
 import { hoy, norm } from './comun';
 import { datosCorredora, type DatosCorredora } from '../documentos/corredora-doc';
+import { PlantillasDocService } from '../documentos/plantillas-doc';
 
 export interface CtxOrden {
   corredoraId: string;
@@ -181,6 +182,7 @@ export class OrdenVisitaService {
 
   constructor(
     private readonly db: PrismaService,
+    private readonly plantillasDoc: PlantillasDocService,
     private readonly envio: EnvioFirmaService,
     private readonly personas: PersonasService,
     private readonly actividad: ActividadService,
@@ -335,10 +337,14 @@ export class OrdenVisitaService {
           : 'venta';
     const propiedades = await Promise.all(props.map((x) => this.datosPropiedad(x, op)));
     const vig = String(a.vigencia_dias ?? '').replace(/D/g, '');
-    if (vig && (Number(vig) < 1 || Number(vig) > 999)) return { error: 'La vigencia de la orden va en días hábiles, entre 1 y 999.' };
+    if (vig && (Number(vig) < 1 || Number(vig) > 999))
+      return { error: 'La vigencia de la orden va en días hábiles, entre 1 y 999.' };
     return {
       vigenciaDias: vig || '250',
-      garantiaSeriedad: String(a.garantia_seriedad ?? '').trim().slice(0, 40) || '$250.000',
+      garantiaSeriedad:
+        String(a.garantia_seriedad ?? '')
+          .trim()
+          .slice(0, 40) || '$250.000',
       c,
       p,
       props,
@@ -368,13 +374,19 @@ export class OrdenVisitaService {
     return f.valor;
   }
 
-  private html(x: Armada, numero: number) {
-    return llenar(cargarPlantilla('orden-visita'), {
+  private async html(x: Armada, numero: number) {
+    return llenar(await this.plantillasDoc.html(x.c.corredoraId, 'orden-visita'), {
       numero: numero.toLocaleString('es-CL'),
       fechaEmision: fechaLarga(hoy()),
       corredora: x.corredora,
       corredor: { nombre: x.usuario.nombre, email: x.usuario.email, telefono: x.usuario.telefono ?? '' },
-      visitante: { nombre: x.vis.nombre, rut: x.vis.rut, email: x.vis.email, telefono: x.vis.telefono, nacionalidad: x.vis.nacionalidad ?? '' },
+      visitante: {
+        nombre: x.vis.nombre,
+        rut: x.vis.rut,
+        email: x.vis.email,
+        telefono: x.vis.telefono,
+        nacionalidad: x.vis.nacionalidad ?? '',
+      },
       visita: { fecha: fechaLarga(x.fecha), hora: x.hora ? `${x.hora} hrs.` : 'hora a coordinar' },
       operacion: {
         txt: x.op === 'arriendo' ? 'arriendo' : 'venta',
@@ -412,7 +424,7 @@ export class OrdenVisitaService {
   async vistaPrevia(c: CtxOrden, a: ArgsOrden): Promise<Record<string, unknown>> {
     const x = await this.armar(c, a);
     if ('error' in x) return { error: x.error };
-    const bytes = await this.pdfs.pdf(this.html(x, await this.numeroSiguiente(c.corredoraId)));
+    const bytes = await this.pdfs.pdf(await this.html(x, await this.numeroSiguiente(c.corredoraId)));
     return {
       ok: true,
       pdf: bytes.toString('base64'),
@@ -431,7 +443,7 @@ export class OrdenVisitaService {
   private async despachar(x: Armada): Promise<Record<string, unknown>> {
     const { c, p, vis, usuario } = x;
     const numero = await this.tomarNumero(c.corredoraId);
-    const bytes = await this.pdfs.pdf(this.html(x, numero));
+    const bytes = await this.pdfs.pdf(await this.html(x, numero));
     const nombreArchivo = `Orden de visita nº ${numero} - ${p.codigo}.pdf`;
     const r = await this.envio.enviar({
       corredoraId: c.corredoraId,

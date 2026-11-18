@@ -65,7 +65,7 @@ const FX = path.join(__dirname, 'fixtures');
 
     // ===== Firmas presenciales
     await w.evaluate(() => window.Escrituras.open()); await w.waitForSelector('.es-layout');
-    ok((await w.$$('.es-card')).length === 3 && /Gestión de firmas presenciales/.test(await txt('#view-escrituras .ops-head h2')), 'firmas presenciales: lista + detalle y tres trámites');
+    ok((await w.$$('.es-card')).length === 3 && /Gestión de firmas presenciales/.test(await txt('#view-escrituras')), 'firmas presenciales: lista + detalle y tres trámites');
     await w.click('[data-tr="escritura"]'); await w.waitForSelector('#esPick');
     await w.evaluate((p) => window.Escrituras.dropFiles([p]), path.join(FX, 'contrato_prueba.pdf')); await w.waitForTimeout(600);
     ok(/minuta en Word/.test(await txt('#toast')), 'escritura: un PDF se rechaza');

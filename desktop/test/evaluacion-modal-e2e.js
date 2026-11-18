@@ -19,7 +19,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     ok(await w.locator('[data-ev-dest="arrendatario"]').count() === 1 && /María Postulante/.test(await w.locator('[data-ev-dest="arrendatario"]').innerText()), 'ofrece al arrendatario del negocio, con su nombre y celular');
     ok(await w.locator('.et-mopts').count() === 1, 'y sigue el menú de estados del paso (logrado, no logrado, esperando…)');
     ok(await w.locator('#evSolicitar').isEnabled(), 'con el arrendatario marcado se puede enviar la solicitud');
-    await w.locator('[data-ev-dest="arrendatario"] input[type=checkbox]').uncheck();
+    await w.locator('[data-ev-dest="arrendatario"] input[type=checkbox]').uncheck({ force: true });
     ok(await w.locator('#evSolicitar').isDisabled(), 'sin nadie marcado no se puede enviar');
     // registrar un aval
     await w.locator('#evAvalNuevo').click();
@@ -39,7 +39,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     ok(per && per.roles.includes('codeudor') && /11\.111\.111-1/.test(per.rut) && /6222/.test(per.telefono), 'el aval queda en Personas con rol codeudor, su RUT y su celular');
     ok(await w.locator(`[data-ev-dest="${per.id}"] input[type=checkbox]`).isChecked(), 'y queda seleccionado');
     ok(/Enviar solicitud por WhatsApp \(1 persona\)/.test(await w.locator('#evSolicitar').innerText()) && await w.locator('#evSolicitar').isEnabled(), 'el botón dice a cuántas personas se envía');
-    await w.locator('[data-ev-dest="arrendatario"] input[type=checkbox]').check();
+    await w.locator('[data-ev-dest="arrendatario"] input[type=checkbox]').check({ force: true });
     ok(/\(2 personas\)/.test(await w.locator('#evSolicitar').innerText()), 'arrendatario y aval juntos: 2 personas');
     // ---- documentos recibidos: resumen breve de cada uno y el corredor asigna su tipo (el servidor real los lee con IA; aquí una evaluación de mentira)
     await w.evaluate(() => window.closeModal());

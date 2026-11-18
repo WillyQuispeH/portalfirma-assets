@@ -7,7 +7,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
   const w = await app.firstWindow(); const errs = []; w.on('pageerror', (e) => errs.push(e.message));
   await w.setViewportSize({ width: 1440, height: 900 }); await w.waitForFunction(() => window.studio && window.Inmo, null, { timeout: 15000 }); await w.waitForTimeout(300); await w.evaluate(() => window.studio.goHome()); await w.waitForSelector('.hub-card');
   await w.evaluate(() => window.pf.opsSetPhone('987276858'));
-  await w.click('.tab[data-view="plazos"]'); await w.waitForSelector('#plPf'); await w.click('#plPf');
+  await w.click('.hub-card[data-act="plazos"]'); await w.waitForSelector('#plPf'); await w.click('#plPf');
   await w.waitForSelector('#modalCard:has-text("no entregó el documento")', { timeout: 60000 });
   ok(true, 'muestra el error que devuelve el servicio de archivos');
   ok(await w.evaluate(() => window.Plazos._p.items.length) === 0, 'no agrega nada roto');

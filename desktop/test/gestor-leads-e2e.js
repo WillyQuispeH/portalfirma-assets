@@ -19,9 +19,11 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
         msgs: { ig1: [{ id: 'i1', direction: 'inbound', messageType: 'TYPE_INSTAGRAM', body: 'Hola, busco arrendar depto en Providencia para mi familia, hasta 800 lucas', dateAdded: t(30) }] } }; });
     // los corredores son los usuarios de Asset (Configuración › Usuarios), vinculados con wechatia por el correo
     await w.evaluate(() => window.abrirConfiguracion('usuarios')); await w.waitForSelector('#usrNuevo');
-    for (const [n, c, e] of [['Ana Rivas', '+56 9 5555 0001', 'ana@thelivingchile.cl'], ['Beto Soto', '+56 9 5555 0002', 'beto@thelivingchile.cl']]) {
-      await w.click('#usrNuevo'); await w.fill('#usrNombre', n); await w.fill('#usrTel', c); await w.fill('#usrEmail', e); await w.fill('#usrClave', 'clave-inicial-1'); await w.click('#usrGuardar'); await w.waitForSelector(`#usrLista li:has-text("${n}")`); }
-    await shot('gl0-corredores.png'); await w.click('#mCancel');
+    // 0.18.9 · ya no se traen los usuarios de wechatia: el administrador vincula cada usuario con su ID de wechatia (Editar › #usrWc)
+    for (const [n, c, e, wc] of [['Ana Rivas', '+56 9 5555 0001', 'ana@thelivingchile.cl', 'u-ana'], ['Beto Soto', '+56 9 5555 0002', 'beto@thelivingchile.cl', 'u-beto']]) {
+      await w.click('#usrNuevo'); await w.fill('#usrNombre', n); await w.fill('#usrTel', c); await w.fill('#usrEmail', e); await w.fill('#usrClave', 'clave-inicial-1'); await w.click('#usrGuardar'); await w.waitForSelector(`#usrLista li:has-text("${n}")`);
+      await w.click(`#usrLista li:has-text("${n}") [data-usr-ed]`); await w.fill('#usrWc', wc); await w.click('#usrGuardar'); await w.waitForSelector(`#usrLista li:has-text("${n}"):has-text("wechatia: ${wc}")`); }
+    await shot('gl0-corredores.png'); // Configuración es una página (no un modal): no hay nada que cerrar
     // llega un lead por Instagram, asignado a Ana en wechatia
     await pfc('obsConfigurar', { activo: true, autorizado: true }); await pfc('obsRevisar');
     await w.click('#nav [data-view="leads"]'); await w.waitForSelector('#ldItems .ld-it:has-text("Valentina Paz")', { timeout: 10000 });

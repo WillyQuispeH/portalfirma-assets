@@ -278,12 +278,13 @@ export default function FichaNegocio({ n, etapas, corredores, vez, acc }: IFicha
       titulo={n.prop?.titulo || 'Negocio'}
       subtitulo={<Subtitulo n={n} />}
       acciones={<>
-        <Boton id="ngSig" icono={principal.icono} onClick={principal.alTocar}>{principal.texto}</Boton>
+        {/* secundario y «⋯» primero; el principal al final, pegado a la derecha */}
         {n.prop && <Boton id="ngProp" variante="secundario" icono="house" onClick={() => abrirFicha(n.prop!.id)}>Ver propiedad</Boton>}
         <MenuMas id="ngMas" opciones={[
           ...(n.estado === 'abierto' ? [{ id: 'ngLost', texto: 'Marcar como perdido', icono: 'x', alTocar: acc.perder }] : []),
           { id: 'ngDel', texto: 'Eliminar negocio', icono: 'trash', alTocar: acc.eliminar },
         ]} />
+        <Boton id="ngSig" icono={principal.icono} onClick={principal.alTocar}>{principal.texto}</Boton>
       </>}
     >
       <Pasos key={n.id} vez={vez} pasos={acc.pasos} />

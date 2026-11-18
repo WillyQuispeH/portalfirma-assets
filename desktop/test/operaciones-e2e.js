@@ -52,17 +52,18 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
   console.log('   ', st.join(' | '));
   ok(st.filter((x) => x.startsWith('needs_data')).length === 8, '8 analizados (incluido el Word convertido); avisa que faltan correo y teléfono');
   ok(st.some((x) => /skipped:Copia/.test(x)) && st.some((x) => /skipped:nota/.test(x)), 'omite duplicados y formatos no admitidos');
+  ok(await w.evaluate(() => /rol real/.test((window.Masiva._bk.st.items[0].missing || []).join(' '))), 'un rol genérico («cliente») se pide antes de enviar: Portalfirma lo rechaza');
   const maxPar = await w.evaluate(() => window.__maxPar || 0); void maxPar;
   await w.screenshot({ path: path.resolve(__dirname, 'o2-masiva.png') });
   // editar firmantes de uno
   await w.click('.bk-row.needs_data >> nth=0 >> [data-a="edit"]'); await w.waitForSelector('.bk-sigrow');
   await w.fill('.bk-sigrow >> nth=0 >> [data-k="email"]', 'juan@correo.cl'); await w.fill('.bk-sigrow >> nth=0 >> [data-k="phone"]', '+56911111111');
-  await w.fill('.bk-sigrow >> nth=1 >> [data-k="email"]', 'maria@correo.cl'); await w.fill('.bk-sigrow >> nth=1 >> [data-k="phone"]', '+56922222222');
+  await w.fill('.bk-sigrow >> nth=1 >> [data-k="email"]', 'maria@correo.cl'); await w.fill('.bk-sigrow >> nth=1 >> [data-k="phone"]', '+56922222222'); await w.fill('.bk-sigrow >> nth=1 >> [data-k="alias"]', 'mandante'); // «cliente» es un rol genérico que Portalfirma rechaza
   await w.click('#mOk'); await sleep(400);
   ok(await w.evaluate(() => window.Masiva._bk.st.items.filter((x) => x.status === 'ready').length) === 1, 'editar firmantes: ese documento queda listo');
   await w.click('.bk-row.ready >> [data-a="edit"]'); await w.waitForSelector('.bk-sigrow'); await w.click('#bkAll'); await sleep(500);
   ok(await w.evaluate(() => window.Masiva._bk.st.items.filter((x) => x.status === 'ready').length) === 8, '«Usar en todos»: 8 listos');
-  await w.click('.bk-row.ready >> nth=1 >> input[type=checkbox]'); await sleep(300);
+  await w.click('.bk-row.ready >> nth=1 >> label'); await sleep(300); // casilla del kit: el input es sr-only, se marca con su etiqueta
   await w.click('[data-a="send"]'); await w.waitForSelector('#bkPay');
   ok(/descuenta saldo/.test(await w.textContent('#modalCard')) && /Enviar 7/.test(await w.textContent('#mOk')), 'una sola confirmación, avisa el cobro (7 seleccionados)');
   await w.fill('#bkPay', 'pagos@empresa.cl'); await w.click('#mOk');
@@ -78,11 +79,12 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
   await w.evaluate(() => window.Masiva.open('cds')); await w.waitForSelector('#cdsRut');
   await w.fill('#cdsRut', '12.345.678-5'); await w.click('#cdsList'); await w.waitForSelector('.cds-op');
   ok(await w.locator('.cds-op').count() === 3, 'lista las operaciones pendientes');
-  await w.locator('.cds-op input >> nth=2').uncheck(); await sleep(100);
+  await w.click('.cds-op label >> nth=2'); await sleep(100);
   await w.fill('#cdsKey', 'clave-secreta'); await w.click('#cdsAsk'); await w.waitForSelector('#cdsCode');
+  ok((await w.inputValue('#cdsCode')) === '', 'el campo del código parte vacío (no arrastra la clave del certificado)');
   await w.fill('#cdsCode', '123456'); await w.click('#cdsSign'); await w.waitForSelector('.cds-res');
   ok(/2 de 2/.test(await w.textContent('.cds-res')), 'firma las 2 elegidas con un solo código');
-  ok(await w.evaluate(() => window.Masiva._cds.clave === ''), 'la clave del certificado se borra al terminar');
+  ok(await w.evaluate(() => !JSON.stringify(window.Masiva._cds).includes('clave-secreta') && !document.querySelector('#cdsKey')?.value), 'la clave del certificado se borra al terminar (no queda en el estado ni en el campo)');
   const disk = fs.readFileSync(path.join(userData, 'portalfirma.json'), 'utf8');
   ok(!disk.includes('clave-secreta'), 'la clave nunca se guarda en disco');
   await w.screenshot({ path: path.resolve(__dirname, 'o3-cds.png') });

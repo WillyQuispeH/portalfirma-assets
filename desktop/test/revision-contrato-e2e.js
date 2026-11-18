@@ -7,6 +7,8 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
   const app = await electron.launch({ args: ['.', '--no-sandbox', `--user-data-dir=${userData}`], cwd: path.join(__dirname, '..'), env: { ...process.env, PF_MOCK: '1', PF_MOCK_LOGGED: '1', PF_INMO_DIR: inmoDir, PF_NO_TOURS: '1' } });
   const w = await app.firstWindow(); const errs = []; w.on('pageerror', (e) => errs.push(e.message));
   const shot = (n) => w.screenshot({ path: path.resolve(__dirname, n) });
+  // casillas del kit (input oculto, controladas por React): click() del elemento y esperar a que quede como se pidió
+  const marcar = async (sel, v) => { for (let i = 0; i < 3; i++) { if ((await w.locator(sel).isChecked()) === v) return; await w.locator(sel).evaluate((e) => e.click()); await w.waitForTimeout(300); } if ((await w.locator(sel).isChecked()) !== v) throw new Error('FALLÓ: no se pudo ' + (v ? 'marcar ' : 'desmarcar ') + sel); };
   const call = (fn, ...a) => w.evaluate(([f, x]) => window.pf[f](...x).then((r) => { if (!r.ok) throw new Error(r.error); return r.data; }), [fn, a]);
   const paso = async (negocioId, id) => (await call('etPasos', { negocioId })).etapas.flatMap((e) => e.pasos).find((x) => x.id === id);
   try {
@@ -62,11 +64,11 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     ok(await w.locator('[data-rc-firmante]').count() === 2 && await w.locator(`#rcEnviar-${c.id}`).count() === 1 && await w.locator(`#rcAprueba-${duenoId}`).count() === 1, 'los firmantes (propietario y arrendatario) salen en cards, cada uno con sus casillas de enviar y de aprobar');
     ok(await w.isDisabled('#rcRevisar'), 'sin elegir a nadie no se puede enviar a revisión');
     // ---- se elige a quién se envía (varios a la vez): el mensaje sale armado y solo se manda al confirmar
-    await w.locator(`#rcEnviar-${c.id}`).check(); await w.locator(`#rcEnviar-${duenoId}`).check();
+    await marcar(`#rcEnviar-${c.id}`, true); await marcar(`#rcEnviar-${duenoId}`, true);
     ok(/Enviar a revisión \(2\)/.test(await w.textContent('#rcRevisar')), 'el botón dice a cuántas personas se envía');
     await w.click('#rcRevisar'); await w.waitForSelector('#rcMensaje');
     ok(/Hola \{nombre\}/.test(await w.inputValue('#rcMensaje')), 'con varios destinatarios el mensaje usa {nombre} para saludar a cada uno');
-    await w.click('text=Cancelar'); await w.locator(`#rcEnviar-${duenoId}`).uncheck();
+    await w.click('text=Cancelar'); await marcar(`#rcEnviar-${duenoId}`, false);
     await w.click('#rcRevisar'); await w.waitForSelector('#rcMensaje');
     const msg = await w.inputValue('#rcMensaje'); ok(/versión 1/.test(msg) && /apruebas/.test(msg), 'el mensaje de revisión sale armado (versión, aprobar o comentar)');
     ok((await call('negObtener', n.id)).ciclo.contrato.envios === undefined, 'preparar el envío no manda nada ni lo registra');
@@ -77,7 +79,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     // ---- comentario del propietario → versión nueva (anula aprobaciones) → aprueban ambos
     await w.click('#rcComentario'); await w.fill('#rcTexto', 'Cambiar el plazo a 24 meses'); await w.click('#rcGuardar');
     await w.waitForFunction(() => /24 meses/.test(document.querySelector('#rcPanel')?.textContent || ''), null, { timeout: 10000 });
-    await w.locator(`#rcAprueba-${duenoId}`).check(); await w.waitForFunction((id) => /Aprobó el/.test(document.querySelector(`[data-rc-estado="${id}"]`)?.textContent || ''), duenoId, { timeout: 10000 });
+    await marcar(`#rcAprueba-${duenoId}`, true); await w.waitForFunction((id) => /Aprobó el/.test(document.querySelector(`[data-rc-estado="${id}"]`)?.textContent || ''), duenoId, { timeout: 10000 });
     ok((await paso(n.id, 'revision')).e === 'pend', 'aprobó solo el propietario: falta el arrendatario');
     await w.locator('#rcPanel [aria-label="Más acciones"]').first().click(); await w.click('text=Editar y guardar una versión nueva'); await w.waitForSelector('#caInicio', { timeout: 15000 }); await w.fill('#caPlazo', '24'); await w.click('#caGuardar');
     await w.waitForFunction(() => /Todo guardado/.test(document.body.textContent), null, { timeout: 15000 });
@@ -94,7 +96,8 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
 
     // ---- aprueban ambos la V2 → paso logrado
     await w.evaluate(() => window.closeModal()); await abrir(x); await w.waitForSelector(`#rcAprueba-${duenoId}`);
-    await w.locator(`#rcAprueba-${duenoId}`).check(); await w.locator(`#rcAprueba-${c.id}`).check();
+    await marcar(`#rcAprueba-${duenoId}`, true); await w.waitForFunction((id) => /Aprobó el/.test(document.querySelector(`[data-rc-estado="${id}"]`)?.textContent || ''), duenoId, { timeout: 10000 });   // la casilla es controlada: se espera que se guarde antes de marcar la otra
+    await marcar(`#rcAprueba-${c.id}`, true);
     await w.waitForFunction(() => /Aprobado por todos/.test(document.querySelector('#rcPanel')?.textContent || ''), null, { timeout: 10000 });
     const p = await paso(n.id, 'revision'); ok(p.e === 'ok' && /V2/.test(p.d), 'con todos los firmantes aprobando la V2, el paso queda logrado');
     await shot('rc1.png');

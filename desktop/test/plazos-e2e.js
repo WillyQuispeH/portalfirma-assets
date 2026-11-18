@@ -61,8 +61,8 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
   const ics = fs.readFileSync(path.join(tmp, 'plazo.ics'), 'utf8'); ok(/BEGIN:VEVENT/.test(ics) && /TRIGGER:-P7D/.test(ics), 'recordatorio para el calendario (.ics, aviso 7 días antes)');
   console.log('Traer de Portalfirma');
   await w.evaluate(() => window.pf.opsSetPhone('987276858'));
-  await w.click('.tab[data-view="plazos"]'); await w.waitForSelector('#plPf');
-  ok(/Plazos y vencimientos/.test(await w.textContent('.tab[data-view="plazos"]')) && await w.evaluate(() => document.querySelector('.tab[data-view="plazos"]').classList.contains('active')), 'botón «Plazos y vencimientos» en la barra superior');
+  await w.evaluate(() => window.studio.goHome()); await w.click('.hub-card[data-act="plazos"]'); await w.waitForSelector('#plPf'); // ya no hay pestaña propia: se entra desde el inicio de Gestión documental
+  ok(await w.isVisible('#view-plazos') && /Plazos y vencimientos/.test(await w.textContent('#view-plazos')), 'se vuelve a Plazos desde su tarjeta del inicio');
   const n0 = await w.evaluate(() => window.Plazos._p.items.length);
   await w.click('#plPf');
   await w.waitForFunction((n) => window.Plazos._p.items.length > n, n0, { timeout: 60000 }); await sleep(800);

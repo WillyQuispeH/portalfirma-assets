@@ -19,7 +19,7 @@ let fallas = 0; const ok = (c, m) => { console.log(`  ${c ? '✔' : '✘'} ${m}`
   ok(/Firman:/.test(await w.textContent('#view-tpl')), 'formulario con quién firma');
   ok(await w.$$eval('input[type="date"]', (l) => l.length && l.every((i) => /^\d{4}-\d{2}-\d{2}$/.test(i.value))), 'las fechas parten en hoy');
   await w.click('#tplSend'); await w.waitForTimeout(200);
-  ok(/Revisa los campos marcados/.test(await w.textContent('#tplError')) && (await w.$$eval('#view-tpl .invalid', (n) => n.length)) > 0, 'sin datos: marca los obligatorios');
+  ok(/Revisa los campos marcados/.test(await w.textContent('#tplError')) && (await w.$$eval('#view-tpl [aria-invalid="true"]', (n) => n.length)) > 0, 'sin datos: marca los obligatorios');
   const fill = async (id, v) => { const s = `[data-f="${id}"]`; if (!(await w.$(s))) return false; await w.fill(s, v); await w.dispatchEvent(s, 'change'); return true; };
   await fill('ciudad_documento_nosigner', 'Santiago');
   await fill('nombre_mandante_signer', 'Juan Pérez Soto'); await fill('rut_mandante_signer', '111111111');
@@ -27,14 +27,14 @@ let fallas = 0; const ok = (c, m) => { console.log(`  ${c ? '✔' : '✘'} ${m}`
   await fill('estado-civil_mandante_signer', 'Soltero(a)'); await fill('direccion_mandante_signer', 'Av. Siempre Viva 123, Santiago');
   await fill('placa-patente_datos-del-vehiculo_nosigner', 'ABCD12');
   // el resto de los obligatorios con un texto cualquiera (depende del trámite del simulador)
-  for (const id of await w.$$eval('#view-tpl .invalid', (l) => l.map((i) => i.dataset.f))) {
+  for (const id of await w.$$eval('#view-tpl [aria-invalid="true"]', (l) => l.map((i) => i.dataset.f))) {
     const t = await w.$eval(`[data-f="${id}"]`, (i) => i.type);
     await fill(id, t === 'email' ? 'otro@correo.cl' : t === 'tel' ? '987654321' : /rut/.test(id) ? '22222222-2' : 'Dato de prueba');
   }
   await w.waitForTimeout(150);
   ok((await w.inputValue('[data-f="rut_mandante_signer"]')) === '11.111.111-1', 'RUT con puntos y guión al salir del campo');
   ok((await w.inputValue('[data-f="telefono_mandante_signer"]')) === '+56912345678', 'teléfono con +56 al salir del campo');
-  ok((await w.$$eval('#view-tpl .invalid', (n) => n.length)) === 0, 'sin campos marcados al completarlo');
+  ok((await w.$$eval('#view-tpl [aria-invalid="true"]', (n) => n.length)) === 0, 'sin campos marcados al completarlo');
   await w.click('#tplSend'); await w.waitForSelector('#mOk');
   const conf = await w.textContent("#modalCard")
   ok(/Juan Pérez Soto — 11\.111\.111-1 — juan@correo\.cl/.test(conf) && /Saldo actual/.test(conf), 'confirmación con firmantes y saldo');

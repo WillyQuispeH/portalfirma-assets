@@ -1311,6 +1311,16 @@ handle('cv:desconectar', () => asset.llamar('DELETE', '/convecta/conexion'));
 // los datos de la corredora que llevan los documentos (razón social, RUT, domicilio, representante, logo)
 handle('corredora:datos', () => asset.llamar('GET', '/corredora/datos'));
 handle('corredora:guardar', (o) => asset.llamar('PUT', '/corredora/datos', o || {}));
+// Configuración › Plantillas: revisar, editar por cláusula y aprobar las plantillas de documentos (GET/PUT /v1/plantillas…).
+// En modo de prueba (PF_MOCK) responde una plantilla simulada en memoria.
+const plMock = process.env.PF_MOCK === '1' ? require('./plantillas-mock').crear() : null;
+const plRuta = (n) => `/plantillas/${encodeURIComponent(String(n || ''))}`;
+handle('pl:lista', () => (plMock ? plMock.lista() : asset.llamar('GET', '/plantillas')));
+handle('pl:detalle', (n) => (plMock ? plMock.detalle(n) : asset.llamar('GET', plRuta(n))));
+handle('pl:guardar', (n, o) => (plMock ? plMock.guardar(n, o || {}) : asset.llamar('PUT', plRuta(n), o || {})));
+handle('pl:previa', (n, bloques) => (plMock ? plMock.previa(n) : asset.llamar('POST', `${plRuta(n)}/vista-previa`, bloques ? { bloques } : {}, 60000)));
+handle('pl:aprobar', (n, o) => (plMock ? plMock.aprobar(n, o || {}) : asset.llamar('POST', `${plRuta(n)}/aprobar`, o || {})));
+handle('pl:restaurar', (n, version) => (plMock ? plMock.restaurar(n, Number(version) || 0) : asset.llamar('POST', `${plRuta(n)}/restaurar`, { version: Number(version) || 0 })));
 // pantalla Configuración › WhatsApp: el número de la empresa, si el servidor está leyendo, y Sofía / Tomás / postventa.
 // En modo de prueba (sin la API) los interruptores quedan en este equipo.
 const ASIST_PRUEBA = { enServidor: false, lectorEncendido: false, numeroEmpresa: '+56 9 4497 5958', clientesActivo: true, leadsActivo: true, ultimaLectura: null, error: null };

@@ -18,10 +18,11 @@ import { RegistrosService } from '../registros/registros';
 import { EnviadosService } from '../whatsapp/enviados';
 import { DocumentoRevisionService } from '../whatsapp/documento-revision';
 import { EnvioFirmaService, type FirmanteEnvio } from '../documentos/envio-firma';
-import { cargarPlantilla, llenar } from '../documentos/plantilla';
+import { llenar } from '../documentos/plantilla';
 import { hoy } from '../whatsapp/comun';
 import { describir, dominioDe, unir } from '../documentos/comparecientes';
 import { datosCorredora } from '../documentos/corredora-doc';
+import { PlantillasDocService } from '../documentos/plantillas-doc';
 
 const SERIE = 'contrato_arriendo';
 /** multa por cada atraso en el pago (modelo de contrato de la corredora) */
@@ -42,9 +43,18 @@ const conLista = (inicio: string, partes: string[]) => {
 const emailOk = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 const mayus = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const fechaLarga = (f: string) =>
-  new Date(`${f}T12:00:00Z`).toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+  new Date(`${f}T12:00:00Z`).toLocaleDateString('es-CL', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
 const monto = (v: number, m: string) =>
-  m === 'UF' ? `UF ${v.toLocaleString('es-CL')}` : m === 'USD' ? `US$ ${v.toLocaleString('es-CL')}` : `$${v.toLocaleString('es-CL')}`;
+  m === 'UF'
+    ? `UF ${v.toLocaleString('es-CL')}`
+    : m === 'USD'
+      ? `US$ ${v.toLocaleString('es-CL')}`
+      : `$${v.toLocaleString('es-CL')}`;
 
 export interface ContratoDatos {
   inicio?: string;
@@ -85,6 +95,7 @@ export class ContratoArriendoService {
   private readonly log = new Logger('ContratoArriendo');
   constructor(
     private readonly db: PrismaService,
+    private readonly plantillasDoc: PlantillasDocService,
     private readonly pdfs: PdfService,
     private readonly envio: EnvioFirmaService,
     private readonly actividad: ActividadService,
@@ -96,7 +107,8 @@ export class ContratoArriendoService {
   private async armar(u: UsuarioToken, negocioId: string) {
     const n = await buscarVisible(this.db.negocio, u, negocioId, 'El negocio');
     if (n.tipo !== 'arriendo') return { error: 'El contrato de arriendo es solo para negocios de arriendo.' };
-    if (!n.clienteId) return { error: 'El negocio no tiene arrendatario: vincúlalo en el paso «Interesado registrado».' };
+    if (!n.clienteId)
+      return { error: 'El negocio no tiene arrendatario: vincúlalo en el paso «Interesado registrado».' };
     if (!n.propiedadId) return { error: 'El negocio no tiene propiedad.' };
     const [arr, prop, usuario, corredora, duenos] = await Promise.all([
       this.db.persona.findFirst({ where: { id: n.clienteId, corredoraId: u.corredoraId, eliminadoEn: null } }),
@@ -140,11 +152,16 @@ export class ContratoArriendoService {
     const ev = await this.db.registro.findUnique({
       where: { corredoraId_coleccion_id: { corredoraId: u.corredoraId, coleccion: 'evaluaciones', id: negocioId } },
     });
-    const idsAvales = (((ev && !ev.eliminadoEn ? ev.datos : null) as { personas?: { personaId: string; rol: string }[] } | null)?.personas ?? [])
+    const idsAvales = (
+      ((ev && !ev.eliminadoEn ? ev.datos : null) as { personas?: { personaId: string; rol: string }[] } | null)
+        ?.personas ?? []
+    )
       .filter((p) => p.rol === 'aval')
       .map((p) => p.personaId);
     const avales = idsAvales.length
-      ? await this.db.persona.findMany({ where: { id: { in: idsAvales }, corredoraId: u.corredoraId, eliminadoEn: null } })
+      ? await this.db.persona.findMany({
+          where: { id: { in: idsAvales }, corredoraId: u.corredoraId, eliminadoEn: null },
+        })
       : [];
     for (const a of avales) {
       const e = falta(a.nombre, rutDe(a), a.email);
@@ -181,7 +198,8 @@ export class ContratoArriendoService {
         personaId: a.id,
       })),
     ];
-    const meses = Number(k.garantiaMeses) || Number(/d+([.,]d+)?/.exec(String(k.garantia ?? ''))?.[0]?.replace(',', '.')) || 1;
+    const meses =
+      Number(k.garantiaMeses) || Number(/d+([.,]d+)?/.exec(String(k.garantia ?? ''))?.[0]?.replace(',', '.')) || 1;
     const garantiaTxt = `${meses.toLocaleString('es-CL')} ${meses === 1 ? 'mes' : 'meses'} de renta (${monto(Math.round(v * meses), moneda)})`;
     const varios = avales.length > 1;
     // dónde se paga la renta: lo escrito en el contrato o, si no, lo de la ficha de la propiedad
@@ -228,7 +246,9 @@ export class ContratoArriendoService {
         propiedad: {
           codigo: prop.codigo,
           tipo: mayus(String(prop.tipo || '').replace(/_/g, ' ')),
-          direccion: [prop.direccion, prop.unidad ? `depto. ${prop.unidad}` : '', prop.comuna].filter(Boolean).join(', '),
+          direccion: [prop.direccion, prop.unidad ? `depto. ${prop.unidad}` : '', prop.comuna]
+            .filter(Boolean)
+            .join(', '),
           // «el departamento número 1502, ubicado en…, de una superficie aproximada de 85 m², compuesto por…»
           descripcion: [
             `${String(prop.tipo || 'inmueble').replace(/_/g, ' ')}${prop.unidad ? ` número ${prop.unidad}` : ''}`,
@@ -236,8 +256,14 @@ export class ContratoArriendoService {
             prop.supTotal || prop.supUtil
               ? `de una superficie aproximada de ${Number(prop.supUtil || prop.supTotal).toLocaleString('es-CL')} m²`
               : '',
-            conLista('compuesto por', [cuenta(prop.dormitorios ?? 0, 'dormitorio', 'dormitorios'), cuenta(prop.banos ?? 0, 'baño', 'baños')]),
-            conLista('con', [cuenta(prop.estacionamientos ?? 0, 'estacionamiento', 'estacionamientos'), cuenta(prop.bodegas ?? 0, 'bodega', 'bodegas')]),
+            conLista('compuesto por', [
+              cuenta(prop.dormitorios ?? 0, 'dormitorio', 'dormitorios'),
+              cuenta(prop.banos ?? 0, 'baño', 'baños'),
+            ]),
+            conLista('con', [
+              cuenta(prop.estacionamientos ?? 0, 'estacionamiento', 'estacionamientos'),
+              cuenta(prop.bodegas ?? 0, 'bodega', 'bodegas'),
+            ]),
           ]
             .filter(Boolean)
             .join(', '),
@@ -280,7 +306,10 @@ export class ContratoArriendoService {
     const x = await this.armar(u, negocioId);
     if ('error' in x) return { error: x.error };
     const bytes = await this.pdfs.pdf(
-      llenar(cargarPlantilla('contrato-arriendo'), x.vars(await this.numeroSiguiente(u.corredoraId))),
+      llenar(
+        await this.plantillasDoc.html(u.corredoraId, 'contrato-arriendo'),
+        x.vars(await this.numeroSiguiente(u.corredoraId)),
+      ),
     );
     return {
       ok: true,
@@ -325,7 +354,10 @@ export class ContratoArriendoService {
     const ev = await this.db.registro.findUnique({
       where: { corredoraId_coleccion_id: { corredoraId: u.corredoraId, coleccion: 'evaluaciones', id: b.negocioId } },
     });
-    const avales = (((ev && !ev.eliminadoEn ? ev.datos : null) as { personas?: { personaId: string; rol: string }[] } | null)?.personas ?? [])
+    const avales = (
+      ((ev && !ev.eliminadoEn ? ev.datos : null) as { personas?: { personaId: string; rol: string }[] } | null)
+        ?.personas ?? []
+    )
       .filter((p) => p.rol === 'aval')
       .map((p) => p.personaId);
     const permitidos = new Set([...duenos.map((d) => d.personaId), ...(n.clienteId ? [n.clienteId] : []), ...avales]);
@@ -335,7 +367,9 @@ export class ContratoArriendoService {
     });
     if (!persona) return { error: 'Esa persona ya no existe.' };
     if (!persona.telefono)
-      return { error: `${persona.nombre} no tiene celular en su ficha: agrégalo para mandarle el contrato por WhatsApp.` };
+      return {
+        error: `${persona.nombre} no tiene celular en su ficha: agrégalo para mandarle el contrato por WhatsApp.`,
+      };
     const url = (await this.registros.descarga(u, 'archivos_negocio', b.negocioId, b.clave, b.nombre)).url;
     let plantilla = false;
     try {
@@ -451,8 +485,22 @@ export class ContratoArriendoService {
       });
       const texto = `Contrato de arriendo nº ${numero} enviado a firmar a ${total} persona${total === 1 ? '' : 's'} (operación ${operacion})`;
       await this.actividad.registrar([
-        { corredoraId: u.corredoraId, entidadTipo: 'negocio' as const, entidadId: x.n.id, ref2: x.prop.id, texto, usuarioId: u.sub },
-        { corredoraId: u.corredoraId, entidadTipo: 'propiedad' as const, entidadId: x.prop.id, ref2: x.n.id, texto, usuarioId: u.sub },
+        {
+          corredoraId: u.corredoraId,
+          entidadTipo: 'negocio' as const,
+          entidadId: x.n.id,
+          ref2: x.prop.id,
+          texto,
+          usuarioId: u.sub,
+        },
+        {
+          corredoraId: u.corredoraId,
+          entidadTipo: 'propiedad' as const,
+          entidadId: x.prop.id,
+          ref2: x.n.id,
+          texto,
+          usuarioId: u.sub,
+        },
       ]);
     } catch (e) {
       this.log.error(`contrato enviado pero sin registrar del todo: ${(e as Error).message}`);
@@ -506,7 +554,8 @@ export class ContratoArriendoController {
   @Post('enviar')
   @HttpCode(200)
   enviar(@UsuarioActual() u: UsuarioToken, @Body(new ZodPipe(pedidoEsquema)) b: z.infer<typeof pedidoEsquema>) {
-    if (!b.clave) return { error: 'Falta el contrato aprobado: primero se aprueba en el paso «Revisión del contrato».' };
+    if (!b.clave)
+      return { error: 'Falta el contrato aprobado: primero se aprueba en el paso «Revisión del contrato».' };
     return this.s.enviar(u, b.negocioId, b.clave, b.tipoFirma, b.tramite);
   }
 
@@ -520,7 +569,10 @@ export class ContratoArriendoController {
   /** la versión por WhatsApp (con el PDF) al arrendatario o al propietario, para que la apruebe o la comente */
   @Post('revision/enviar')
   @HttpCode(200)
-  revisionEnviar(@UsuarioActual() u: UsuarioToken, @Body(new ZodPipe(revisionEsquema)) b: z.infer<typeof revisionEsquema>) {
+  revisionEnviar(
+    @UsuarioActual() u: UsuarioToken,
+    @Body(new ZodPipe(revisionEsquema)) b: z.infer<typeof revisionEsquema>,
+  ) {
     return this.s.revisionEnviar(u, b);
   }
 }

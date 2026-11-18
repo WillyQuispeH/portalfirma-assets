@@ -53,6 +53,7 @@ async function run(name, bytes, pi, rect, mustGo, mustStay) {
   await run('Contrato de prueba', contrato, 0, { x: m.x - 1, y: m.y - 13, w: 520, h: 16 }, ['22.222.222-2'], ['JUAN PEREZ SOTO, RUT 11.111.111-1', 'PRIMERO']);
   // 5) fuentes del catálogo incrustadas por la app (TrueType recortada)
   const fu = new Uint8Array(fs.readFileSync(path.join(__dirname, 'fixtures', 'fuentes.pdf')));
-  const fi = (await textItems(fu, 0)).out; const g = fi.find((i) => /^Georgia Bold/.test(i.s));
-  await run('Fuentes TrueType incrustadas', fu, 0, { x: g.x - 1, y: g.y - 12, w: 560, h: 14 }, ['Georgia Bold:'], ['Georgia Italic:', 'Georgia:']);
+  // (el fixture trae una línea por fuente: «Georgia: Señor Pérez 123», «Garamond: …»; ya no trae variantes Bold/Italic)
+  const fi = (await textItems(fu, 0)).out; const g = fi.find((i) => /^Georgia:/.test(i.s));
+  await run('Fuentes TrueType incrustadas', fu, 0, { x: g.x - 1, y: g.y - 12, w: 560, h: 14 }, ['Georgia:'], ['Garamond:', 'Cambria:']);
 })().catch((e) => { console.error(e); process.exit(1); });

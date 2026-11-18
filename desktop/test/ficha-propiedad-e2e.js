@@ -32,7 +32,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     ok(/UF 12\.500/.test(await txt('#fStrip')) && /Disponible/.test(await txt('#fStrip')), 'la franja muestra precio y estado');
     await w.waitForFunction(() => /\d+ de \d+/.test(document.querySelector('#fStripCapt')?.textContent || ''), null, { timeout: 8000 });
     ok(true, 'la franja muestra el avance de la captación');
-    await w.waitForSelector('#fCapt .et-next', { timeout: 8000 });
+    await w.waitForSelector('#fCapt .et-e', { timeout: 8000 }); // la captación se dibuja como etapas plegables (.et-e); .et-next solo sale cuando todo está logrado
     ok(true, 'la captación (Etapas.bloque) se dibuja dentro de la ficha');
     ok(/Dormitorios 4/.test(await txt('[data-caracteristicas]')) && /Casa amplia con jardín/.test(await txt('[data-pane="resumen"]')), 'características y descripción');
     ok(/Rosa Pérez Mena/.test(await txt('[data-pane="resumen"] [data-pv]')) && /Propietario · 11\.111\.111-1/.test(await txt('[data-pane="resumen"] [data-pv]')), 'personas vinculadas con rol y RUT');

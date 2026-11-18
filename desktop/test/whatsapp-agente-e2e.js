@@ -39,7 +39,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     ok(ev && ev.hora === '11:00', 'por WhatsApp agenda la visita en la agenda de la app');
     ok(!(await enviados()).some((x) => x.startsWith('k2|')), 'el mensaje del cliente (otro número) no recibe respuesta del Agente');
     // 4. lo que cobra se confirma con SÍ
-    e0 = (await enviados()).length; await escribe('Juanita, hazme la orden de visita para Rosa Paz Mella mañana');
+    e0 = (await enviados()).length; await escribe('Juanita, hazme la orden de visita para Rosa Paz Mella mañana a las 12:00');   // 12:00: las visitas de una propiedad no se sobreponen (a las 11:00 ya está la de Juan Pérez)
     await esperaEnvio(/^k9\|\*Juanita\* · Documentos\n\*Generar la orden de visita[\s\S]*Responde \*SÍ\* para confirmar/, e0); ok(true, '«Juanita, …» la activa con el pedido; la orden de visita (cobra) pide confirmar con SÍ o NO');
     e0 = (await enviados()).length; await escribe('sí');
     await esperaEnvio(/^k9\|[\s\S]*(operaci[oó]n|orden)/i, e0);

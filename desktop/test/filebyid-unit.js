@@ -6,6 +6,8 @@ const orig = Module._load;
 Module._load = function (req, ...a) {
   if (req === 'electron') return { shell: {}, app: { getPath: () => os.tmpdir() }, safeStorage: { isEncryptionAvailable: () => false } };
   if (req === './store') return { get: () => null, set() {}, getSecret: (k) => secrets[k], setSecret: (k, v) => { secrets[k] = v; } };
+  // la app pide primero el archivo a la API de Asset; aquí el servidor no tiene la credencial (503) → usa la del equipo
+  if (req === './asset') return { llamar: async () => { throw Object.assign(new Error('sin credencial del servicio'), { status: 503 }); } };
   return orig.call(this, req, ...a);
 };
 const cfg = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'pfcfg-')), 'api.json'); fs.writeFileSync(cfg, '{"id":""}');

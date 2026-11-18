@@ -6,6 +6,7 @@
 const { _electron: electron } = require('playwright'); const path = require('path'); const fs = require('fs'); const os = require('os');
 const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  ✔ ' + m); };
 const FX = process.env.PF_ESCR_FX || '/home/claude/scratch/escr/fx2';
+if (!fs.existsSync(FX)) { console.log('SALTADA: faltan los documentos reales de prueba (minutas Word, escaneos). No se guardan en el proyecto: define PF_ESCR_FX con la carpeta que los contiene (' + FX + ' no existe).'); process.exit(0); }
 (async () => {
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'pfrg-')); const out = fs.mkdtempSync(path.join(os.tmpdir(), 'pfrg-out-'));
   const app = await electron.launch({ args: ['.', '--no-sandbox', `--user-data-dir=${userData}`], cwd: path.join(__dirname, '..'), env: { ...process.env, PF_MOCK: '1', PF_SAVE_DIR: out } });

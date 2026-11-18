@@ -8,6 +8,9 @@ async function openDoc(w, p) {
   await pr;
 }
 (async () => {
+  // plano A0 de prueba: si no está en fixtures (no se guarda en el proyecto), se genera uno simple con pdf-lib
+  let PLANO = F('plano_A0.pdf');
+  if (!fs.existsSync(PLANO)) { const { PDFDocument, rgb } = require('pdf-lib'); const d = await PDFDocument.create(); const p = d.addPage([2384, 3370]); for (let i = 0; i < 12; i++) p.drawRectangle({ x: 150 + i * 160, y: 300 + i * 220, width: 900, height: 600, borderColor: rgb(0, 0, 0), borderWidth: 3 }); p.drawText('PLANO DE ARQUITECTURA - PLANTA GENERAL', { x: 200, y: 3200, size: 60 }); PLANO = require('path').join(require('os').tmpdir(), 'pf-plano_A0.pdf'); fs.writeFileSync(PLANO, await d.save()); }
   const app = await electron.launch({ args: ['.', '--no-sandbox'], cwd: path.join(__dirname, '..'), env: { ...process.env, PF_MOCK: '1' } });
   const w = await app.firstWindow(); const errs = []; w.on('pageerror', (e) => errs.push('PAGE: ' + e.message)); w.on('console', (m) => m.type() === 'error' && errs.push(m.text()));
   await w.setViewportSize({ width: 1440, height: 900 });
@@ -53,14 +56,14 @@ async function openDoc(w, p) {
   await w.keyboard.press('Escape'); await w.waitForTimeout(300); await w.screenshot({ path: out('s6-scan-edited.png') });
   const b64c = await w.evaluate(() => window.editor.exportBase64()); fs.writeFileSync(out('out-scan.pdf'), Buffer.from(b64c, 'base64'));
   // ---- 4) Plano: asistente
-  await openDoc(w, F('plano_A0.pdf')); await idle();
+  await openDoc(w, PLANO); await idle();
   await w.evaluate(() => window.editor.planWizard()); await w.fill('#plName', 'Vivienda Los Aromos'); await w.fill('#plPro', 'Arq. Ana Díaz'); await w.click('#mOk');
   await w.waitForTimeout(800); await idle(); await w.waitForTimeout(800); await w.screenshot({ path: out('s7-plan.png') });
   const st = await w.evaluate(() => ({ count: window.editor._state.count, mb: (window.editor._state.bytes.length / 1048576).toFixed(1), notice: window.editor._state.notice }));
   console.log('plan:', JSON.stringify(st));
   const b64d = await w.evaluate(() => window.editor.exportBase64()); fs.writeFileSync(out('out-plan.pdf'), Buffer.from(b64d, 'base64'));
   // ---- 5) inicio y login a demanda
-  await w.click('.tab[data-view="tpl"]'); await w.waitForSelector('#view-login:visible'); console.log('login requested for Notaría: OK');
+  await w.evaluate(() => window.studio.goHome()); await w.click('.hn-card[data-act="tpl"]'); await w.waitForSelector('#view-login:visible'); console.log('login requested for Notaría: OK'); // la Notaría virtual se abre desde su tarjeta en el inicio de Gestión documental
   await w.click('#loginBtn'); await w.waitForSelector('.tpl-card, #tplBody', { timeout: 10000 }); console.log('after login →', await w.evaluate(() => [...document.querySelectorAll('.view')].find((v) => !v.classList.contains('hidden')).id));
   console.log('errors:', errs.filter((e) => !/Warning|deprecated|font/i.test(e)));
   await w.evaluate(() => window.pf.closeNow()).catch(() => {}); await app.close().catch(() => {}); process.exit(0);

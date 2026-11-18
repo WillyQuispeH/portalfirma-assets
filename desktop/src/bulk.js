@@ -108,12 +108,13 @@ async function work(it) {
     } else { it.status = 'error'; it.error = e.message || String(e); }
   }
 }
-// Datos que faltan para enviar
+// Datos que faltan para enviar. Portalfirma rechaza al enviar un rol genérico («cliente», «firmante»…): se pide el rol real antes.
+const ROL_GENERICO = /^(cliente|firmante\s*\d*|firma|parte|persona|signer|signatario|usuario)$/i;
 function validate(it) {
   const req = it.required || {}; const miss = [];
   if (!it.signers?.length) miss.push('sin firmantes');
   (it.signers || []).forEach((s, i) => {
-    const f = []; if (!s.rut) f.push('RUT'); if (!s.alias) f.push('rol');
+    const f = []; if (!s.rut) f.push('RUT'); if (!s.alias) f.push('rol'); else if (ROL_GENERICO.test(s.alias.trim())) f.push('rol real (Portalfirma rechaza «' + s.alias.trim() + '»)');
     if (req.name && !s.fullName) f.push('nombre'); if (req.email && !s.email) f.push('correo'); if (req.phone && !s.phone) f.push('teléfono');
     if (f.length) miss.push(`firmante ${i + 1}: ${f.join(', ')}`);
   });

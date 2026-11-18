@@ -62,11 +62,17 @@ export interface EntregaDatos {
 const t = (v: unknown) => String(v ?? '').trim();
 const esFecha = (f: unknown): f is string => typeof f === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(f);
 export const fechaLarga = (f: string) =>
-  new Date(`${f}T12:00:00Z`).toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+  new Date(`${f}T12:00:00Z`).toLocaleDateString('es-CL', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
 const mayus = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 /** los espacios con nombre (formato nuevo o antiguo) */
-export const espaciosDe = (k: EntregaDatos) => (Array.isArray(k.inventario) ? k.inventario : []).filter((i) => t(i?.espacio));
+export const espaciosDe = (k: EntregaDatos) =>
+  (Array.isArray(k.inventario) ? k.inventario : []).filter((i) => t(i?.espacio));
 
 /** las fotos que entran al PDF, en orden, respetando los límites */
 export function fotosParaPdf(k: EntregaDatos): string[] {
@@ -121,14 +127,21 @@ export function varsActaEntrega(x: EntradaActa) {
   const llaves = t(k.llaves);
   const medidores = MEDIDORES.flatMap(([id, nombre]) => {
     const m = k.medidores?.[id];
-    return m && (t(m.numero) || t(m.lectura)) ? [{ nombre, numero: t(m.numero) || '—', lectura: t(m.lectura) || '—' }] : [];
+    return m && (t(m.numero) || t(m.lectura))
+      ? [{ nombre, numero: t(m.numero) || '—', lectura: t(m.lectura) || '—' }]
+      : [];
   });
   const imagenes = x.imagenes ?? new Map<string, string>();
   const permitidas = new Set(fotosParaPdf(k));
   const inventario = espaciosDe(k).map((e) => {
     const items = (Array.isArray(e.items) ? e.items : [])
       .filter((i) => t(i?.nombre) && i.estado !== 'na')
-      .map((i) => ({ nombre: t(i.nombre), cantidad: t(i.cantidad) || '—', estado: ESTADO[t(i.estado)] ?? 'Bueno', nota: t(i.nota) }));
+      .map((i) => ({
+        nombre: t(i.nombre),
+        cantidad: t(i.cantidad) || '—',
+        estado: ESTADO[t(i.estado)] ?? 'Bueno',
+        nota: t(i.nota),
+      }));
     const fotos = (Array.isArray(e.fotos) ? e.fotos : [])
       .filter((f) => permitidas.has(t(f?.clave)) && imagenes.has(t(f.clave)))
       .map((f) => ({ src: imagenes.get(t(f.clave)) as string }));
@@ -142,7 +155,8 @@ export function varsActaEntrega(x: EntradaActa) {
     };
   });
   const conFotos = inventario.filter((e) => e.fotos.length).map((e) => ({ espacio: e.espacio, fotos: e.fotos }));
-  const estacionamientos = t(k.estacionamientos) || (p.estacionamientos ? `${p.estacionamientos} (número no indicado)` : '');
+  const estacionamientos =
+    t(k.estacionamientos) || (p.estacionamientos ? `${p.estacionamientos} (número no indicado)` : '');
   const bodega = t(k.bodega) || (p.bodegas ? `${p.bodegas} (número no indicado)` : '');
   const entregaNombre = t(k.entregadoPor?.nombre) || x.usuario.nombre;
   const aspectos = (Array.isArray(k.aspectos) ? k.aspectos : []).map((a) => ({ texto: t(a) })).filter((a) => a.texto);

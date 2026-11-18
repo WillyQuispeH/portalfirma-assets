@@ -2,6 +2,9 @@
 const { _electron: electron } = require('playwright'); const path = require('path'); const fs = require('fs'); const os = require('os');
 const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  ✔ ' + m); };
 (async () => {
+  // Sin modo de prueba: usa una credencial real de Google («App de escritorio», con la configuración del Picker) en OAUTH y la red.
+  // Cargar la credencial es solo para administradores (gdrive:setClient), así que además necesita una sesión de Asset con ese permiso.
+  if (!process.env.OAUTH || !fs.existsSync(process.env.OAUTH)) { console.log('SALTADA: falta la credencial de Google Drive. Define OAUTH con la ruta del JSON del cliente OAuth («App de escritorio») y corre la prueba con una sesión de administrador y red.'); process.exit(0); }
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'pfdr2-'));
   const env = { ...process.env }; delete env.PF_MOCK;
   const app = await electron.launch({ args: ['.', '--no-sandbox', `--user-data-dir=${userData}`], cwd: path.join(__dirname, '..'), env });

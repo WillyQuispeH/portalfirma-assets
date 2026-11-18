@@ -31,7 +31,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     await w.waitForSelector('#usrErr'); ok(/8 caracteres/.test(await txt('#usrErr')), 'la clave inicial debe tener al menos 8 caracteres');
     await w.fill('#usrClave', ANA[1]); await w.click('#usrGuardar'); await w.waitForSelector('#usrForm', { state: 'detached' });
     ok(/Ana Rivas/.test(await txt('#usrLista')) && /Corredor/.test(await txt(`#usrLista li:has-text("Ana Rivas")`)), 'agrega a Ana como corredora, con clave inicial');
-    await shot('ac-usuarios.png'); await w.click('#mCancel');
+    await shot('ac-usuarios.png'); // «Usuarios» ahora es una pestaña de Configuración (no una ventana): no hay que cerrarla
     const ana = (await call('usrListar')).find((u) => u.email === ANA[0]);
     const beto = await call('usrCrear', { nombre: 'Beto Soto', email: BETO[0], telefono: '+56955550002', clave: BETO[1] });
     ok(/Ya existe/.test(await falla('usrCrear', { nombre: 'Otra Ana', email: ANA[0], clave: 'clave-otra-123' }) || ''), 'no se repite el correo');
@@ -101,7 +101,6 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     // la corredora ve el equipo, sin editar
     await w.evaluate(() => window.Usuarios.abrir()); await w.waitForSelector('#usrPanel [data-usr]');
     ok(/Beto Soto/.test(await txt('#usrLista')) && !(await w.$('#usrNuevo')) && !(await w.$('[data-usr-ed]')) && /lo hace el administrador/.test(await txt('#usrPanel')), 'el corredor ve al equipo, sin agregar ni editar');
-    await w.click('#mCancel');
     // negocios: el que abre Ana es suyo; el del administrador no lo ve
     const cli = await call('inmoPerGuardar', { nombre: 'Cliente Uno', email: 'c1@correo.cl', roles: ['interesado'] });
     const nAna = await call('negGuardar', { tipo: 'arriendo', propId: pA.id, clienteId: cli.id });
@@ -117,7 +116,6 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     await w.evaluate(() => window.Usuarios.abrir()); await w.waitForSelector(`[data-usr-ed="${ana.id}"]`); await w.click(`[data-usr-ed="${ana.id}"]`);
     await w.fill('#usrWc', 'u-ana'); await w.click('#usrGuardar'); await w.waitForSelector('#usrForm', { state: 'detached' });
     ok((await call('usrListar')).find((u) => u.id === ana.id).wechatiaId === 'u-ana' && /wechatia: u-ana/.test(await txt(`#usrLista li:has-text("Ana Rivas")`)), 'el administrador vincula a Ana con su usuario de wechatia');
-    await w.click('#mCancel');
     await app.evaluate(() => { const t = new Date().toISOString(); global.__waMock = { enviados: [], convs: [{ id: 'igA', contactId: 'cA', fullName: 'Lead de Ana', lastMessageType: 'TYPE_INSTAGRAM', assignedTo: 'u-ana' }, { id: 'igX', contactId: 'cX', fullName: 'Lead sin dueño', lastMessageType: 'TYPE_INSTAGRAM' }],
       msgs: { igA: [{ id: 'a1', direction: 'inbound', messageType: 'TYPE_INSTAGRAM', body: 'Hola, busco depto', dateAdded: t }], igX: [{ id: 'x1', direction: 'inbound', messageType: 'TYPE_INSTAGRAM', body: 'Hola', dateAdded: t }] } }; });
     await call('obsConfigurar', { activo: true, autorizado: true, ia: false }); await call('obsRevisar');

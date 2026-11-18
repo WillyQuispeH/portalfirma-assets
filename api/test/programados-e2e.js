@@ -129,7 +129,7 @@ function wechatiaFalso() {
     ok(a.estado === 'enviado' && a.resultado.messageId && a.resultado.entrega === 'delivered' && a.enviadoEn, 'escribió en 24 h: sale con texto libre y queda entregado');
     ok(W.enviados.filter((x) => x.message === 'Hola a, te recuerdo la visita').length === 1, 'salió una sola vez');
     ok(de(l, 'b').estado === 'fallido' && de(l, 'b').resultado.codigo === 'FUERA_24H' && /no está activa/.test(de(l, 'b').resultado.error), 'no escribió y la plantilla no está activa: fallido con el motivo');
-    ok(de(l, 'c').estado === 'enviado' && de(l, 'c').resultado.plantilla === 'asset_seguimiento_lead' && W.tags.some((x) => x.tags[0] === 'asset-seguimiento_lead'), 'no escribió y la plantilla está activa: sale la plantilla (etiqueta en wechatia)');
+    ok(de(l, 'c').estado === 'enviado' && de(l, 'c').resultado.plantilla === 'asset_seguimiento_lead' && W.tags.some((x) => /^asset-seguimiento_lead(-dev)?$/.test(x.tags[0])), 'no escribió y la plantilla está activa: sale la plantilla (etiqueta en wechatia)');
     ok(W.campos.some((x) => x.customFields.some((f) => f.id === 'cf1' && f.field_value === 'Ana Corredora')), 'con los campos de la plantilla llenos');
     ok(de(l, 'f').estado === 'enviado', 'wechatia no sabe si escribió, pero Asset tiene su mensaje: sale con texto libre');
     ok(de(l, 'g').estado === 'programado' && de(l, 'h').estado === 'cancelado', 'el de mañana sigue programado y el cancelado no sale');

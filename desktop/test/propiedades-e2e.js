@@ -10,7 +10,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
   try {
     await w.setViewportSize({ width: 1440, height: 900 }); await w.waitForSelector('#view-inicio [data-cabecera]'); await w.waitForTimeout(400);
     ok(await w.isVisible('#view-inicio') && await w.isHidden('#view-home'), 'abre en el inicio inmobiliario, no en el documental');
-    ok((await w.$$eval('#nav .tab', (x) => x.map((t) => t.textContent.trim()))).join('|') === 'Agente|Hoy|Cartera|Personas|Leads|Negocios|Agenda|Publicaciones|Arriendos|Finanzas|Gestión documental', 'menú inmobiliario con Gestión documental al final');
+    ok((await w.$$eval('#nav .tab', (x) => x.map((t) => t.textContent.trim()))).join('|') === 'Hoy|Cartera|Personas|Leads|Negocios|Agenda|Publicaciones|Arriendos|Finanzas|Gestión documental', 'menú inmobiliario con Gestión documental al final'); // el Agente es un botón de la barra (#agBtn), no una pestaña; Postventa solo si está activada
     ok(/Trae tu cartera/.test(await txt('#view-inicio')), 'sin propiedades: invita a importar o crear');
     ok(/Asset/.test(await txt('.brand')) && (await w.title()) === 'PortalFirma Asset', 'marca PortalFirma Asset');
     await shot('pr0-vacio.png');
@@ -58,7 +58,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
 
     // Nueva propiedad manual
     await w.click('#imNew'); await w.click('#mOk'); ok(/título/.test(await txt('#pfErr')), 'exige título');
-    await w.fill('#pf_titulo', 'Local comercial en Ñuñoa'); await w.selectOption('#pf_tipo', 'local_comercial'); await w.uncheck('#pf_venta'); await w.check('#pf_arriendo');
+    await w.fill('#pf_titulo', 'Local comercial en Ñuñoa'); await w.selectOption('#pf_tipo', 'local_comercial'); await w.uncheck('#pf_venta', { force: true }); await w.check('#pf_arriendo', { force: true }); // casillas del kit: el input es sr-only
     await w.fill('#pf_precioArriendo', '35'); await w.selectOption('#pf_precioArriendoM', 'UF'); await w.fill('#pf_comuna', 'Ñuñoa'); await w.click('#mOk');
     await w.waitForSelector('h1:has-text("Local comercial en Ñuñoa")'); ok(/PF-1001/.test(await txt('.im-ft')), 'propiedad nueva con código correlativo');
 

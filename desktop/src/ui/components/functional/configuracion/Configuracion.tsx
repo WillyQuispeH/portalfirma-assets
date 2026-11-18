@@ -1,5 +1,6 @@
 // Configuración (menú del usuario › Configuración): las preferencias y conexiones de Asset, en pestañas.
 //  · General: apariencia (tema) y la luz de la oficina (pantalla Hoy).
+//  · Plantillas: los textos de los documentos, por cláusula, con su versión y aprobación (plantillas/Plantillas.tsx).
 //  · WhatsApp: tu celular vinculado (cada usuario el suyo): verlo, cambiarlo con un código nuevo o desvincularlo, para
 //    hablar con tu equipo (Pedro, Juanita, Diego, Fernanda). El administrador además enciende o apaga a Sofía, Tomás y
 //    la postventa (si el servidor no responde, la tarjeta lo dice sin bloquear la pantalla).
@@ -10,6 +11,8 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import Layout from '../../ui/Layout';
 import Corredora from './Corredora';
+import Plantillas from './plantillas/Plantillas';
+import DetallePlantilla from './plantillas/Detalle';
 import Tabs from '../../ui/Tabs';
 import Card from '../../ui/Card';
 import Switch from '../../ui/Switch';
@@ -26,9 +29,9 @@ import { IntegracionesContenido } from '../integraciones/Integraciones';
 import Usuarios from '../usuarios/Usuarios';
 import Metas from './Metas';
 
-export type TPestanaConfig = 'general' | 'corredora' | 'whatsapp' | 'usuarios' | 'metas' | 'integraciones';
+export type TPestanaConfig = 'general' | 'corredora' | 'plantillas' | 'whatsapp' | 'usuarios' | 'metas' | 'integraciones';
 const pestanas = (admin: boolean): [TPestanaConfig, string, undefined, string][] => [
-  ['general', 'General', undefined, 'sun'], ['corredora', 'Corredora', undefined, 'building'], ['whatsapp', 'WhatsApp', undefined, 'whatsapp'], ['usuarios', admin ? 'Usuarios' : 'Equipo', undefined, 'users'],
+  ['general', 'General', undefined, 'sun'], ['corredora', 'Corredora', undefined, 'building'], ['plantillas', 'Plantillas', undefined, 'template'], ['whatsapp', 'WhatsApp', undefined, 'whatsapp'], ['usuarios', admin ? 'Usuarios' : 'Equipo', undefined, 'users'],
   ...(admin ? [['metas', 'Metas', undefined, 'chart'] as [TPestanaConfig, string, undefined, string]] : []), ['integraciones', 'Integraciones', undefined, 'link'],
 ];
 
@@ -193,7 +196,12 @@ function WhatsApp() {
 
 export default function Configuracion({ pestana: inicial = 'general' }: { pestana?: TPestanaConfig }) {
   const [pestana, setPestana] = useState<TPestanaConfig>(inicial);
+  const [plantilla, setPlantilla] = useState<string | null>(null);
   const { usuario } = useAcceso();
+  // el detalle de una plantilla es pantalla propia (su Layout/cabecera); al volver se refresca la pestaña
+  if (plantilla) {
+    return <DetallePlantilla nombre={plantilla} alVolver={() => { setPlantilla(null); setPestana('plantillas'); }} />;
+  }
   return (
     <Layout
       id="configuracion"
@@ -201,7 +209,7 @@ export default function Configuracion({ pestana: inicial = 'general' }: { pestan
       subtitulo="Tus preferencias, tu WhatsApp, el equipo y las integraciones de la corredora."
       barra={<Tabs id="cfgTabs" dato="t" etiqueta="Secciones" opciones={pestanas(usuario?.rol === 'ADMIN')} valor={pestana} alCambiar={setPestana} />}
     >
-      {pestana === 'general' ? <General /> : pestana === 'corredora' ? <Corredora /> : pestana === 'whatsapp' ? <WhatsApp /> : pestana === 'usuarios' ? <Usuarios /> : pestana === 'metas' ? <Metas /> : <IntegracionesContenido />}
+      {pestana === 'general' ? <General /> : pestana === 'corredora' ? <Corredora /> : pestana === 'plantillas' ? <Plantillas alAbrir={setPlantilla} /> : pestana === 'whatsapp' ? <WhatsApp /> : pestana === 'usuarios' ? <Usuarios /> : pestana === 'metas' ? <Metas /> : <IntegracionesContenido />}
     </Layout>
   );
 }

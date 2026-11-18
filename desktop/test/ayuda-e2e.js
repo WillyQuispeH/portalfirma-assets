@@ -25,7 +25,8 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
   ok(!(await w.$('.hub-row[data-act="exp"] .new-badge')), '«Nuevo» se quita después de abrirla');
   await w.evaluate(() => window.Ayuda.endTour());
   // ayuda
-  await w.click('#helpFab'); await w.waitForSelector('#helpPanel.open');
+  // la ayuda ya no tiene botón flotante: se abre desde el menú de la cuenta («Ayuda y guías»)
+  await w.click('#account'); await w.click('[data-um="help"]'); await w.waitForSelector('#helpPanel.open');
   ok(/En esta pantalla/.test(await w.textContent('#helpPanel')) && /Lo esencial/.test(await w.textContent('#helpPanel')), 'panel de ayuda con guías de la pantalla y por nivel');
   await w.fill('#hpQ', '¿cómo muevo un logo?'); await sleep(400);
   ok(/Mover textos, campos e imágenes/.test(await w.textContent('#hpRes')), 'el buscador entiende la duda («cómo muevo un logo»)');

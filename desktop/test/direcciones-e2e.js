@@ -12,7 +12,8 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
   try {
     await w.setViewportSize({ width: 1440, height: 920 }); await w.waitForSelector('#view-inicio');
     await w.evaluate(() => window.Inmo.formProp()); await w.waitForSelector('#pf_direccion');
-    await w.waitForSelector('.dr-pie [data-activar]');
+    // el pie (Activar Google) flota bajo el campo solo con el campo enfocado
+    await w.waitForSelector('.dr-pie [data-activar]', { state: 'attached' }); await w.focus('#pf_direccion'); await w.waitForSelector('.dr-pie [data-activar]');
     ok(await w.isVisible('.dr-bus'), 'sin clave: botón «Buscar» (OpenStreetMap) y enlace para activar Google');
     await w.fill('#pf_titulo', 'Depto en Providencia'); await w.fill('#pf_direccion', 'Providencia 1234'); await w.click('.dr-bus');
     await w.waitForSelector('.dr-l [data-i]'); ok(/OpenStreetMap/.test(await txt('.dr-l')), 'muestra resultados con la atribución de OpenStreetMap');
@@ -32,7 +33,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     ok(/Avenida Providencia 1234/.test(await txt('.dr-l')) && /Google/.test(await txt('.dr-l')), 'sugiere mientras se escribe');
     await w.press('#pf_direccion', 'ArrowDown'); await w.press('#pf_direccion', 'Enter'); await w.waitForSelector('.dr-ok');
     ok(await w.inputValue('#pf_direccion') === 'Avenida Providencia 1234' && await w.inputValue('#pf_comuna') === 'Providencia', 'con el teclado: elige y llena calle, número y comuna');
-    await w.check('#pf_arriendo'); await w.fill('#pf_precioArriendo', '850000'); await w.click('#mOk'); await w.waitForSelector('#fMapa');
+    await w.check('#pf_arriendo', { force: true }); await w.fill('#pf_precioArriendo', '850000'); await w.click('#mOk'); await w.waitForSelector('#fMapa');
     const p = await w.evaluate(() => window.pf.inmoListar().then((r) => r.data.propiedades.find((x) => x.titulo === 'Depto en Providencia')));
     ok(Math.abs(p.lat + 33.4295) < 1e-6 && Math.abs(p.lng + 70.6162) < 1e-6 && p.placeId === 'mock-prov-1234', `la propiedad guarda sus coordenadas (${p.lat}, ${p.lng})`);
     await shot('dr2-ficha.png');

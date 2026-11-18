@@ -28,23 +28,25 @@ const OBS = require('../src/observador');
         wa1: [],
       } };
     });
-    await w.click('#nav [data-view="leads"]'); await w.waitForSelector('#ldCuentas');
-    await w.click('#ldCuentas'); await w.waitForSelector('.ld-obs');
-    ok(/Apagado/.test(await txt('#ldObs')) && /Instagram/.test(await txt('.ld-obs')) && /Correo/.test(await txt('.ld-obs')), 'panel «En vivo desde wechatia»: apagado, con sus canales');
-    await w.click('#ldObsOn'); await w.waitForTimeout(300);
-    ok(/autorización/.test(await txt('#ldObsErr')), 'no se activa sin la autorización de la corredora');
-    await w.check('#ldObsAut'); await w.click('#ldObsOn'); await w.waitForFunction(() => /llegan solos/.test(document.querySelector('#ldObs')?.textContent || ''));
-    ok(/llegan solos/.test(await txt('#ldObs')), 'queda activo (la tarjeta se reemplaza por el aviso de que llega solo)');
+    // 0.18.13 · ya no existe el panel «Cuentas e historial» (#ldCuentas, #ldObs): el observador queda activo al conectar
+    // wechatia (con la autorización de la corredora). Aquí se activa por la API, igual que lo hace la conexión.
+    await w.click('#nav [data-view="leads"]');
+    const est0 = (await w.evaluate(() => window.pf.obsEstado())).data;
+    ok(!est0.activo && est0.canales.instagram && est0.canales.email, 'el observador parte apagado, con Instagram y correo como canales');
+    const sinAut = await w.evaluate(() => window.pf.obsConfigurar({ activo: true }));
+    ok(sinAut.ok === false && /autoriza/.test(sinAut.error || ''), 'no se activa sin la autorización de la corredora');
+    await w.evaluate(() => window.pf.obsConfigurar({ activo: true, autorizado: true }));
+    ok((await w.evaluate(() => window.pf.obsEstado())).data.activo === true, 'con la autorización queda activo');
     await w.evaluate(() => window.pf.obsRevisar());
-    await shot('ob0-panel.png');
-    await w.click('#mCancel'); await w.waitForSelector('#ldItems .ld-it', { timeout: 10000 }); await w.waitForTimeout(500);
+    await w.waitForSelector('#ldItems .ld-it', { timeout: 10000 }); await w.waitForTimeout(500);
     const items = await txt('#ldItems');
     ok(/Valentina Paz/.test(items) && /Rodrigo Lagos/.test(items) && !/Cliente WA/.test(items), 'Instagram y correo quedan como leads; el WhatsApp no lo toma el observador');
     await w.click('#ldItems .ld-it:has-text("Valentina Paz")'); await w.waitForTimeout(800);
     const ch = await txt('#ldChB');
     ok(/Providencia/.test(ch) && (await w.$$('#ldChB .ld-m.in')).length === 2 && (await w.$$('#ldChB .ld-m.out')).length === 1 && /cdn\.ig\.test/.test(ch), 'el historial de Instagram con ambos lados y el adjunto');
-    ok(/6543/.test(await w.inputValue('#ldFicha [data-k="telefono"]')) && await w.inputValue('#ldFicha [data-k="b_operacion"]') === 'arriendo' && /familia/.test(await txt('#ldFicha .ld-perfil')), 'la IA deja celular, qué busca y perfil');
-    ok(/Solo lectura/.test(await txt('.ld-ch-h')) && /Instagram/.test(await txt('.ld-ch-h')), 'solo lectura, origen Instagram');
+    ok(/6543/.test(await w.inputValue('#ldFicha [data-k="telefono"]')) && await w.inputValue('#ldFicha [data-k="b_operacion"]') === 'arriendo' && /Perfil ?[^]*familia/.test(await txt('#ldFicha')), 'la IA deja celular, qué busca y perfil');
+    // ya no es «Solo lectura» (Leads permite responder por Instagram); el origen va en el chip con el usuario
+    ok(/@vale\.paz/.test(await txt('.ld-ch-h')), 'origen Instagram (chip con @vale.paz)');
     await shot('ob1-lead-ig.png');
     await w.click('#ldItems .ld-it:has-text("Rodrigo Lagos")'); await w.waitForTimeout(800);
     const ce = await txt('#ldChB');

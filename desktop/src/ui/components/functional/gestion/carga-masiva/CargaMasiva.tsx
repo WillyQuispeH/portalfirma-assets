@@ -182,7 +182,7 @@ function ConCertificado() {
         {cds.paso === 'code' ? (
           <div className="tw:flex tw:flex-col tw:gap-ui">
             <div className="tw:flex tw:items-end tw:gap-ui">
-              <Input id="cdsCode" ref={codigo} etiqueta="Código recibido por SMS o WhatsApp" inputMode="numeric" autoComplete="one-time-code" placeholder="123456" clasesCampo="tw:flex-1" />
+              <Input key="codigo" id="cdsCode" ref={codigo} etiqueta="Código recibido por SMS o WhatsApp" inputMode="numeric" autoComplete="one-time-code" placeholder="123456" clasesCampo="tw:flex-1" />
               <Boton id="cdsSign" disabled={ocupado} cargando={ocupado} onClick={firmar}>Firmar {cds.sel.length} documento(s)</Boton>
             </div>
             <div className="tw:flex tw:justify-end"><Boton variante="fantasma" tamano="sm" id="cdsBack" onClick={() => { clave.current = ''; masivaSetCds({ paso: 'rut' }); }}>Cancelar</Boton></div>
@@ -190,7 +190,7 @@ function ConCertificado() {
         ) : (
           <div className="tw:flex tw:flex-col tw:gap-ui">
             <div className="tw:flex tw:items-end tw:gap-ui">
-              <Input id="cdsKey" ref={caja} type="password" autoComplete="off" etiqueta="Clave de tu certificado" placeholder="Clave del certificado" clasesCampo="tw:flex-1" />
+              <Input key="clave" id="cdsKey" ref={caja} type="password" autoComplete="off" etiqueta="Clave de tu certificado" placeholder="Clave del certificado" clasesCampo="tw:flex-1" />
               <Boton id="cdsAsk" disabled={!cds.sel.length || ocupado} cargando={ocupado} onClick={pedir}>Pedir código</Boton>
             </div>
             <p className="tw:m-0 tw:text-xs tw:text-muted">La clave se envía directo a Portalfirma para validar tu certificado; la app no la guarda.</p>

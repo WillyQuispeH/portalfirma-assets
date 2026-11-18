@@ -11,7 +11,10 @@ interface PersonaDoc {
   direccion: string | null;
 }
 
-const minus = (s: string | null | undefined) => String(s ?? '').trim().toLowerCase();
+const minus = (s: string | null | undefined) =>
+  String(s ?? '')
+    .trim()
+    .toLowerCase();
 
 export const rutDe = (p: { rutFormato: string | null; rut: string | null }) => p.rutFormato || p.rut || '';
 

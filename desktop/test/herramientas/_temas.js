@@ -3,7 +3,7 @@ const { _electron: electron } = require('playwright'); const path = require('pat
 const OUT = process.env.SHOTS || __dirname;
 (async () => {
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'pftm-')); const inmoDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pftm-db-'));
-  const app = await electron.launch({ args: ['.', '--no-sandbox', `--user-data-dir=${userData}`], cwd: path.join(__dirname, '..'), env: { ...process.env, PF_MOCK: '1', PF_MOCK_LOGGED: '1', PF_INMO_DIR: inmoDir, PF_START: 'inicio' } });
+  const app = await electron.launch({ args: ['.', '--no-sandbox', `--user-data-dir=${userData}`], cwd: path.join(__dirname, '..', '..'), env: { ...process.env, PF_MOCK: '1', PF_MOCK_LOGGED: '1', PF_INMO_DIR: inmoDir, PF_START: 'inicio' } });
   const w = await app.firstWindow(); const errs = []; w.on('pageerror', (e) => errs.push(e.message));
   const shot = (n) => w.screenshot({ path: path.join(OUT, n) });
   try {

@@ -129,7 +129,13 @@ export class EnvioFirmaService {
         };
       // una copia en Drive (empresa y usuario, si los conectaron): sin esperar y sin que un fallo afecte el envío
       void this.google
-        .subirDocumento({ corredoraId: o.corredoraId, usuarioId: o.usuarioId, nombre: o.nombreArchivo, bytes: o.bytes, ref: o.drive })
+        .subirDocumento({
+          corredoraId: o.corredoraId,
+          usuarioId: o.usuarioId,
+          nombre: o.nombreArchivo,
+          bytes: o.bytes,
+          ref: o.drive,
+        })
         .catch(() => null);
       return { operacion };
     } catch (e) {

@@ -56,7 +56,8 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     await shot('ge6-revisar.png');
     await w.click('.ga-conf [data-send]'); await w.waitForSelector('.ga-res', { timeout: 15000 });
     const ord = await app.evaluate(() => JSON.parse(JSON.stringify(global.__pfMock._ordenes || []))); const o = ord[ord.length - 1];
-    ok(o && o.values.rut_mandante_signer === '22.222.222-2' && o.values['tipo-de-gestion_documento_nosigner'] === 'arriendo' && o.values.rut_corredor_signer === '12.345.678-5' && o.property_id === '00000000-0000-4000-8000-000000000002', 'Portalfirma recibe la plantilla con los valores y la propiedad');
+    // la cartera viene de Convecta (0.18.10): su id no es una propiedad de Portalfirma, así que va sin property_id y los datos del inmueble salen de la ficha
+    ok(o && o.values.rut_mandante_signer === '22.222.222-2' && o.values['tipo-de-gestion_documento_nosigner'] === 'arriendo' && o.values.rut_corredor_signer === '12.345.678-5' && !o.property_id && /Avenida Demo 450/.test(o.values['direccion-del-inmueble_datos-del-inmueble_nosigner'] || ''), 'Portalfirma recibe la plantilla con los valores y los datos de la propiedad (de la ficha)');
     const opN = Number((await txt('.ga-opn')).replace(/\D/g, '')); ok(opN > 0 && /Enviado a firmar/.test(await txt('.ga-res')), `resultado con el número de operación (${opN})`);
     let d = await datos(); const p2 = d.propiedades.find((p) => p.codigo === 'CV-9002');
     ok(p2.firmas?.[0]?.operacion === opN && p2.firmas[0].plantilla === 'Contrato de Corretaje de Propiedades', 'el documento queda en la ficha de la propiedad');

@@ -101,4 +101,4 @@ const PDF = Buffer.from('%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n');
       await s3.send(new DeleteObjectsCommand({ Bucket: env.R2_BUCKET, Delete: { Objects: creados.claves.map((Key) => ({ Key })), Quiet: true } })).catch((e) => console.warn('limpieza R2:', e.message));
     }
   }
-})();
+})().finally(() => setTimeout(() => process.exit(process.exitCode ?? 0), 200)); // el cliente S3 deja conexiones abiertas

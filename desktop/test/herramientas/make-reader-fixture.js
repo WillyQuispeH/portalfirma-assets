@@ -9,5 +9,5 @@ app.whenReady().then(async () => {
     ${sec(1, 'Partes')}${sec(2, 'Renta')}${sec(3, 'Garantía')}${sec(4, 'Término')}</body></html>`;
   await w.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
   const pdf = await w.webContents.printToPDF({ pageSize: 'Letter', generateDocumentOutline: true, generateTaggedPDF: false });
-  fs.writeFileSync(path.join(__dirname, 'fixtures', 'lector.pdf'), pdf); console.log('ok', pdf.length); app.quit();
+  fs.writeFileSync(path.join(__dirname, '..', 'fixtures', 'lector.pdf'), pdf); console.log('ok', pdf.length); app.quit();
 });

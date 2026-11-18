@@ -5,7 +5,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'pfdv-'));
   const app = await electron.launch({ args: ['.', '--no-sandbox', `--user-data-dir=${userData}`], cwd: path.join(__dirname, '..'), env: { ...process.env, PF_MOCK: '1', PF_MOCK_LOGGED: '1' } });
   const w = await app.firstWindow(); const errs = global.__errs = []; w.on('pageerror', (e) => errs.push('PAGE: ' + e.message)); w.on('console', (m) => m.type() === 'error' && errs.push(m.text()));
-  await w.setViewportSize({ width: 1440, height: 900 }); await w.waitForFunction(() => window.studio && window.Inmo, null, { timeout: 15000 }); await w.evaluate(() => window.studio.goHome()); await w.waitForSelector('#hubDrive');
+  await w.setViewportSize({ width: 1440, height: 900 }); await w.waitForFunction(() => window.studio && window.Inmo, null, { timeout: 15000 }); await w.waitForTimeout(300); await w.evaluate(() => window.studio.goHome()); await w.waitForSelector('#hubDrive'); // como las demás pruebas: la app termina su primera navegación antes de ir al inicio
   const sleep = (ms) => w.waitForTimeout(ms);
   await w.click('#hubDrive'); await w.waitForSelector('#mOk:has-text("Conectar")'); await w.click('#mOk');
   await w.waitForSelector('.drv-item'); await sleep(200);

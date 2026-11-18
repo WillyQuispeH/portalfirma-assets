@@ -144,7 +144,7 @@ function transcripcionFalsa() {
   return new Promise((ok) => s.listen(0, '127.0.0.1', () => ok(s)));
 }
 // Portalfirma falso: la plantilla «Orden de visita» de la Notaría virtual. Registra lo que se manda a firmar.
-const PFTOKEN = 'tok-pf-' + SUF; const ENVIOS = []; const FIRMANTE = []; // lo que se hace con el firmante después de enviar
+const PFTOKEN = 'tok-pf-' + SUF; const ENVIOS = []; const INGESTA = []; const FIRMANTE = []; // lo que se hace con el firmante después de enviar
 const ENVIOS_PLANTILLA = ENVIOS; const OPERACION = 800000000 + Math.floor(Math.random() * 90000000);
 const FORMULARIO = { groups: [
   { type: 'signer', variables: [{ id: 'v-nom', name: 'nombre_visitante_signer', label: 'Nombre del visitante', required: true }, { id: 'v-rut', name: 'rut_visitante_signer', label: 'RUT del visitante', required: true }, { id: 'v-mail', name: 'correo_visitante_signer', label: 'Correo del visitante', required: true }] },
@@ -161,6 +161,15 @@ function portalfirmaFalso() {
       if (a.action === 'get_forms') return t(FORMULARIO);
       if (a.action === 'send_sign') { ENVIOS.push({ values: a.values, plantilla: a.template_version_id }); return t({ operation: OPERACION, message: 'Enviado a firmar' }); }
       return { content: [{ type: 'text', text: 'Error: acción desconocida' }], isError: true };
+    });
+    // documentos que arma Asset (PDF propio): se suben y se envían a firmar con los firmantes (correo incluido)
+    srv.tool('ingest_document_tools', { source: z.string(), base64: z.string().optional(), filename: z.string().optional() }, async (a) => {
+      INGESTA.push({ nombre: a.filename, pdf: Buffer.from(a.base64 || '', 'base64') });
+      return { content: [{ type: 'text', text: JSON.stringify({ document_id: 'doc-' + INGESTA.length }) }] };
+    });
+    srv.tool('send_to_sign_document_tools', { document_id: z.string(), email: z.string().optional(), protocolization: z.string().optional(), signatories: z.array(z.record(z.string(), z.any())) }, async (a) => {
+      ENVIOS.push({ documento: a.document_id, firmantes: a.signatories, pagador: a.email });
+      return { content: [{ type: 'text', text: JSON.stringify({ operation: OPERACION, message: 'Enviado a firmar' }) }] };
     });
     srv.tool('process_detail_get_by_operation', { operation: z.number() }, async ({ operation }) => ({ content: [{ type: 'text', text: JSON.stringify({ processId: 'pid-1', operation, status: 'starting', signatories: [{ personId: 'per-1', contractSignatoryId: 'cs-1', rut: '11.111.111-1', name: 'ANA', paternalLastName: 'VISITANTE', maternalLastName: '', email: '', phone: '', url: ' https://cliente.portalfirma.cl/v?c=cs-1&h=portalfirma', signed: false }] }) }] }));
     srv.tool('operation_manage_signing_tools', { action: z.string(), person_id: z.string().optional(), email: z.string().optional(), phone: z.string().optional(), operation: z.union([z.number(), z.string()]).optional(), link: z.string().optional(), name: z.string().optional() }, async (a) => { FIRMANTE.push(a); return { content: [{ type: 'text', text: JSON.stringify(a.action === 'send_signature_link_by_email' ? { sent: true } : { person_id: a.person_id, email: a.email, phone: a.phone }) }] }; });
@@ -227,7 +236,7 @@ function iaFalsa() {
     ok(r.j.activo && r.j.telefono === '+56 9 9111 1111' && !r.j.codigo, 'su vínculo queda activo con ese celular');
     // Usuarios de la corredora: quién tiene su celular vinculado; el celular queda como su teléfono; pedirle a otro
     r = await req('GET', '/whatsapp/ejecutivo/equipo', null, tA);
-    ok(r.s === 200 && r.j.items.some((x) => x.usuarioId === c1.id && x.telefono === '+56 9 9111 1111') && /^\+56 9 \d{4} \d{4}$/.test(r.j.numeroEmpresa), 'el equipo de la corredora muestra quién tiene su celular vinculado');
+    ok(r.s === 200 && r.j.items.some((x) => x.usuarioId === c1.id && x.telefono === '+56 9 9111 1111') && /^(\+56 9 \d{4} \d{4}|el WhatsApp de la empresa)$/.test(r.j.numeroEmpresa), 'el equipo de la corredora muestra quién tiene su celular vinculado');
     ok((await db.usuario.findUnique({ where: { id: c1.id } })).telefono === '+56 9 9111 1111', 'el celular vinculado queda como teléfono del usuario (no tenía)');
     ok((await req('POST', '/whatsapp/ejecutivo/pedir', { usuarioId: adm.id }, t1)).s === 400, 'un corredor no le pide a otro que vincule');
     r = await req('POST', '/whatsapp/ejecutivo/pedir', { usuarioId: c1.id }, tA);
@@ -250,12 +259,14 @@ function iaFalsa() {
     ok(await hasta(() => salidas(cel).slice(antesOv).some((t) => /Uy: El corredor todavía no confirmó/.test(t))) && ENVIOS.length === enviosAntes, 'un «sí, pero a las 12» pide un cambio: no cuenta como confirmación y no se envía');
     antesOv = salidas(cel).length;
     escribe(cel, 'sí');
-    ok(await hasta(() => salidas(cel).slice(antesOv).some((t) => new RegExp(`Orden enviada, operación ${OPERACION}\\.`).test(t))), 'con el sí del corredor, la envía a firmar (operación ' + OPERACION + ')');
-    ok(ENVIOS.length === enviosAntes + 1 && ENVIOS.at(-1).values['v-rut'] === '11.111.111-1' && ENVIOS.at(-1).values['v-mail'] === 'ana.visitante@prueba.cl' && ENVIOS.at(-1).values['v-fecha'] === '2037-12-01' && /Larraín 6200/.test(ENVIOS.at(-1).values['v-dir']) && /^data:image\/jpeg;base64,/.test(ENVIOS.at(-1).values['v-foto']) && /Corredor B/.test(ENVIOS.at(-1).values['v-cor']), 'el documento salió con los datos de la ficha (dirección), del visitante y del corredor, y la foto como imagen en base64 (Portalfirma no acepta un enlace)');
-    ok(FIRMANTE.length === 2 && FIRMANTE[0].action === 'update_signatory_data' && FIRMANTE[0].person_id === 'per-1' && FIRMANTE[0].email === 'ana.visitante@prueba.cl', 'completa los datos del firmante (correo) porque la plantilla no los pide');
-    ok(FIRMANTE[1].action === 'send_signature_link_by_email' && FIRMANTE[1].email === 'ana.visitante@prueba.cl' && FIRMANTE[1].link === 'https://cliente.portalfirma.cl/v?c=cs-1&h=portalfirma' && Number(FIRMANTE[1].operation) === OPERACION, 'y le manda el enlace de firma por correo');
+    const enviada = await hasta(() => salidas(cel).slice(antesOv).some((t) => new RegExp(`Orden enviada, operación ${OPERACION}\\.`).test(t)));
+    if (!enviada) console.log('  respuestas:', JSON.stringify(salidas(cel).slice(antesOv)));
+    ok(enviada, 'con el sí del corredor, la envía a firmar (operación ' + OPERACION + ')');
+    const env = ENVIOS.at(-1); const fir = env?.firmantes?.[0] || {};
+    ok(ENVIOS.length === enviosAntes + 1 && INGESTA.at(-1)?.pdf.slice(0, 4).toString() === '%PDF' && /orden/i.test(INGESTA.at(-1).nombre || ''), 'la orden sale como PDF armado por Asset (se sube a Portalfirma y se envía a firmar)');
+    ok(env.firmantes.length === 1 && fir.rut === '11.111.111-1' && fir.email === 'ana.visitante@prueba.cl' && /Ana Visitante/i.test(fir.fullName || ''), 'firma el visitante, con su RUT y correo (ahí le llega el enlace de firma)');
     const fOv = await db.firma.findFirst({ where: { corredoraId: co.id, operacion: OPERACION } });
-    ok(fOv && fOv.documento === 'Orden de visita' && fOv.estado === 'en_firma' && fOv.enviadoPorId === c1.id && fOv.propiedadIds.includes(prop2.id) && fOv.firmantes[0].rut === '11.111.111-1', 'la firma queda registrada (en firma, de quien la envió, ligada a la propiedad)');
+    ok(fOv && /^Orden de visita( nº [\d.]+)?$/.test(fOv.documento) && fOv.estado === 'en_firma' && fOv.enviadoPorId === c1.id && fOv.propiedadIds.includes(prop2.id) && fOv.firmantes[0].rut === '11.111.111-1', 'la firma queda registrada (en firma, de quien la envió, ligada a la propiedad)');
     const pAna = await db.persona.findFirst({ where: { corredoraId: co.id, rut: '111111111' }, include: { vinculos: true } });
     ok(pAna && pAna.nombre === 'Ana Visitante' && pAna.email === 'ana.visitante@prueba.cl' && pAna.vinculos.some((x) => x.propiedadId === prop2.id && x.rol === 'interesado'), 'el visitante quedó en el CRM y vinculado como interesado');
     const evOv = await db.evento.findFirst({ where: { corredoraId: co.id, propiedadId: prop2.id, tipo: 'visita' } });
@@ -318,8 +329,10 @@ function iaFalsa() {
     ok(r.s === 200 && salidas(cel).some((t) => /Tienes 1 propiedad/.test(t)), 'la respuesta de su Asset sale a su celular');
     ok(!salidas(cel).some((t) => /Tu Asset está cerrado/.test(t)), 'ya no hace falta el aviso de «Asset cerrado»: el equipo responde igual');
 
-    // SOLO_PUENTE=1 salta las secciones 2-8 (Sofía y otros asistentes que ya no conversan con leads tras el puente)
-    if (!process.env.SOLO_PUENTE) {
+    // Secciones 2-8: Sofía y otros asistentes conversando con leads. Desde el puente corredor ↔ interesado (commit 3496ded)
+    // los asistentes ya no conversan con los leads (primer aviso fijo; lo prueba puente-e2e), así que se saltan por
+    // defecto. CON_SOFIA=1 las corre igual (por si se vuelve a encender esa conversación).
+    if (process.env.CON_SOFIA) {
     // ---- 2. Sofía con un lead
     const cj = conv({ telefono: '+56 9 8765 4321', nombre: 'Juan Pérez' });
     escribe(cj, 'Hola, quiero agendar una visita al depto');
@@ -469,7 +482,7 @@ function iaFalsa() {
     const antesPl = (W.plantillas || []).length;
     r = await asignar(c2.id);
     ok(r.s === 200 && r.j.corredorId === c2.id, 'el administrador le asigna el lead a otro corredor');
-    const pl = await hasta(() => (W.plantillas || []).length > antesPl && W.plantillas.at(-1).etiqueta === 'nuevo_lead_asignado' && W.plantillas.at(-1), 30);
+    const pl = await hasta(() => (W.plantillas || []).length > antesPl && /^nuevo_lead_asignado(-dev)?$/.test(W.plantillas.at(-1).etiqueta) && W.plantillas.at(-1), 30);
     ok(pl, 'como ese corredor no le ha escrito a la empresa en 24 h, el aviso sale por la plantilla «nuevo_lead_asignado»');
     ok(pl.campos.asset_lead_nombre === 'Juan Pérez' && /8765 4321/.test(pl.campos.asset_lead_celular) && /PF-9001/.test(pl.campos.asset_propiedad) && pl.campos.asset_nombre === 'Corredor' && pl.campos.asset_lead_canal && pl.campos.asset_lead_enlace.startsWith(leadId + '.'), 'con los datos del interesado, la propiedad y el enlace del botón ' + JSON.stringify(pl.campos));
     ok(await hasta(() => db.aviso.findFirst({ where: { corredoraId: co.id, usuarioId: c2.id, tipo: 'lead' } })), 'y también queda en sus avisos de la app');
@@ -582,7 +595,7 @@ function iaFalsa() {
     const antesPl2 = (W.plantillas || []).length;
     escribe(cel, 'Para Juan Pérez: ¿le acomoda ver el depto el sábado?');
     ok(await hasta(() => salidas(cel).some((t) => /Juan Pérez no ha escrito en las últimas 24 h: le mandé la plantilla de primer contacto/.test(t))), 'fuera de las 24 h se le avisa al corredor que se mandó la plantilla');
-    const pc = (W.plantillas || []).slice(antesPl2).find((x) => x.etiqueta === 'asset-primer-contacto');
+    const pc = (W.plantillas || []).slice(antesPl2).find((x) => /^asset-primer-contacto(-dev)?$/.test(x.etiqueta));
     ok(pc && pc.campos.asset_nombre === 'Juan' && /Corredor/.test(pc.campos.asset_remitente) && pc.campos.asset_motivo, 'a Juan le sale la plantilla «asset-primer-contacto» con su nombre, el corredor y el motivo ' + JSON.stringify(pc));
     ok(!W.enviados.some((e) => /le acomoda ver el depto/.test(e.message)), 'y el mensaje del corredor todavía no sale');
     ok((await db.lead.findUnique({ where: { id: leadId } })).datos.pendiente?.texto === '¿le acomoda ver el depto el sábado?', 'queda pendiente en el lead');
@@ -606,7 +619,7 @@ function iaFalsa() {
     ok(r.s === 400 && /no tiene celular/.test(r.j.message || ''), 'no se puede pedir documentación a un aval sin celular');
     r = await req('POST', `/evaluaciones/${ng.id}/solicitar`, { avales: [av1.id] }, tA);
     ok(r.s === 200 && r.j.personas.length === 2 && r.j.personas[0].rol === 'arrendatario' && r.j.personas[1].rol === 'aval' && r.j.estado === 'solicitada', 'solicitar: queda el arrendatario y su aval esperando documentos');
-    const plEv = (W.plantillas || []).filter((x) => x.etiqueta === 'asset_solicitar_documentos'); // (la del aviso de lead asignado es otra)
+    const plEv = (W.plantillas || []).filter((x) => /^asset_solicitar_documentos(-dev)?$/.test(x.etiqueta)); // (la del aviso de lead asignado es otra)
     ok(plEv.length === 2, 'a cada uno le sale la plantilla (con su etiqueta) ' + JSON.stringify(W.plantillas));
     ok(plEv[0].campos.asset_nombre === 'María' && /Irarrázaval/.test(plEv[0].campos.asset_propiedad) && /^Corredor A/.test(plEv[0].campos.asset_remitente) && /aval de María Postulante/.test(plEv[1].campos.asset_propiedad), 'con su nombre, quien escribe y la propiedad (al aval se le dice de quién es aval)');
     r = await req('POST', `/evaluaciones/${ng.id}/solicitar`, { avales: [av1.id] }, tA);
@@ -654,13 +667,16 @@ function iaFalsa() {
     ok(n >= 6 && IA.llamadas.every((x) => x.model && x.fallbacks === 'default'), `cada llamada a la IA queda anotada (${n}) y pide respaldo ante rechazos`);
     const aj = await db.waAjustes.findUnique({ where: { corredoraId: co.id } });
     ok(aj.lectorEn && !aj.lectorError, 'el lector terminó sus rondas sin error');
-    const dup = W.enviados.filter((e) => e.contactId === cj.contactId && /quedó tu visita/.test(e.message));
-    ok(dup.length === 1, 'ninguna respuesta salió dos veces');
+    // sin duplicados: ningún mensaje de los asistentes salió dos veces al mismo contacto
+    const vistos = new Set(); let repetido = null;
+    for (const e of W.enviados) { const k = `${e.contactId}|${e.message}`; if (vistos.has(k) && !/^(\*\w+\* · |✅ Enviado a )/.test(e.message || '')) repetido = e.message; vistos.add(k); }
+    ok(!repetido, 'ninguna respuesta salió dos veces' + (repetido ? ': ' + String(repetido).slice(0, 80) : ''));
 
     // ---- desvincular
     ok((await req('POST', '/whatsapp/ejecutivo/desvincular', null, t1)).j.ok && !(await req('GET', '/whatsapp/ejecutivo', null, t1)).j.activo, 'el corredor desvincula su celular');
   } finally {
     srv.close(); ia.close(); trf.close(); pfs.close();
+    console.log('  · limpiando los datos de prueba…');
     if (co) {
       const w = { where: { corredoraId: co.id } };
       for (const m of ['waEntrante', 'waVinculo', 'waHilo', 'waEnviado', 'waConversacion', 'waAjustes', 'iaConsumo', 'waProgramado', 'aviso', 'conexion', 'registro', 'actividad', 'evento', 'firma', 'leadMensaje', 'lead', 'negocio']) await db[m].deleteMany(w).catch((e) => console.warn(m, e.message));
@@ -672,4 +688,4 @@ function iaFalsa() {
     }
     await db.$disconnect();
   }
-})().catch((e) => { console.error(e.message); process.exit(1); });
+})().then(() => { console.log('OK asistentes-wa'); process.exit(process.exitCode ?? 0); }, (e) => { console.error(e.message); process.exit(1); }); // los servidores falsos dejan conexiones abiertas

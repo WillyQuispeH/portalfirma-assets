@@ -27,11 +27,15 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     ok((await w.inputValue('#nnProp')) !== '', 'conserva la propiedad elegida');
     await w.fill('#nnVal', '18000'); await w.fill('#nnAcc', 'Llamar a Ana para agendar visita'); await w.click('#mOk');
     await w.waitForSelector('#ngEt .et-col');
-    ok(/Etapa actual: Interesado/.test(await txt('.ng-etapa')) && await w.isChecked('[data-task="0"]'), 'abre el negocio en «Interesado» con el cliente ya registrado');
+    // la ficha ya no dice «Etapa actual: …» ni tiene casillas de tareas: la etapa se lee del negocio y el botón principal (#ngSig) dice lo que sigue
+    const negId = () => w.evaluate(() => window.Negocios._NG.actual);
+    const etapa = async () => (await w.evaluate((id) => window.pf.negObtener(id), await negId())).data.etapa;
+    const hasta = async (e) => { for (let i = 0; i < 40; i++) { if ((await etapa()) === e) return true; await w.waitForTimeout(250); } return false; };
+    ok((await etapa()) === 'interes' && /Interesado registrado\s*Logrado/.test(await txt('#ngEt')), 'abre el negocio en «Interesado» con el cliente ya registrado');
     ok(/UF 360/.test(await txt('#view-negocios')), 'calcula la comisión (2% de UF 18.000)');
-    await w.check('[data-task="1"]'); await w.waitForTimeout(400);
-    await w.click('#ngNext'); await w.waitForSelector('text=Etapa actual: Visita');
-    ok(true, 'avanza a «Visita» con un clic');
+    ok(/Siguiente: pasar a «Visita»/.test(await txt('#ngSig')), 'el botón principal dice lo que sigue');
+    await w.click('#ngSig'); ok(await hasta('visita'), 'avanza a «Visita» con un clic');
+    await w.waitForSelector('#ngSig:has-text("Oferta y reserva")');
     await shot('ng2-negocio.png');
 
     // Arrastrar en el tablero
@@ -41,24 +45,29 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     ok((await estado('CV-9001', 'estadoVenta')) === 'reservada', 'la propiedad queda reservada');
     await shot('ng1-tablero.png');
 
-    // Firma: operación en curso y luego firmada → avanza solo
-    await w.click('.ng-card'); await w.waitForSelector('#ngVin');
-    await w.click('#ngVin'); await w.fill('#vfOp', '20886'); await w.click('#mOk'); await w.waitForSelector('.ng-fb.wait');
-    ok(/en firma/.test(await txt('.ng-fb')) && /1 de 2 firmas|de 2 firmas/.test(await txt('.ng-fb')), 'operación vinculada: muestra el avance de firmas');
-    await w.click('#ngFq'); await w.waitForSelector('#ngVin');
-    await w.click('#ngVin'); await w.fill('#vfOp', '20900'); await w.click('#mOk'); await w.waitForSelector('text=Etapa actual: Promesa', { timeout: 10000 });
-    ok(/firmado/.test(await txt('#toast')), 'al estar firmada la reserva, el negocio pasa solo a «Promesa»');
+    // Firma: operación en curso y luego firmada → avanza solo. Vincular a mano una operación (#ngVin) ya no está en la ficha:
+    // se liga por la API, y la ficha ofrece «Siguiente: revisar la firma» (#ngSig)
+    await w.click('.ng-card'); await w.waitForSelector('#ngSig:has-text("a firmar")');
+    await w.evaluate((id) => window.pf.negFirmaVincular(id, 'reserva', 20886), await negId());
+    await w.evaluate((id) => window.Negocios.abrirNegocio(id), await negId()); await w.waitForSelector('#ngSig:has-text("revisar la firma")');
+    await w.click('#ngSig'); await w.waitForTimeout(800); await w.click('#ngPlDoc'); await w.waitForSelector('[data-doc]');
+    ok(/En firma · 1\/2/.test(await txt('[role="dialog"]')), 'operación vinculada: muestra el avance de firmas (1 de 2)');
+    await w.keyboard.press('Escape');
+    await w.evaluate(async (id) => { await window.pf.negFirmaQuitar(id, 'reserva'); await window.pf.negFirmaVincular(id, 'reserva', 20900); }, await negId());
+    await w.evaluate((id) => window.Negocios.abrirNegocio(id), await negId()); await w.waitForSelector('#ngSig:has-text("revisar la firma")');
+    await w.click('#ngSig'); ok(await hasta('promesa'), 'al estar firmada la reserva, el negocio pasa solo a «Promesa»');
+    ok(/firmado/.test(await txt('#toast')), 'y lo avisa');
 
     // Enviar a firmar desde el negocio: la operación creada queda ligada sola
-    await w.click('#ngEnv'); await w.click('#edFile'); await w.waitForTimeout(300);
+    await w.waitForSelector('#ngSig:has-text("a firmar")'); await w.click('#ngSig'); await w.click('#edFile'); await w.waitForTimeout(300);
     await w.evaluate(() => window.dispatchEvent(new CustomEvent('pf-operacion', { detail: { operation: 20893 } })));
     await w.waitForTimeout(800);
-    await w.evaluate(() => window.Negocios.abrirNegocio(window.Negocios._NG.actual)); await w.waitForSelector('#ngRev');
-    await w.click('#ngRev'); await w.waitForSelector('text=Etapa actual: Escritura', { timeout: 10000 });
-    ok(true, 'el documento enviado desde el negocio queda ligado y, al firmarse, avanza a «Escritura»');
+    await w.evaluate(() => window.Negocios.abrirNegocio(window.Negocios._NG.actual)); await w.waitForSelector('#ngSig:has-text("revisar la firma")');
+    await w.click('#ngSig'); ok(await hasta('escritura'), 'el documento enviado desde el negocio queda ligado y, al firmarse, avanza a «Escritura»');
 
-    // Próxima acción vencida → aviso en el inicio
-    await w.fill('#ngPaT', 'Confirmar fecha de notaría'); await w.fill('#ngPaF', '2026-01-05'); await w.click('#ngPa button'); await w.waitForSelector('text=Esta acción venció');
+    // Próxima acción vencida → aviso en el inicio (la ficha ya no tiene el formulario de próxima acción: se guarda por la API)
+    await w.evaluate((id) => window.pf.negGuardar({ id, proximaAccion: { texto: 'Confirmar fecha de notaría', fecha: '2026-01-05' } }), await negId());
+    await w.evaluate((id) => window.Negocios.abrirNegocio(id), await negId()); await w.waitForSelector('text=Próxima acción vencida');
     await w.click('#nav [data-view="inicio"]'); await w.waitForSelector('#view-inicio .hoy-ks');
     ok(/Necesita tu atención/.test(await txt('#view-inicio')) && /Venció el/.test(await txt('#view-inicio')), '«Hoy» avisa la acción vencida como no lograda');
     await w.click('#nav [data-view="negocios"]'); await w.waitForSelector('.ng-card.vencida');
@@ -67,22 +76,26 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     // Arriendo perdido: la propiedad vuelve a disponible
     await w.click('#ngTipo [data-t="arriendo"]'); await w.click('#ngNew'); await w.waitForSelector('#nnProp');
     await w.selectOption('#nnProp', { label: 'CV-9002 · Departamento en Providencia' }); await w.selectOption('#nnCli', { label: 'JUAN PEREZ SOTO · 11.111.111-1' });
-    await w.selectOption('#nnEt', 'reserva'); await w.click('#mOk'); await w.waitForSelector('text=Etapa actual: Reserva');
-    ok((await estado('CV-9002', 'estadoArriendo')) === 'reservada' && /UF|\$950\.000/.test(await txt('.im-ft')), 'negocio de arriendo creado directo en «Reserva»: la propiedad queda reservada');
-    await w.click('#ngLost'); await w.selectOption('#lmSel', 'No calificó (crédito o antecedentes)'); await w.click('#mOk'); await w.waitForSelector('text=Perdido:');
+    await w.selectOption('#nnEt', 'reserva'); await w.click('#mOk'); await w.waitForSelector('#ngEt .et-col');
+    ok((await etapa()) === 'reserva' && (await estado('CV-9002', 'estadoArriendo')) === 'reservada' && /UF|\$950\.000/.test(await txt('.im-ft')), 'negocio de arriendo creado directo en «Reserva»: la propiedad queda reservada');
+    await w.click('#ngMas'); await w.click('#ngLost'); await w.selectOption('#lmSel', 'No calificó (crédito o antecedentes)'); await w.click('#mOk'); await w.waitForSelector('text=Perdido:');
     ok((await estado('CV-9002', 'estadoArriendo')) === 'disponible', 'al perderse, la propiedad vuelve a estar disponible');
 
-    // Cerrar la venta con éxito
+    // Cerrar la venta con éxito: ya no hay botón «Ganado» (#ngWin) en la ficha; se cierra desde el paso «Cierre de la operación»
     await w.evaluate(() => window.Negocios.abrir({ tipo: 'venta', ver: 'abiertos' })); await w.waitForSelector('.ng-card');
     await w.dragAndDrop('.ng-card', '.ng-col[data-e="entrega"]'); await w.waitForSelector('.ng-col[data-e="entrega"] .ng-card');
-    await w.click('.ng-card'); await w.waitForSelector('#ngWin'); await w.click('#ngWin'); await w.waitForSelector('text=Cerrado con éxito');
+    await w.click('.ng-card'); await w.waitForSelector('#ngEt .et-col');
+    const cierre = w.locator('#ngEt .et-go:has-text("Cierre de la operación")');
+    for (let i = 0; i < 4 && !(await cierre.count()); i++) { await w.locator('#ngEt .et-mas:has-text("más")').first().click(); await w.waitForTimeout(400); }
+    await cierre.first().click(); await w.waitForSelector('#pasoAccion'); ok(/Cerrar con éxito/.test(await txt('#pasoAccion')), 'el paso «Cierre de la operación» ofrece «Cerrar con éxito»');
+    await w.click('#pasoAccion'); await w.waitForSelector('text=Cerrado con éxito');
     ok((await estado('CV-9001', 'estadoVenta')) === 'vendida', 'cerrar con éxito deja la propiedad vendida');
     await w.click('#ngBack'); await w.click('#ngVer [data-v="cerrados"]'); ok(/Cerrado con éxito/.test(await txt('.ng-cerrados')), 'vista de negocios cerrados');
 
     // La ficha de la propiedad muestra sus negocios
     await w.evaluate(() => window.Inmo.cartera({ especial: '', op: 'todas' })); await w.click('.im-card:has-text("CV-9001")'); await w.waitForSelector('.im-ftabs'); await w.evaluate(() => window.Inmo.fichaTab('negocios')); await w.waitForSelector('[data-neg]');
     ok(/Ana Rojas Díaz\s*Venta/.test(await txt('#view-cartera')) && /Comprador/.test(await txt('#view-cartera')), 'la ficha lista el negocio y vincula al comprador');
-    await w.click('[data-neg]'); await w.waitForSelector('#ngEt .et-col'); ok(/Escritura de compraventa/.test(await txt('#view-negocios')), 'desde la ficha se abre el negocio');
+    await w.click('[data-neg]'); await w.waitForSelector('#ngEt .et-col'); ok(/Promesa firmada/.test(await txt("#view-negocios")) && /Cerrado con éxito/.test(await txt("#view-negocios")), "desde la ficha se abre el negocio");
     ok(!errs.length, 'sin errores de JavaScript' + (errs.length ? ': ' + errs.join(' | ') : ''));
     console.log('OK negocios');
   } catch (e) { console.error(e.message); await shot('ng-error.png').catch(() => {}); process.exitCode = 1; } finally { await app.close(); }

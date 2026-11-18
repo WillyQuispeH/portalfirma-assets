@@ -55,25 +55,30 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     await w.click(`#view-inicio .hoy-neg:has-text("${pA.titulo.slice(0, 20).replace(/"/g, '')}")`); await w.waitForSelector('#ngEt .et-col');
     const e = await txt('#ngEt');
     ok(!/Captación/.test(e) && /Comercialización/.test(e) && /Post(venta|arriendo)/.test(e), '0.16.11 · el negocio muestra comercialización y postventa (postarriendo si es arriendo) (la captación quedó en Cartera)');
-    ok(/Siguiente paso · te toca/.test(e) && /Visita agendada/.test(e), 'y un solo siguiente paso destacado (visita)');
-    ok(await w.evaluate(() => document.querySelector('#ngEt .luz.on #etAcc') != null), 'la luz guía está en el botón del siguiente paso');
-    await w.click('#etOk'); await w.waitForFunction(() => /Orden de visita/.test(document.querySelector('#ngEt .et-next')?.textContent || ''), null, { timeout: 8000 });
-    ok(/Logrado/.test(await txt('#ngEt .et-p:has-text("Visita agendada")')), '«Marcar como logrado» avanza al siguiente paso (orden de visita)');
-    await shot('et2-negocio.png');
+    // el paso en curso va destacado (tarjeta con su acción); ya no hay «Siguiente paso · te toca» ni luz guía en la ficha del negocio
+    ok(await w.locator('#ngEt .et-pa').count() === 1 && /Visita agendada/.test(await txt('#ngEt .et-pa')), 'y un solo paso en curso destacado (visita)');
     // 0.18.10 · ya no existe «Esperando a alguien» (solo logrado, no logrado y volver a lo automático)
-    await w.click('#etMas'); ok(await w.$('.et-mopts [data-e="otro"]') === null, 'el menú de estados ya no ofrece «Esperando a alguien»'); await w.keyboard.press('Escape');
-    // postventa de arriendo sin escritura ni Conservador
+    await w.click('#ngEt .et-pa [data-pm]'); await w.waitForSelector('.et-mopts [data-e="fail"]');
+    ok(await w.$('.et-mopts [data-e="otro"]') === null, 'el menú de estados ya no ofrece «Esperando a alguien»'); await w.evaluate(() => window.closeModal());
+    // la acción del paso en curso («Agendar visita»): se agenda y, al marcarla realizada, el negocio avanza al siguiente paso
+    await w.click('#ngEt .et-pa .et-do'); await w.waitForSelector('#pvForm'); await w.locator('#shHorarios [data-hora]:not([disabled])').first().click(); await w.click('#pvAgendar');
+    await w.waitForSelector('#pvLista [data-pv-hecha]'); await w.click('#pvLista [data-pv-hecha]');
+    await w.waitForFunction(() => /Orden de visita/.test(document.querySelector('#ngEt .et-pa')?.textContent || ''), null, { timeout: 8000 });
+    await w.evaluate(() => window.closeModal());
+    ok(/Logrado/.test(await txt('#ngEt .et-p:has-text("Visita agendada")')), 'agendar la visita desde el paso avanza al siguiente (orden de visita)');
+    await shot('et2-negocio.png');
+    // el cierre y el postarriendo de un arriendo, sin escritura ni Conservador
     if (await w.$('#ngEt .et-col >> nth=1 >> [data-mas]')) await w.click('#ngEt .et-col >> nth=1 >> [data-mas]');
-    const pv = await txt('#ngEt .et-col >> nth=1');
-    ok(/Contrato de arriendo firmado/.test(pv) && !/Conservador/.test(pv), 'la postventa de un arriendo tiene sus pasos (sin escritura ni Conservador)');
+    const pv = (await txt('#ngEt .et-col >> nth=1')) + (await txt('#ngEt .et-col >> nth=2'));
+    ok(/Contrato firmado/.test(pv) && /Devolución de la garantía/.test(pv) && !/Conservador|[Ee]scritura/.test(pv), 'el cierre y el postarriendo de un arriendo tienen sus pasos (sin escritura ni Conservador)');
     // 0.16.11 · la captación de la propiedad se ve en Cartera: en la tarjeta y en la ficha
     await w.evaluate(() => window.Inmo.cartera({ especial: '', op: 'todas' })); await w.waitForSelector('.im-card .im-capt');
     ok(await w.$$eval('.im-card .im-capt', (x) => x.length) >= 1 && /Captación \d\/8/.test(await txt('#view-cartera')), 'cada tarjeta de Cartera muestra su avance de captación');
     if (await w.$('#imCapt')) { await w.click('#imCapt'); await w.waitForSelector('.im-chip:has-text("Captación incompleta")'); ok(true, 'el filtro «En captación» deja solo las que tienen algo pendiente'); await w.click('#imCapt'); }
-    await w.evaluate((id) => window.Inmo.abrirFicha(id), pA.id); await w.evaluate((k) => window.Inmo.fichaTab(k), 'captacion'); await w.waitForSelector('#fCapt .et-next');
+    await w.evaluate((id) => window.Inmo.abrirFicha(id), pA.id); await w.evaluate((k) => window.Inmo.fichaTab(k), 'captacion'); await w.waitForSelector('#fCapt .et-e');
     ok(!(await w.$('#fCapt .et-p')) && (await w.isVisible('[data-pane="resumen"] #fCapt')), '0.16.27 · la captación está en el Resumen, con los pasos plegados');
     await w.click('#fCapt [data-tog="0"]'); await w.waitForSelector('#fCapt .et-p');
-    const fc = await txt('#fCapt'); ok(/Captación/.test(fc) && /Mandato firmado|Datos de la propiedad|Fotos|Publicada/.test(fc) && !/Comercialización ·|Postventa/.test(fc), `la ficha muestra la captación con el siguiente paso: «${fc.slice(0, 90)}…»`);
+    const fc = await txt('#fCapt'); ok(/[Cc]aptación/.test(fc) && /Mandato firmado|Datos de la propiedad|Fotos|Publicada/.test(fc) && !/Comercialización ·|Postventa/.test(fc), `la ficha muestra la captación con el siguiente paso: «${fc.slice(0, 90)}…»`);
     await shot('et4-captacion-ficha.png');
     ok(!errs.length, 'sin errores de JavaScript' + (errs.length ? ': ' + errs.join(' | ') : ''));
     console.log('OK etapas');
