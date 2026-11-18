@@ -23,7 +23,8 @@ function crear() {
     variables: ['corredora.nombre', 'corredora.rut', 'propiedad.direccion', 'visitante.nombre', 'visita.fecha'],
     bloques: [
       { clave: 'comparecencia', titulo: 'Comparecencia', tipo: 'comparecencia', base: null },
-      { clave: 'objeto', titulo: 'Primero: objeto', tipo: 'clausula', base: '# Primero: objeto\n\n{{visitante.nombre}} visitará la propiedad de **{{propiedad.direccion}}** el {{visita.fecha}}.' },
+      // con negritas, cursiva, una parte condicional dentro del párrafo y otra de bloque (con una lista adentro)
+      { clave: 'objeto', titulo: 'Primero · objeto', tipo: 'clausula', base: '# __Primero ·__ Objeto\n\n{{visitante.nombre}} visitará la propiedad de **{{propiedad.direccion}}** el {{visita.fecha}}, con __{{corredora.nombre}}__{{#corredora.rut}}, RUT {{corredora.rut}}{{/corredora.rut}}.\n\n{{#corredora.rut}}\n\nLa corredora está **inscrita** y responde por:\n\n- la coordinación de la visita\n- los datos de la propiedad\n\n{{/corredora.rut}}' },
       { clave: 'comision', titulo: 'Segundo: comisión', tipo: 'clausula', base: '# Segundo: comisión\n\nSi compra o arrienda, pagará a {{corredora.nombre}} la comisión pactada.\n\n- 2% más IVA en venta\n- 50% de un mes en arriendo' },
     ],
   };
@@ -58,7 +59,7 @@ function crear() {
         if (!b || b.base === null) throw new Error(`La cláusula «${clave}» no se puede editar.`);
         const t = String(texto).replace(/\r/g, '').trim();
         if (!t) throw new Error(`«${b.titulo}» no puede quedar vacía.`);
-        const malo = [...t.matchAll(/\{\{\s*([^#/}][^}]*?)\s*\}\}/g)].map((m) => m[1]).find((x) => !BASE.variables.includes(x));
+        const malo = [...t.matchAll(/\{\{\s*([^#^/}][^}]*?)\s*\}\}/g)].map((m) => m[1]).find((x) => !BASE.variables.includes(x));
         if (malo) throw new Error(`${b.titulo}: El dato «{{${malo}}}» no existe en esta plantilla.`);
         if (t !== b.base.trim()) propios[clave] = t;
       }

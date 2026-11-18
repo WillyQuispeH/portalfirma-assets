@@ -93,8 +93,10 @@ export default function VisorPdf({
         });
       }
     };
-    dibujar();
-    const obs = new ResizeObserver(() => { dibujar(); });
+    // si el PDF cambia o se cierra a medio dibujar, pdf.js cancela ese dibujo (RenderingCancelledException): se ignora
+    const intentar = () => { dibujar().catch(() => { /* dibujo viejo cancelado */ }); };
+    intentar();
+    const obs = new ResizeObserver(intentar);
     obs.observe(outer);
     return () => { vivo = false; obs.disconnect(); };
   }, [pdf, pagina, ajustar, sinCaja, factor]);

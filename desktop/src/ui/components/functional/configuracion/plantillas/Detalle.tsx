@@ -1,20 +1,18 @@
 // Configuración › Plantillas › una plantilla (pantalla propia con Layout): cabecera con estado, versión y acciones;
 // abajo, cláusulas en cards (izquierda, ancho arrastrable) y vista previa PDF (derecha: hoja entera, zoom y pager flotantes).
-//  · El administrador edita cada cláusula como texto (# título, párrafos, «- » ítems, **negrita**, __cursiva__, {{datos}}),
-//    «Probar» arma la vista previa con los cambios sin guardarlos, «Guardar versión» crea una versión nueva y «Aprobar»
+//  · El administrador edita cada cláusula con un editor tipo Word (EditorClausula: negrita, cursiva, listas, datos como
+//    fichas y partes condicionales; nunca ve el formato guardado, lo arma formatoClausula.ts), «Probar» arma la vista previa con los cambios sin guardarlos, «Guardar versión» crea una versión nueva y «Aprobar»
 //    registra la revisión del abogado o notario. En «⋯»: historial (restaurar), volver todo a la base y descargar el PDF.
 //  · Los demás la ven y prueban, sin editar.
 // API: pl:detalle / pl:guardar / pl:previa / pl:aprobar / pl:restaurar (src/main.js → /v1/plantillas…).
-// Ids para pruebas: #plDetalle, #plBack, [data-clausula], #plTexto, #plInsertar, #plVerBase, #plVolverBase, #plProbar,
+// Ids para pruebas: #plDetalle, #plBack, [data-clausula], #plTexto (el editor; ids de su barra en EditorClausula), #plVerBase, #plVolverBase, #plProbar,
 // #plGuardar, #plAprobar, #plMas, #plHistorialBtn, #plBaseTodo, #plDescargar, #plVista.
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as PointerEventR, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type KeyboardEvent, type PointerEvent as PointerEventR, type ReactNode } from 'react';
 import Layout, { MIGA_INICIO } from '../../../ui/Layout';
 import Card from '../../../ui/Card';
 import Boton from '../../../ui/Boton';
 import Badge from '../../../ui/Badge';
 import MenuMas, { type IOpcionMenu } from '../../../ui/MenuMas';
-import Select from '../../../ui/Select';
-import Textarea from '../../../ui/Textarea';
 import EstadoVacio from '../../../ui/EstadoVacio';
 import VisorPdf, { PdfCargando } from '../../agenda/VisorPdf';
 import { api } from '../../../../utils/api';
@@ -23,6 +21,7 @@ import { descargarPdf } from '../../../../utils/pdf';
 import { fecha } from '../../../../utils/formato';
 import { cx } from '../../../../utils/cx';
 import EstadoPlantilla from './EstadoPlantilla';
+import EditorClausula from './EditorClausula';
 import { elegirVersion, pedirAprobacion, pedirNotaVersion } from './ventanas';
 import type { IDetallePlantilla } from './tipos';
 
@@ -30,9 +29,9 @@ const textosDe = (d: IDetallePlantilla) => Object.fromEntries(d.bloques.filter((
 const igual = (a?: string | null, b?: string | null) => (a ?? '').replace(/\r/g, '').trim() === (b ?? '').replace(/\r/g, '').trim();
 
 const CLAVE_ANCHO = 'pf.plClausulasW';
-const ANCHO_DEF = 380;
+const ANCHO_DEF = 560; // con el editor enriquecido la cláusula necesita espacio
 const ANCHO_MIN = 280;
-const ANCHO_MAX = 640;
+const ANCHO_MAX = 900;
 const PDF_MIN = 320;
 
 function leerAncho(): number {
@@ -116,7 +115,6 @@ export default function Detalle({ nombre, alVolver }: { nombre: string; alVolver
   const [errorPdf, setErrorPdf] = useState('');
   const [ocupado, setOcupado] = useState(false);
   const [anchoClausulas, setAnchoClausulas] = useState(leerAncho);
-  const area = useRef<HTMLTextAreaElement>(null);
 
   const aplicar = useCallback((x: IDetallePlantilla) => {
     setD(x); setTextos(textosDe(x));
@@ -158,16 +156,6 @@ export default function Detalle({ nombre, alVolver }: { nombre: string; alVolver
   }
 
   const editar = d.puedeEditar;
-
-  const insertar = (variable: string) => {
-    const b = d.bloques.find((x) => x.clave === sel);
-    if (!b || !variable) return;
-    const t = textos[b.clave] ?? ''; const el = area.current;
-    const ini = el ? el.selectionStart : t.length; const fin = el ? el.selectionEnd : t.length;
-    const dato = `{{${variable}}}`;
-    setTextos((x) => ({ ...x, [b.clave]: t.slice(0, ini) + dato + t.slice(fin) }));
-    requestAnimationFrame(() => { if (!area.current) return; area.current.focus(); area.current.setSelectionRange(ini + dato.length, ini + dato.length); });
-  };
 
   const accion = async (hacer: () => Promise<IDetallePlantilla>, listo: string) => {
     setOcupado(true);
@@ -263,25 +251,15 @@ export default function Detalle({ nombre, alVolver }: { nombre: string; alVolver
                       ? <p id="plSoloLectura" className="tw:m-0 tw:cursor-auto tw:text-sm tw:text-muted" onClick={(e) => e.stopPropagation()}>Esta parte se arma con los datos del documento; se ajusta desde su ventana.</p>
                       : (
                         <div className="tw:flex tw:cursor-auto tw:flex-col tw:gap-ui" onClick={(e) => e.stopPropagation()}>
-                          <Textarea id="plTexto" ref={area} rows={8} value={textos[x.clave] ?? ''} readOnly={!editar} aria-label={`Texto de ${x.titulo}`}
-                            onChange={(e) => setTextos((t) => ({ ...t, [x.clave]: e.target.value }))} />
-                          <details className="tw:text-xs tw:text-muted">
-                            <summary className="tw:cursor-pointer tw:font-semibold">Cómo escribir</summary>
-                            <p className="tw:m-0 tw:mt-1">
-                              <b># Título</b> en la primera línea · línea en blanco = párrafo nuevo · <b>- </b> al inicio = ítem · **negrita** · __cursiva__ · {'{{#dato}}'} y {'{{/dato}}'} solos en su línea = parte condicional
-                            </p>
-                          </details>
+                          <EditorClausula id="plTexto" tipo={x.tipo} texto={textos[x.clave] ?? ''} variables={d.variables} soloLectura={!editar}
+                            etiqueta={`Texto de ${x.titulo}`} alCambiar={(t) => setTextos((v) => ({ ...v, [x.clave]: t }))} />
                           {verBase && (
                             <div id="plBase" className="tw:flex tw:flex-col tw:gap-1">
                               <small className="tw:text-xs tw:font-semibold tw:text-muted">Texto de la base de Asset</small>
-                              <pre className="tw:m-0 tw:max-h-[200px] tw:overflow-auto tw:whitespace-pre-wrap tw:rounded-control tw:bg-sunken tw:p-3 tw:font-[inherit] tw:text-[13px] tw:leading-relaxed">{x.base}</pre>
+                              <EditorClausula key={x.clave} tipo={x.tipo} texto={x.base} soloLectura etiqueta={`Texto de la base de ${x.titulo}`} />
                             </div>
                           )}
                           <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-ui">
-                            {editar && (
-                              <Select id="plInsertar" aria-label="Insertar un dato" vacia="Insertar un dato…" value="" clasesCampo="tw:flex-1 tw:min-w-[180px]"
-                                opciones={d.variables.map((v) => [v, `{{${v}}}`])} onChange={(e) => insertar(e.target.value)} />
-                            )}
                             <div className="tw:ml-auto tw:flex tw:flex-nowrap tw:items-center tw:gap-ui">
                               <Boton id="plVerBase" variante="secundario" icono="file" onClick={() => setVerBase((v) => !v)}>{verBase ? 'Ocultar la base' : 'Ver la base'}</Boton>
                               {editar && <Boton id="plVolverBase" variante="secundario" icono="undo" disabled={igual(textos[x.clave], x.base)}
