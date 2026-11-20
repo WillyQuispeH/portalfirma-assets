@@ -42,6 +42,7 @@ const PROVEEDOR = 'konver';
 const PERMITIDAS: { m: string[]; r: RegExp; admin?: boolean }[] = [
   { m: ['GET'], r: /^\/v1\/cuenta$/ },
   { m: ['GET'], r: /^\/v1\/cuenta\/conectar-mercadolibre$/, admin: true },
+  { m: ['DELETE'], r: /^\/v1\/cuenta\/mercadolibre$/, admin: true },   // desconecta Mercado Libre: KONVER revoca su permiso en la cuenta
   { m: ['PUT', 'DELETE'], r: /^\/v1\/cuenta\/toctoc$/, admin: true },
   { m: ['GET'], r: /^\/v1\/ubicaciones\/(regiones|comunas|barrios)(\?[^#]*)?$/ },
   { m: ['POST'], r: /^\/v1\/propiedades(\/validar)?$/ },

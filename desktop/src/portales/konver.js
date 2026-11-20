@@ -103,8 +103,11 @@ async function conectar() {
   }
   throw err('No se completó la conexión con Mercado Libre (se acabó el tiempo). Inténtalo de nuevo.', 'CANCELADO');
 }
+/** desconecta la cuenta de Mercado Libre (KONVER le quita su permiso en Mercado Libre); los avisos y los leads ya recibidos no se tocan */
 async function desconectar() {
-  throw err('La cuenta de Mercado Libre queda conectada en KONVER. Para cortar todo, el administrador quita la llave de KONVER en Integraciones.', 'SOLO_ADMIN');
+  if (!enApi()) throw sinCuentaAsset();
+  await api('DELETE', '/v1/cuenta/mercadolibre');
+  return estado();
 }
 async function conectada() { if (!enApi()) return false; try { await estadoRemoto(); } catch {} return piConectado(); }
 function tokensOk() { if (!enApi()) return false; refrescarSiViejo(); return piConectado(); }

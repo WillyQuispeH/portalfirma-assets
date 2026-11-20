@@ -256,12 +256,15 @@ export default function Integraciones() {
 type TAccion = (id: string, fn: () => Promise<{ ok: boolean; error?: string }>, listo?: string) => Promise<boolean>;
 
 /** La llave de KONVER (de la corredora, en el servidor), la cuenta de Mercado Libre («Conectar» abre el navegador, como Google)
- *  y TOCTOC (sus 3 llaves). Conectar y quitar es del administrador. */
+ *  y TOCTOC (sus 3 llaves). Conectar y desconectar es del administrador; cada portal se desconecta por separado
+ *  (DELETE /v1/cuenta/mercadolibre y /v1/cuenta/toctoc de KONVER) y quitar la llave suelta los dos. */
 function PortalesKonver({ ml, admin, ocupado, accion }: { ml: IMlEstado; admin: boolean; ocupado: string | null; accion: TAccion }) {
   const kv = ml.konver; const tt = ml.toctoc;
   const [llaveAbierta, setLlaveAbierta] = useState(false); const [llave, setLlave] = useState('');
   const [ttAbierto, setTtAbierto] = useState(false);
-  const [desconectando, setDesconectando] = useState(false); // confirmar «Desconectar» (KONVER no permite soltar solo Mercado Libre)
+  // qué se está por desconectar (se confirma abajo de su fila): la llave de KONVER entera, solo Mercado Libre o solo TOCTOC
+  const [desconectando, setDesconectando] = useState<'konver' | 'ml' | 'toctoc' | null>(null);
+  const alternar = (q: 'konver' | 'ml' | 'toctoc') => setDesconectando((x) => (x === q ? null : q));
   const [tl, setTl] = useState({ keyCliente: '', keyIntegrador: '', corredorId: '' });
   const ttListo = !!(tl.keyCliente.trim() && tl.keyIntegrador.trim() && tl.corredorId.trim());
   const soloAdmin = (q: string) => (admin ? undefined : `${q} el administrador de la corredora`);
@@ -272,7 +275,7 @@ function PortalesKonver({ ml, admin, ocupado, accion }: { ml: IMlEstado; admin: 
         estado={kv?.conectado ? (kv.error ? 'atencion' : 'conectado') : 'sin-conectar'}>
         {kv?.conectado
           ? (kv.propia && <Boton tamano="sm" variante="fantasma" disabled={!admin || ocupado === 'konver'} title={soloAdmin('Lo desconecta')}
-              onClick={() => setDesconectando((x) => !x)}>{desconectando ? 'Cerrar' : 'Desconectar'}</Boton>)
+              onClick={() => alternar('konver')}>{desconectando === 'konver' ? 'Cerrar' : 'Desconectar'}</Boton>)
           : <Boton tamano="sm" icono="link" disabled={!admin || ocupado === 'konver'} title={soloAdmin('La pega')} onClick={() => setLlaveAbierta((x) => !x)}>{llaveAbierta ? 'Cerrar' : 'Conectar'}</Boton>}
       </Fila>
       {llaveAbierta && !kv?.conectado && admin && (
@@ -284,6 +287,13 @@ function PortalesKonver({ ml, admin, ocupado, accion }: { ml: IMlEstado; admin: 
           <Boton type="submit" cargando={ocupado === 'konver'} disabled={!/^kp_\S{20,}$/.test(llave.trim())}>Guardar</Boton>
         </form>
       )}
+      {desconectando === 'konver' && kv?.conectado && admin && (
+        <Confirmar id="konver" cargando={ocupado === 'konver'} alCancelar={() => setDesconectando(null)}
+          alConfirmar={async () => { if (await accion('konver', svc.kvQuitarLlave, 'KONVER desconectado.')) setDesconectando(null); }}>
+          Se quita la llave de KONVER: se desconectan Portal Inmobiliario y TOCTOC, y dejan de llegar sus interesados.
+          Los avisos ya publicados siguen en los portales, pero Asset deja de actualizarlos.
+        </Confirmar>
+      )}
       <Fila id="mercadolibre" logo={<Logo icono="house" color="#e9b200" />} nombre="Mercado Libre y Portal Inmobiliario"
         detalle={!kv?.conectado ? 'Primero conecta KONVER.' : ml.conectada ? `Publica, actualiza, pausa y finaliza avisos; los interesados llegan a Leads${ml.cuenta?.nickname ? ' · ' + ml.cuenta.nickname : ''}.` : 'Conecta la cuenta de Mercado Libre de la corredora: se abre el navegador para autorizar.'}
         estado={!kv?.conectado ? 'no-disponible' : ml.conectada ? 'conectado' : 'sin-conectar'}>
@@ -291,30 +301,33 @@ function PortalesKonver({ ml, admin, ocupado, accion }: { ml: IMlEstado; admin: 
           <Boton tamano="sm" icono="link" cargando={ocupado === 'ml'} disabled={!admin} title={soloAdmin('La conecta')}
             onClick={() => accion('ml', svc.mlConectar, 'Mercado Libre conectado.')}>{ocupado === 'ml' ? 'Esperando la autorización…' : 'Conectar'}</Boton>
         )}
-        {kv?.conectado && ml.conectada && kv.propia && (
-          <Boton tamano="sm" variante="fantasma" disabled={!admin || ocupado === 'konver'} title={soloAdmin('La desconecta')}
-            onClick={() => setDesconectando((x) => !x)}>{desconectando ? 'Cerrar' : 'Desconectar'}</Boton>
+        {kv?.conectado && ml.conectada && (
+          <Boton tamano="sm" variante="fantasma" disabled={!admin || ocupado === 'ml'} title={soloAdmin('La desconecta')}
+            onClick={() => alternar('ml')}>{desconectando === 'ml' ? 'Cerrar' : 'Desconectar'}</Boton>
         )}
       </Fila>
-      {desconectando && kv?.conectado && admin && (
-        <div data-kv="desconectar" className="tw:flex tw:flex-wrap tw:items-center tw:justify-end tw:gap-3 tw:pl-[52px]">
-          <p className="tw:m-0 tw:flex-1 tw:min-w-[240px] tw:text-[13px] tw:text-muted">
-            Se quita la llave de KONVER: se desconectan Mercado Libre, Portal Inmobiliario y TOCTOC, y dejan de llegar sus interesados.
-            Los avisos ya publicados siguen en los portales, pero Asset deja de actualizarlos.
-          </p>
-          <Boton variante="secundario" onClick={() => setDesconectando(false)}>Cancelar</Boton>
-          <Boton variante="peligro" cargando={ocupado === 'konver'}
-            onClick={async () => { if (await accion('konver', svc.kvQuitarLlave, 'Portales desconectados.')) setDesconectando(false); }}>Desconectar</Boton>
-        </div>
+      {desconectando === 'ml' && kv?.conectado && ml.conectada && admin && (
+        <Confirmar id="ml" cargando={ocupado === 'ml'} alCancelar={() => setDesconectando(null)}
+          alConfirmar={async () => { if (await accion('ml', svc.mlDesconectar, 'Mercado Libre desconectado.')) setDesconectando(null); }}>
+          Se le quita a KONVER el permiso en la cuenta de Mercado Libre{ml.cuenta?.nickname ? ` ${ml.cuenta.nickname}` : ''}. Los avisos publicados y los interesados
+          ya recibidos no se tocan, pero Asset deja de publicar y actualizar en Portal Inmobiliario. Para usar otra cuenta, pulsa «Conectar» de nuevo.
+        </Confirmar>
       )}
       <Fila id="toctoc" logo={<LogoPortal id="toctoc" nombre="TOCTOC" />} nombre="TOCTOC"
         detalle={!kv?.conectado ? 'Primero conecta KONVER.' : tt?.conectado ? (tt.planActivo ? `Publica, actualiza y retira avisos; los interesados llegan a Leads${tt.corredorId ? ' · corredor ' + tt.corredorId : ''}.` : 'Llaves válidas, pero la cuenta no tiene plan activo o se acabó el cupo.') : 'Pega las 3 llaves que TOCTOC (integraciones@toctoc.com) entrega a las corredoras con plan activo.'}
         estado={!kv?.conectado ? 'no-disponible' : tt?.conectado ? (tt.planActivo ? 'conectado' : 'atencion') : 'sin-conectar'}>
         {kv?.conectado && (tt?.conectado
           ? <Boton tamano="sm" variante="fantasma" cargando={ocupado === 'toctoc'} disabled={!admin} title={soloAdmin('Lo desconecta')}
-              onClick={() => accion('toctoc', svc.kvToctocQuitar, 'TOCTOC desconectado.')}>Desconectar</Boton>
+              onClick={() => alternar('toctoc')}>{desconectando === 'toctoc' ? 'Cerrar' : 'Desconectar'}</Boton>
           : <Boton tamano="sm" icono="link" disabled={!admin || ocupado === 'toctoc'} title={soloAdmin('Lo conecta')} onClick={() => setTtAbierto((x) => !x)}>{ttAbierto ? 'Cerrar' : 'Conectar'}</Boton>)}
       </Fila>
+      {desconectando === 'toctoc' && kv?.conectado && tt?.conectado && admin && (
+        <Confirmar id="toctoc" cargando={ocupado === 'toctoc'} alCancelar={() => setDesconectando(null)}
+          alConfirmar={async () => { if (await accion('toctoc', svc.kvToctocQuitar, 'TOCTOC desconectado.')) setDesconectando(null); }}>
+          Se borran las llaves de TOCTOC en KONVER. Los avisos publicados siguen en TOCTOC, pero Asset deja de publicarlos y actualizarlos.
+          Para volver a conectar, pega las 3 llaves otra vez.
+        </Confirmar>
+      )}
       {ttAbierto && kv?.conectado && !tt?.conectado && admin && (
         <form className="tw:flex tw:flex-wrap tw:items-end tw:justify-end tw:gap-3 tw:pl-[52px]"
           onSubmit={async (e) => { e.preventDefault(); if (await accion('toctoc', () => svc.kvToctoc({ keyCliente: tl.keyCliente.trim(), keyIntegrador: tl.keyIntegrador.trim(), corredorId: tl.corredorId.trim() }), 'TOCTOC conectado.')) { setTl({ keyCliente: '', keyIntegrador: '', corredorId: '' }); setTtAbierto(false); } }}>
@@ -326,6 +339,17 @@ function PortalesKonver({ ml, admin, ocupado, accion }: { ml: IMlEstado; admin: 
         </form>
       )}
     </>
+  );
+}
+
+/** confirmación bajo la fila de un portal antes de desconectarlo (texto a la izquierda, botones a la derecha) */
+function Confirmar({ id, cargando, alCancelar, alConfirmar, children }: { id: string; cargando: boolean; alCancelar: () => void; alConfirmar: () => void; children: ReactNode }) {
+  return (
+    <div data-kv="desconectar" data-kv-que={id} className="tw:flex tw:flex-wrap tw:items-center tw:justify-end tw:gap-3 tw:pl-[52px]">
+      <p className="tw:m-0 tw:flex-1 tw:min-w-[240px] tw:text-[13px] tw:text-muted">{children}</p>
+      <Boton variante="secundario" onClick={alCancelar}>Cancelar</Boton>
+      <Boton variante="peligro" cargando={cargando} onClick={alConfirmar}>Desconectar</Boton>
+    </div>
   );
 }
 

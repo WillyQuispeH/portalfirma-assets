@@ -30,6 +30,8 @@ function konverFalso(c) {
     case 'PATCH /v1/portal-inmobiliario/propiedades/MLC999': return { status: 200, cuerpo: { id: 'MLC999', estado: 'active', url: pi.url } };
     case 'POST /v1/portal-inmobiliario/propiedades/MLC999/pausar': return { status: 200, cuerpo: { id: 'MLC999', estado: 'paused' } };
     case 'DELETE /v1/toctoc/propiedades/AS-101-V': return { status: 200, cuerpo: { ok: true } };
+    case 'DELETE /v1/cuenta/mercadolibre': return { status: 200, cuerpo: { conectado: false, usuario_ml: '1', permiso_revocado_en_mercadolibre: true } };
+    case 'DELETE /v1/cuenta/toctoc': return { status: 200, cuerpo: { conectado: false } };
     case 'GET /v1/portal-inmobiliario/propiedades': return { status: 200, cuerpo: [] };
     case 'GET /v1/portal-inmobiliario/propiedades/MLC999': return { status: 200, cuerpo: { id: 'MLC999', estado: 'paused' } };
     case 'GET /v1/leads': {
@@ -104,6 +106,13 @@ const kv = require(path.join(src, 'portales', 'konver'));
     props[0].direccion = 'Av. Apoquindo';
     const r2 = await kv.revisar('p1', 'venta');
     assert.ok(r2.errores.some((e) => /número/.test(e)));
+    // desconectar cada portal por separado (DELETE /v1/cuenta/mercadolibre y /v1/cuenta/toctoc), sin tocar la llave de KONVER
+    const d1 = await kv.desconectar();
+    assert.ok(llamadas.some((l) => l.cuerpo?.metodo === 'DELETE' && l.cuerpo?.ruta === '/v1/cuenta/mercadolibre'), 'desconectar pide DELETE /v1/cuenta/mercadolibre');
+    assert.ok(d1 && 'conectada' in d1, 'desconectar devuelve el estado');
+    await kv.toctocDesconectar();
+    assert.ok(llamadas.some((l) => l.cuerpo?.metodo === 'DELETE' && l.cuerpo?.ruta === '/v1/cuenta/toctoc'), 'toctocDesconectar pide DELETE /v1/cuenta/toctoc');
+    assert.ok(!llamadas.some((l) => l.m === 'DELETE' && l.ruta === '/konver/conexion'), 'la llave de KONVER no se quita');
   }
   console.log('konver-unit OK');
 })().catch((e) => { console.error(e); process.exit(1); });
