@@ -64,7 +64,9 @@ export interface IPropiedad {
 export interface IAvisoPortal {
   status?: string; // active, paused, closed, under_review, inactive
   itemId?: string;
+  enPI?: boolean; // false: el aviso solo se ve en Mercado Libre (p. ej. los gratuitos); true: también en Portal Inmobiliario
   permalink?: string;
+  url?: string; // el enlace del aviso en portales que no son Portal Inmobiliario (TOCTOC, Chilepropiedades…)
   error?: string;
 }
 

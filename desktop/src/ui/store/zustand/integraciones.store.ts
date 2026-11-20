@@ -36,8 +36,9 @@ export const useIntegracionesStore = create<IIntegracionesState>((set, get) => (
     } catch (e) {
       return (e as Error).message || 'No se pudo completar.';
     } finally {
+      // el botón sigue «cargando» hasta que se vuelve a leer el estado: así no parece que no pasó nada
+      await get().integCargar().catch(() => {});
       set({ ocupado: null });
-      await get().integCargar();
     }
   },
 }));

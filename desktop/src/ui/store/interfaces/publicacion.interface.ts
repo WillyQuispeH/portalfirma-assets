@@ -85,6 +85,7 @@ export interface IPortal {
   feedUrl?: string;
   correo?: string | null; // a quién pedir la integración
   desde?: string | null; // cuándo se activó
+  pausado?: boolean; // desactivado por ahora en Asset (no se puede elegir)
   enTramite?: boolean; // la integración está pedida y aún no responde el portal (Broku)
   acciones?: TAccionAviso[];
   maxTitulo?: number;
@@ -108,7 +109,7 @@ export interface IPortales {
 
 // ---------- el flujo «Publicar»: calidad del aviso, portales y publicar (pubCalidad, pubRedactar, pubTextos, pubPublicar) ----------
 export type TPasoPublicar = 1 | 2 | 3;
-export type TTipoAviso = 'silver' | 'gold' | 'gold_premium'; // aviso de Portal Inmobiliario
+export type TTipoAviso = 'free' | 'silver' | 'gold' | 'gold_premium'; // aviso de Portal Inmobiliario
 export type TPaquetes = Partial<Record<TTipoAviso, number>>; // publicaciones disponibles en el paquete de la cuenta (mlPaquetes)
 
 export interface ICalidadItem {
@@ -148,6 +149,6 @@ export interface IResultadoPortalPublicar {
 
 export interface IResultadoSincronizar {
   chilepropiedades?: { leads?: number };
-  pi?: { leads?: number };
+  pi?: { leads?: number; quitados?: number; vinculados?: number };
   errores: string[];
 }

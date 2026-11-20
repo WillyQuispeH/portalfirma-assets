@@ -8,7 +8,7 @@ import type { TTipoAviso } from '../../../../store/interfaces/publicacion.interf
 // dos columnas en pantallas anchas, con las mismas proporciones que las fichas
 export const COLUMNAS = 'tw:grid tw:gap-4 tw:lg:grid-cols-[minmax(0,1.6fr)_minmax(320px,1fr)] tw:items-start';
 
-export const TIPO_AVISO: Record<TTipoAviso, string> = { silver: 'Plata', gold: 'Oro', gold_premium: 'Oro Premium' };
+export const TIPO_AVISO: Record<TTipoAviso, string> = { free: 'Gratuita', silver: 'Plata', gold: 'Oro', gold_premium: 'Oro Premium' };
 
 // sigla y color de cada portal
 const LOGO: Record<string, [string, TTono]> = { pi: ['PI', 'amarillo'], chilepropiedades: ['CP', 'azul'], toctoc: ['TT', 'verde'], yapo: ['YA', 'durazno'] };

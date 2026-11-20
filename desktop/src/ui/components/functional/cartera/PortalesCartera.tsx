@@ -30,13 +30,14 @@ function ContactoAvisos({ cuenta }: { cuenta: ReturnType<typeof useCuentaML> }) 
     setGuardando(false);
   };
   return (
-    <Card titulo="Contacto que aparece en los avisos" subtitulo="Lo ven los interesados en todos los portales. El WhatsApp es obligatorio."
+    <Card titulo="Contacto que aparece en los avisos" subtitulo={e?.whatsappEmpresa ? `Lo ven los interesados en todos los portales. El WhatsApp de los avisos es el de la corredora en wechatia: ${e.whatsappEmpresa}.` : 'Lo ven los interesados en todos los portales. El WhatsApp es obligatorio.'}
       pie={<div className="tw:flex tw:justify-end"><Boton id="coSave" type="submit" form="frmContactoAvisos" cargando={guardando}>Guardar contacto</Boton></div>}>
       <form id="frmContactoAvisos" key={JSON.stringify(c) + (e?.tipoAviso ?? '')} onSubmit={guardar} className="tw:flex tw:flex-col tw:gap-ui">
         <div className="tw:grid tw:grid-cols-1 tw:md:grid-cols-3 tw:gap-ui">
           <Input id="coNom" name="nombre" etiqueta="Nombre de la corredora" defaultValue={c.nombre || ''} />
           <Input id="coMail" name="email" type="email" etiqueta="Correo para consultas" defaultValue={c.email || ''} />
-          <Input id="coWa" name="whatsapp" etiqueta="WhatsApp" placeholder="+56 9 1234 5678" defaultValue={c.whatsapp || ''} />
+          <Input id="coWa" name="whatsapp" etiqueta={e?.whatsappEmpresa ? 'WhatsApp de respaldo' : 'WhatsApp'} placeholder={e?.whatsappEmpresa || '+56 9 1234 5678'} defaultValue={c.whatsapp || ''}
+            ayuda={e?.whatsappEmpresa ? 'Solo se usa si la corredora no tiene número en wechatia.' : undefined} />
           <Input id="coTel" name="telefono" etiqueta="Teléfono" defaultValue={c.telefono || ''} />
           <Input id="coWeb" name="web" etiqueta="Sitio web" placeholder="https://" defaultValue={c.web || ''} />
           <Select id="coTipo" name="tipo" etiqueta="Tipo de aviso por defecto" defaultValue={e?.tipoAviso || 'silver'} opciones={Object.entries(TIPO_AVISO)} />

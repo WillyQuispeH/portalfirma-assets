@@ -11,6 +11,7 @@ import { flushSync } from 'react-dom';
 import { createRoot } from 'react-dom/client';
 import { agenteService } from '../../../store/services/agente.service';
 import { useAgenteStore } from '../../../store/zustand/agente.store';
+import { usePublicacionStore } from '../../../store/zustand/publicacion.store';
 import { toast } from '../../../utils/app';
 import Agente from './Agente';
 import { nombreHerramienta } from './Mensaje';
@@ -288,6 +289,7 @@ function alEvento(e: any) {
   } else if (e.type === 'aviso') { toast(e.texto, 10000); return;
   } else if (e.type === 'tarjeta' && e.tipo === 'dictado') { W.Dictado?.mostrar(e.r, e.texto); return;
   } else if (e.type === 'datos' && e.que === 'postventa') { W.Postventa?.refrescar?.(); return;
+  } else if (e.type === 'datos' && e.que === 'publicaciones') { const pb = usePublicacionStore.getState(); if (pb.panel) pb.publicacionAbrir(); return;
   } else if (e.type === 'datos') { clearTimeout(tRefresco); tRefresco = setTimeout(() => { W.AssetRefrescar?.(); if (lienzoVisible()) refrescarLienzo(); }, 250); return;
   } else if (e.type === 'contexto') { contexto(e); return;
   } else if (e.type === 'sugerencias') { sugeridas = e.lista; return;

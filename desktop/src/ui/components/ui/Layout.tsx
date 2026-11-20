@@ -38,31 +38,19 @@ function useDesplazada() {
 }
 
 interface ILayoutProps extends Partial<TCabecera> {
-  /** bajo la cabecera: buscador, pestañas, filtros */
   barra?: ReactNode;
   children?: ReactNode;
-  /** color del tinte del fondo general (por defecto, el de la ilustración o el de la marca) */
   tinte?: string;
   /** @deprecated el espacio entre bloques es siempre --ui-gap; se conserva por las pantallas que lo pasan */
   espacio?: 'normal' | 'compacto' | 'pantalla';
   id?: string;
   className?: string;
-  /** clases del contenedor del contenido (p. ej. una grilla) */
   contenidoClassName?: string;
-  /** clases de la cabecera (p. ej. una clase que buscan las pruebas o el recorrido de Aprende) */
   cabeceraClassName?: string;
-  /** el fondo general: false = sin fondo (la pantalla pone el suyo), o un nodo propio que reemplaza al tinte */
   fondo?: false | ReactNode;
-  /** referencia al contenedor de la pantalla (p. ej. para la luz guía de etapas.js) */
   ref?: Ref<HTMLDivElement>;
-  /** migas de pan (la última es la pantalla actual); false = sin migas. Por defecto: Inicio › [volver] › título */
   migas?: IMiga[] | false;
-  /** texto de la última miga cuando el título no es texto (por defecto, el título) */
   miga?: string;
-  /**
-   * pantallas de trabajo (bandejas, tableros): la pantalla ocupa justo el alto de la ventana, la ventana no se desplaza
-   * y la cabecera queda quieta con sus migas; el contenido estira y cada panel se desplaza por dentro (flex-1 min-h-0)
-   */
   altoCompleto?: boolean;
 }
 

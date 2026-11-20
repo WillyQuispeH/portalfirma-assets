@@ -25,6 +25,10 @@ export interface IMlEstado {
   configurada: boolean; // el servidor de Asset tiene la app de Mercado Libre (y hay sesión de Asset)
   conectada: boolean;
   cuenta: { id: string | number | null; nickname: string; email: string } | null;
+  via?: 'konver'; // Portal Inmobiliario y TOCTOC por KONVER (src/portales/konver.js)
+  error?: string;
+  konver?: { conectado: boolean; propia: boolean; cliente: string | null; admin: boolean; error: string | null };
+  toctoc?: { conectado: boolean; planActivo: boolean; corredorId: string | null; ambiente: string | null };
 }
 
 export interface IIaEstado {

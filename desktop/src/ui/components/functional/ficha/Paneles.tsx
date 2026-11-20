@@ -147,6 +147,22 @@ const PI_ST: Record<string, [string, string, TTono]> = {
   active: ['Activo', 'ok', 'verde'], paused: ['Pausado', 'res', 'amarillo'], closed: ['Finalizado', 'off', 'gris'],
   under_review: ['En revisión', 'res', 'amarillo'], inactive: ['Inactivo', 'off', 'gris'],
 };
+/** el enlace directo del aviso, a la vista: se abre en el navegador y se puede copiar */
+function EnlaceAviso({ url, portal }: { url: string; portal: string }) {
+  const seguro = url.replace(/^http:\/\//, 'https://');
+  const corto = seguro.replace(/^https:\/\/(www\.)?/, '').replace(/(.{48}).+/, '$1…');
+  const copiar = () => navigator.clipboard.writeText(seguro).then(() => toast('Enlace copiado.'), () => toast(seguro, 8000));
+  return (
+    <span data-enlace-aviso={portal} className="tw:flex tw:max-w-full tw:items-center tw:gap-1.5 tw:text-[13px]">
+      <a href={seguro} title={`Abrir el aviso en ${portal}`} onClick={(e) => { e.preventDefault(); abrirUrl(seguro); }}
+        className="tw:inline-flex tw:min-w-0 tw:items-center tw:gap-1 tw:text-brand tw:underline tw:underline-offset-2 tw:break-all">
+        <Icono nombre="export" tam={13} />{corto}
+      </a>
+      <Boton variante="fantasma" tamano="sm" icono="files" title="Copiar el enlace" aria-label="Copiar el enlace" onClick={copiar} />
+    </span>
+  );
+}
+
 const CANAL_IC: Record<string, string> = { whatsapp: 'whatsapp', question: 'help', call: 'phone', schedule: 'calendar', quotation: 'coins' };
 
 function FilaAviso({ p, op }: { p: IPropiedad; op: TOperacion }) {
@@ -160,13 +176,14 @@ function FilaAviso({ p, op }: { p: IPropiedad; op: TOperacion }) {
       <span className="tw:flex tw:flex-col tw:items-start tw:gap-1">
         <small className="tw:text-xs tw:text-muted">{op === 'venta' ? 'Venta' : 'Arriendo'}{a?.itemId ? ' · ' + a.itemId : ''}</small>
         {!a?.itemId ? <Badge>No publicado</Badge> : <span data-st={c}><Badge tono={tono} punto>{l}</Badge></span>}
+        {a?.permalink && st !== 'closed' && <EnlaceAviso url={a.permalink} portal={a.enPI === false ? 'Mercado Libre' : 'Mercado Libre + Portal Inmobiliario'} />}
+        {a?.itemId && a.enPI === false && st !== 'closed' && <small className="tw:text-xs tw:text-muted tw:max-w-[260px]">Solo en Mercado Libre: los avisos gratuitos no salen en Portal Inmobiliario.</small>}
         {a?.error && <em className="tw:not-italic tw:text-xs tw:text-err tw:max-w-[260px]">{a.error}</em>}
       </span>
       <span className="tw:flex tw:flex-wrap tw:gap-1.5">
         {!a?.itemId || st === 'closed'
           ? <Boton tamano="sm" data-pi="publicar" data-op={op} onClick={() => publicarEnPortalInmobiliario(p, op)}>{st === 'closed' ? 'Publicar de nuevo' : 'Publicar'}</Boton>
           : <>
-            {a.permalink && <Boton variante="fantasma" tamano="sm" icono="export" data-pi="ver" data-op={op} title="Abrir el aviso" aria-label="Abrir el aviso" onClick={() => abrirUrl(a.permalink!)} />}
             <Boton variante="secundario" tamano="sm" data-pi="actualizar" data-op={op} disabled={ocupado} onClick={() => hacer(() => fichaAvisoActualizar(op))}>Actualizar</Boton>
             {st === 'active' && <Boton variante="fantasma" tamano="sm" data-pi="paused" data-op={op} disabled={ocupado} onClick={() => hacer(() => fichaAvisoEstado(op, 'paused'))}>Pausar</Boton>}
             {st === 'paused' && <Boton variante="fantasma" tamano="sm" data-pi="active" data-op={op} disabled={ocupado} onClick={() => hacer(() => fichaAvisoEstado(op, 'active'))}>Reactivar</Boton>}
@@ -212,6 +229,34 @@ function Interesados({ p }: { p: IPropiedad }) {
   );
 }
 
+// los demás portales donde está la propiedad (TOCTOC, Chilepropiedades…): estado y enlace directo, si el portal lo entrega
+const OTROS: Record<string, string> = { toctoc: 'TOCTOC', chilepropiedades: 'Chilepropiedades', broku: 'Broku', yapo: 'Yapo' };
+const OTRO_ST: Record<string, [string, TTono]> = {
+  active: ['Publicado', 'verde'], publicada: ['Publicado', 'verde'], en_feed: ['En el feed', 'verde'], pendiente: ['En espera', 'amarillo'],
+  pausada: ['Pausado', 'amarillo'], retirada: ['Retirado', 'gris'], vencida: ['Vencido', 'gris'],
+};
+function OtrosPortales({ p }: { p: IPropiedad }) {
+  const filas = Object.entries(OTROS).flatMap(([id, nombre]) => OPS.map((op) => ({ id, nombre, op, a: p.portales?.[id]?.[op] })).filter((x) => x.a?.status));
+  if (!filas.length) return null;
+  return (
+    <div className="tw:mt-ui">
+      <Card titulo="Otros portales">
+        {filas.map(({ id, nombre, op, a }) => {
+          const [t, tono] = OTRO_ST[a!.status!] || [a!.status!, 'gris' as TTono];
+          return (
+            <div key={id + op} data-portal={id} data-op={op} className="tw:flex tw:flex-col tw:items-start tw:gap-1 tw:py-3 tw:border-0 tw:border-t tw:border-solid tw:border-edge tw:first:border-t-0 tw:first:pt-0">
+              <small className="tw:text-xs tw:text-muted">{nombre} · {op === 'venta' ? 'Venta' : 'Arriendo'}</small>
+              <Badge tono={tono} punto>{t}</Badge>
+              {a!.url && !['retirada', 'vencida'].includes(a!.status!) && <EnlaceAviso url={a!.url} portal={nombre} />}
+              {a!.error && <em className="tw:not-italic tw:text-xs tw:text-err">{a!.error}</em>}
+            </div>
+          );
+        })}
+      </Card>
+    </div>
+  );
+}
+
 export function Portales({ p }: { p: IPropiedad }) {
   const { portal } = useFicha();
   const ops = OPS.filter((o) => p[o]);
@@ -226,6 +271,7 @@ export function Portales({ p }: { p: IPropiedad }) {
                 : <Boton variante="secundario" tamano="sm" icono="link" data-pi="config" onClick={abrirPortales}>Conectar cuenta</Boton>}>
               {ops.map((op) => <FilaAviso key={op} p={p} op={op} />)}
             </Card>
+            <OtrosPortales p={p} />
           </div>
         ) : <Card><EstadoVacio compacto texto="Marca la propiedad en venta o arriendo para publicarla." /></Card>}
       </div>

@@ -214,7 +214,7 @@ app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) creat
 
 // ---- IPC: cada handler devuelve {ok, data} o {ok:false, error, code} ----
 // Canales que solo usa el administrador (rol ADMIN del usuario de Asset; el resto lo usa también el corredor)
-const SOLO_ADMIN = { 'gdrive:connect': 'conexiones', 'gdrive:setClient': 'conexiones', 'gdrive:disconnect': 'conexiones', 'ml:conectar': 'conexiones', 'ml:desconectar': 'conexiones', 'ml:contacto': 'conexiones', 'pub:configurar': 'conexiones', 'pub:feeds': 'conexiones', 'pub:feedsRotar': 'conexiones',
+const SOLO_ADMIN = { 'gdrive:connect': 'conexiones', 'gdrive:setClient': 'conexiones', 'gdrive:disconnect': 'conexiones', 'ml:conectar': 'conexiones', 'kv:llave': 'conexiones', 'kv:quitarLlave': 'conexiones', 'kv:toctoc': 'conexiones', 'kv:toctocQuitar': 'conexiones', 'ml:desconectar': 'conexiones', 'ml:contacto': 'conexiones', 'pub:configurar': 'conexiones', 'pub:feeds': 'conexiones', 'pub:feedsRotar': 'conexiones',
   'res:configurar': 'conexiones', 'pv:claveWa': 'conexiones', 'obs:configurar': 'conexiones', 'dir:configurar': 'conexiones', 'ops:setFileKey': 'conexiones', 'ai:config': 'conexiones',
   'pv:configurar': 'fernanda', 'wallet:topup': 'saldo', 'inmo:propArchivar': 'borrar', 'inmo:perBorrar': 'borrar', 'leads:borrar': 'borrar', 'neg:borrar': 'borrar',
   'leads:asignar': 'reasignar', 'neg:corredor': 'reasignar', 'inmo:importar': 'importar', 'pv:importar': 'importar', 'fmt:configurar': 'documentos', 'usr:listar': 'usuarios', 'usr:crear': 'usuarios', 'usr:editar': 'usuarios', 'usr:clave': 'usuarios' };
@@ -774,7 +774,8 @@ const inmo = require('./inmo');
 if (process.env.PF_MOCK === '1') global.__pfInmo = inmo;   // solo pruebas: las e2e registran firmas de mentira
 global.__inmo = inmo; // las pruebas e2e lo usan desde el proceso principal (app.evaluate)
 inmo.configurar({ historialLocal: () => store.get('history') || [], avisar: (texto) => toUI('agent:event', { type: 'aviso', texto }), cambio: (que) => toUI('agent:event', { type: 'datos', que: que || 'propiedades' }), nombreUsuario: (id) => equipo.nombre(id) });
-const ml = require('./portales/mercadolibre');
+// Portal Inmobiliario y TOCTOC por KONVER; en modo de prueba, la API simulada de Mercado Libre
+const ml = (process.env.PF_MOCK === '1' || process.env.PF_ML_MOCK === '1') && process.env.PF_ML_MOCK !== '0' ? require('./portales/mercadolibre') : require('./portales/konver');
 const negocios = require('./negocios');
 if (process.env.PF_MOCK === '1') global.__pfNeg = negocios;   // solo pruebas: las e2e marcan firmas como firmadas
 // Un cambio en la ficha (desde un botón, un negocio o el agente) mantiene al día el aviso del portal
@@ -1133,6 +1134,17 @@ handle('pub:feeds', () => pubs.feedsServidor(false));
 handle('pub:feedsRotar', () => pubs.feedsServidor(true));
 handle('pub:panel', () => pubs.panel());
 handle('pub:sincronizar', () => pubs.sincronizar());
+// sincronización automática con los portales: al iniciar y cada 10 min (estados, avisos nuevos o borrados, interesados)
+let pubSyncEnCurso = false;
+async function pubSyncAuto() {
+  if (pubSyncEnCurso || process.env.PF_MOCK === '1') return; pubSyncEnCurso = true;
+  try {
+    const r = await pubs.sincronizar();
+    if (r.pi?.vinculados || r.pi?.quitados || r.pi?.leads || r.chilepropiedades?.leads || r.chilepropiedades?.estados) toUI('agent:event', { type: 'datos', que: 'publicaciones' });
+  } catch {} finally { pubSyncEnCurso = false; }
+}
+setTimeout(pubSyncAuto, 20e3); setTimeout(pubSyncAuto, 120e3); // la segunda por si al principio aún no había sesión
+setInterval(pubSyncAuto, 10 * 60e3).unref?.();
 handle('pub:interesados', (f) => pubs.interesados(f || {}));
 handle('pub:interesado', (propId, leadId, c) => pubs.actualizarInteresado(propId, leadId, c || {}));
 handle('pub:agregarInteresado', (propId, o) => pubs.agregarInteresado(propId, o || {}));
@@ -1531,6 +1543,11 @@ handle('ml:sincronizar', () => ml.sincronizar());
 handle('ml:existentes', () => ml.avisosExistentes());
 handle('ml:vincular', (l) => ml.vincularAvisos(l));
 handle('ml:barrios', (c, r) => ml.barrios(c, r));
+const sinKonver = () => { throw Object.assign(new Error('KONVER no está disponible en el modo de prueba.'), { code: 'NO_APP' }); };
+handle('kv:llave', (llave) => (ml.guardarLlave ? ml.guardarLlave(llave) : sinKonver()));
+handle('kv:quitarLlave', () => (ml.quitarLlave ? ml.quitarLlave() : sinKonver()));
+handle('kv:toctoc', (l) => (ml.toctocConectar ? ml.toctocConectar(l || {}) : sinKonver()));
+handle('kv:toctocQuitar', () => (ml.toctocDesconectar ? ml.toctocDesconectar() : sinKonver()));
 handle('inmo:leadsVistos', (id) => inmo.parchear(id, (p) => (p.leads || []).forEach((l) => { l.visto = true; })));
 if (process.env.PF_MOCK === '1' && process.env.PF_ML_MOCK !== '0') global.__mlMock = require('./portales/mercadolibre-mock')._state;
 handle('inmo:listar', () => permisos.listar(inmo.listar()));

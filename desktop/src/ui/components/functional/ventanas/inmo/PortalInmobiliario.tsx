@@ -32,15 +32,22 @@ interface IRevision {
 }
 export interface IOpcionesAviso { tituloPortal: string; barrio: IBarrio | null; tipoAviso: string }
 
-export function Publicar({ p, op, r, opts, tiposAviso, barrioSel, sinConexion, alCambiarTipo, alIrPortales, alPublicar }: {
+export function Publicar({ p, op, r, opts, tiposAviso, barrioSel, sinConexion, alCambiarTipo, alIrPortales, alPublicar, alGuardarWhatsApp }: {
   p: { codigo?: string }; op: string; r: IRevision; opts: { tituloPortal?: string }; tiposAviso: Record<string, string>; barrioSel?: string | null; sinConexion: boolean;
   alCambiarTipo: (v: IOpcionesAviso) => void; alIrPortales: () => void; alPublicar: (v: IOpcionesAviso) => Promise<void>;
+  alGuardarWhatsApp?: (wa: string, v: IOpcionesAviso) => Promise<void>;
 }) {
   const max = r.categoria?.maxTitulo || 60; const barrios = r.ubicacion?.barrios || [];
   const [titulo, setTitulo] = useState(opts.tituloPortal ?? r.titulo ?? '');
   const [barrio, setBarrio] = useState(barrios.some((b) => b.id === barrioSel) ? String(barrioSel) : '');
   const [tipo, setTipo] = useState(r.tipoAviso && r.tipoAviso in tiposAviso ? r.tipoAviso : Object.keys(tiposAviso)[0]);
   const [publicando, setPublicando] = useState(false); const [err, setErr] = useState('');
+  const faltaWa = r.errores.some((e) => /WhatsApp de contacto/.test(e));
+  const [wa, setWa] = useState(''); const [guardandoWa, setGuardandoWa] = useState(false); const [errWa, setErrWa] = useState('');
+  const guardarWa = async () => {
+    if (!alGuardarWhatsApp) return; setGuardandoWa(true); setErrWa('');
+    try { await alGuardarWhatsApp(wa.trim(), actuales()); } catch (e) { setErrWa((e as Error).message); setGuardandoWa(false); }
+  };
   const actuales = (tipoAviso = tipo): IOpcionesAviso => {
     const b = barrios.find((x) => x.id === barrio);
     return { tituloPortal: titulo, barrio: b ? { id: b.id, name: b.name } : null, tipoAviso };
@@ -52,12 +59,14 @@ export function Publicar({ p, op, r, opts, tiposAviso, barrioSel, sinConexion, a
 
   return <>
     <VentanaCabecera titulo={<span className="im-pih"><Logo />Publicar en Portal Inmobiliario</span>}
-      descripcion={`${p.codigo ?? ''} · ${op === 'venta' ? 'Venta' : 'Arriendo'} · también aparece en Mercado Libre`} />
+      descripcion={`${p.codigo ?? ''} · ${op === 'venta' ? 'Venta' : 'Arriendo'} · ${tipo === 'free' ? 'gratuita: solo se ve en Mercado Libre' : 'se ve en Portal Inmobiliario y Mercado Libre'}`} />
     <VentanaCuerpo className="tw:flex tw:flex-col tw:gap-3.5">
       <Input id="piTit" maxLength={max} value={titulo} onChange={(e) => setTitulo(e.target.value)}
         etiqueta={<>Título del aviso <span id="piCnt" className="tw:font-normal tw:text-muted">{titulo.length}/{max}</span></>} />
-      <ListaDatos datos={[['Categoría', r.categoria ? r.categoria.ruta.join(' › ') : '—'], ['Comuna', r.ubicacion ? `${r.ubicacion.city.name}, ${r.ubicacion.state.name}` : '—'],
-        ['Fotos', `${r.fotos} de ${r.minFotos} recomendadas`]]} />
+      <ListaDatos datos={[
+        ...(r.categoria ? [['Categoría', r.categoria.ruta.join(' › ')] as [string, string]] : []),
+        ...(r.ubicacion ? [['Comuna', `${r.ubicacion.city.name}, ${r.ubicacion.state.name}`] as [string, string]] : []),
+        ['Fotos', r.fotos >= r.minFotos ? `${r.fotos} fotos` : `${r.fotos} de ${r.minFotos} recomendadas`]]} />
       <div className="tw:grid tw:grid-cols-2 tw:gap-3">
         <Select id="piBar" etiqueta={<>Barrio <span className="tw:font-normal tw:text-muted">(opcional)</span></>} value={barrio} onChange={(e) => setBarrio(e.target.value)}
           vacia="Sin barrio" opciones={barrios.map((b) => [b.id, b.name])} />
@@ -66,6 +75,13 @@ export function Publicar({ p, op, r, opts, tiposAviso, barrioSel, sinConexion, a
           onChange={(e) => { setTipo(e.target.value); alCambiarTipo(actuales(e.target.value)); }} />
       </div>
       {r.errores.length > 0 && <Aviso tono="rojo" titulo="Antes de publicar" lista={r.errores} />}
+      {faltaWa && alGuardarWhatsApp && (
+        <div className="tw:flex tw:items-end tw:gap-3">
+          <Input id="piWa" className="tw:flex-1" etiqueta="WhatsApp de contacto de los avisos" placeholder="+56 9 1234 5678" value={wa}
+            onChange={(e) => setWa(e.target.value)} error={errWa || null} ayuda="Sale en todos los avisos de la corredora; los interesados escriben a este número." />
+          <Boton id="piWaOk" variante="secundario" cargando={guardandoWa} disabled={!wa.trim()} onClick={guardarWa}>Guardar</Boton>
+        </div>
+      )}
       {r.avisos.length > 0 && <Aviso tono="amarillo" titulo="Para mejorar el aviso" lista={r.avisos} />}
       {err && <p id="piErr" className="error tw:m-0 tw:text-[13px]" role="alert">{err}</p>}
     </VentanaCuerpo>

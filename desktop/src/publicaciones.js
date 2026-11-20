@@ -1,7 +1,7 @@
 // Publicaciones de PortalFirma Asset: un solo flujo «Publicar» para llevar una propiedad a los portales,
 // separado del resto de la gestión (negocios, agenda, documentos).
 //   · Calidad del aviso: puntaje y lista de lo que falta, con redacción del título y la descripción por IA.
-//   · Portales: Portal Inmobiliario por API (Mercado Libre); Chilepropiedades por feed XML (especificación
+//   · Portales: Portal Inmobiliario y TOCTOC por API (KONVER, portales/konver.js; en modo de prueba, Mercado Libre simulado); Chilepropiedades por feed XML (especificación
 //     oficial revisada el 13/10/2026: chilepropiedades.cl/integraciones/crear-feed) y su API de seguimiento
 //     (/api-integraciones: mensajes, estadísticas y estado); TOCTOC y Yapo por acuerdo comercial (mismo feed).
 //   · Rendimiento: visitas, contactos e interesados por aviso, con recomendaciones de precio y de aviso.
@@ -14,6 +14,8 @@ const norm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toL
 const xmlEsc = (s) => String(s ?? '').replace(/]]>/g, ']]]]><![CDATA[>');
 const cd = (s) => `<![CDATA[ ${xmlEsc(s)} ]]>`;
 
+// pausados: por ahora solo se publica en Portal Inmobiliario (orden del usuario 2026-11-19); se reactivan quitándolos de aquí
+const PAUSADOS = new Set(['chilepropiedades', 'broku']);
 const PORTALES = {
   pi: { id: 'pi', nombre: 'Portal Inmobiliario', via: 'api', detalle: 'Publica tus avisos desde Asset; también se ven en Mercado Libre y usan el paquete de publicaciones de tu cuenta.', maxTitulo: 60 },
   chilepropiedades: { id: 'chilepropiedades', nombre: 'Chilepropiedades', via: 'feed', detalle: 'Actualiza los avisos una vez al día. La integración es gratis si la aprueban; el número de avisos depende del plan.', maxTitulo: 65, correo: 'integraciones@chilepropiedades.cl' },
@@ -21,6 +23,8 @@ const PORTALES = {
   toctoc: { id: 'toctoc', nombre: 'TOCTOC', via: 'acuerdo', detalle: 'Para publicar hace falta un acuerdo comercial con TOCTOC. Cuando esté firmado, lo activamos en Asset.', maxTitulo: 70 },
   yapo: { id: 'yapo', nombre: 'Yapo', via: 'acuerdo', detalle: 'Para publicar hace falta un acuerdo con su equipo comercial. Cuando esté listo, lo activamos en Asset.', maxTitulo: 70 },
 };
+// TOCTOC por API (KONVER): se conecta con las llaves que entrega TOCTOC a las corredoras con plan activo
+const TOCTOC_API = { via: 'api', detalle: 'Publica, actualiza y retira tus avisos desde Asset. Exige ubicación en el mapa, 3 fotos y una descripción de 50 caracteres o más.' };
 const TIPO_FEED = { casa: 'Casa', departamento: 'Departamento', oficina: 'Oficina', sitio: 'Sitio', local_comercial: 'Local Comercial', industrial: 'Terreno Industrial', agricola: 'Terreno Agricola', parcela: 'Parcela', estacionamiento: 'Estacionamiento', terreno_construccion: 'Terreno', bodega: 'Bodega' };
 const MONEDA_FEED = { UF: 'CLF', CLP: 'CLP', USD: 'USD' };
 const VIVIENDA = ['casa', 'departamento', 'parcela'];
@@ -37,9 +41,13 @@ function crear({ ml, ai, cambiarPropiedad }) {
   }
 
   // ---------- portales y su estado de conexión ----------
+  const ttApi = () => typeof ml.toctocPublicar === 'function'; // TOCTOC por KONVER (fuera del modo de prueba)
+  const def = (id) => (id === 'toctoc' && ttApi() ? { ...PORTALES.toctoc, ...TOCTOC_API } : PORTALES[id]);
   function catalogo() {
     const piOk = ml.tokensOk();
-    return Object.values(PORTALES).map((x) => {
+    return Object.keys(PORTALES).map(def).map((x) => {
+      if (x.id === 'toctoc' && x.via === 'api') { const ok = ml.toctocOk(); return { ...x, listo: ok, estado: ok ? 'Cuenta conectada' : 'Falta conectar la cuenta', token: false, feedUrl: null, desde: null, acciones: ACCIONES }; }
+      if (PAUSADOS.has(x.id)) return { ...x, listo: false, pausado: true, estado: 'Desactivado por ahora', token: false, feedUrl: null, desde: null, acciones: ACCIONES };
       const c = cfgPortal(x.id);
       const listo = x.id === 'pi' ? piOk : !!c.activo;
       const estado = x.id === 'pi' ? (piOk ? 'Cuenta conectada' : 'Falta conectar la cuenta') : c.activo ? (x.via === 'feed' ? (c.token ? 'Feed activo · seguimiento conectado' : 'Feed activo') : 'Integración activa') : x.enTramite ? 'Integración en trámite' : x.via === 'feed' ? 'Falta activar la integración' : 'Requiere acuerdo comercial';
@@ -47,7 +55,7 @@ function crear({ ml, ai, cambiarPropiedad }) {
     });
   }
   function configurar(id, cambios) {
-    if (!PORTALES[id] || id === 'pi') throw err('Portal no válido.');
+    if (!PORTALES[id] || id === 'pi') throw err('Portal no válido.'); if (PAUSADOS.has(id)) throw err(`${PORTALES[id].nombre} está desactivado por ahora.`);
     const ok = {}; if ('activo' in cambios) ok.activo = !!cambios.activo; if ('token' in cambios) ok.token = String(cambios.token || '').trim() || null; if ('feedUrl' in cambios) ok.feedUrl = String(cambios.feedUrl || '').trim() || null; if ('nota' in cambios) ok.nota = String(cambios.nota || '').slice(0, 300);
     if (ok.activo && !cfgPortal(id).desde) ok.desde = hoy();
     guardarCfg(id, ok);
@@ -100,8 +108,10 @@ function crear({ ml, ai, cambiarPropiedad }) {
     const q = calidad(propId, op); if (q.bloquea.length) throw err('No se puede publicar todavía: ' + q.bloquea.join(' '));
     const out = [];
     for (const id of portales) {
-      const P = PORTALES[id]; if (!P) continue;
+      const P = def(id); if (!P) continue;
+      if (PAUSADOS.has(id)) { out.push({ portal: id, ok: false, error: `${P.nombre} está desactivado por ahora.` }); continue; }
       try {
+        if (P.via === 'api' && id === 'toctoc') { const p1 = await ml.toctocPublicar(propId, op); const a = aviso(p1 || inmo.obtener(propId), 'toctoc', op); out.push({ portal: id, ok: true, estado: 'Publicado', url: a?.url || null }); continue; }
         if (id === 'pi') { await ml.publicar(propId, op, { tipoAviso: opciones.tipoAviso }); const a = aviso(inmo.obtener(propId), 'pi', op); out.push({ portal: id, ok: true, estado: a?.status === 'active' ? 'Publicado' : 'Enviado', url: a?.permalink || null }); continue; }
         const c = cfgPortal(id);
         if (!c.activo) { guardarAviso(propId, id, op, { status: 'pendiente', solicitado: hoy() }, `Publicación en ${P.nombre} (${op}) en espera: falta activar la integración`); out.push({ portal: id, ok: true, estado: 'En espera de la integración', espera: true }); continue; }
@@ -113,6 +123,7 @@ function crear({ ml, ai, cambiarPropiedad }) {
   }
   async function retirar(propId, op, portal) {
     if (portal === 'pi') { await ml.cambiarEstado(propId, op, 'paused', 'retirada desde Publicaciones'); return true; }
+    if (portal === 'toctoc' && ttApi()) { await ml.toctocRetirar(propId, op, 'retirada'); return true; }
     guardarAviso(propId, portal, op, { status: 'retirada', retirada: hoy() }, `Retirada de ${PORTALES[portal]?.nombre || portal} (${op})`); return true;
   }
 
@@ -135,6 +146,19 @@ function crear({ ml, ai, cambiarPropiedad }) {
       else if (que === 'reactivar') { await ml.cambiarEstado(propId, op, 'active'); mensaje = 'Aviso reactivado.'; }
       else if (que === 'retirar') { await ml.cambiarEstado(propId, op, 'closed', 'finalizado desde Publicaciones'); mensaje = 'Aviso finalizado en Portal Inmobiliario.'; }
       else { const r = await ml.eliminar(propId, op); mensaje = r.borrado ? 'Aviso eliminado de Portal Inmobiliario.' : 'Aviso finalizado y quitado de Asset.'; }
+    } else if (portal === 'toctoc' && ttApi()) {
+      const en = ['active', 'publicada', 'en_feed'].includes(a?.status);
+      if (que === 'publicar' || que === 'actualizar' || que === 'reactivar') {
+        if (que === 'actualizar' && !en) throw err('El aviso no está publicado en TOCTOC: reactívalo primero.');
+        await ml.toctocPublicar(propId, op); mensaje = que === 'actualizar' ? 'Aviso actualizado en TOCTOC.' : 'Publicado en TOCTOC.';
+      } else if (que === 'pausar' || que === 'retirar') {
+        if (!en) throw err('El aviso ya no está publicado en TOCTOC.');
+        await ml.toctocRetirar(propId, op, que === 'pausar' ? 'pausada' : 'retirada'); mensaje = que === 'pausar' ? 'Aviso pausado: ya no se ve en TOCTOC.' : 'Aviso retirado de TOCTOC.';
+      } else {
+        if (en) await ml.toctocRetirar(propId, op, 'retirada');
+        inmo.parchear(propId, (q) => { if (q.portales?.toctoc) { delete q.portales.toctoc[op]; if (!Object.keys(q.portales.toctoc).length) delete q.portales.toctoc; } }, `Aviso de TOCTOC eliminado (${op})`);
+        mensaje = 'Aviso retirado de TOCTOC y quitado de Asset.';
+      }
     } else if (que === 'publicar') {
       const r = await publicar(propId, op, [portal], {}); const x = r.resultados[0]; if (!x?.ok) throw err(x?.error || `No se pudo publicar en ${P.nombre}.`); mensaje = x.estado;
     } else if (que === 'actualizar') {
@@ -214,7 +238,7 @@ ${area('floorArea', p.supTotal)}${area('usableFloorArea', p.supUtil)}${p.estacio
   }
   async function sincronizar() {
     const r = { pi: null, chilepropiedades: null, errores: [] };
-    if (await ml.conectada()) { try { r.pi = await ml.sincronizar(); await metricasPI(); } catch (e) { r.errores.push('Portal Inmobiliario: ' + e.message); } }
+    if (await ml.conectada() || (ttApi() && ml.toctocOk())) { try { r.pi = await ml.sincronizar(); await metricasPI(); } catch (e) { r.errores.push('Portal Inmobiliario: ' + e.message); } }
     try { r.chilepropiedades = await sincronizarCP(); } catch (e) { r.errores.push('Chilepropiedades: ' + e.message); }
     inmo.guardarConfig({ publicacionesSync: hoy() });
     return r;
@@ -254,7 +278,7 @@ ${area('floorArea', p.supTotal)}${area('usableFloorArea', p.supUtil)}${p.estacio
       const portales = Object.keys(PORTALES).map((id) => { const a = aviso(p, id, op); if (!a || (id === 'pi' && !a.itemId)) return null;
         const desde = a.publicado || a.desde || a.solicitado || null; const dias = desde ? Math.floor((Date.now() - new Date(desde)) / 864e5) : 0;
         const leads = (p.leads || []).filter((l) => (id === 'pi' ? l.itemId === a.itemId : norm(l.portal) === norm(PORTALES[id].nombre) && (!l.op || l.op === op))).length;
-        return { portal: id, nombre: PORTALES[id].nombre, status: a.status, url: a.permalink || a.url || null, dias, stats: a.stats || null, leads, error: a.error || null }; }).filter(Boolean);
+        return { portal: id, nombre: id === 'pi' && a.enPI === false ? 'Mercado Libre' : id === 'pi' && a.enPI ? 'Mercado Libre + Portal Inmobiliario' : PORTALES[id].nombre, status: a.status, url: a.permalink || a.url || null, dias, stats: a.stats || null, leads, error: a.error || null }; }).filter(Boolean);
       if (!portales.length) continue;
       const comp = comparables(p, op);
       filas.push({ propId: p.id, codigo: p.codigo, titulo: p.titulo, comuna: p.comuna, foto: (p.fotos || [])[0] || null, op, precio: op === 'venta' ? p.precioVenta : p.precioArriendo, estado: op === 'venta' ? p.estadoVenta : p.estadoArriendo,

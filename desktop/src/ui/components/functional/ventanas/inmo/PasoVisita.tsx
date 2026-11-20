@@ -1,8 +1,8 @@
-// Contenido del paso «Visita agendada» dentro de su ventana (modal-13, ventanas/inmo/Etapas.tsx › MenuPaso).
+// Contenido del paso «Visita y orden de visita» dentro de su ventana (modal-13, ventanas/inmo/Etapas.tsx › MenuPaso).
 // Todo el ciclo de la visita de un negocio sin salir de la ventana:
 //  · agendarla (día, hora, duración y notas; la propiedad y el cliente vienen del negocio);
-//  · confirmarla por WhatsApp (el servidor manda la plantilla; si el arrendatario responde que sí, el paso queda logrado),
-//    reprogramarla, marcarla realizada o cancelarla.
+//  · confirmarla por WhatsApp (el servidor manda la plantilla), reprogramarla, marcarla realizada o cancelarla;
+//  · ya en la puerta, generar la orden de visita y enviarla a firmar (al firmarse, el paso queda logrado).
 // Las visitas son eventos de la agenda ligados al negocio (agendaCrear con negocioId). La lógica del estado del paso
 // (esperando / logrado / no logrado) está en src/etapas.js.
 // El día y la hora se eligen en el calendario (SelectorHorario): solo se ofrecen horarios libres, porque las visitas de una propiedad
@@ -21,6 +21,8 @@ import { toast } from '../../../../utils/app';
 
 export interface IVisitaPaso {
   negocioId: string; propId: string; lugar: string; clienteId: string; cliente: string;
+  /** generar la orden de visita de esa visita y enviarla a firmar (se hace en la puerta, el día de la visita) */
+  alOrden?: (e: any) => void;
   /** avisa que algo cambió para que se redibuje la pantalla de atrás */
   alCambio: () => void;
 }
@@ -85,6 +87,9 @@ export default function PasoVisita({ v, pie }: { v: IVisitaPaso; pie?: HTMLEleme
         <ul className="tw:list-none tw:m-0 tw:p-0 tw:flex tw:flex-col tw:gap-4">
           {[...lista].sort((a, b) => (b.fecha + (b.hora || '')).localeCompare(a.fecha + (a.hora || ''))).map((e) => {
             const st = estadoDe(e); const programada = e.estado === 'programado';
+            // a la vista, máximo dos botones (+ «⋯»): confirmar por WhatsApp y generar la orden; «Ya se hizo» pasa al menú mientras falte la orden
+            const conOrden = !!e.orden?.operacion; const puedeOrden = !!v.alOrden && !conOrden && (e.personas || []).length > 0;
+            const puedeConfirmar = (e.personas || []).length > 0 && e.confirmacion?.estado !== 'confirmada';
             return (
               <li key={e.id} data-pv-visita={e.id} className="tw:flex tw:items-start tw:gap-3 tw:flex-nowrap">
                 <div className="tw:min-w-0 tw:flex-1 tw:flex tw:flex-col tw:gap-1">
@@ -92,15 +97,19 @@ export default function PasoVisita({ v, pie }: { v: IVisitaPaso; pie?: HTMLEleme
                     <b className="tw:text-sm">{dia(e.fecha)}{e.hora ? ` · ${e.hora}` : ''}<span className="tw:font-normal tw:text-muted"> · {e.duracion || 45} min</span></b>
                     <Badge tono={st.tono} punto>{st.txt}</Badge>
                     {programada && <Confirmacion e={e} />}
+                    {conOrden && <Badge tono="verde" icono="sign" ajustar>Orden de visita · operación {e.orden.operacion}</Badge>}
                   </div>
                   <small className="tw:text-xs tw:text-muted">{[e.lugar, (e.personas || []).map((p: any) => p.nombre).join(', ')].filter(Boolean).join(' · ')}</small>
                   {e.notas && <small className="tw:text-xs">{e.notas}</small>}
                 </div>
                 {programada && (
                   <div className="tw:flex tw:flex-none tw:items-center tw:gap-2">
-                    {(e.personas || []).length > 0 && e.confirmacion?.estado !== 'confirmada' && <Boton variante="secundario" tamano="sm" icono="whatsapp" disabled={ocupado} data-pv-confirmar onClick={() => confirmar(e)}>{e.confirmacion?.estado === 'enviada' ? 'Reenviar confirmación' : 'Confirmar por WhatsApp'}</Boton>}
-                    <Boton tamano="sm" icono="check" disabled={ocupado} data-pv-hecha onClick={() => estado(e, 'hecho')}>Ya se hizo</Boton>
+                    {puedeConfirmar && <Boton variante="secundario" tamano="sm" icono="whatsapp" disabled={ocupado} data-pv-confirmar onClick={() => confirmar(e)}>{e.confirmacion?.estado === 'enviada' ? 'Reenviar confirmación' : 'Confirmar por WhatsApp'}</Boton>}
+                    {puedeOrden
+                      ? <Boton tamano="sm" icono="sign" disabled={ocupado} data-pv-orden onClick={() => v.alOrden?.(e)}>Generar orden de visita</Boton>
+                      : <Boton tamano="sm" icono="check" disabled={ocupado} data-pv-hecha onClick={() => estado(e, 'hecho')}>Ya se hizo</Boton>}
                     <MenuMas tamano="sm" etiqueta="Más acciones de la visita" opciones={[
+                      ...(puedeOrden ? [{ id: 'pvHecha', texto: 'Ya se hizo', icono: 'check', disabled: ocupado, alTocar: () => estado(e, 'hecho') }] : []),
                       { id: 'pvReprogramar', texto: 'Reprogramar', icono: 'calendar', disabled: ocupado, alTocar: () => reprogramar(e) },
                       { id: 'pvCancelar', texto: 'Cancelar visita', icono: 'x', disabled: ocupado, alTocar: () => estado(e, 'cancelado') },
                     ]} />

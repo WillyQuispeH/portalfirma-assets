@@ -48,6 +48,32 @@ export default function Cartera({ filtros: filtrosIniciales }: ICarteraProps) {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps -- solo al montar
 
   const lista = useMemo(() => filtrarPropiedades(propiedades, personas, captaciones, f), [propiedades, personas, captaciones, f]);
+  // cuántas quedarían con cada opción de un filtro, manteniendo los demás filtros (así se sabe cuántas hay antes de elegir)
+  const cuenta = useMemo(() => {
+    const base = filtrarPropiedades(propiedades, personas, captaciones, { ...f, op: 'todas', tipo: '', estado: '', comuna: '', captador: '' });
+    const pasa = (p: (typeof base)[number], sin: keyof IFiltrosCartera) => {
+      if (sin !== 'op' && ((f.op === 'venta' && !p.venta) || (f.op === 'arriendo' && !p.arriendo))) return false;
+      if (sin !== 'tipo' && f.tipo && p.tipo !== f.tipo) return false;
+      if (sin !== 'estado' && f.estado && !((p.venta && p.estadoVenta === f.estado) || (p.arriendo && p.estadoArriendo === f.estado))) return false;
+      if (sin !== 'comuna' && f.comuna && p.comuna !== f.comuna) return false;
+      if (sin !== 'captador' && f.captador && (f.captador === '_sin' ? !!p.captadorId : p.captadorId !== f.captador)) return false;
+      return true;
+    };
+    const por = <K extends string>(sin: keyof IFiltrosCartera, claves: (p: (typeof base)[number]) => (K | null | undefined)[]) => {
+      const m: Record<string, number> = {}; let total = 0;
+      for (const p of base) { if (!pasa(p, sin)) continue; total++; for (const k of new Set(claves(p))) if (k) m[k] = (m[k] || 0) + 1; }
+      return { m, total };
+    };
+    return {
+      op: por('op', (p) => [p.venta ? 'venta' : null, p.arriendo ? 'arriendo' : null]),
+      tipo: por('tipo', (p) => [p.tipo]),
+      estado: por('estado', (p) => [p.venta ? p.estadoVenta : null, p.arriendo ? p.estadoArriendo : null]),
+      comuna: por('comuna', (p) => [p.comuna]),
+      captador: por('captador', (p) => [p.captadorId || '_sin']),
+    };
+  }, [propiedades, personas, captaciones, f]);
+  const n = (x: number | undefined) => (x || 0).toLocaleString('es-CL');
+  const filtrando = !!(f.q.trim() || f.op !== 'todas' || f.tipo || f.estado || f.comuna || f.captador || f.especial);
   const activas = propiedades.filter((p) => !p.archivada);
   const comunas = useMemo(() => [...new Set(propiedades.map((p) => p.comuna).filter(Boolean) as string[])].sort(), [propiedades]);
   const enCaptacion = activas.filter((p) => captaciones[p.id]?.completa === false).length;
@@ -73,7 +99,7 @@ export default function Cartera({ filtros: filtrosIniciales }: ICarteraProps) {
     <Layout
       titulo="Cartera"
       ilustracion={{ imagen: 'img/formas/cartera.svg' }}
-      subtitulo={`${activas.length} propiedades${ultimaImportacion ? ` · actualizada desde Convecta el ${fecha(ultimaImportacion.fecha)}` : ''}`}
+      subtitulo={`${filtrando ? `${n(lista.length)} de ${n(activas.length)}` : n(activas.length)} propiedades${ultimaImportacion ? ` · actualizada desde Convecta el ${fecha(ultimaImportacion.fecha)}` : ''}`}
       acciones={<>
         <Boton id="imPort" variante="secundario" icono="link" onClick={abrirPortales}>Portales</Boton>
         <Boton id="imImp" variante="secundario" icono="download" onClick={importarCartera}>Importar desde Convecta</Boton>
@@ -83,10 +109,10 @@ export default function Cartera({ filtros: filtrosIniciales }: ICarteraProps) {
       barra={<>
         <Buscador kit id="imQ" valor={f.q} alCambiar={(q) => carteraSetFiltros({ q })} espera={180} placeholder="Buscar por código, dirección, comuna, rol o propietario"
           className="tw:w-full tw:sm:w-auto tw:sm:flex-1 tw:sm:min-w-[280px]" />
-        <Tabs id="imOp" dato="op" etiqueta="Operación" opciones={OPERACIONES} valor={f.op} alCambiar={(op) => carteraSetFiltros({ op })} />
-        <Select id="imTipo" aria-label="Tipo" vacia="Todo tipo" opciones={Object.entries(TIPO)} value={f.tipo}
+        <Tabs id="imOp" dato="op" etiqueta="Operación" opciones={OPERACIONES.map(([k, t]) => [k, t, k === 'todas' ? cuenta.op.total : cuenta.op.m[k] || 0] as TTabOpcion<IFiltrosCartera['op']>)} valor={f.op} alCambiar={(op) => carteraSetFiltros({ op })} />
+        <Select id="imTipo" aria-label="Tipo" vacia={`Todo tipo · ${n(cuenta.tipo.total)}`} opciones={Object.entries(TIPO).filter(([k]) => cuenta.tipo.m[k] || f.tipo === k).map(([k, v]): [string, string] => [k, `${v} · ${n(cuenta.tipo.m[k])}`])} value={f.tipo}
           onChange={(e) => carteraSetFiltros({ tipo: e.target.value as TPropiedadTipo | '' })} />
-        <Select id="imEst" aria-label="Estado" vacia="Todo estado" opciones={Object.entries(ESTADO).map(([k, [v]]): [string, string] => [k, v])} value={f.estado}
+        <Select id="imEst" aria-label="Estado" vacia={`Todo estado · ${n(cuenta.estado.total)}`} opciones={Object.entries(ESTADO).map(([k, [v]]): [string, string] => [k, `${v} · ${n(cuenta.estado.m[k])}`])} value={f.estado}
           onChange={(e) => carteraSetFiltros({ estado: e.target.value as TPropiedadEstado | '' })} />
         {enCaptacion > 0 && (
           <Boton id="imCapt" variante={f.especial === 'enCaptacion' ? 'principal' : 'secundario'} icono="clock" aria-pressed={f.especial === 'enCaptacion'}
@@ -95,13 +121,13 @@ export default function Cartera({ filtros: filtrosIniciales }: ICarteraProps) {
             En captación · {enCaptacion}
           </Boton>
         )}
-        <Select id="imCom" aria-label="Comuna" vacia="Toda comuna" opciones={comunas.map((c): [string, string] => [c, c])} value={f.comuna}
+        <Select id="imCom" aria-label="Comuna" vacia={`Toda comuna · ${n(cuenta.comuna.total)}`} opciones={comunas.filter((c) => cuenta.comuna.m[c] || f.comuna === c).map((c): [string, string] => [c, `${c} · ${n(cuenta.comuna.m[c])}`])} value={f.comuna}
           onChange={(e) => carteraSetFiltros({ comuna: e.target.value })} />
         {hayCorredores && (
           <Select id="imCaptF" aria-label="Captador" value={f.captador} onChange={(e) => carteraSetFiltros({ captador: e.target.value })}>
-            <option value="">Todo captador</option>
-            <option value="_sin">Sin captador · {activas.filter((p) => !p.captadorId).length}</option>
-            {corredores.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+            <option value="">Todo captador · {n(cuenta.captador.total)}</option>
+            <option value="_sin">Sin captador · {n(cuenta.captador.m._sin)}</option>
+            {corredores.map((c) => <option key={c.id} value={c.id}>{c.nombre} · {n(cuenta.captador.m[c.id])}</option>)}
           </Select>
         )}
         {hayCorredores && esAdmin && !seleccion && (

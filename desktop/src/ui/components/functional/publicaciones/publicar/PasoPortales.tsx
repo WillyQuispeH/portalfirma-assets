@@ -16,14 +16,15 @@ import type { IPortal, TTipoAviso } from '../../../../store/interfaces/publicaci
 const YA: Record<string, string> = {
   active: 'activo', publicada: 'publicado', en_feed: 'en el feed', pendiente: 'en espera', paused: 'pausado', under_review: 'en revisión', vencida: 'vencido',
 };
-const TIPOS: TTipoAviso[] = ['silver', 'gold', 'gold_premium'];
+const TIPOS: TTipoAviso[] = ['free', 'silver', 'gold', 'gold_premium']; // «free»: la publicación gratuita de las cuentas sin paquete
 
 function TarjetaPortal({ x }: { x: IPortal }) {
   const { propiedad, op, sel, paquetes, tipoAviso, destacado, publicarMarcar, publicarSetTipoAviso, publicarSetDestacado } = usePublicar();
   const ya = avisoVigente(propiedad, x.id, op);
-  const puede = x.listo || x.via === 'feed';
+  const puede = !x.pausado && (x.listo || x.via === 'feed');
   const on = !!sel?.includes(x.id);
-  const nota = !puede
+  const nota = x.pausado ? 'Desactivado por ahora: solo publicamos en Portal Inmobiliario.'
+    : !puede
     ? (x.via === 'acuerdo' ? 'Cuando el acuerdo esté activo, se suma con un clic.' : 'Conecta la cuenta en la pestaña Portales.')
     : x.via === 'feed' && !x.listo ? 'Queda en espera y sale apenas el portal active la integración.' : '';
   return (
@@ -46,6 +47,14 @@ function TarjetaPortal({ x }: { x: IPortal }) {
           <small className="tw:text-xs tw:text-muted">Tipo de aviso{paquetes ? ' · disponibles en tu paquete' : ''}</small>
           <Segmentos etiqueta="Tipo de aviso" dato="ta" valor={tipoAviso} alCambiar={publicarSetTipoAviso}
             opciones={TIPOS.map((t) => [t, `${TIPO_AVISO[t]}${paquetes?.[t] != null ? ` · ${paquetes[t]}` : ''}`])} />
+          {/* dónde se verá el aviso según el tipo: los gratuitos de Mercado Libre no salen en Portal Inmobiliario */}
+          <span data-donde={tipoAviso === 'free' ? 'ml' : 'ml-pi'} className="tw:flex tw:flex-wrap tw:items-center tw:gap-1.5 tw:text-xs tw:text-muted">
+            Se verá en:
+            <Badge tono="verde" icono="check" ajustar>Mercado Libre</Badge>
+            {tipoAviso === 'free'
+              ? <><Badge tono="gris" ajustar>Portal Inmobiliario no</Badge><span>Los avisos gratuitos no salen en Portal Inmobiliario; elige Plata o superior.</span></>
+              : <Badge tono="verde" icono="check" ajustar>Portal Inmobiliario</Badge>}
+          </span>
         </div>
       )}
       {x.id === 'chilepropiedades' && puede && (

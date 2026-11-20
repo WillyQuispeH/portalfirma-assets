@@ -21,7 +21,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
 
     const r = await call('etPasos', { negocioId: nA.id });
     ok(JSON.stringify(nombres(r)) === JSON.stringify(['Comercialización', 'Cierre del arriendo', 'Postarriendo']), 'un arriendo tiene tres etapas: Comercialización, Cierre del arriendo y Postarriendo');
-    ok(JSON.stringify(pasosDe(r, 0)) === JSON.stringify(['Interesado registrado', 'Visita agendada', 'Orden de visita', 'Acta de visita', 'Carta oferta', 'Aceptación del propietario']), 'Comercialización: interesado, visita, orden, acta, carta oferta y aceptación del propietario');
+    ok(JSON.stringify(pasosDe(r, 0)) === JSON.stringify(['Interesado registrado', 'Visita y orden de visita', 'Acta de visita', 'Carta oferta', 'Aceptación del propietario']), 'Comercialización: interesado, visita y orden (un solo paso), acta, carta oferta y aceptación del propietario');
     ok(JSON.stringify(pasosDe(r, 1)) === JSON.stringify(['Reserva pagada', 'Evaluación del arrendatario', 'Revisión del contrato', 'Contrato firmado', 'Garantía y primer mes recibidos', 'Entrega con acta e inventario', 'Comisión facturada y cobrada']), 'Cierre del arriendo: reserva, evaluación, revisión y firma del contrato, garantía y primer mes, entrega y comisión');
     ok(JSON.stringify(pasosDe(r, 2)) === JSON.stringify(['Reajustes', 'Renovación o término', 'Devolución de la garantía']), 'Postarriendo: reajustes, renovación o término y devolución de la garantía');
     ok(r.actual && r.actual.id === 'visita' && r.actual.etapa === 'Comercialización', 'el siguiente paso sale de la comercialización (el interesado ya está registrado)');
@@ -35,7 +35,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     const pb = (await call('etPasos', { negocioId: nA.id })).etapas[0].pasos.find((x) => x.id === 'acta');
     ok(pb.e === 'ok', 'cuando el visitante firma el acta, el paso «Acta de visita» queda logrado');
     // el postarriendo no es «el siguiente paso» mientras no toque
-    for (const id of ['visita', 'orden', 'acta', 'carta', 'aceptacion']) await call('etMarcar', { negocioId: nA.id, paso: id, estado: 'ok' });
+    for (const id of ['visita', 'acta', 'carta', 'aceptacion']) await call('etMarcar', { negocioId: nA.id, paso: id, estado: 'ok' });
     for (const id of ['reserva_pago', 'evaluacion', 'revision', 'contrato', 'garantia_mes', 'entrega']) await call('etMarcar', { negocioId: nA.id, paso: id, estado: 'ok' });
     let r2 = await call('etPasos', { negocioId: nA.id });
     ok(r2.actual && r2.actual.id === 'comision', 'con todo lo anterior logrado, el siguiente paso es la comisión (no el postarriendo)');

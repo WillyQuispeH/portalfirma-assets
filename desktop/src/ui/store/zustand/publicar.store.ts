@@ -83,7 +83,9 @@ export const usePublicarStore = create<IPublicarState>((set, get) => ({
         get().catalogo ? Promise.resolve(get().catalogo!) : publicacionService.getCatalogo(),
         get().paquetes ? Promise.resolve(get().paquetes) : publicacionService.getPaquetes().catch(() => null),
       ]);
-      const sel = get().sel ?? catalogo.filter((x) => (x.listo || x.via === 'feed') && !avisoVigente(propiedad, x.id, op)).map((x) => x.id);
+      // los portales desactivados por ahora (pausado) nunca quedan marcados
+      const pausados = new Set(catalogo.filter((x) => x.pausado).map((x) => x.id));
+      const sel = (get().sel ?? catalogo.filter((x) => (x.listo || x.via === 'feed') && !avisoVigente(propiedad, x.id, op)).map((x) => x.id)).filter((id) => !pausados.has(id));
       set({ catalogo, paquetes, sel });
     } catch (e) { set({ error: (e as Error).message }); }
   },

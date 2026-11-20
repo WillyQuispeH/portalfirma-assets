@@ -13,6 +13,7 @@ import Badge from '../../ui/Badge';
 import Boton from '../../ui/Boton';
 import Input from '../../ui/Input';
 import Icono from '../../ui/Icono';
+import Esqueleto, { EsqueletoZona } from '../../ui/Esqueleto';
 import { useIntegraciones } from '../../../store/hooks/useIntegraciones.hook';
 import { useCuenta } from '../../../store/hooks/useCuenta.hook';
 import { useAcceso } from '../../../store/hooks/useAcceso.hook';
@@ -24,7 +25,7 @@ import { api } from '../../../utils/api';
 import { LogoPortal } from '../publicaciones/comun';
 import type { IPortal } from '../../../store/interfaces/publicacion.interface';
 import { fechaHora } from '../../../utils/formato';
-import type { ICanal } from '../../../store/interfaces/integraciones.interface';
+import type { ICanal, IMlEstado } from '../../../store/interfaces/integraciones.interface';
 
 // ---------------------------------------------------------------- piezas
 
@@ -99,6 +100,7 @@ export function IntegracionesContenido() {
   const accion = async (id: string, fn: () => Promise<{ ok: boolean; error?: string }>, listo?: string) => {
     const error = await integAccion(id, fn);
     if (error) toast(error, 5000); else if (listo) toast(listo);
+    return !error;
   };
 
   const pfCuenta = (pfUsuario as { email?: string } | null)?.email || (sesion as { email?: string } | null)?.email || '';
@@ -164,17 +166,29 @@ export function IntegracionesContenido() {
 
       <Card titulo="Portales inmobiliarios">
         <Lista>
+          {!ml && cargando ? (
+            <EsqueletoZona etiqueta="Cargando los portales">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="tw:flex tw:items-center tw:gap-3 tw:py-3">
+                  <Esqueleto forma="icono" ancho={40} /><div className="tw:flex tw:flex-1 tw:flex-col tw:gap-2"><Esqueleto ancho="35%" alto={12} /><Esqueleto ancho="70%" alto={10} /></div>
+                </div>
+              ))}
+            </EsqueletoZona>
+          ) : ml?.via === 'konver' ? (
+            <PortalesKonver ml={ml} admin={admin} ocupado={ocupado} accion={accion} />
+          ) : (
           <Fila id="mercadolibre" logo={<Logo icono="house" color="#e9b200" />} nombre="Mercado Libre y Portal Inmobiliario"
-            detalle={ml?.conectada ? `Publica y sincroniza avisos${ml.cuenta?.nickname ? ' · ' + ml.cuenta.nickname : ''}` : 'Publica tus propiedades y recibe los interesados en Leads.'}
-            estado={!ml?.configurada ? 'no-disponible' : ml.conectada ? 'conectado' : 'sin-conectar'}>
-            {/* la cuenta es de toda la corredora (la sesión vive en el servidor): la conecta y desconecta el administrador */}
-            {ml?.configurada && (ml.conectada
-              ? <Boton tamano="sm" variante="fantasma" cargando={ocupado === 'ml'} disabled={!admin} title={admin ? undefined : 'La desconecta el administrador de la corredora'}
-                  onClick={() => accion('ml', svc.mlDesconectar, 'Mercado Libre desconectado.')}>Desconectar</Boton>
-              : <Boton tamano="sm" icono="link" cargando={ocupado === 'ml'} disabled={!admin} title={admin ? undefined : 'La conecta el administrador de la corredora'}
-                  onClick={() => accion('ml', svc.mlConectar, 'Mercado Libre conectado.')}>Conectar</Boton>)}
-          </Fila>
-          {portales.filter((x) => x.id !== 'pi').map((x) => (
+              detalle={ml?.conectada ? `Publica y sincroniza avisos${ml.cuenta?.nickname ? ' · ' + ml.cuenta.nickname : ''}` : 'Publica tus propiedades y recibe los interesados en Leads.'}
+              estado={!ml?.configurada ? 'no-disponible' : ml.conectada ? 'conectado' : 'sin-conectar'}>
+              {/* la cuenta es de toda la corredora (la sesión vive en el servidor): la conecta y desconecta el administrador */}
+              {ml?.configurada && (ml.conectada
+                ? <Boton tamano="sm" variante="fantasma" cargando={ocupado === 'ml'} disabled={!admin} title={admin ? undefined : 'La desconecta el administrador de la corredora'}
+                    onClick={() => accion('ml', svc.mlDesconectar, 'Mercado Libre desconectado.')}>Desconectar</Boton>
+                : <Boton tamano="sm" icono="link" cargando={ocupado === 'ml'} disabled={!admin} title={admin ? undefined : 'La conecta el administrador de la corredora'}
+                    onClick={() => accion('ml', svc.mlConectar, 'Mercado Libre conectado.')}>Conectar</Boton>)}
+            </Fila>
+          )}
+          {portales.filter((x) => x.id !== 'pi' && x.via !== 'api').map((x) => (
             <Fila key={x.id} id={x.id} logo={<LogoPortal id={x.id} nombre={x.nombre} />} nombre={x.nombre}
               detalle={x.listo ? `${x.estado}. Publica y retira avisos desde Asset.` : x.enTramite ? 'Integración en proceso: te avisamos cuando puedas publicar.' : x.via === 'acuerdo' ? 'Requiere un acuerdo comercial con el portal.' : 'Activa la publicación y pega el código cuando el portal te lo entregue.'}
               estado={x.listo ? 'conectado' : x.enTramite ? 'en-tramite' : 'sin-conectar'}>
@@ -235,6 +249,84 @@ export function IntegracionesContenido() {
 /** la pantalla sola (se mantiene por compatibilidad; desde el menú se abre Configuración › Integraciones) */
 export default function Integraciones() {
   return <Layout titulo="Integraciones" ilustracion={{ imagen: 'img/formas/portales.svg', tinte: '#3346c7' }}><IntegracionesContenido /></Layout>;
+}
+
+// ---------------------------------------------------------------- KONVER: Portal Inmobiliario y TOCTOC
+
+type TAccion = (id: string, fn: () => Promise<{ ok: boolean; error?: string }>, listo?: string) => Promise<boolean>;
+
+/** La llave de KONVER (de la corredora, en el servidor), la cuenta de Mercado Libre («Conectar» abre el navegador, como Google)
+ *  y TOCTOC (sus 3 llaves). Conectar y quitar es del administrador. */
+function PortalesKonver({ ml, admin, ocupado, accion }: { ml: IMlEstado; admin: boolean; ocupado: string | null; accion: TAccion }) {
+  const kv = ml.konver; const tt = ml.toctoc;
+  const [llaveAbierta, setLlaveAbierta] = useState(false); const [llave, setLlave] = useState('');
+  const [ttAbierto, setTtAbierto] = useState(false);
+  const [desconectando, setDesconectando] = useState(false); // confirmar «Desconectar» (KONVER no permite soltar solo Mercado Libre)
+  const [tl, setTl] = useState({ keyCliente: '', keyIntegrador: '', corredorId: '' });
+  const ttListo = !!(tl.keyCliente.trim() && tl.keyIntegrador.trim() && tl.corredorId.trim());
+  const soloAdmin = (q: string) => (admin ? undefined : `${q} el administrador de la corredora`);
+  return (
+    <>
+      <Fila id="konver" logo={<Logo letra="K" color="#1f7a3a" />} nombre="KONVER"
+        detalle={kv?.conectado ? (kv.error || `Publica en Portal Inmobiliario y TOCTOC con una sola cuenta${kv.cliente ? ' · ' + kv.cliente : ''}${kv.propia ? '' : ' · incluida por PortalFirma'}.`) : 'La cuenta que publica en Portal Inmobiliario y TOCTOC. Pega la llave que te entregó KONVER.'}
+        estado={kv?.conectado ? (kv.error ? 'atencion' : 'conectado') : 'sin-conectar'}>
+        {kv?.conectado
+          ? (kv.propia && <Boton tamano="sm" variante="fantasma" disabled={!admin || ocupado === 'konver'} title={soloAdmin('Lo desconecta')}
+              onClick={() => setDesconectando((x) => !x)}>{desconectando ? 'Cerrar' : 'Desconectar'}</Boton>)
+          : <Boton tamano="sm" icono="link" disabled={!admin || ocupado === 'konver'} title={soloAdmin('La pega')} onClick={() => setLlaveAbierta((x) => !x)}>{llaveAbierta ? 'Cerrar' : 'Conectar'}</Boton>}
+      </Fila>
+      {llaveAbierta && !kv?.conectado && admin && (
+        <form className="tw:flex tw:flex-wrap tw:items-end tw:justify-end tw:gap-3 tw:pl-[52px]"
+          onSubmit={async (e) => { e.preventDefault(); if (await accion('konver', () => svc.kvLlave(llave.trim()), 'KONVER conectado.')) { setLlave(''); setLlaveAbierta(false); } }}>
+          <Input id="kvLlave" autoFocus clasesCampo="tw:flex-1 tw:min-w-[220px]" etiqueta="Llave de KONVER" type="password" autoComplete="off" placeholder="kp_…"
+            value={llave} onChange={(e) => setLlave(e.target.value)} ayuda="Empieza con «kp_». Se prueba antes de guardarla y queda cifrada en el servidor." />
+          <Boton variante="secundario" type="button" onClick={() => setLlaveAbierta(false)}>Cancelar</Boton>
+          <Boton type="submit" cargando={ocupado === 'konver'} disabled={!/^kp_\S{20,}$/.test(llave.trim())}>Guardar</Boton>
+        </form>
+      )}
+      <Fila id="mercadolibre" logo={<Logo icono="house" color="#e9b200" />} nombre="Mercado Libre y Portal Inmobiliario"
+        detalle={!kv?.conectado ? 'Primero conecta KONVER.' : ml.conectada ? `Publica, actualiza, pausa y finaliza avisos; los interesados llegan a Leads${ml.cuenta?.nickname ? ' · ' + ml.cuenta.nickname : ''}.` : 'Conecta la cuenta de Mercado Libre de la corredora: se abre el navegador para autorizar.'}
+        estado={!kv?.conectado ? 'no-disponible' : ml.conectada ? 'conectado' : 'sin-conectar'}>
+        {kv?.conectado && !ml.conectada && (
+          <Boton tamano="sm" icono="link" cargando={ocupado === 'ml'} disabled={!admin} title={soloAdmin('La conecta')}
+            onClick={() => accion('ml', svc.mlConectar, 'Mercado Libre conectado.')}>{ocupado === 'ml' ? 'Esperando la autorización…' : 'Conectar'}</Boton>
+        )}
+        {kv?.conectado && ml.conectada && kv.propia && (
+          <Boton tamano="sm" variante="fantasma" disabled={!admin || ocupado === 'konver'} title={soloAdmin('La desconecta')}
+            onClick={() => setDesconectando((x) => !x)}>{desconectando ? 'Cerrar' : 'Desconectar'}</Boton>
+        )}
+      </Fila>
+      {desconectando && kv?.conectado && admin && (
+        <div data-kv="desconectar" className="tw:flex tw:flex-wrap tw:items-center tw:justify-end tw:gap-3 tw:pl-[52px]">
+          <p className="tw:m-0 tw:flex-1 tw:min-w-[240px] tw:text-[13px] tw:text-muted">
+            Se quita la llave de KONVER: se desconectan Mercado Libre, Portal Inmobiliario y TOCTOC, y dejan de llegar sus interesados.
+            Los avisos ya publicados siguen en los portales, pero Asset deja de actualizarlos.
+          </p>
+          <Boton variante="secundario" onClick={() => setDesconectando(false)}>Cancelar</Boton>
+          <Boton variante="peligro" cargando={ocupado === 'konver'}
+            onClick={async () => { if (await accion('konver', svc.kvQuitarLlave, 'Portales desconectados.')) setDesconectando(false); }}>Desconectar</Boton>
+        </div>
+      )}
+      <Fila id="toctoc" logo={<LogoPortal id="toctoc" nombre="TOCTOC" />} nombre="TOCTOC"
+        detalle={!kv?.conectado ? 'Primero conecta KONVER.' : tt?.conectado ? (tt.planActivo ? `Publica, actualiza y retira avisos; los interesados llegan a Leads${tt.corredorId ? ' · corredor ' + tt.corredorId : ''}.` : 'Llaves válidas, pero la cuenta no tiene plan activo o se acabó el cupo.') : 'Pega las 3 llaves que TOCTOC (integraciones@toctoc.com) entrega a las corredoras con plan activo.'}
+        estado={!kv?.conectado ? 'no-disponible' : tt?.conectado ? (tt.planActivo ? 'conectado' : 'atencion') : 'sin-conectar'}>
+        {kv?.conectado && (tt?.conectado
+          ? <Boton tamano="sm" variante="fantasma" cargando={ocupado === 'toctoc'} disabled={!admin} title={soloAdmin('Lo desconecta')}
+              onClick={() => accion('toctoc', svc.kvToctocQuitar, 'TOCTOC desconectado.')}>Desconectar</Boton>
+          : <Boton tamano="sm" icono="link" disabled={!admin || ocupado === 'toctoc'} title={soloAdmin('Lo conecta')} onClick={() => setTtAbierto((x) => !x)}>{ttAbierto ? 'Cerrar' : 'Conectar'}</Boton>)}
+      </Fila>
+      {ttAbierto && kv?.conectado && !tt?.conectado && admin && (
+        <form className="tw:flex tw:flex-wrap tw:items-end tw:justify-end tw:gap-3 tw:pl-[52px]"
+          onSubmit={async (e) => { e.preventDefault(); if (await accion('toctoc', () => svc.kvToctoc({ keyCliente: tl.keyCliente.trim(), keyIntegrador: tl.keyIntegrador.trim(), corredorId: tl.corredorId.trim() }), 'TOCTOC conectado.')) { setTl({ keyCliente: '', keyIntegrador: '', corredorId: '' }); setTtAbierto(false); } }}>
+          <Input id="ttCliente" autoFocus clasesCampo="tw:flex-1 tw:min-w-[180px]" etiqueta="Llave del cliente" type="password" autoComplete="off" value={tl.keyCliente} onChange={(e) => setTl({ ...tl, keyCliente: e.target.value })} />
+          <Input id="ttIntegrador" clasesCampo="tw:flex-1 tw:min-w-[180px]" etiqueta="Llave del integrador" type="password" autoComplete="off" value={tl.keyIntegrador} onChange={(e) => setTl({ ...tl, keyIntegrador: e.target.value })} />
+          <Input id="ttCorredor" clasesCampo="tw:w-[140px]" etiqueta="Id del corredor" autoComplete="off" value={tl.corredorId} onChange={(e) => setTl({ ...tl, corredorId: e.target.value })} />
+          <Boton variante="secundario" type="button" onClick={() => setTtAbierto(false)}>Cancelar</Boton>
+          <Boton type="submit" cargando={ocupado === 'toctoc'} disabled={!ttListo}>Guardar</Boton>
+        </form>
+      )}
+    </>
+  );
 }
 
 // ---------------------------------------------------------------- wechatia y sus canales

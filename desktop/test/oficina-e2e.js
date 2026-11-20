@@ -25,7 +25,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     ok(await w.$('.of-escena canvas.of-lienzo') && p2.tl > p1.tl, 'los personajes caminan por la oficina (se dibujan en un canvas con su propio reloj)');
     ok(!/Buenas|Buenos/.test(await txt('.of-cab')) && /Te toca hoy · \d+/.test(await txt('#ofToca')) && !(await w.$('.of-toca')), 'arriba, sin saludo: «Te toca hoy · N» (minimizado)');
     const g = await txt('.of-pj-diego .of-globo');
-    ok(/No logrado/i.test(g) && /Visita agendada/.test(g), 'Diego muestra en una nube lo no logrado (la visita cancelada)');
+    ok(/No logrado/i.test(g) && /Visita y orden de visita/.test(g), 'Diego muestra en una nube lo no logrado (la visita cancelada)');
     await w.click('#ofToca'); await w.waitForSelector('.of-toca'); ok((await w.$$('.of-toca')).length >= 2, 'al desplegar «Te toca hoy» aparece la lista, lo urgente primero');
     await shot('of1-oficina.png');
     await w.click('.of-toca >> nth=0'); await w.waitForSelector('.of-panel');

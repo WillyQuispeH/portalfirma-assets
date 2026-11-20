@@ -62,7 +62,7 @@ export function MenuPaso({ post, revision, pagos, aceptacion, alCambioDocs, titu
   personas?: { id: string; texto: string }[]; rolCliente?: 'arrendatario' | 'comprador'; clienteActual?: string; alVincular?: (clienteId: string) => void;
   /** el paso «Evaluación del arrendatario» de un arriendo: la ventana trae también la solicitud de documentos y el análisis */
   evaluacionNegocioId?: string;
-  /** el paso «Visita agendada»: la ventana trae el formulario para agendar, confirmar, reprogramar y marcar la visita */
+  /** el paso «Visita y orden de visita»: agendar, confirmar, reprogramar y marcar la visita, y generar su orden de visita */
   visita?: IVisitaPaso;
   /** el paso «Acta de visita»: la ventana trae el acta (audio de la visita, fotos y resumen) */
   actaNegocioId?: string; alActaCerrada?: () => void;

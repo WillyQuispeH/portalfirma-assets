@@ -60,22 +60,18 @@ async function documento(x, re, titulo, buscar) {
 // Lo que el modal-13 agrega en los pasos con firma: documentos ya generados y el botón para enviarlos a firmar
 function extraPaso(x, alTerminar) {
   const t = x.tipo; const id = x.pasoId || x.id;
-  if (id === 'orden' && x.propId) {
-    // la orden la arma Asset (plantilla HTML → PDF en el servidor): el corredor ve el PDF antes de enviarlo a firmar
-    const enviar = async () => {
-      const neg = x.negocioId ? await api('negObtener', x.negocioId).catch(() => null) : null;
-      if (!neg?.clienteId) return toast('Primero vincula al ' + (neg?.tipo === 'venta' ? 'comprador' : 'arrendatario') + ' del negocio (paso «Interesado registrado»).', 5000);
-      const vs = await api('agendaListar', { propId: x.propId, tipo: 'visita' }).catch(() => []);
-      const v = vs.filter((e) => e.estado === 'programado' && e.negocioId === x.negocioId).sort((a, b) => (a.fecha + (a.hora || '')).localeCompare(b.fecha + (b.hora || '')))[0];
-      return window.Agenda.ordenVisita({ id: v?.id, prop: { id: x.propId }, personas: [{ id: neg.clienteId }], fecha: v?.fecha, hora: v?.hora, negocioId: x.negocioId, operacion: neg.tipo }, () => alTerminar?.());
-    };
-    const dd = docsDeFirma(x, /orden de visita/i, enviar, 'Ver la orden y enviarla a firmar');
-    return { ...dd, etiquetaEnviar: dd.documentos.length ? 'Enviar una orden nueva' : 'Ver la orden y enviarla a firmar', alCambioDocs: alTerminar };
-  }
-  if (t === 'visita' && x.negocioId) { // modal-13: la visita del negocio (agendar, confirmar por WhatsApp, reprogramar, realizada, cancelada)
+  if (t === 'visita' && x.negocioId) { // modal-13: la visita del negocio (agendar, confirmar por WhatsApp, reprogramar, realizada, cancelada) y su orden de visita
     const p = propDe(x.propId); const c = x.clienteId ? window.Inmo._IM.data?.personas?.find((q) => q.id === x.clienteId) : null;
-    return { visita: { negocioId: x.negocioId, propId: x.propId, lugar: p ? [p.direccion, p.unidad ? 'depto. ' + p.unidad : '', p.comuna].filter(Boolean).join(', ') : '', clienteId: x.clienteId || '', cliente: c?.nombre || '',
-      alCambio: () => alTerminar?.() } };
+    // la orden la arma Asset (plantilla HTML → PDF en el servidor): se genera en la puerta, el día de la visita, y se envía a firmar
+    const alOrden = async (e) => {
+      const neg = await api('negObtener', x.negocioId).catch(() => null);
+      if (!neg?.clienteId) return toast('Primero vincula al ' + (neg?.tipo === 'venta' ? 'comprador' : 'arrendatario') + ' del negocio (paso «Interesado registrado»).', 5000);
+      return window.Agenda.ordenVisita({ id: e.id, prop: { id: x.propId }, personas: [{ id: neg.clienteId }], fecha: e.fecha, hora: e.hora, negocioId: x.negocioId, operacion: neg.tipo }, () => alTerminar?.());
+    };
+    const dd = docsDeFirma(x, /orden de visita/i, null);   // las órdenes ya enviadas: su PDF y si ya firmó
+    return { ...(dd.documentos.length ? { documentos: dd.documentos, alCambioDocs: alTerminar } : {}),
+      visita: { negocioId: x.negocioId, propId: x.propId, lugar: p ? [p.direccion, p.unidad ? 'depto. ' + p.unidad : '', p.comuna].filter(Boolean).join(', ') : '', clienteId: x.clienteId || '', cliente: c?.nombre || '',
+        alOrden, alCambio: () => alTerminar?.() } };
   }
   if (t === 'cliente' && x.negocioId) { // modal-13: elegir al cliente (arrendatario o comprador) del negocio
     // solo quien puede ser el cliente: arrendatario (o comprador) e interesados; nunca el propietario de la propiedad ni proveedores
@@ -418,7 +414,7 @@ async function escrituraCompraventa(negocioId, despues) {
 // ---------- acciones de un paso ----------
 // acciones del negocio abierto en pantalla (las deja negocios.js); si no es ese negocio, se abre
 const accNegocio = (negocioId) => { const NG = window.Negocios?._NG; return NG?.acc && NG.actual === negocioId ? NG.acc : null; };
-const RE_DOC = { orden: /orden de visita/i, carta: /carta oferta|oferta/i, promesa: /promesa/i, escritura: /escritura/i, contrato: /contrato de arriendo/i, entrega: /acta/i };
+const RE_DOC = { carta: /carta oferta|oferta/i, promesa: /promesa/i, escritura: /escritura/i, contrato: /contrato de arriendo/i, entrega: /acta/i };
 // documentos ya generados de la propiedad que corresponden al paso (firmas y archivos) y cómo enviarlos a firmar
 function docsDeFirma(x, re, enviar, etiqueta) {
   const p = propDe(x.propId); const L = [];
@@ -431,7 +427,6 @@ function docsDeFirma(x, re, enviar, etiqueta) {
 async function accion(x, alTerminar) {
   const t = x.tipo; const id = x.pasoId || x.id; x.alTerminar = alTerminar; engancharAgente();
   if (x.negocioId && !x.propId) { const ng = await api('negObtener', x.negocioId).catch(() => null); x.propId = ng?.prop?.id || ng?.propId || x.propId; }   // el paso llegó sin la propiedad: se busca en el negocio
-  if (id === 'orden' && !x.propId) return toast('No encuentro la propiedad de este negocio: abre el negocio y vincúlala antes de hacer la orden de visita.', 6000);
   if (x.negocioId) { try { await cargar(); } catch {} }   // la cartera al día: los documentos y firmas de cada paso salen de ahí (si no, un documento recién enviado aparece como «todavía no hay»)
   if ((t === 'visita' || t === 'aceptacion' || t === 'pago' || t === 'revision' || t === 'post') && x.negocioId) return menuPaso(x, alTerminar);   // modal-13: agendar, confirmar, reprogramar y marcar la visita, todo adentro
   if (x.accion === 'Reprogramar' || x.accion === 'Reintentar') return reprogramar(x, alTerminar);
@@ -447,7 +442,7 @@ async function accion(x, alTerminar) {
   if (id === 'mandato' && x.propId) { const e = await api('fmtEstado').catch(() => null); const otro = () => documento(x, [/contrato de corretaje/i, /mandato/i, /^(?!.*visita).*corretaje/i], 'Mandato de corretaje', 'Contrato de corretaje');
     return e ? window.Formatos.abrir(x.propId, { hito: 'mandato', despues: alTerminar }, otro) : otro(); }
   if (id === 'mandato') return documento(x, [/contrato de corretaje/i, /mandato/i, /^(?!.*visita).*corretaje/i], 'Mandato de corretaje', 'Contrato de corretaje');
-  if ((id === 'orden' && x.propId) || ((t === 'firma' || (t === 'revisar' && x.etapaFirma)) && x.negocioId)) { try { await cargar(); } catch {} return menuPaso(x, alTerminar); }   // con la cartera al día: la lista de documentos muestra lo último (p. ej. «Firmado») // modal-13: documentos generados + enviar a firmar
+  if (((t === 'firma' || (t === 'revisar' && x.etapaFirma)) && x.negocioId)) { try { await cargar(); } catch {} return menuPaso(x, alTerminar); }   // con la cartera al día: la lista de documentos muestra lo último (p. ej. «Firmado») // modal-13: documentos generados + enviar a firmar
   if (id === 'visita') { ventana('Agendar visita', [x.codigo, x.titulo].filter(Boolean).join(' · '), alTerminar); const neg = x.negocioId ? (await api('negObtener', x.negocioId).catch(() => null)) : null; return window.Gestion.agendar({ tipo: 'visita', propId: x.propId, personaId: neg?.clienteId || undefined }); }
   if (id === 'fotos' && x.propId) return window.Fotos.drive(x.propId);
   if (id === 'publicada' && x.propId) return window.Publicaciones.publicar(x.propId);

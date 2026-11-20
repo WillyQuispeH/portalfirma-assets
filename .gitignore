@@ -1,0 +1,3 @@
+# llaves y credenciales que llegan como documentos: nunca al repositorio
+docs/*llave*
+docs/*Llave*

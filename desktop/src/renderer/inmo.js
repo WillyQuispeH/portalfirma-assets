@@ -165,7 +165,7 @@ pf.onInmoProgreso((x) => IM._prog?.(x));
 // ---------- Portal Inmobiliario (Mercado Libre) ----------
 // El bloque de la ficha está en React (Paneles.tsx); aquí quedan el formulario «Publicar» (Inmo.publicarPI),
 // la pantalla Portales y «Vincular avisos existentes», que también se abren desde otras pantallas.
-const TIPO_AVISO = { silver: 'Publicación', gold: 'Destacado', gold_premium: 'Destacado premium' };
+const TIPO_AVISO = { free: 'Gratuita', silver: 'Plata', gold: 'Oro', gold_premium: 'Oro Premium' };
 async function publicarModal(p, op, opts = {}) {
   window.Ventanas.abrir('inmo.espera', { titulo: 'Publicar en Portal Inmobiliario', texto: 'Revisando la ficha para Portal Inmobiliario…', icono: 'search' }, { clave: 'modal-29' });
   let r; try { r = await api('mlRevisar', p.id, op, opts); } catch (e) { closeModal(); return toast(e.message, 5000); }
@@ -175,6 +175,8 @@ async function publicarModal(p, op, opts = {}) {
   window.Ventanas.abrir('inmo.publicarPI', { p, op, r, opts, tiposAviso: TIPO_AVISO, barrioSel, sinConexion,
     alCambiarTipo: (actuales) => publicarModal(p, op, actuales),
     alIrPortales: () => { closeModal(); portales(); },
+    // falta el WhatsApp de los avisos: se guarda aquí mismo (sin tocar el resto del contacto) y se vuelve a revisar
+    alGuardarWhatsApp: async (wa, actuales) => { const est = await api('mlEstado'); await api('mlContacto', { ...(est.contacto || {}), whatsapp: wa }, est.tipoAviso); toast('WhatsApp de los avisos guardado.'); publicarModal(p, op, actuales); },
     alPublicar: async (actuales) => { await api('mlPublicar', p.id, op, actuales); closeModal(); toast('Publicada en Portal Inmobiliario.'); await cargar(); renderFicha(); }, // si falla, la ventana muestra el error en #piErr
   }, { clave: 'modal-30', ancho: true });
 }

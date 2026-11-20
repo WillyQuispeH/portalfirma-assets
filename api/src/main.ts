@@ -2,7 +2,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
-import { json, urlencoded } from 'express';
+import { json, raw, urlencoded } from 'express';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 import type { Env } from './config/env';
@@ -23,6 +23,8 @@ async function bootstrap() {
   // datos de la corredora (incluye el logo como imagen en base64, hasta ~550 KB) y plantillas (texto de todas las cláusulas)
   app.use('/v1/corredora/datos', json({ limit: '1mb' }));
   app.use('/v1/plantillas', json({ limit: '2mb' }));
+  // KONVER firma el cuerpo tal cual llega: el webhook lo recibe crudo (Buffer) para verificar la firma
+  app.use('/v1/konver/webhook', raw({ type: '*/*', limit: '200kb' }));
   app.use(json({ limit: '100kb' }));
   app.use(urlencoded({ extended: true, limit: '100kb' }));
   app.setGlobalPrefix('v1');

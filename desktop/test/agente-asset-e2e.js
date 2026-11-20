@@ -80,8 +80,8 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     { const d0 = await datos(); const pr = d0.propiedades.find((x) => x.codigo === 'CV-9004'); const mg = d0.personas.find((x) => x.rut === '22.222.222-2');
       const ng = await w.evaluate(([propId, clienteId, tipo]) => window.pf.negGuardar({ tipo, propId, clienteId }).then((r) => r.data), [pr.id, mg.id, pr.venta ? 'venta' : 'arriendo']);
       const pasos = await w.evaluate((negocioId) => window.pf.etPasos({ negocioId }).then((r) => r.data), ng.id);
-      const po = pasos.etapas.flatMap((e) => e.pasos).find((x) => x.id === 'orden');
-      ok(po && po.e === 'pend' && po.q === 'otro' && /la firma del visitante/.test(po.quien) && /operación \d+/.test(po.d), 'el paso «Orden de visita» queda esperando la firma del visitante, con el número de operación'); }
+      const po = pasos.etapas.flatMap((e) => e.pasos).find((x) => x.id === 'visita');
+      ok(po && po.e === 'pend' && po.q === 'otro' && /la firma del visitante/.test(po.quien) && /operación \d+/.test(po.d), 'el paso «Visita y orden de visita» queda esperando la firma del visitante, con el número de operación'); }
     await w.click('#nav [data-view="inicio"]'); await w.waitForSelector('#view-inicio .hoy-agenda'); ok(/Agenda de hoy/.test(await txt('#view-inicio')), '«Hoy» muestra la agenda de hoy');
     ok(!errs.length, 'sin errores de JavaScript' + (errs.length ? ': ' + errs.join(' | ') : ''));
     console.log('OK agente asset');

@@ -21,6 +21,7 @@ import { cx } from '../../../utils/cx';
 import { usePublicacion } from '../../../store/hooks/usePublicacion.hook';
 import { useCartera } from '../../../store/hooks/useCartera.hook';
 import { LogoPortal, VIA } from './comun';
+import { abrirConfiguracion } from '../integraciones/controlador';
 import type { IContactoAvisos, IPortal } from '../../../store/interfaces/publicacion.interface';
 
 const aviso = (r: { mensaje?: string; error?: string }) => { if (r.error) toast(r.error, 5000); else if (r.mensaje) toast(r.mensaje, 5000); };
@@ -58,9 +59,11 @@ function CapaEnProceso({ titulo, texto }: { titulo: string; texto: string }) {
 interface IEstadoML {
   configurada: boolean; conectada: boolean; cuenta?: { nickname?: string; email?: string } | null;
   contacto?: IContactoAvisos | null; tipoAviso?: string; ultimaSync?: string | null;
+  whatsappEmpresa?: string | null; // el WhatsApp de la corredora en wechatia: es el que sale en los avisos
+  via?: 'konver'; konver?: { conectado: boolean } | null; // por KONVER: la cuenta de Mercado Libre se conecta en el navegador
 }
 type TPaquetes = Record<string, number | null | undefined>;
-export const TIPO_AVISO: Record<string, string> = { silver: 'Publicación', gold: 'Destacado', gold_premium: 'Destacado premium' };
+export const TIPO_AVISO: Record<string, string> = { free: 'Gratuita', silver: 'Plata', gold: 'Oro', gold_premium: 'Oro Premium' };
 
 /** el estado de la cuenta de Mercado Libre (la sesión vive en el servidor); la usan la tarjeta y el formulario de contacto */
 export function useCuentaML() {
@@ -115,7 +118,7 @@ export function TarjetaPortalInmobiliario({ cuenta }: { cuenta: ReturnType<typeo
               <>
                 <Boton id="poExist" variante="secundario" icono="link" onClick={vincularAvisosExistentes}>Vincular avisos existentes</Boton>
                 <Boton id="poSync" icono="rotateR" cargando={ocupado === 'sync'} onClick={sincronizar}>Sincronizar</Boton>
-                <MenuMas etiqueta="Más acciones de la cuenta" opciones={[{ id: 'poOut', texto: 'Desconectar cuenta', icono: 'x', alTocar: desconectar }]} />
+                {e.via !== 'konver' && <MenuMas etiqueta="Más acciones de la cuenta" opciones={[{ id: 'poOut', texto: 'Desconectar cuenta', icono: 'x', alTocar: desconectar }]} />}
               </>
             ) : (
               <Boton id="poCon" icono="link" disabled={!e.configurada} cargando={ocupado === 'conectar'} onClick={conectar}>
@@ -140,12 +143,36 @@ export function TarjetaPortalInmobiliario({ cuenta }: { cuenta: ReturnType<typeo
           )}
         </div>
       </Card>
-      {!e.configurada && (
-        <CapaEnProceso
-          titulo="Conexión en preparación"
-          texto="PortalFirma está dejando lista esta conexión. Cuando esté disponible, podrás vincular la cuenta de tu corredora desde aquí."
-        />
-      )}
+      {!e.configurada && (e.via === 'konver'
+        ? <CapaEnProceso titulo="Falta conectar KONVER" texto="El administrador conecta KONVER en Configuración › Integraciones; después podrás conectar aquí la cuenta de Mercado Libre." />
+        : <CapaEnProceso
+            titulo="Conexión en preparación"
+            texto="PortalFirma está dejando lista esta conexión. Cuando esté disponible, podrás vincular la cuenta de tu corredora desde aquí."
+          />)}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- portales por API de KONVER (TOCTOC)
+
+export function TarjetaPortalApi({ x }: { x: IPortal }) {
+  const { propiedades } = useCartera();
+  const avisos = propiedades.flatMap((p) => (['venta', 'arriendo'] as const).map((op) => p.portales?.[x.id]?.[op])).filter(Boolean) as { status?: string }[];
+  const n = (l: string[]) => avisos.filter((a) => l.includes(a.status || '')).length;
+  return (
+    <div data-po={x.id} className={cx('tw:relative tw:h-full', x.listo && 'on')}>
+      <Card className={MARCO} titulo={<Titulo id={x.id} nombre={x.nombre} via={VIA[x.via]} />}
+        accion={<Badge tono={x.listo ? 'verde' : 'gris'} punto>{x.estado}</Badge>}
+        pie={(
+          <div className={PIE}>
+            <Boton variante="secundario" icono="settings" onClick={() => abrirConfiguracion('integraciones')}>{x.listo ? 'Ver la conexión' : 'Conectar en Integraciones'}</Boton>
+          </div>
+        )}>
+        <div className={CUERPO}>
+          <p className="tw:m-0 tw:text-sm tw:text-muted">{x.detalle}</p>
+          {x.listo && <ListaDatos datos={[['Avisos', `${n(['active', 'publicada', 'en_feed'])} publicados · ${n(['pausada'])} pausados · ${n(['retirada'])} retirados`]]} />}
+        </div>
+      </Card>
     </div>
   );
 }
@@ -153,6 +180,7 @@ export function TarjetaPortalInmobiliario({ cuenta }: { cuenta: ReturnType<typeo
 // ---------------------------------------------------------------- portales de feed (Chilepropiedades, Broku, TOCTOC, Yapo)
 
 function mensajeEnProceso(x: IPortal): { titulo: string; texto: string } {
+  if (x.pausado) return { titulo: 'Desactivado por ahora', texto: `Por ahora solo publicamos en Portal Inmobiliario. ${x.nombre} se vuelve a activar más adelante.` };
   if (x.enTramite) {
     return {
       titulo: 'Integración en proceso',
@@ -176,7 +204,7 @@ export function TarjetaPortalFeed({ x, feed, url }: { x: IPortal; feed: number; 
   const [activo, setActivo] = useState(x.listo);
   const [token, setToken] = useState('');
   const [cambiarClave, setCambiarClave] = useState(false);
-  const enProceso = !x.listo && !!(x.enTramite || x.via === 'acuerdo');
+  const enProceso = !x.listo && !!(x.pausado || x.enTramite || x.via === 'acuerdo');
   const capa = enProceso ? mensajeEnProceso(x) : null;
   const copiar = () => { if (url) navigator.clipboard.writeText(url).then(() => toast('Enlace copiado.'), () => toast(url, 8000)); };
   return (
@@ -251,10 +279,11 @@ export function GrillaPortales({ cuenta }: { cuenta: ReturnType<typeof useCuenta
   return (
     <div className={GRILLA}>
       <TarjetaPortalInmobiliario cuenta={cuenta} />
-      {portales.catalogo.filter((x) => x.id !== 'pi').map((x) => <TarjetaPortalFeed key={x.id} x={x} feed={portales.feeds[x.id] ?? 0} url={portales.urls?.[x.id]} />)}
+      {portales.catalogo.filter((x) => x.id !== 'pi' && x.via === 'api').map((x) => <TarjetaPortalApi key={x.id} x={x} />)}
+      {portales.catalogo.filter((x) => x.id !== 'pi' && x.via !== 'api').map((x) => <TarjetaPortalFeed key={x.id} x={x} feed={portales.feeds[x.id] ?? 0} url={portales.urls?.[x.id]} />)}
     </div>
   );
 }
 
 /** el aviso de pie de página, el mismo en las dos pantallas */
-export const NOTA_PORTALES = 'Chilepropiedades actualiza una vez al día y su integración es gratis si la aprueban. Broku está en proceso de conexión. TOCTOC y Yapo requieren un acuerdo comercial. El detalle de cada aviso (publicar, pausar, retirar) está en Publicaciones › Avisos.';
+export const NOTA_PORTALES = 'Portal Inmobiliario y TOCTOC se publican por KONVER (se conectan en Configuración › Integraciones). Chilepropiedades actualiza una vez al día y su integración es gratis si la aprueban. Broku está en proceso de conexión. Yapo requiere un acuerdo comercial. El detalle de cada aviso (publicar, pausar, retirar) está en Publicaciones › Avisos.';

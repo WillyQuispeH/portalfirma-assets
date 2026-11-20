@@ -1,7 +1,7 @@
 // Etapas del negocio (0.15): cada operación se ve en 3 etapas con sus pasos, y cada paso en uno de cuatro estados:
 //   ok (logrado) · pend (pendiente: te toca, o esperando a otro —eso lo deduce Asset: firmas, confirmaciones—) · fail (no logrado: vencido o caído) · todo (por hacer).
 //  1. Captación (de la propiedad): datos, mandato firmado, fotos, publicada.
-//  2. Comercialización (del negocio): interesado, visita, orden de visita, acta de visita, negociación, carta oferta firmada.
+//  2. Comercialización (del negocio): interesado, visita y orden de visita (un solo paso), acta de visita, negociación, carta oferta firmada.
 //  3. Postventa (lo que viene después de la carta oferta; así lo llama The Living): venta; en un arriendo se llama Postarriendo.
 // Los estados se deducen de lo que ya registra Asset (firmas, tareas, agenda, fotos, portales). El ejecutivo puede
 // además marcar a mano un paso como logrado o no logrado (o volver a lo automático); eso queda en n.pasos (o p.pasos).
@@ -21,8 +21,7 @@ const CAPT = [
 ];
 const COM = [
   { id: 'interesado', t: 'Interesado registrado', a: 'Crear el negocio', tipo: 'negocio' },
-  { id: 'visita', t: 'Visita agendada', a: 'Agendar visita', tipo: 'agente', pedir: (c) => `Agenda una visita${c.cliente ? ' con ' + c.cliente : ''} en ${c.codigo}` },
-  { id: 'orden', t: 'Orden de visita', a: 'Enviar orden de visita', tipo: 'agente', pedir: (c) => `Hazme la orden de visita${c.cliente ? ' para ' + c.cliente : ''} en ${c.codigo}` },
+  { id: 'visita', t: 'Visita y orden de visita', a: 'Agendar visita', tipo: 'agente', pedir: (c) => `Agenda una visita${c.cliente ? ' con ' + c.cliente : ''} en ${c.codigo}` },   // la orden se genera y firma en la puerta, el día de la visita: mismo paso
   { id: 'acta', t: 'Acta de visita', a: 'Hacer el acta de visita', tipo: 'acta' },
   { id: 'negociacion', t: 'Negociación', a: 'Marcar como logrado', tipo: 'ok' },
   { id: 'carta', t: 'Carta oferta', a: 'Enviar carta oferta a firmar', tipo: 'firma', etapa: 'reserva' },
@@ -44,8 +43,7 @@ const POST = {
 // cuando corresponden (reajuste, renovación, devolución de la garantía): no son «el siguiente paso» mientras no toquen.
 const COM_ARR = [
   { id: 'interesado', t: 'Interesado registrado', a: 'Crear el negocio', tipo: 'negocio' },
-  { id: 'visita', t: 'Visita agendada', a: 'Agendar visita', tipo: 'agente', pedir: (c) => `Agenda una visita${c.cliente ? ' con ' + c.cliente : ''} en ${c.codigo}` },
-  { id: 'orden', t: 'Orden de visita', a: 'Enviar orden de visita', tipo: 'agente', pedir: (c) => `Hazme la orden de visita${c.cliente ? ' para ' + c.cliente : ''} en ${c.codigo}` },
+  { id: 'visita', t: 'Visita y orden de visita', a: 'Agendar visita', tipo: 'agente', pedir: (c) => `Agenda una visita${c.cliente ? ' con ' + c.cliente : ''} en ${c.codigo}` },   // la orden se genera y firma en la puerta, el día de la visita: mismo paso
   { id: 'acta', t: 'Acta de visita', a: 'Hacer el acta de visita', tipo: 'acta' },
   { id: 'carta', t: 'Carta oferta', a: 'Enviar carta oferta a firmar', tipo: 'firma', etapa: 'oferta' },   // 'oferta' no es una etapa del embudo: firmarla no mueve el negocio
   { id: 'aceptacion', t: 'Aceptación del propietario', a: 'Registrar la respuesta', tipo: 'aceptacion' },
@@ -79,6 +77,13 @@ function crear({ agenda = null, formatos = null } = {}) {
   // las visitas de ESTE negocio: las ligadas a él, o (viejas, sin negocio) las de su cliente en la misma propiedad
   const visitas = (p, n) => { try { return agenda && p ? agenda.listar({ propId: p.id, tipo: 'visita' }).filter((e) => (n?.id && e.negocioId === n.id) || (!e.negocioId && n?.clienteId && (e.personaIds || []).includes(n.clienteId))) : []; } catch { return []; } };
 
+  // la firma de ESTE negocio (ligada a él, o suelta pero del mismo cliente), la firmada primero
+  const firmaNeg = (p, n, re) => {
+    const cli = n?.clienteId ? inmo.personaPorId(n.clienteId) : null; const rutC = cli?.rut ? inmo.fmtRut(cli.rut) : null;
+    const suyas = (p?.firmas || []).filter((x) => re.test(x.plantilla || '') && ((n?.id && x.negocioId === n.id) || (!x.negocioId && (x.firmantes || []).some((s) => (n?.clienteId && s.personaId === n.clienteId) || (rutC && s.rut && inmo.fmtRut(s.rut) === rutC)))));
+    return suyas.find((x) => x.estado === 'firmado') || suyas[0] || null;
+  };
+
   // estado automático de un paso según lo que ya hay en Asset → { e, f, d, q, quien } o null (sin evidencia)
   function auto(def, p, n) {
     const tarea = (et, i) => !!n?.tareas?.[et]?.[i];
@@ -110,30 +115,31 @@ function crear({ agenda = null, formatos = null } = {}) {
       case 'fotos': return (p?.fotos || []).length ? { e: 'ok', f: null, d: `${p.fotos.length} fotos` } : null;
       case 'publicada': return publicada(p) ? { e: 'ok' } : null;
       case 'interesado': return n?.clienteId ? { e: 'ok', f: n.creado } : null;
-      case 'visita': { // logrado solo cuando la visita ya se hizo; agendada a futuro queda «esperando»; pasada sin marcar o cancelada, no lograda
+      case 'visita': { // visita y orden de visita (un solo paso): se agenda y, ya en la puerta, se genera la orden y se envía a firmar
+        // orden firmada → logrado; enviada → esperando la firma del visitante; sin orden: el estado de la visita en la agenda
+        const fo = firmaNeg(p, n, /orden de visita/i);
+        if (fo?.estado === 'firmado') return { e: 'ok', f: fo.firmado || fo.fecha, d: `Orden de visita firmada${fo.operacion ? ' · operación ' + fo.operacion : ''}` };
+        if (fo) return { e: 'pend', q: 'otro', quien: 'la firma del visitante', d: `Orden de visita enviada el ${fdm(fo.fecha)}${fo.operacion ? ' · operación ' + fo.operacion : ''}.` };
         const vs = visitas(p, n); const h = hoy(); const ah = require('./hora').ahora(); const cuando = (e) => `${fdm(e.fecha)}${e.hora ? ' a las ' + e.hora : ''}`;
         const hecha = vs.filter((e) => e.estado === 'hecho').pop();
-        if (hecha || tarea('visita', 1) || pasado('visita')) return { e: 'ok', f: hecha ? hecha.fecha : null, d: hecha ? `Visita realizada el ${cuando(hecha)}` : '' };
+        if (hecha || tarea('visita', 1) || pasado('visita')) return { e: 'ok', f: hecha ? hecha.fecha : null, d: hecha ? `Visita realizada el ${cuando(hecha)}${pasado('visita') ? '' : ' · sin orden de visita'}` : '' };
         const prog = vs.filter((e) => e.estado === 'programado');
         const futura = prog.find((e) => e.fecha > h || (e.fecha === h && (e.hora || '23:59') >= ah));
-        // el arrendatario respondió que sí a la plantilla de WhatsApp: el paso queda logrado
-        const conf = (e) => e.confirmacion?.estado;   // 'enviada' | 'confirmada' | 'cambio' (las confirmaciones manuales antiguas no traen estado)
-        const confirmada = prog.find((e) => conf(e) === 'confirmada' && (e.fecha > h || (e.fecha === h && (e.hora || '23:59') >= ah)));
-        if (confirmada) return { e: 'ok', f: confirmada.confirmacion.respondioEn || confirmada.fecha, d: `Visita del ${cuando(confirmada)} · confirmada por ${confirmada.confirmacion.nombre || 'el cliente'}` };
         if (futura) {
-          const c = futura.confirmacion;
+          const c = futura.confirmacion;   // 'enviada' | 'confirmada' | 'cambio' (las confirmaciones manuales antiguas no traen estado)
           if (c?.estado === 'cambio') return { e: 'fail', d: `${c.nombre || 'El cliente'} pidió cambiar la visita del ${cuando(futura)}${c.respuesta ? ': «' + c.respuesta + '»' : ''}. Reprográmala.` };
-          return { e: 'pend', q: 'otro', quien: c?.estado === 'enviada' ? `la respuesta de ${c.nombre || 'el cliente'}` : 'la confirmación', vence: futura.fecha, d: `Visita agendada el ${cuando(futura)}${c?.estado === 'enviada' ? ' · confirmación enviada por WhatsApp' : ' · sin confirmar'}` };
+          const conf = c?.estado === 'confirmada' ? ` · confirmada por ${c.nombre || 'el cliente'}` : c?.estado === 'enviada' ? ' · confirmación enviada por WhatsApp' : ' · sin confirmar';
+          // el día de la visita te toca: en la puerta se genera la orden y se envía a firmar
+          if (futura.fecha === h) return { e: 'pend', q: 'tu', vence: futura.fecha, d: `Visita hoy${futura.hora ? ' a las ' + futura.hora : ''}${conf} · en la puerta, genera la orden de visita y envíala a firmar.` };
+          if (c?.estado === 'confirmada') return { e: 'pend', q: 'otro', quien: 'el día de la visita', vence: futura.fecha, d: `Visita del ${cuando(futura)}${conf}` };
+          return { e: 'pend', q: 'otro', quien: c?.estado === 'enviada' ? `la respuesta de ${c.nombre || 'el cliente'}` : 'la confirmación', vence: futura.fecha, d: `Visita agendada el ${cuando(futura)}${conf}` };
         }
         if (prog.length) return { e: 'fail', d: `La visita del ${cuando(prog[prog.length - 1])} ya pasó: márcala como realizada o reprográmala.` };
         if (vs.length) return { e: 'fail', d: `La visita del ${cuando(vs[vs.length - 1])} se canceló.` };
         return null; }
-      case 'orden': case 'acta': { // la firma de ESTE negocio (ligada a él, o suelta pero del mismo cliente): firmada → logrado; enviada → esperando al visitante
-        const re = def.id === 'orden' ? /orden de visita/i : /^acta de visita/i;
-        const cli = n?.clienteId ? inmo.personaPorId(n.clienteId) : null; const rutC = cli?.rut ? inmo.fmtRut(cli.rut) : null;
-        const suyas = (p?.firmas || []).filter((x) => re.test(x.plantilla || '') && ((n?.id && x.negocioId === n.id) || (!x.negocioId && (x.firmantes || []).some((s) => (n?.clienteId && s.personaId === n.clienteId) || (rutC && s.rut && inmo.fmtRut(s.rut) === rutC)))));
-        const f = suyas.find((x) => x.estado === 'firmado') || suyas[0] || null;
-        if (!f) return def.id === 'orden' && pasado('reserva') ? { e: 'ok' } : null;   // el acta sin firma: la deja pendiente el servidor al cerrarla
+      case 'acta': { // la firma de ESTE negocio: firmada → logrado; enviada → esperando al visitante
+        const f = firmaNeg(p, n, /^acta de visita/i);
+        if (!f) return null;   // el acta sin firma: la deja pendiente el servidor al cerrarla
         return f.estado === 'firmado' ? { e: 'ok', f: f.firmado || f.fecha, d: `Firmada${f.operacion ? ' · operación ' + f.operacion : ''}` } : { e: 'pend', q: 'otro', quien: 'la firma del visitante', d: `Enviada el ${fdm(f.fecha)}${f.operacion ? ' · operación ' + f.operacion : ''}.` }; }
       case 'negociacion': return tarea('reserva', 0) && n.tipo === 'venta' || pasado('visita') && n?.firmas?.reserva ? { e: 'ok' } : null;
       case 'aceptacion': { // la última ronda de la negociación: aceptada → logrado; rechazada → no logrado; contraoferta → falta la respuesta del interesado

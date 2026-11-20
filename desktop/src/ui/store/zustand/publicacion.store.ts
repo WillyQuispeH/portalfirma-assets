@@ -147,6 +147,8 @@ export const usePublicacionStore = create<IPublicacionState>((set, get) => ({
       return {
         mensaje: ['Portales actualizados.',
           ...(r.chilepropiedades?.leads ? [`${r.chilepropiedades.leads} interesados nuevos de Chilepropiedades.`] : []),
+          ...(r.pi?.vinculados ? [`${r.pi.vinculados} avisos de Portal Inmobiliario vinculados a su propiedad.`] : []),
+          ...(r.pi?.quitados ? [`${r.pi.quitados} avisos quitados: ya no existen en Portal Inmobiliario.`] : []),
           ...(r.pi?.leads ? [`${r.pi.leads} interesados nuevos de Portal Inmobiliario.`] : []),
           ...r.errores].join(' '),
       };

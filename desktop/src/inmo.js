@@ -1143,8 +1143,11 @@ alCargar(async () => {
 // Interesado que llega desde un portal: queda en la ficha; si trae RUT válido entra al CRM como «interesado».
 function registrarLead(propId, l) {
   const p = prop(propId); p.leads ||= [];
-  if (p.leads.some((x) => x.id === l.id)) return false;
-  p.leads.unshift({ ...l, recibido: now() }); p.leads.length = Math.min(p.leads.length, 300);
+  const ya = p.leads.find((x) => x.id === l.id);
+  // delServidor: lo guardó la API al llegar el aviso del portal (webhook); falta la persona y el vínculo, que se hacen aquí una vez
+  if (ya && !(API && ya.delServidor)) return false;
+  if (ya) delete ya.delServidor;
+  else { p.leads.unshift({ ...l, recibido: now() }); p.leads.length = Math.min(p.leads.length, 300); }
   if (API) { // la ficha se envía ya; la persona y su vínculo, en segundo plano
     log(p.id, `Nuevo interesado desde ${l.portal}: ${l.nombre || 'sin nombre'} (${l.canalTxt || l.canal})`, { tipo: 'lead' });
     encolar({ tipo: 'prop', id: p.id });

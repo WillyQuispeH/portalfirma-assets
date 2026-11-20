@@ -24,7 +24,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     await call('etMarcar', { negocioId: n2.id, paso: 'visita', estado: 'fail', d: 'El cliente canceló la visita del sábado.' });
     await w.click('#nav [data-view="inicio"]'); await w.waitForSelector('#view-inicio .hoy-list');
     const h = await txt('#view-inicio');
-    ok(/Necesita tu atención/.test(h) && /Visita agendada/.test(h) && /canceló la visita/.test(h), '«Necesita tu atención»: la visita no lograda, con su motivo');
+    ok(/Necesita tu atención/.test(h) && /Visita y orden de visita/.test(h) && /canceló la visita/.test(h), '«Necesita tu atención»: la visita no lograda, con su motivo');
     ok(/1 cosa necesita tu atención/.test(h), 'el estado general avisa que algo necesita atención');
     ok(/Te toca a ti/.test(h) && /Tus negocios \(\d+\)/.test(h), '«Te toca a ti» y «Tus negocios» con su avance');
     ok(await w.$$eval('.hoy-neg .et-segs > span', (x) => x.length) >= 3, 'cada negocio (y cada captación) muestra su barra de avance');
@@ -56,16 +56,17 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     const e = await txt('#ngEt');
     ok(!/Captación/.test(e) && /Comercialización/.test(e) && /Post(venta|arriendo)/.test(e), '0.16.11 · el negocio muestra comercialización y postventa (postarriendo si es arriendo) (la captación quedó en Cartera)');
     // el paso en curso va destacado (tarjeta con su acción); ya no hay «Siguiente paso · te toca» ni luz guía en la ficha del negocio
-    ok(await w.locator('#ngEt .et-pa').count() === 1 && /Visita agendada/.test(await txt('#ngEt .et-pa')), 'y un solo paso en curso destacado (visita)');
+    ok(await w.locator('#ngEt .et-pa').count() === 1 && /Visita y orden de visita/.test(await txt('#ngEt .et-pa')), 'y un solo paso en curso destacado (visita)');
     // 0.18.10 · ya no existe «Esperando a alguien» (solo logrado, no logrado y volver a lo automático)
     await w.click('#ngEt .et-pa [data-pm]'); await w.waitForSelector('.et-mopts [data-e="fail"]');
     ok(await w.$('.et-mopts [data-e="otro"]') === null, 'el menú de estados ya no ofrece «Esperando a alguien»'); await w.evaluate(() => window.closeModal());
     // la acción del paso en curso («Agendar visita»): se agenda y, al marcarla realizada, el negocio avanza al siguiente paso
     await w.click('#ngEt .et-pa .et-do'); await w.waitForSelector('#pvForm'); await w.locator('#shHorarios [data-hora]:not([disabled])').first().click(); await w.click('#pvAgendar');
-    await w.waitForSelector('#pvLista [data-pv-hecha]'); await w.click('#pvLista [data-pv-hecha]');
-    await w.waitForFunction(() => /Orden de visita/.test(document.querySelector('#ngEt .et-pa')?.textContent || ''), null, { timeout: 8000 });
+    await w.waitForSelector('#pvLista [data-pv-orden]'); ok(await w.locator('#pvLista [data-pv-orden]').count() === 1, 'la visita agendada ofrece «Generar orden de visita» en el mismo paso');
+    await w.click('#pvLista [data-pv-visita] [data-mas]'); await w.click('#pvHecha');
+    await w.waitForFunction(() => /Acta de visita/.test(document.querySelector('#ngEt .et-pa')?.textContent || ''), null, { timeout: 8000 });
     await w.evaluate(() => window.closeModal());
-    ok(/Logrado/.test(await txt('#ngEt .et-p:has-text("Visita agendada")')), 'agendar la visita desde el paso avanza al siguiente (orden de visita)');
+    ok(/Logrado/.test(await txt('#ngEt .et-p:has-text("Visita y orden de visita")')), 'marcar la visita realizada desde el paso avanza al siguiente (acta de visita)');
     await shot('et2-negocio.png');
     // el cierre y el postarriendo de un arriendo, sin escritura ni Conservador
     if (await w.$('#ngEt .et-col >> nth=1 >> [data-mas]')) await w.click('#ngEt .et-col >> nth=1 >> [data-mas]');

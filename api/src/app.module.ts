@@ -15,6 +15,7 @@ import { PersonasService } from './personas/personas.service';
 import { PropiedadesController } from './propiedades/propiedades.controller';
 import { PropiedadesService } from './propiedades/propiedades.service';
 import { ConvectaController, ConvectaService } from './propiedades/convecta';
+import { KonverController, KonverService } from './conexiones/konver';
 import { CorredoraDocController, CorredoraDocService } from './documentos/corredora-doc';
 import { PlantillasDocController, PlantillasDocService } from './documentos/plantillas-doc';
 import { DominioIaController, DominioIaService } from './propiedades/dominio-ia';
@@ -85,6 +86,7 @@ import { LeadsEnvioController, PuenteService } from './whatsapp/puente';
     PlantillasDocController,
     CorredoraDocController,
     ConvectaController,
+    KonverController,
     UsuariosController,
     SaludController,
     PropiedadesController,
@@ -133,6 +135,7 @@ import { LeadsEnvioController, PuenteService } from './whatsapp/puente';
     { provide: APP_GUARD, useClass: LimiteGuard },
     PropiedadesService,
     ConvectaService,
+    KonverService,
     CorredoraDocService,
     PlantillasDocService,
     DominioIaService,

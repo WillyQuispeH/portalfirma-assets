@@ -94,6 +94,14 @@ const esquema = z.object({
   CONVECTA_SUBSCRIPTION_KEY: z.string().trim().optional(),
   /** la única corredora que puede usar CONVECTA_SUBSCRIPTION_KEY; las demás conectan su propia clave en Integraciones */
   CONVECTA_CORREDORA_ID: z.string().trim().optional(),
+  /** KONVER (Portal Inmobiliario y TocToc por una sola API): dirección base; la llave es de cada corredora (Integraciones) */
+  KONVER_API_URL: z
+    .url()
+    .transform((u) => u.replace(/\/+$/, ''))
+    .default('https://konver-portales-76790408323.us-central1.run.app'),
+  /** llave de KONVER del servidor y la única corredora a la que sirve (las demás pegan la suya en Integraciones) */
+  KONVER_API_KEY: z.string().trim().optional(),
+  KONVER_CORREDORA_ID: z.string().trim().optional(),
   /** solo fuera de producción: otras direcciones para la API y la autorización de Mercado Libre (las pruebas) */
   ML_API_URL: z.url().optional(),
   ML_AUTH_URL: z.url().optional(),
