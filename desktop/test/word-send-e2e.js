@@ -20,9 +20,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     // completa y envía (el servidor de prueba responde error 500): un solo firmante
     while ((await w.$$('#signers .signer')).length > 1) await w.click('#signers .signer:last-child button[data-act="del"]');
     for (const [k, v] of [['fullName', 'Ana Rojas'], ['rut', '11.111.111-1'], ['email', 'ana@correo.cl'], ['phone', '+56911111111'], ['alias', 'Arrendataria']]) { const s = `input[data-i="0"][data-k="${k}"]`; await w.fill(s, v); await w.locator(s).blur(); }
-    if (await w.isVisible('#typeSignAll')) await w.selectOption('#typeSignAll', 'simple');
-    await w.fill('#payerEmail', 'pagos@correo.cl');
-    await w.click('#sendBtn'); await w.waitForSelector('#mOk'); await w.click('#mOk'); await w.waitForTimeout(1500);
+    await w.click('#sendBtn'); await w.waitForSelector('#mOk'); await w.click('#mOk'); await w.waitForFunction(() => (document.querySelector('#reviewError')?.textContent || '').trim().length > 0, null, { timeout: 15000 });
     ok(await w.evaluate(() => document.querySelector('#view-done').classList.contains('hidden')), 'no muestra «Enviado a firmar» cuando falla');
     const msg = await w.textContent('#reviewError'); console.log('   mensaje:', msg);
     ok(/error 500/.test(msg), 'explica el error del servidor');

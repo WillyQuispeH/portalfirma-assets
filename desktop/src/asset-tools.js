@@ -11,9 +11,13 @@ const precioTxt = (p) => (!p || p.valor == null ? null : p.moneda === 'CLP' ? '$
 const S = (props, req = []) => ({ type: 'object', properties: props, required: req });
 const str = (d) => ({ type: 'string', description: d }); const num = (d) => ({ type: 'number', description: d }); const bool = (d) => ({ type: 'boolean', description: d });
 const en = (vals, d) => ({ type: 'string', enum: vals, description: d });
+const TIPO_PAGO = { reserva: 'Reserva', garantia: 'Garantía', primer_mes: 'Primer mes de arriendo', comision: 'Comisión', otro: 'Otro pago' };
+const MEDIO_PAGO = { transferencia: 'Transferencia', deposito: 'Depósito', efectivo: 'Efectivo', cheque: 'Cheque', tarjeta: 'Tarjeta', otro: 'Otro medio' };
+const montoTxt = (v, m) => (m === 'UF' ? 'UF ' : m === 'USD' ? 'US$ ' : '$') + Number(v).toLocaleString('es-CL');
+const adjunto = require('./adjunto-wa');
 const REF_PROP = str('Propiedad: id, código (ej. CV-5514) o texto de búsqueda (dirección, comuna, título).');
 const REF_PER = str('Persona: id, RUT o nombre.');
-const REF_NEG = str('Negocio: id, o el código de la propiedad / nombre del cliente.');
+const REF_NEG = str('Negocio: su código (NG-014), su id, o el código de la propiedad / nombre del cliente.');
 const TIPOS_PROP = ['casa', 'departamento', 'oficina', 'sitio', 'local_comercial', 'industrial', 'agricola', 'parcela', 'estacionamiento', 'terreno_construccion', 'bodega'];
 const ROLES = ['propietario', 'arrendatario', 'comprador', 'codeudor', 'interesado', 'proveedor'];
 const CAMPOS_PROP = {
@@ -58,15 +62,16 @@ function crear({ inmo, negocios, agenda, ml, pf, cambiarPropiedad, docs, pubs, e
   function negocio(ref) {
     if (!ref) throw err('Falta indicar el negocio.');
     const all = negsVisibles(); const r = norm(ref);
-    let l = all.filter((n) => n.id === ref);
-    if (!l.length) { const tok = r.split(/\s+/).filter((t) => t.length > 1); l = all.filter((n) => tok.every((t) => norm([n.titulo, n.prop?.codigo, n.cliente?.nombre, n.cliente?.rut, n.tipo].join(' ')).includes(t))); }
+    const ng = /^ng-?\s*0*(\d+)$/.exec(r);   // el código del negocio: «NG-014», «ng14»
+    let l = all.filter((n) => n.id === ref || (ng && Number(/^NG-0*(\d+)$/i.exec(n.codigo || '')?.[1]) === Number(ng[1])));
+    if (!l.length) { const tok = r.split(/\s+/).filter((t) => t.length > 1); l = all.filter((n) => tok.every((t) => norm([n.codigo, n.titulo, n.prop?.codigo, n.cliente?.nombre, n.cliente?.rut, n.tipo].join(' ')).includes(t))); }
     if (l.length > 1) { const ab = l.filter((n) => n.estado === 'abierto'); if (ab.length === 1) l = ab; }
     if (!l.length) throw err(`No encontré un negocio que coincida con «${ref}».`);
     if (l.length > 1) throw varias('negocios', l, (n) => `${n.id} ${n.tipo} ${n.titulo} (${n.etapaInfo?.t})`);
     return l[0];
   }
   const resumenProp = (p) => ({ id: p.id, codigo: p.codigo, titulo: p.titulo, tipo: p.tipo, comuna: p.comuna, direccion: [p.direccion, p.unidad].filter(Boolean).join(' '), venta: p.venta ? { precio: precioTxt(p.precioVenta), estado: p.estadoVenta } : null, arriendo: p.arriendo ? { precio: precioTxt(p.precioArriendo), estado: p.estadoArriendo } : null, enPortal: ['venta', 'arriendo'].filter((o) => p.portales?.pi?.[o]?.status === 'active') });
-  const resumenNeg = (n) => ({ id: n.id, tipo: n.tipo, estado: n.estado, etapa: n.etapaInfo?.t, propiedad: n.prop?.codigo + ' ' + (n.prop?.titulo || ''), cliente: n.cliente?.nombre, valor: precioTxt(n.valor), falta: n.siguiente, proximaAccion: n.proximaAccion, vencida: n.vencida });
+  const resumenNeg = (n) => ({ id: n.id, codigo: n.codigo || null, tipo: n.tipo, estado: n.estado, etapa: n.etapaInfo?.t, propiedad: n.prop?.codigo + ' ' + (n.prop?.titulo || ''), cliente: n.cliente?.nombre, valor: precioTxt(n.valor), falta: n.siguiente, proximaAccion: n.proximaAccion, vencida: n.vencida });
   const resumenEv = (e) => ({ id: e.id, tipo: e.tipoTxt, titulo: e.titulo, fecha: e.fecha, hora: e.hora, estado: e.estado, lugar: e.lugar, propiedad: e.prop ? e.prop.codigo : null, personas: e.personas.map((c) => c.nombre), ordenDeVisita: e.orden?.operacion || null });
   const datos = (que) => ({ efectos: { datos: que } });
   const argsDoc = (a) => ({ plantilla: a.plantilla, propId: a.propiedad ? prop(a.propiedad).id : null, negocioId: a.negocio ? negocio(a.negocio).id : null, valores: a.valores || {},
@@ -131,11 +136,48 @@ function crear({ inmo, negocios, agenda, ml, pf, cambiarPropiedad, docs, pubs, e
         return { ...c, propiedades: inmo.todas().flatMap((p) => (p.vinculos || []).filter((v) => v.personaId === c.id).map((v) => ({ codigo: p.codigo, titulo: p.titulo, rol: v.rol }))), negocios: negsVisibles().filter((n) => n.clienteId === c.id).map(resumenNeg), proximosEventos: agenda.listar({ personaId: c.id, desde: hoy() }).map(resumenEv) }; } },
     { name: 'asset_listar_negocios', modo: 'leer', description: 'Lista negocios (ventas y arriendos) con su etapa, lo que falta y la próxima acción.', parameters: S({ tipo: en(['venta', 'arriendo']), estado: en(['abierto', 'ganado', 'perdido']), texto: str('Filtrar por propiedad o cliente'), solo_vencidos: bool('Solo con la próxima acción vencida') }),
       run: async (a) => { const tok = norm(a.texto).split(/\s+/).filter((t) => t.length > 1);
-        const l = negsVisibles().filter((n) => (!a.tipo || n.tipo === a.tipo) && (!a.estado ? n.estado === 'abierto' : n.estado === a.estado) && (!a.solo_vencidos || n.vencida) && (!tok.length || tok.every((t) => norm([n.titulo, n.prop?.codigo, n.cliente?.nombre].join(' ')).includes(t))));
+        const l = negsVisibles().filter((n) => (!a.tipo || n.tipo === a.tipo) && (!a.estado ? n.estado === 'abierto' : n.estado === a.estado) && (!a.solo_vencidos || n.vencida) && (!tok.length || tok.every((t) => norm([n.codigo, n.titulo, n.prop?.codigo, n.cliente?.nombre].join(' ')).includes(t))));
         return { total: l.length, negocios: l.slice(0, 20).map(resumenNeg) }; } },
     { name: 'asset_ver_negocio', modo: 'leer', description: 'Detalle de un negocio: etapas, tareas pendientes, firmas, condiciones e historial.', parameters: S({ negocio: REF_NEG }, ['negocio']),
       run: async (a) => { const n = await negocios.obtener(negocio(a.negocio).id); const et = negocios.ETAPAS[n.tipo];
         return { ...resumenNeg(n), etapas: et.map((e) => e.t), tareasPendientes: (n.etapaInfo.tareas || []).filter((_, i) => !n.tareas?.[n.etapa]?.[i]), firmaDeLaEtapa: n.etapaInfo.firma || null, firmas: n.firmas, comision: n.comision, comisionEstimada: n.comisionMonto, actividad: (n.actividad || []).slice(0, 8).map((x) => `${x.fecha.slice(0, 10)} ${x.texto}`) }; } },
+    // ---------- comprobante de pago que el ejecutivo manda por WhatsApp ----------
+    { name: 'asset_registrar_comprobante', modo: 'confirmar',
+      description: 'Sube a un negocio el COMPROBANTE DE PAGO que el usuario acaba de mandar por WhatsApp (el archivo ya está guardado en la conversación: NO lo busques ni pidas que lo reenvíe) y registra el pago con su monto, moneda, fecha y medio. Úsala cuando el mensaje diga «[ARCHIVO RECIBIDO POR WHATSAPP]». REGLAS: (1) SIEMPRE pregunta a qué negocio va, aunque la propiedad tenga uno solo: lista con asset_listar_negocios (texto = código de la propiedad) y muestra sus códigos NG-XXX con tipo, etapa y cliente; si el usuario ya escribió el código NG-XXX, no preguntes. (2) Usa los datos que trae la lectura del comprobante (monto, moneda, fecha, medio, referencia): si están, NO los preguntes; pregunta SOLO lo que falte o no sea legible, todo junto en un mensaje. (3) Si el negocio es de arriendo, pregunta a qué corresponde el pago: reserva, garantía, primer mes, comisión u otro (si el texto del usuario ya lo dice, no preguntes). En una venta es siempre «otro». (4) Llámala solo con todos los datos: pide la confirmación del usuario y registra.',
+      parameters: S({ negocio: str('Código del negocio (NG-014)'), tipo_pago: en(['reserva', 'garantia', 'primer_mes', 'comision', 'otro'], 'A qué corresponde (en una venta, «otro»)'), monto: num('Monto pagado, sin puntos'), moneda: en(['CLP', 'UF', 'USD']), fecha: str('Fecha del pago, AAAA-MM-DD'), medio: en(['transferencia', 'deposito', 'efectivo', 'cheque', 'tarjeta', 'otro']), referencia: str('N° de operación o folio del comprobante (si lo trae)'), nota: str('Una nota breve (opcional)') }, ['negocio', 'tipo_pago', 'monto', 'moneda', 'fecha', 'medio']),
+      preparar: async (a) => {
+        const adj = adjunto.ver(); if (!adj) throw err('No tengo el comprobante: que el usuario lo mande de nuevo por WhatsApp.');
+        const n = negocio(a.negocio); const nv = await negocios.obtener(n.id);
+        if (!(Number(a.monto) > 0)) throw err('Falta el monto del pago.');
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(String(a.fecha || ''))) throw err('Falta la fecha del pago (AAAA-MM-DD).');
+        if (nv.tipo === 'venta' && a.tipo_pago !== 'otro') throw err('En una venta el comprobante se guarda como «otro»: no hay reserva, garantía ni primer mes.');
+        const ya = nv.tipo === 'arriendo' ? { reserva: nv.ciclo?.pagos?.reserva, garantia: nv.ciclo?.pagos?.garantia, primer_mes: nv.ciclo?.pagos?.primerMes, comision: nv.ciclo?.comision?.pago }[a.tipo_pago] : null;
+        const aviso = { reserva: 'Al registrar la reserva, el negocio pasa a «Reserva» y la propiedad queda reservada.', comision: 'Al registrar el pago de la comisión, el negocio se cierra como ganado y parte el postarriendo.' }[a.tipo_pago];
+        return { titulo: `Subir el comprobante al negocio ${n.codigo || n.id}`, detalle: [
+          `Negocio: ${[n.codigo, n.tipo, n.prop?.codigo, n.cliente?.nombre].filter(Boolean).join(' · ')}`,
+          `Corresponde a: ${TIPO_PAGO[a.tipo_pago]}`,
+          `Monto: ${montoTxt(a.monto, a.moneda)} · ${String(a.fecha).split('-').reverse().join('/')} · ${MEDIO_PAGO[a.medio] || a.medio}${a.referencia ? ' · ref. ' + a.referencia : ''}`,
+          `Archivo: ${adj.nombre}`, ...(ya ? ['⚠️ Ya hay un pago de este tipo registrado: se reemplaza.'] : [])], aviso: aviso || 'Queda guardado en el negocio y en su historial.' };
+      },
+      run: async (a) => {
+        const adj = adjunto.ver(); if (!adj) throw err('No tengo el comprobante: que el usuario lo mande de nuevo por WhatsApp.');
+        const n = negocio(a.negocio); const buf = Buffer.from(adj.bytes);
+        // con el servidor, negocios.pago le manda el archivo y él lo sube a R2 y aplica las reglas (reserva → «Reserva», comisión → cierra ganado);
+        // en pruebas (sin servidor) se sube con el gancho de prueba y se aplica la demo local
+        let comprobante = null; let archivo = null;
+        if (inmo.API) archivo = { nombre: adj.nombre, mime: adj.mime || 'application/pdf', bytes: buf };
+        else {
+          const subir = process.env.PF_MOCK === '1' && global.__subirArchivoRegistro ? global.__subirArchivoRegistro : null;
+          if (!subir) throw err('Los comprobantes se guardan solo con la cuenta de Asset: inicia sesión en la app.');
+          const clave = await subir('archivos_negocio', n.id, adj.nombre, buf, adj.mime);
+          comprobante = { clave, nombre: String(adj.nombre).slice(0, 200), tipo: adj.mime || '', bytes: buf.length, fecha: new Date().toISOString() };
+        }
+        const r = await negocios.pago(n.id, { tipo: a.tipo_pago, monto: a.monto, moneda: a.moneda, fecha: a.fecha, medio: a.medio, referencia: a.referencia, nota: a.nota, ...(archivo ? { archivo } : { comprobante }) });
+        const avisos = [...(r.mensajes || [])];
+        inmo.registrar(n.id, `Comprobante de pago subido por WhatsApp: ${TIPO_PAGO[a.tipo_pago]} · ${montoTxt(a.monto, a.moneda)} (${MEDIO_PAGO[a.medio] || a.medio}, ${String(a.fecha).split('-').reverse().join('/')})`, { ref2: n.propId });
+        adjunto.quitar();
+        return { ok: true, negocio: n.codigo || n.id, mensaje: `Listo: subí el comprobante (${TIPO_PAGO[a.tipo_pago]}, ${montoTxt(a.monto, a.moneda)}) al negocio ${n.codigo || n.id}.`, avisos, ...datos('negocios') };
+      } },
     { name: 'asset_agenda', modo: 'leer', description: 'Eventos de la agenda (visitas, reuniones, firmas, llamadas, tareas) en un rango de fechas.', parameters: S({ desde: str('AAAA-MM-DD (por defecto hoy)'), hasta: str('AAAA-MM-DD (por defecto en 14 días)'), tipo: en(['visita', 'reunion', 'firma', 'llamada', 'tarea', 'otro']), propiedad: REF_PROP, persona: REF_PER, incluir_cancelados: bool('Incluir cancelados') }),
       run: async (a) => { const l = agenda.listar({ desde: a.desde || hoy(), hasta: a.hasta || require('./hora').sumarDias(hoy(), 14), tipo: a.tipo, propId: a.propiedad ? prop(a.propiedad).id : undefined, personaId: a.persona ? persona(a.persona).id : undefined }).filter((e) => a.incluir_cancelados || e.estado !== 'cancelado');
         return { total: l.length, eventos: l.map(resumenEv) }; } },
@@ -193,11 +235,11 @@ function crear({ inmo, negocios, agenda, ml, pf, cambiarPropiedad, docs, pubs, e
       run: async (a) => { const n = negocio(a.negocio); const r = await negocios.mover(n.id, a.etapa); return { ok: true, negocio: resumenNeg(r.negocio), efectos: { datos: 'negocios' }, avisos: r.mensajes }; } },
     { name: 'asset_tarea_negocio', modo: 'escribir', description: 'Marca o desmarca una tarea de la etapa actual del negocio (por su texto o número, desde 1).', parameters: S({ negocio: REF_NEG, tarea: str('Texto o número de la tarea'), hecha: bool('true = hecha') }, ['negocio', 'tarea']),
       run: async (a) => { const n = negocio(a.negocio); const ts = n.etapaInfo.tareas || []; let i = Number(a.tarea) - 1; if (!(i >= 0 && i < ts.length)) i = ts.findIndex((t) => norm(t).includes(norm(a.tarea)));
-        if (i < 0) throw err(`La etapa «${n.etapaInfo.t}» tiene estas tareas: ${ts.join(' | ')}.`); const r = negocios.tarea(n.id, n.etapa, i, a.hecha !== false); return { ok: true, negocio: resumenNeg(r), ...datos('negocios') }; } },
+        if (i < 0) throw err(`La etapa «${n.etapaInfo.t}» tiene estas tareas: ${ts.join(' | ')}.`); const r = await negocios.tarea(n.id, n.etapa, i, a.hecha !== false); return { ok: true, negocio: resumenNeg(r), ...datos('negocios') }; } },
     { name: 'asset_proxima_accion', modo: 'escribir', description: 'Define la próxima acción de un negocio, con fecha.', parameters: S({ negocio: REF_NEG, texto: str('Qué hay que hacer'), fecha: str('AAAA-MM-DD') }, ['negocio', 'texto']),
       run: async (a) => { const n = negocio(a.negocio); const r = await negocios.guardar({ id: n.id, proximaAccion: { texto: a.texto, fecha: a.fecha || null } }); return { ok: true, negocio: resumenNeg(r), ...datos('negocios') }; } },
     { name: 'asset_vincular_firma', modo: 'escribir', description: 'Liga la operación de firma de Portalfirma a la etapa actual del negocio; al quedar firmada, el negocio avanza solo.', parameters: S({ negocio: REF_NEG, operacion: num('Número de operación') }, ['negocio', 'operacion']),
-      run: async (a) => { const n = negocio(a.negocio); negocios.vincularFirma(n.id, n.etapa, a.operacion); const r = await negocios.revisarFirmas(pf, n.id); return { ok: true, avisos: r.mensajes, negocio: resumenNeg(negocios.obtener(n.id)), ...datos('negocios') }; } },
+      run: async (a) => { const n = negocio(a.negocio); await negocios.vincularFirma(n.id, n.etapa, a.operacion); const r = await negocios.revisarFirmas(pf, n.id); return { ok: true, avisos: r.mensajes, negocio: resumenNeg(await negocios.obtener(n.id)), ...datos('negocios') }; } },
     { name: 'asset_cerrar_negocio', modo: 'confirmar', description: 'Cierra un negocio como ganado o perdido (pide motivo si se perdió). Cambia el estado de la propiedad.', parameters: S({ negocio: REF_NEG, resultado: en(['ganado', 'perdido']), motivo: str('Motivo si se perdió') }, ['negocio', 'resultado']),
       preparar: async (a) => { const n = negocio(a.negocio); if (a.resultado === 'perdido' && !a.motivo) throw err('Pregunta al usuario por qué se perdió el negocio.'); return { titulo: a.resultado === 'ganado' ? 'Cerrar el negocio con éxito' : 'Marcar el negocio como perdido', detalle: [`${n.tipo}: ${n.titulo}`, `Etapa: ${n.etapaInfo.t}`, ...(a.motivo ? [`Motivo: ${a.motivo}`] : [])], aviso: a.resultado === 'ganado' ? `La propiedad queda ${n.tipo === 'venta' ? 'vendida' : 'arrendada'} y su aviso se pausa.` : 'Si la propiedad estaba reservada por este negocio, vuelve a quedar disponible.' }; },
       run: async (a) => { const n = negocio(a.negocio); const r = await negocios.cerrar(n.id, a.resultado, a.motivo); return { ok: true, negocio: resumenNeg(r.negocio), avisos: r.mensajes, ...datos('negocios') }; } },
@@ -221,7 +263,7 @@ function crear({ inmo, negocios, agenda, ml, pf, cambiarPropiedad, docs, pubs, e
         return { ok: true, enviada: false, listo: true, propiedad: `${p.codigo} · ${p.titulo}`, visitante: r.visitante, fecha: r.fecha, hora: r.hora, datosDelDocumento: r.datosDelDocumento, archivo, indicacion: 'La orden NO se envió, NO se cobró y NO se agendó. El PDF quedó guardado en este computador para revisarlo; si está bien, que pida enviarla (asset_orden_visita).' }; } },
     { name: 'asset_orden_visita', modo: 'confirmar', description: 'SOLO cuando el usuario pide explícitamente la ORDEN de visita (el documento que firma el visitante). Genera el PDF de la «Orden de visita» de Asset con los datos de la propiedad y del visitante, lo envía a firmar con Portalfirma (cobra del saldo) y agenda la visita. Si el visitante no está en el CRM, pasa nombre y RUT.', parameters: S({ propiedad: REF_PROP, visitante: str('Persona del CRM (id, RUT o nombre) o nombre completo si es nueva'), rut: str('RUT del visitante si es nuevo'), email: str('Correo del visitante'), telefono: str('Teléfono del visitante'), fecha: str('Fecha de la visita AAAA-MM-DD'), hora: str('Hora HH:MM'), vigencia_dias: str('Días hábiles de vigencia de la orden (por defecto 250)'), garantia_seriedad: str('Garantía de seriedad de los arriendos, como se escribe en la orden (por defecto $250.000)'), corredor_nombre: str('Nombre del corredor (si falta en la cuenta; queda guardado)'), corredor_email: str('Correo del corredor (si falta en la cuenta; queda guardado)'), operacion: en(['venta', 'arriendo'], 'Venta o arriendo'), negocio: str('Negocio del visitante en esa propiedad (si lo hay): la firma y la visita quedan ligadas a él'), otras_propiedades: { type: 'array', items: { type: 'string' }, description: 'Otras propiedades que el visitante verá (van en la misma orden)' } }, ['propiedad', 'visitante']),
       preparar: async (a) => { guardarCorredor(a); const { r } = await ordenServidor(a, 'vista-previa'); a.__vista = r;
-        return { titulo: 'Generar la orden de visita y enviarla a firmar', detalle: r.datosDelDocumento.map((d) => `${d.campo}: ${d.valor}`), aviso: 'Se cobra del saldo de Portalfirma y el visitante recibe el enlace para firmar en su correo. La visita queda en la agenda.', pdf: r.pdf, archivo: r.archivo }; },
+        return { titulo: 'Generar la orden de visita y enviarla a firmar', detalle: r.datosDelDocumento.map((d) => `${d.campo}: ${d.valor}`), aviso: 'Se cobra del saldo de Portalfirma y el visitante recibe el enlace para firmar en su correo. La visita queda en la agenda.', pdf: r.pdf, archivo: r.archivo, firmantes: r.firmantes }; },
       run: async (a) => { guardarCorredor(a); const { r, p, n } = await ordenServidor(a, 'enviar');
         try { await inmo.sincronizar(); } catch {}   // trae la firma y la visita que creó el servidor
         if (r.simulada) { (global.__pfMock ||= {})._ordenes ||= []; global.__pfMock._ordenes.push({ simulada: true }); const c = persona(a.visitante, { opcional: true }) || await inmo.guardarPersona({ nombre: a.visitante, rut: a.rut, email: a.email || '', telefono: a.telefono || '', roles: ['interesado'] }); const ya0 = a.fecha ? agenda.listar({ propId: p.id, personaId: c.id, tipo: 'visita', estado: 'programado' }).find((x) => x.fecha === a.fecha) : null; const e0 = ya0 || (a.fecha ? agenda.crear({ tipo: 'visita', fecha: a.fecha, hora: a.hora, propId: p.id, personaIds: [c.id], negocioId: n?.id || null, notas: `Orden de visita: operación ${r.operacion}` }) : null); if (e0) agenda.actualizar(e0.id, { orden: { operacion: r.operacion } });
@@ -273,15 +315,10 @@ function crear({ inmo, negocios, agenda, ml, pf, cambiarPropiedad, docs, pubs, e
         const out = []; for (const x of l) out.push(await docs.seguimiento(x.operacion)); return { propiedad: p.codigo, enFirma: out, ...datos('propiedades') }; } },
     { name: 'asset_firmas_pendientes', modo: 'leer', description: 'Todos los documentos enviados a firmar desde Asset que siguen en curso: operación, documento, propiedad, quién falta (con su calidad) y hace cuántos días. Úsala cuando pregunten «qué falta por firmar», «quién no ha firmado» o para hacer seguimiento.', parameters: S({ propiedad: REF_PROP }),
       run: async (a) => { if (!firmas) return { pendientes: [] }; const p = a.propiedad ? prop(a.propiedad) : null; const l = firmas.pendientes({ propId: p?.id || null });
-        return { pendientes: l, atrasadas: l.filter((x) => x.atrasada).length, indicacion: l.some((x) => x.atrasada) ? 'Hay firmas de hace 3 días o más: ofrece reenviar el enlace (asset_reenviar_firma) o revisar si el correo o el celular del firmante está bien (asset_corregir_firmante).' : '' }; } },
+        return { pendientes: l, atrasadas: l.filter((x) => x.atrasada).length, indicacion: l.some((x) => x.atrasada) ? 'Hay firmas de hace 3 días o más: ofrece reenviar el enlace (asset_reenviar_firma). Si el correo o el celular del firmante estaba malo, por ahora no se puede corregir un proceso ya enviado: hay que enviarlo de nuevo con el dato correcto.' : '' }; } },
     { name: 'asset_reenviar_firma', modo: 'confirmar', description: 'Reenvía por correo o WhatsApp el enlace de firma de Portalfirma a un firmante que aún no firma. El enlace lo envía Portalfirma.', parameters: S({ operacion: num('Número de operación'), firmante: str('Nombre, RUT o calidad del firmante (p. ej. «arrendatario»)'), via: en(['correo', 'whatsapp'], 'Por dónde (por defecto correo)') }, ['operacion', 'firmante']),
       preparar: async (a) => ({ titulo: `Reenviar el enlace de firma (operación ${a.operacion})`, detalle: [`Firmante: ${a.firmante}`, `Por ${a.via === 'whatsapp' ? 'WhatsApp' : 'correo'}`], aviso: 'Portalfirma le envía de nuevo su enlace para firmar.' }),
       run: async (a) => firmas.reenviar({ operacion: a.operacion, firmante: a.firmante, via: a.via === 'whatsapp' ? 'whatsapp' : 'correo' }) },
-    { name: 'asset_corregir_firmante', modo: 'confirmar', description: 'Cuando el enlace de firma no le llegó a alguien porque su correo o celular estaba malo: corrige el dato del firmante en la operación de Portalfirma, le reenvía el enlace y corrige también la persona en el CRM.', parameters: S({ operacion: num('Número de operación'), firmante: str('Nombre, RUT o calidad del firmante'), email: str('Correo correcto'), telefono: str('Celular correcto') }, ['operacion', 'firmante']),
-      preparar: async (a) => { const c = a.email ? firmas.correo(a.email) : null; const t = a.telefono ? firmas.celular(a.telefono) : null;
-        if (c && !c.ok) throw err(`El correo ${a.email}: ${c.motivo}`); if (t && !t.ok) throw err(`El celular ${a.telefono} ${t.motivo}.`); if (!c && !t) throw err('Pide el correo o el celular correcto.');
-        return { titulo: `Corregir el contacto de ${a.firmante} (operación ${a.operacion})`, detalle: [...(c ? [`Correo: ${c.valor}`] : []), ...(t ? [`Celular: ${t.valor}`] : [])], aviso: 'Se corrige en Portalfirma y en el CRM, y Portalfirma le reenvía su enlace para firmar.' }; },
-      run: async (a) => ({ ...(await firmas.corregir({ operacion: a.operacion, firmante: a.firmante, email: a.email || null, telefono: a.telefono || null })), ...datos('personas') }) },
 
     // ======================= portales =======================
     { name: 'asset_publicar_portal', modo: 'confirmar', description: 'Publica la propiedad en Portal Inmobiliario (Mercado Libre). Antes revisa la ficha; si falta algo, devuelve qué.', parameters: S({ propiedad: REF_PROP, operacion: en(['venta', 'arriendo']), titulo_portal: str('Título para el aviso, máx. 60 caracteres') }, ['propiedad', 'operacion']),

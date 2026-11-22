@@ -24,7 +24,8 @@ import { cerrarModal } from '../../../utils/modal';
 import { toast } from '../../../utils/app';
 import { descargarPdf } from '../../../utils/pdf';
 import { correoValido, formatearRut, rutValido } from '../../../utils/rut';
-import VisorPdf, { PdfCargando } from '../agenda/VisorPdf';
+import { PdfCargando } from '../agenda/VisorPdf';
+import PdfConFirmas from '../agenda/PdfConFirmas';
 import { usePdfInicial, type IPdfInicial } from '../agenda/usePdfInicial';
 import { AvisoDominio, type ICambiosFicha, type IDominioFicha } from './AvisoDominio';
 
@@ -77,7 +78,7 @@ const REAJUSTES: [string, string][] = [['ipc_semestral', 'IPC cada 6 meses'], ['
 export function ContratoArriendo({ modo = 'borrador', versionN, alGuardarVersion, pdf: pdf0, pdfPromesa, errorInicial, datos, firma, propiedad, firmantes: firmantes0, alGuardar, alConfirmar, dominio, alGuardarDominio, alLeerDominio }: IContratoArriendoProps) {
   const [v, setV] = useState<IContratoDatos>(datos); const f = firma ?? null;
   const [guardado, setGuardado] = useState<{ v: IContratoDatos; f: IContratoFirma | null }>({ v: datos, f: firma ?? null });
-  const { pdf, setPdf, cargando: cargandoPdf, errorCarga } = usePdfInicial(pdf0, pdfPromesa);
+  const { pdf, setPdf, cargando: cargandoPdf, errorCarga, firmantes: firmantesPdf } = usePdfInicial(pdf0, pdfPromesa);
   const [fp, setFp] = useState<IFirmantePersona[]>(firmantes0); const [fpGuardado, setFpGuardado] = useState<IFirmantePersona[]>(firmantes0);
   const [abiertos, setAbiertos] = useState<Set<string>>(() => new Set(firmantes0.filter((p) => faltaDe(p).length).map((p) => p.personaId)));   // los incompletos se abren solos
   const [guardando, setGuardando] = useState(false); const [enviando, setEnviando] = useState(false);
@@ -196,7 +197,7 @@ export function ContratoArriendo({ modo = 'borrador', versionN, alGuardarVersion
         </div>
 
         <Card titulo="Vista previa" subtitulo={firmando ? 'Así se envía a firmar' : 'Borrador del contrato'} relleno={true} className="tw:min-w-0 tw:lg:sticky tw:lg:top-0">
-          <div className={guardando ? 'tw:opacity-50 tw:transition-opacity' : 'tw:transition-opacity'}>{pdf ? <VisorPdf base64={pdf} /> : cargandoPdf ? <PdfCargando /> : <p className={NOTA}>No se pudo preparar el PDF: completa las condiciones y guarda.</p>}</div>
+          <div className={guardando ? 'tw:opacity-50 tw:transition-opacity' : 'tw:transition-opacity'}>{pdf ? <PdfConFirmas pdf={pdf} firmantes={firmantesPdf} plantilla="contrato-arriendo" /> : cargandoPdf ? <PdfCargando /> : <p className={NOTA}>No se pudo preparar el PDF: completa las condiciones y guarda.</p>}</div>
         </Card>
       </div>
       <p className={`${NOTA} tw:mt-3`}>{firmando ? 'Se cobra del saldo de Portalfirma y cada firmante recibe el enlace en su correo. Se firma exactamente el PDF aprobado.' : 'Al guardar la versión se archiva su PDF y se anulan las aprobaciones anteriores. Después la envías al propietario y al arrendatario por WhatsApp. El texto es un borrador para que lo revise el notario.'}</p>

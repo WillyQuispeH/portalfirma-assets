@@ -240,13 +240,11 @@ export class EjecutivoService {
     nuevos = await this.fotos.interceptar(wa, v, cv, nuevos);
     if (!nuevos.length) return;
     const abierto = v.senalEn && Date.now() - v.senalEn.getTime() < ABIERTO_MS;
-    // con su Asset cerrado, el equipo le responde desde el servidor
-    if (!abierto) {
-      try {
-        if (await this.equipo.atender(wa, v, cv, nuevos)) return;
-      } catch (e) {
-        this.log.warn(`equipo en el servidor: ${(e as Error).message}`);
-      }
+    // el equipo le responde SIEMPRE desde el servidor (con su Asset abierto o cerrado); la cola de su Asset es solo el respaldo si la IA no está
+    try {
+      if (await this.equipo.atender(wa, v, cv, nuevos)) return;
+    } catch (e) {
+      this.log.warn(`equipo en el servidor: ${(e as Error).message}`);
     }
     await this.db.waEntrante.createMany({
       data: nuevos.map((m) => ({

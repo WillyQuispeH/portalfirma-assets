@@ -39,8 +39,8 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     const ab = await app.evaluate(() => global.__abiertos || []); const borr = ab.find((x) => /\.pdf$/.test(x));
     ok(borr && fs.readFileSync(borr).slice(0, 5).toString() === '%PDF-' && fs.statSync(borr).size > 3000, '«Ver PDF» genera un PDF real de borrador');
     await shot('dg1-form.png');
-    await w.click('.ga-dn [data-rev]'); await w.waitForSelector('.ga-dn .ga-conf [data-pag]');
-    ok(await w.inputValue('.ga-dn [data-pag]') === 'pagos@corredora.cl' && /Juan|JUAN/.test(await txt('.ga-dn .ga-conf ul')), 'antes de enviar pide confirmación con firmantes y correo del pagador');
+    await w.click('.ga-dn [data-rev]'); await w.waitForSelector('.ga-dn .ga-conf');
+    ok(!(await w.$('.ga-dn [data-pag]')) && /Juan|JUAN/.test(await txt('.ga-dn .ga-conf ul')), 'antes de enviar pide confirmación con firmantes (sin pedir correo del pagador)');
     await w.click('.ga-dn [data-send]'); await w.waitForSelector('.ga-res', { timeout: 20000 });
     const res = await txt('.ga-res'); const op = Number((res.match(/Operación (\d+)/) || [])[1]);
     ok(op > 0 && /Comprobante de pago de reserva/.test(res) && /Quedó ligado a la etapa «Reserva»/.test(res), `se sube a Portalfirma y se envía a firmar (operación ${op}), ligado a la etapa Reserva`);

@@ -26,7 +26,8 @@ import { cerrarModal } from '../../../utils/modal';
 import { toast } from '../../../utils/app';
 import { descargarPdf } from '../../../utils/pdf';
 import { formatearRut } from '../../../utils/rut';
-import VisorPdf, { PdfCargando } from '../agenda/VisorPdf';
+import { PdfCargando } from '../agenda/VisorPdf';
+import PdfConFirmas from '../agenda/PdfConFirmas';
 import { usePdfInicial, type IPdfInicial } from '../agenda/usePdfInicial';
 
 export interface IPromesaDatos {
@@ -63,7 +64,7 @@ const dec = (t: string) => Number(String(t).replace(',', '.'));
 export function PromesaCompraventa({ pdf: pdf0, pdfPromesa, errorInicial, archivo, propiedad, datos, alGuardar, alEnviar }: IPromesaCompraventaProps) {
   const [v, setV] = useState<IPromesaDatos>(datos);
   const [guardado, setGuardado] = useState<IPromesaDatos>(datos);
-  const { pdf, setPdf, cargando: cargandoPdf, errorCarga } = usePdfInicial(pdf0, pdfPromesa);
+  const { pdf, setPdf, cargando: cargandoPdf, errorCarga, firmantes: firmantesPdf } = usePdfInicial(pdf0, pdfPromesa);
   const [guardando, setGuardando] = useState(false); const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState(errorInicial || '');
   const sucio = JSON.stringify(v) !== JSON.stringify(guardado);
@@ -161,7 +162,7 @@ export function PromesaCompraventa({ pdf: pdf0, pdfPromesa, errorInicial, archiv
         </div>
 
         <Card titulo="Vista previa" subtitulo="Así queda el documento" relleno={true} className="tw:min-w-0 tw:lg:sticky tw:lg:top-0">
-          <div className={guardando ? 'tw:opacity-50 tw:transition-opacity' : 'tw:transition-opacity'}>{pdf ? <VisorPdf base64={pdf} /> : cargandoPdf ? <PdfCargando /> : <p className={NOTA}>Todavía no hay PDF: completa los datos marcados y guarda.</p>}</div>
+          <div className={guardando ? 'tw:opacity-50 tw:transition-opacity' : 'tw:transition-opacity'}>{pdf ? <PdfConFirmas pdf={pdf} firmantes={firmantesPdf} plantilla="promesa-compraventa" /> : cargandoPdf ? <PdfCargando /> : <p className={NOTA}>Todavía no hay PDF: completa los datos marcados y guarda.</p>}</div>
         </Card>
       </div>
       <p className={`${NOTA} tw:mt-3`}>Firmar en Asset es opcional: puedes descargar el PDF. Si lo envías, se cobra del saldo de Portalfirma y el comprador y el vendedor reciben el enlace en su correo{faltaCorreo.length ? ` (falta el correo de ${faltaCorreo.join(', ')})` : ''}. Cuando firmen ambos, el negocio avanza solo.</p>

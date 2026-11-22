@@ -128,8 +128,8 @@ function FormNuevoNegocio({ tipo, propiedades, personas, etapas, propId: prop0, 
         <EnLinea>
           <Select etiqueta={venta ? 'Comprador' : 'Arrendatario'} id="nnCli" value={clienteId} onChange={(e) => setClienteId(e.target.value)} vacia="Elegir…"
             opciones={personas.map((c) => [c.id, c.texto])} />
-          <Boton id="nnPer" variante="secundario" icono="plus" title="Crear persona" aria-label="Crear persona"
-            className="tw:h-14! tw:w-14 tw:px-0" onClick={() => alCrearPersona(leer())} />
+          <Boton id="nnPer" variante="secundario" tamano="lg" icono="plus" title="Crear persona" aria-label="Crear persona"
+            className="tw:w-14 tw:px-0" onClick={() => alCrearPersona(leer())} />
         </EnLinea>
         <EnLinea>
           <Input etiqueta={venta ? 'Precio acordado' : 'Arriendo mensual acordado'} id="nnVal" type="number" step="any" value={valor} onChange={(e) => setValor(e.target.value)} />

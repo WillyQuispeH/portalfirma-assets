@@ -1,6 +1,6 @@
-// Reglas de «Enviar a firmar»: nombres de la firma y del trámite, validación de cada firmante y el pedido a Portalfirma.
+// Reglas de «Enviar a firmar»: nombres de la firma y del trámite, validación de cada firmante y el pedido de envío.
 import { correoValido, formatearRut, normalizarTelefono, rutValido, telefonoValido } from './rut';
-import type { IAnalisis, IFirmante, IPayloadEnvio, IRequeridos, TCampoFirmante } from '../store/interfaces/envio.interface';
+import type { IAnalisis, IFirmante, IPayloadEnvio, IPosicionFirma, IRequeridos, TCampoFirmante } from '../store/interfaces/envio.interface';
 
 export const TIPOS_FIRMA: Record<string, string> = { avanzada: 'Firma electrónica avanzada (FEA)', simple: 'Firma electrónica simple (FES)', visada: 'Visada por Portalfirma', enrolada: 'FEA enrolada' };
 export const TRAMITES_NOTARIALES: Record<string, string> = { none: 'Ninguno', legalization: 'Legalización', protocolization: 'Protocolización' };
@@ -25,9 +25,9 @@ export function erroresFirmante(s: IFirmante, req: IRequeridos) {
   return e;
 }
 
-// Los firmantes que detectó Portalfirma, completados con los que vienen de una plantilla llenada en el editor
+// Los firmantes que detectó la IA de Asset, completados con los que vienen de una plantilla llenada en el editor
 export function firmantesIniciales(a: IAnalisis, pre: Partial<IFirmante>[] | null): IFirmante[] {
-  const lista: IFirmante[] = (a.extract?.firmantes || []).map((s) => ({ ...firmanteVacio(), fullName: s.fullName || '', rut: s.rut || '', email: s.email || '', phone: s.phone || '', alias: s.alias || '' }));
+  const lista: IFirmante[] = (a.extract?.firmantes || []).map((s) => ({ ...firmanteVacio(), fullName: s.fullName || '', rut: s.rut || '', email: s.email || '', phone: s.phone || '', alias: s.alias || '', pagina: s.pagina || 0 }));
   (pre || []).forEach((p, i) => {
     let s = lista.find((x) => x.alias && p.alias && x.alias.toLowerCase() === p.alias.toLowerCase()) || lista.find((x, k) => k >= i && !x.rut && !x.prellenado);
     if (!s) { s = firmanteVacio(); lista.push(s); }
@@ -46,11 +46,10 @@ export function ordenarCampo(s: IFirmante, k: TCampoFirmante): IFirmante {
   return n;
 }
 
-export function construirPayload(a: IAnalisis, firmantes: IFirmante[], o: { tipoFirma: string; protocolizacion: string; pagador: string; descuento: string }): IPayloadEnvio {
+export function construirPayload(a: IAnalisis, firmantes: IFirmante[], o: { tipoFirma: string; protocolizacion: string; posiciones?: IPosicionFirma[] | null; paginaExtra?: boolean }): IPayloadEnvio {
   const bloqueada = configBloqueada(a);
   const p: IPayloadEnvio = {
     document_id: a.ingest.document_id,
-    email: o.pagador.trim(),
     signatories: firmantes.map((s) => {
       const x: IPayloadEnvio['signatories'][number] = { rut: formatearRut(s.rut), alias: s.alias.trim(), fullName: s.fullName.trim(), email: s.email.trim(), phone: normalizarTelefono(s.phone) };
       if (!bloqueada) x.typeSign = s.typeSign || o.tipoFirma;
@@ -59,7 +58,9 @@ export function construirPayload(a: IAnalisis, firmantes: IFirmante[], o: { tipo
   };
   if (bloqueada) p.document_config_id = a.extract!.document_config_id;
   else p.protocolization = o.protocolizacion;
-  const code = o.descuento.trim(); if (code) p.code = code;
+  // con las firmas ubicadas en el PDF: una por firmante y en su orden; si no, Portalfirma agrega la página de firmas
+  if (o.posiciones && o.posiciones.length === firmantes.length) p.posiciones = o.posiciones;
+  if (o.paginaExtra) p.paginaExtra = true;
   return p;
 }
 

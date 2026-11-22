@@ -36,7 +36,7 @@ function Inicio() {
     <Layout titulo="Flujos documentales" ilustracion={{ imagen: 'img/formas/etapa.svg', tinte: '#6d5bd0' }}
       subtitulo="Una receta une una plantilla, una nómina y sus firmantes. Prepárala una vez y vuelve a usarla con cada nómina nueva."
       acciones={<>
-        <Boton variante="secundario" icono="files" id="flBulk" onClick={() => abrirCarga('load')}>Carga masiva</Boton>
+        <Boton variante="secundario" icono="files" id="flBulk" onClick={() => abrirCarga('load')}>Firma masiva</Boton>
         <Boton icono="plus" id="flNew" onClick={() => asistenteIniciar()}>Nuevo flujo</Boton>
       </>}>
       <h3 className="fl-h">Mis recetas</h3>
@@ -105,7 +105,7 @@ function PasoFirma() {
         <div className="bk-foot" id="flRunFoot">
           {cola.sending ? <Boton variante="secundario" data-a="stop" onClick={() => nominaFlujo.detener()}>Detener el envío</Boton> : <>
             <Boton variante="fantasma" icono="rotateR" data-a="sync" onClick={flujosSincronizarFirmas}>Actualizar firmas</Boton>
-            <Boton variante="fantasma" data-a="bulk" onClick={() => abrirCarga('load')}>Ver en Carga masiva</Boton>
+            <Boton variante="fantasma" data-a="bulk" onClick={() => abrirCarga('load')}>Ver en Firma masiva</Boton>
             {listos.length > 0 && <Boton icono="sign" data-a="send" onClick={enviar}>Enviar {listos.length} a firmar</Boton>}
           </>}
         </div>

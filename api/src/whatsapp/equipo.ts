@@ -1,12 +1,9 @@
-// El equipo del ejecutivo (Pedro · Captación, Juanita · Documentos, Diego · Seguimiento, Fernanda · Leads) atendido
-// por el SERVIDOR cuando su Asset está cerrado: así el corredor siempre tiene respuesta desde su celular.
-// Con su Asset abierto, lo atiende el Asset (ejecutivo.ts lo deja en la cola), con todas sus herramientas.
-//
-// Trabaja sobre la base, con los permisos del usuario (el corredor ve sus leads, negocios y agenda; el administrador,
-// todo; los datos del propietario solo en las propiedades que captó o si es administrador): resumen del día, cartera,
-// personas, negocios, leads (y su conversación), agenda (ver y agendar), firmas y notas. Lo que necesita el computador
-// (generar documentos, enviar a firmar, publicar en portales, Google Drive, editar fichas, audios) lo deja para cuando
-// abra Asset: queda en su cola (wa_entrantes) y su Asset lo atiende al abrirse.
+// El equipo del ejecutivo (Pedro · Captación, Juanita · Documentos, Diego · Seguimiento, Fernanda · Leads) vive en el SERVIDOR y atiende
+// siempre, con el Asset del corredor abierto o cerrado: la lógica de negocio está una sola vez aquí y la app de escritorio es la parte visual.
+// Sus herramientas están en ./herramientas (negocios, propiedades, documentos y firmas); aquí quedan las de consulta.
+// Lee texto, notas de voz y archivos (PDF, fotos, chat exportado), con los permisos del usuario (el corredor ve lo suyo; el administrador,
+// todo; los datos del propietario solo en las propiedades que captó o si es administrador). La cola (wa_entrantes) es solo el respaldo
+// si la IA no está disponible.
 // Cada personaje lleva su propia conversación (wa_vinculos.datos.hilos), como en la app.
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-base-to-string --
    los datos de leads, negocios y eventos son JSON de la app y se leen campo a campo */
@@ -22,6 +19,8 @@ import { IaService, type HerramientaIa, type TurnoIa } from './ia';
 import { EnviadosService } from './enviados';
 import type { Conversacion, MensajeWa, Wechatia } from './wechatia';
 import { contexto, diaSemana, firma, hoy, nombresAsistentes, norm, sumarDias } from './comun';
+import { HerramientasRegistro } from './herramientas/registro';
+import type { AdjuntoRecibido } from './herramientas/tipos';
 
 type TPersona = 'pedro' | 'juanita' | 'diego' | 'fernanda';
 const PERSONAS: Record<TPersona, { nombre: string; area: string; foco: string }> = {
@@ -50,6 +49,8 @@ interface Ctx {
   admin: boolean;
   /** lo que escribió (o dijo) el corredor en este turno */
   texto: string;
+  /** los archivos que mandó en este turno */
+  adjuntos: AdjuntoRecibido[];
 }
 
 const HERRAMIENTAS: HerramientaIa[] = [
@@ -114,25 +115,6 @@ const HERRAMIENTAS: HerramientaIa[] = [
     input_schema: { type: 'object', properties: { desde: { type: 'string' }, hasta: { type: 'string' } } },
   },
   {
-    name: 'agendar',
-    description:
-      'Agenda un evento en la agenda del corredor: visita, reunión, llamada o tarea. Si es una visita, da el código de la propiedad. Confirma con el corredor el día y la hora antes de agendar. Si dijo el día de la semana («el jueves 13»), pásalo en dia_semana: se verifica que coincida con la fecha.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        tipo: { type: 'string', enum: ['visita', 'reunion', 'llamada', 'tarea'] },
-        titulo: { type: 'string' },
-        fecha: { type: 'string', description: 'AAAA-MM-DD' },
-        dia_semana: { type: 'string', description: 'el día de la semana que dijo el corredor (lunes…domingo), si lo dijo' },
-        hora: { type: 'string', description: 'HH:MM' },
-        codigo_propiedad: { type: 'string' },
-        lugar: { type: 'string' },
-        notas: { type: 'string' },
-      },
-      required: ['tipo', 'titulo', 'fecha'],
-    },
-  },
-  {
     name: 'orden_visita',
     description:
       'Prepara y envía a firmar la ORDEN DE VISITA de una propiedad (documento que firma el visitante; cobra del saldo de Portalfirma). SIEMPRE en dos pasos: 1) llámala SIN confirmado: arma el documento y devuelve los datos que llevaría, sin enviar ni cobrar; muéstraselos al corredor. 2) Solo cuando el corredor responda que sí, llámala de nuevo con confirmado: true y EXACTAMENTE los mismos datos. El servidor rechaza el envío si no hubo ese paso previo o si el corredor no confirmó. Si el visitante no está en el CRM necesita nombre completo y RUT; siempre necesita su correo.',
@@ -159,18 +141,9 @@ const HERRAMIENTAS: HerramientaIa[] = [
     input_schema: { type: 'object', properties: { todas: { type: 'boolean' } } },
   },
   {
-    name: 'anotar',
-    description: 'Deja una nota en el historial de una propiedad (por su código).',
-    input_schema: {
-      type: 'object',
-      properties: { codigo_propiedad: { type: 'string' }, nota: { type: 'string' } },
-      required: ['codigo_propiedad', 'nota'],
-    },
-  },
-  {
     name: 'dejar_para_asset',
     description:
-      'Para lo que solo se hace con Asset abierto en el computador (generar documentos o contratos, enviar a firmar, publicar en portales, Google Drive, crear o editar fichas, enviar WhatsApp a clientes): deja el pedido en la cola y su Asset lo hace apenas se abra.',
+      'Solo para algo que NINGUNA otra herramienta puede hacer (por ejemplo Google Drive): deja el pedido en la cola y su Asset lo hace apenas se abra. Antes de usarla, revisa que de verdad no exista una herramienta para eso.',
     input_schema: { type: 'object', properties: { pedido: { type: 'string' } }, required: ['pedido'] },
   },
 ];
@@ -189,6 +162,7 @@ export class EquipoService {
     private readonly actividad: ActividadService,
     private readonly transcripcion: TranscripcionService,
     private readonly ordenVisita: OrdenVisitaService,
+    private readonly registro: HerramientasRegistro,
   ) {}
 
   /** transcribe los audios de los mensajes; lo que no se pueda transcribir queda para su Asset (cola) como antes */
@@ -206,6 +180,26 @@ export class EquipoService {
         }
       }
     return { textos, avisos: [...new Set(avisos)] };
+  }
+
+  /** baja los archivos que no son audio (PDF, fotos, chat exportado…) para que las herramientas los lean */
+  private async descargar(nuevos: MensajeWa[]): Promise<AdjuntoRecibido[]> {
+    const out: AdjuntoRecibido[] = [];
+    for (const m of nuevos)
+      for (const url of m.adjuntos.filter((u) => !ES_AUDIO.test(u))) {
+        try {
+          const r = await fetch(url, { signal: AbortSignal.timeout(60_000) });
+          if (!r.ok) throw new Error(`respondió ${r.status}`);
+          const bytes = Buffer.from(await r.arrayBuffer());
+          if (!bytes.length || bytes.length > 25 * 1024 * 1024) continue;
+          const mime = (r.headers.get('content-type') || '').split(';')[0].trim().toLowerCase() || 'application/octet-stream';
+          const nombre = decodeURIComponent((url.split('?')[0].split('/').pop() || 'archivo').slice(-80)) || 'archivo';
+          out.push({ nombre, mime, bytes });
+        } catch (e) {
+          this.log.warn(`adjunto sin descargar: ${(e as Error).message}`);
+        }
+      }
+    return out;
   }
 
   /** a quién le habla: el personaje que nombra («Juanita, …», «mis documentos Juanita»; si nombra varios, el primero),
@@ -234,7 +228,11 @@ export class EquipoService {
     const conAdjuntos = nuevos.some((m) => m.adjuntos.length);
     // los audios (notas de voz) se transcriben aquí, aun con su Asset cerrado; el resto de los archivos los ve su Asset
     const { textos: dichos, avisos: avisosAudio } = await this.escuchar(v.corredoraId, nuevos);
-    const texto = [escrito, ...dichos].filter(Boolean).join('\n');
+    const archivos = await this.descargar(nuevos);
+    const aviso = archivos.length
+      ? `[El corredor adjuntó ${archivos.length === 1 ? 'un archivo' : archivos.length + ' archivos'}: ${archivos.map((a) => `${a.nombre} (${a.mime})`).join(', ')}. Las herramientas lo reciben solas.]`
+      : '';
+    const texto = [escrito, ...dichos, aviso].filter(Boolean).join('\n');
     const datos = (v.datos ?? {}) as { persona?: string; hilos?: Record<string, TurnoIa[]>; nombre?: string };
     const persona = this.personaDe(texto, datos.persona, v.corredoraId);
     const p = { ...PERSONAS[persona], nombre: nombresAsistentes.get(v.corredoraId)?.[persona] || PERSONAS[persona].nombre };
@@ -249,12 +247,9 @@ export class EquipoService {
       const r = await wa.enviarAContacto(cv.contactId, eco);
       await this.enviados.registrar(v.corredoraId, cv.telefono, { messageId: r.messageId, texto: eco, enHilo: false });
     }
-    // audios y archivos: los atiende su Asset al abrirse (el servidor solo lee texto)
+    // un audio o archivo que no se pudo abrir: se lo decimos (antes quedaba para el escritorio)
     if (!texto && conAdjuntos) {
-      await this.encolar(v, nuevos);
-      await enviar(
-        'Recibí tu audio o archivo. Con Asset cerrado solo leo texto: lo veo apenas abras Asset. Si es urgente, escríbemelo.',
-      );
+      await enviar('No pude abrir lo que mandaste. ¿Me lo envías de nuevo o me dices qué es?');
       return true;
     }
     if (!texto) return true;
@@ -262,7 +257,7 @@ export class EquipoService {
 
     const u = await this.db.usuario.findUnique({ where: { id: v.usuarioId } });
     if (!u) return false;
-    const c: Ctx = { corredoraId: v.corredoraId, usuarioId: u.id, nombre: u.nombre, admin: u.rol === 'ADMIN', texto };
+    const c: Ctx = { corredoraId: v.corredoraId, usuarioId: u.id, nombre: u.nombre, admin: u.rol === 'ADMIN', texto, adjuntos: archivos };
     const nota = avisosAudio.length
       ? `\n\n[Aviso de la transcripción del audio: ${avisosAudio.join(' ')} No guardes ese dato sin que lo confirme.]`
       : '';
@@ -271,8 +266,8 @@ export class EquipoService {
     const sistema = [
       `Eres ${p.nombre}, del área de ${p.area} del equipo de PortalFirma Asset (CRM inmobiliario chileno). Trabajas para ${u.nombre}, corredor${c.admin ? ' y administrador' : ''} de la corredora, y le respondes por WhatsApp. Tu foco: ${p.foco}, pero ayudas con lo que te pida usando las herramientas.`,
       contexto(),
-      'Su Asset está cerrado en el computador: tú respondes desde el servidor. Puedes consultar la cartera, personas, negocios, leads, la agenda y las firmas, agendar eventos y dejar notas. La ORDEN DE VISITA sí la haces tú, aun con Asset cerrado, con orden_visita: primero sin confirmado para mostrarle los datos y, solo cuando el corredor responda que sí, con confirmado: true (cobra y envía un enlace a una persona: nunca la envíes sin su sí). Lo demás que necesita Asset abierto (otros documentos como mandatos o contratos, publicar en portales, Drive, crear o editar fichas, escribirle a clientes) déjalo con dejar_para_asset y dile que se hará al abrir Asset.',
-      'REGLA DE NEGOCIOS: todo negocio tiene siempre una propiedad y un interesado (comprador en venta, arrendatario en arriendo). Si el corredor te pide crear o armar algo de un negocio y falta uno de los dos (por ejemplo una orden de visita para una propiedad sin interesado vinculado), dilo y pídele el dato que falta; nunca lo supongas.',
+      'Tú administras todo desde el servidor, aunque el corredor esté en terreno y su computador esté apagado: propiedades, personas, leads, agenda, negocios de venta y arriendo con todos sus pasos (tareas, etapas, pagos y comprobantes, aceptación, evaluación, contrato, postarriendo), documentos y firmas, portales. Usa siempre la herramienta que corresponda; no le pidas que abra Asset. Lo que cobra, publica fuera, envía a firmar, cierra o borra se hace en DOS pasos: primero la herramienta SIN confirmado para armar y mostrarle un resumen corto, y solo cuando el corredor responda que sí, de nuevo con confirmado: true; nunca lo hagas sin su sí. Pregunta SOLO lo que falte: si el dato ya está en el CRM, en el mensaje o en el archivo que mandó (PDF, foto, chat exportado), no lo vuelvas a pedir. dejar_para_asset es solo para algo que de verdad no tenga herramienta.',
+      'REGLA DE NEGOCIOS: todo negocio tiene siempre una propiedad y un interesado (comprador en venta, arrendatario en arriendo) y un código NG-XXX. Si el corredor te pide algo de un negocio y no lo nombró o hay más de uno posible, pregúntale SIEMPRE a cuál (por su código NG-XXX); si falta la propiedad o el interesado, dilo y pídele el dato; nunca lo supongas. Un comprobante de pago (PDF o foto) que te manda se lee con la herramienta de comprobantes: pregunta a qué negocio va, pide solo lo que el comprobante no trae y confirma con SÍ antes de registrarlo.',
       'Fotos de una propiedad: el corredor puede mandarlas a este mismo chat con el código en el mensaje (por ejemplo «PF-1001») y se agregan solas a la ficha, aun con Asset cerrado. Nunca digas que no puedes recibir fotos.',
       'Responde corto y claro, como en WhatsApp: frases breves, listas con «•», *negrita* con asteriscos simples, sin títulos ni tablas. Usa siempre las herramientas antes de afirmar datos; nunca inventes. Fechas como «lunes 10/11». Trátalo de tú.',
     ].join('\n\n');
@@ -283,9 +278,9 @@ export class EquipoService {
         uso: 'equipo',
         sistema,
         historial: hilo,
-        herramientas: HERRAMIENTAS,
+        herramientas: [...HERRAMIENTAS, ...this.registro.todas()],
         ejecutar: (n, a) => this.ejecutar(c, v, n, a),
-        vueltas: 6,
+        vueltas: 10,
       });
     } catch (e) {
       this.log.warn(`equipo (${persona}): ${(e as Error).message}`);
@@ -673,8 +668,10 @@ export class EquipoService {
       case 'dejar_para_asset':
         await this.encolar(v, [{ id: 'eq' + Date.now().toString(36), texto: txt('pedido') }]);
         return { ok: true, nota: 'Queda en la cola: su Asset lo hará apenas se abra.' };
-      default:
-        return { error: 'Herramienta desconocida.' };
+      default: {
+        const h = this.registro.buscar(nombre);
+        return h ? h.ejecutar(c, a) : { error: 'Herramienta desconocida.' };
+      }
     }
   }
 

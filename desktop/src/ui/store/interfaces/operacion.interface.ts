@@ -15,6 +15,8 @@ export interface IOperacion {
 export interface IFirmante {
   name?: string; paternalLastName?: string; maternalLastName?: string; rut?: string; email?: string; phone?: string;
   signed?: boolean; url?: string; personId?: string | number; alias?: string;
+  /** el id del firmante en Portalfirma: con él se le reenvía el enlace */
+  id?: string;
 }
 export interface IDetalleOperacion {
   operation: number;
@@ -25,6 +27,11 @@ export interface IDetalleOperacion {
   updatedDateAt?: string;
   processId?: string | null; // sin él no se puede traer el documento
   versions: { label: string; done: boolean }[];
+  /** los archivos que tiene Portalfirma: `kind` es original, signed o legalized */
+  files?: { fileName?: string; kind?: string; id?: string }[];
   signatories?: IFirmante[];
 }
-export interface IEstadoCuenta { api?: boolean; apiAvailable?: boolean; corredora?: boolean; phone?: string; account?: string }
+export interface IEstadoCuenta { /** la corredora tiene ingresadas las credenciales de la API de Portalfirma (Integraciones): sin ellas no se lista nada */ integracion?: boolean; api?: boolean; apiAvailable?: boolean; corredora?: boolean; phone?: string; account?: string }
+
+/** una versión del documento de una operación */
+export type TVersionDoc = 'original' | 'signed' | 'legalized';

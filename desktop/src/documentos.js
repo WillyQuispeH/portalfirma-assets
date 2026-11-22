@@ -189,7 +189,7 @@ function crear({ inmo, negocios, pf, firmas = null }) {
     const doc = { operacion: op, plantilla: f.plantilla.nombre, plantillaId: f.plantilla.id, fecha: new Date().toISOString(), estado: 'en_firma', firmantes: firmantes.filter((s) => s.rol !== 'corredor' || s.nombre).map((s) => ({ nombre: s.nombre, rut: s.rut, rol: s.titulo, personaId: s.personaId || null })), negocioId: null };
     if (op) firmas?.registrar({ operacion: op, nombre: f.plantilla.nombre, propId: f.propiedad?.id || null, negocioId: o.negocioId || null, firmantes: doc.firmantes.map((x) => ({ ...x, alias: x.rol })), origen: 'plantilla' });
     let negMsg = null;
-    if (o.negocioId && op) { const n = negocios.ver(o.negocioId); if (n?.etapaInfo?.firma) { negocios.vincularFirma(n.id, n.etapa, op); doc.negocioId = n.id; negMsg = `Quedó ligado a la etapa «${n.etapaInfo.t}» del negocio: cuando se firme, avanza solo.`; } }
+    if (o.negocioId && op) { const n = negocios.ver(o.negocioId); if (n?.etapaInfo?.firma) { try { await negocios.vincularFirma(n.id, n.etapa, op); } catch (e) { console.warn('[negocios] vincular la firma:', e.message); } doc.negocioId = n.id; negMsg = `Quedó ligado a la etapa «${n.etapaInfo.t}» del negocio: cuando se firme, avanza solo.`; } }
     if (f.propiedad) inmo.agregarFirma(doc, [f.propiedad.id], `Documento «${f.plantilla.nombre}» enviado a firmar${op ? ' (operación ' + op + ')' : ''}`);
     else inmo.guardar();
     return { ok: true, operacion: op, plantilla: f.plantilla.nombre, propiedad: f.propiedad, firmantes: doc.firmantes, negocio: negMsg, mensaje: String(r.text).slice(0, 300) };

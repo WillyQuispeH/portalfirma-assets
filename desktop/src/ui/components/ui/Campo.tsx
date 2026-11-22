@@ -2,8 +2,8 @@
 // y el texto de ayuda o error. Estados: reposo (gris), foco (azul), ok (verde + ✓), error (rojo),
 // pendiente (amarillo) y resaltado (lila, valor propuesto por Asset).
 //
-// Altura: con etiqueta 56px (formulario); sin etiqueta 40px (= Boton md / Tabs), para que en barras
-// de filtros buscador, selects, pestañas y botones midan lo mismo.
+// Altura: con etiqueta 56px (= Boton lg, en filas de formulario); sin etiqueta 40px (= Boton md / Tabs),
+// para que en barras de filtros buscador, selects, pestañas y botones midan lo mismo.
 import type { ReactNode } from 'react';
 import { cx } from '../../utils/cx';
 

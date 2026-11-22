@@ -26,6 +26,7 @@ import type { RolAsset } from '../../../store/interfaces/acceso.interface';
 import { toast } from '../../../utils/app';
 import { api } from '../../../utils/api';
 import { fechaHora } from '../../../utils/formato';
+import { useMarca } from '../../../store/zustand/marca.store';
 
 const ROLES: [RolAsset, string][] = [['CORREDOR', 'Corredor'], ['ADMIN', 'Administrador']];
 // nota en gris y error de los formularios
@@ -85,9 +86,10 @@ export default function Usuarios() {
 }
 
 function Fila({ u, yo, admin, onEditar, onClave, onAgente, wa, onPedir }: { u: IUsuario; yo: string; admin: boolean; onEditar: () => void; onClave: () => void; onAgente: () => void; wa: string; onPedir: () => void }) {
+  const fotos = useMarca((s) => s.fotos);
   return (
     <li data-usr={u.id} className={`tw:flex tw:items-center tw:gap-3 tw:p-3 tw:rounded-card tw:border tw:border-solid tw:border-edge tw:border-b-2 tw:border-b-edge-b tw:bg-card ${u.activo ? '' : 'tw:opacity-60'}`}>
-      <Avatar nombre={u.nombre} />
+      <Avatar nombre={u.nombre} foto={fotos[u.id]} />
       <div className="tw:min-w-0 tw:flex-1">
         <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
           <b className="tw:text-sm">{u.nombre}</b>{u.id === yo && <span className="tw:text-xs tw:text-muted">(tú)</span>}

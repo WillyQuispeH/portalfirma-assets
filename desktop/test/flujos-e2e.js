@@ -68,9 +68,9 @@ const pdfText = async (file) => { const doc = await pdfjs.getDocument({ data: ne
   const sigs = await w.evaluate(() => { const r = window.Flujos._fl.w.run.rows[0]; return window.Flujos._fl.bulk.items.find((x) => x.id === r.bulkId).signers; });
   ok(sigs.length === 1 && sigs[0].alias === 'Mandante' && sigs[0].rut === '22.222.222-2' && sigs[0].email === 'maria@correo.cl', 'en la cola con su firmante ya asignado (sin detectarlo con IA)');
   await w.screenshot({ path: path.resolve(__dirname, 'fl4-listos.png') });
-  await w.click('[data-a="send"]'); await w.waitForSelector('#flPay');
+  await w.click('[data-a="send"]'); await w.waitForSelector('#modalCard #mOk');
   ok(/3 operaciones/.test(await w.textContent('#modalCard')) && /descuenta saldo/.test(await w.textContent('#modalCard')), 'confirma antes de enviar: cantidad y cobro');
-  await w.fill('#flPay', 'pagos@andes.cl'); await w.click('#mOk');
+  ok(!(await w.$('#flPay')), 'y no pide correo del pagador'); await w.click('#mOk');
   await w.waitForFunction(() => { const run = window.Flujos._fl.w.run; const b = window.Flujos._fl.bulk.items; return run.rows.every((r) => b.find((x) => x.id === r.bulkId)?.status === 'sent'); }, null, { timeout: 60000 }); await sleep(400);
   ok(/Enviado · N°/.test(await w.textContent('#flRunTable')), 'enviados: cada fila con su número de operación');
   await w.screenshot({ path: path.resolve(__dirname, 'fl5-enviados.png') });

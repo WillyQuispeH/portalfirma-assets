@@ -15,8 +15,7 @@ import { Confirmacion } from './Documentos';
 import { resultado } from './gestion';
 
 export interface IDocNuevo { propId?: string | null; titulo?: string; tipoDoc?: string | null; personaId?: string | null; negocioId?: string | null }
-const DATOS_FIRMANTE: [string, string, string?][] = [['alias', 'Rol en el documento', 'pagador, visitante, arrendatario…'], ['nombre', 'Nombre'], ['rut', 'RUT'], ['email', 'Correo'], ['telefono', 'Celular', '+56 9 …']];
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const DATOS_FIRMANTE: [string, string, string?][] = [['alias', 'Rol en el documento', 'visitante, arrendatario, mandante…'], ['nombre', 'Nombre'], ['rut', 'RUT'], ['email', 'Correo'], ['telefono', 'Celular', '+56 9 …']];
 
 export function DocNuevo({ o }: { o: IDocNuevo }) {
   const [listo, setListo] = useState<{ tipo: string; f: any } | null>(null); const [error, setError] = useState('');
@@ -43,7 +42,6 @@ function Editor({ o, tipo, f }: { o: IDocNuevo; tipo: string; f: any }) {
   const [texto, setTexto] = useState(''); const [auto, setAuto] = useState(true); const [iaHecha, setIaHecha] = useState(false);
   const [ligar, setLigar] = useState(true); const [redactando, setRedactando] = useState(false); const [viendo, setViendo] = useState(false);
   const [conf, setConf] = useState(false); const [enviando, setEnviando] = useState(false); const [faltaConf, setFaltaConf] = useState('');
-  const [pag, setPag] = useState('');
   const libre = tipo === 'libre';
   const pers = [...f.personas].sort((a: any, b: any) => (b.rol ? 1 : 0) - (a.rol ? 1 : 0) || a.nombre.localeCompare(b.nombre, 'es'));
 
@@ -89,14 +87,11 @@ function Editor({ o, tipo, f }: { o: IDocNuevo; tipo: string; f: any }) {
   };
   const revisar = () => {
     if (nFalta || hueco) { node.querySelector<HTMLElement>('.falta input, .falta select, .falta textarea')?.focus(); return toast('Completa los datos marcados.'); }
-    let x = ''; try { x = localStorage.getItem('pf.pagador') || ''; } catch { /* sin almacenamiento */ }
-    setPag(x || firm.find((s) => s.rol === 'corredor')?.email || ''); setFaltaConf(''); setConf(true); setTimeout(() => Ag().bajar(), 0);
+    setFaltaConf(''); setConf(true); setTimeout(() => Ag().bajar(), 0);
   };
   const enviar = async () => {
-    const email = pag.trim(); if (!EMAIL.test(email)) return setFaltaConf('Escribe el correo del pagador.');
-    try { localStorage.setItem('pf.pagador', email); } catch { /* sin almacenamiento */ }
     const ob = objeto(); setEnviando(true); setFaltaConf('');
-    let res: any; try { res = await api('dgEnviar', { ...ob, email }); } catch (e) { setEnviando(false); return setFaltaConf((e as Error).message); }
+    let res: any; try { res = await api('dgEnviar', { ...ob }); } catch (e) { setEnviando(false); return setFaltaConf((e as Error).message); }
     const cod = f.propiedad ? ' · ' + f.propiedad.codigo : '';
     terminar(<><b>{ob.titulo}</b>{cod} creado en Asset y enviado a firmar</>, `${ob.titulo}${cod} creado en Asset y enviado a firmar`);
     resultado({ ...res, plantilla: ob.titulo }, f.propiedad || { codigo: '', id: null }); W.AssetRefrescar?.();
@@ -159,7 +154,6 @@ function Editor({ o, tipo, f }: { o: IDocNuevo; tipo: string; f: any }) {
         <Confirmacion
           firmantes={[<><b>Documento:</b> {titulo.trim()}{f.propiedad ? ' · ' + f.propiedad.codigo : ''} (PDF de Asset)</>,
             ...firm.filter((x) => x.firma).map((x) => <><b>{x.titulo}</b> ({x.alias}): {x.nombre} · {x.rut} · {x.email}</>)]}
-          extra={<Input etiqueta="Correo del pagador (tu cuenta)" data-pag type="email" value={pag} onChange={(e) => setPag(e.target.value)} placeholder="pagos@empresa.cl" />}
           cobro="Se sube el PDF a Portalfirma, se cobra del saldo y cada firmante recibe su enlace. Queda guardado en la ficha de la propiedad y en la de cada firmante."
           falta={faltaConf} enviando={enviando} textoEnviando="Creando el PDF y enviando…" alEditar={() => setConf(false)} alEnviar={enviar} />
       )}

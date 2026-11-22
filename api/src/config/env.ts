@@ -24,6 +24,8 @@ const esquema = z.object({
   API_URL_PUBLICA: z.url().transform((u) => u.replace(/\/+$/, '')),
   /** servidor MCP de Portalfirma (firma digital y plantillas) */
   PORTALFIRMA_MCP_URL: z.url().default('https://mcp.portalfirma.cl/api/mcp'),
+  /** API de integración de Portalfirma (enviar a firmar, estado, PDF firmado); cada corredora ingresa sus credenciales en Integraciones */
+  PORTALFIRMA_API_URL: z.url().default('https://integracion.portalfirma.cl/api'),
   /** credencial del servicio de archivos de Portalfirma (cabecera «id» de /api/file/getById); sin ella no se bajan PDFs */
   PORTALFIRMA_ARCHIVOS_ID: z.string().optional(),
   /** correos (separados por coma) de quienes revisan lo de la plataforma: casos y reglas notariales de todas las corredoras */

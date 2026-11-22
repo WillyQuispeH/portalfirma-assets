@@ -25,7 +25,8 @@ import { descargarPdf } from '../../../utils/pdf';
 import { correoValido, formatearRut, rutValido } from '../../../utils/rut';
 import DatosPersona, { faltaDePersona, guardarPersonaDoc, personaCambio, type IPersonaDoc } from './DatosPersona';
 import { AvisoDominio, type ICambiosFicha, type IDominioFicha } from './AvisoDominio';
-import VisorPdf, { PdfCargando } from '../agenda/VisorPdf';
+import { PdfCargando } from '../agenda/VisorPdf';
+import PdfConFirmas from '../agenda/PdfConFirmas';
 import { usePdfInicial, type IPdfInicial } from '../agenda/usePdfInicial';
 
 export interface ICartaDatos {
@@ -63,7 +64,7 @@ export function CartaOferta({ pdf: pdf0, pdfPromesa, errorInicial, tipo, datos, 
   const [v, setV] = useState<ICartaDatos>(datos);
   const [props, setProps] = useState<IPersonaDoc[]>(propietarios0); const [propsGuardado, setPropsGuardado] = useState<IPersonaDoc[]>(propietarios0);
   const [guardado, setGuardado] = useState<ICartaDatos>(datos);
-  const { pdf, setPdf, cargando: cargandoPdf, errorCarga } = usePdfInicial(pdf0, pdfPromesa);
+  const { pdf, setPdf, cargando: cargandoPdf, errorCarga, firmantes: firmantesPdf } = usePdfInicial(pdf0, pdfPromesa);
   const [guardando, setGuardando] = useState(false); const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState(errorInicial || '');
   const [conProp, setConProp] = useState(tipo === 'venta'); // el propietario acepta con su firma: en venta siempre; en arriendo, opcional
@@ -164,7 +165,7 @@ export function CartaOferta({ pdf: pdf0, pdfPromesa, errorInicial, tipo, datos, 
         </div>
 
         <Card titulo="Vista previa" subtitulo="Así se envía a firmar" relleno={true} className="tw:min-w-0 tw:lg:sticky tw:lg:top-0">
-          <div className={guardando ? 'tw:opacity-50 tw:transition-opacity' : 'tw:transition-opacity'}>{pdf ? <VisorPdf base64={pdf} /> : cargandoPdf ? <PdfCargando /> : <p className={NOTA}>No se pudo preparar el PDF.</p>}</div>
+          <div className={guardando ? 'tw:opacity-50 tw:transition-opacity' : 'tw:transition-opacity'}>{pdf ? <PdfConFirmas pdf={pdf} firmantes={firmantesPdf} plantilla="carta-oferta" /> : cargandoPdf ? <PdfCargando /> : <p className={NOTA}>No se pudo preparar el PDF.</p>}</div>
         </Card>
       </div>
       <p className={`${NOTA} tw:mt-3`}>Firmar en Asset es opcional: puedes descargar el PDF. Si lo envías, se cobra del saldo de Portalfirma y {venta ? 'el comprador y el vendedor reciben' : conProp ? 'cada firmante recibe' : 'el arrendatario recibe'} el enlace en su correo; el tipo de firma lo define la plantilla (Configuración › Plantillas). Cuando se firme, el negocio avanza solo.</p>

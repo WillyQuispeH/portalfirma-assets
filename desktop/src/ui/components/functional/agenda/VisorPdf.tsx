@@ -166,7 +166,8 @@ export default function VisorPdf({
 
   const cajaCls = cx(
     'tw:h-full tw:w-full tw:[&_canvas]:bg-white tw:[&_canvas]:shadow-md tw:[&_canvas]:select-none',
-    sinCaja ? '' : 'tw:p-3 tw:[&_canvas]:rounded',
+    // en el visor clásico el tope de altura va aquí (la caja es la que scrollea): con solo max-h en el marco, h-full no resolvía y la hoja quedaba cortada
+    sinCaja ? '' : 'tw:max-h-[58vh] tw:p-3 tw:[&_canvas]:rounded',
     puedePan
       ? cx('tw:overflow-auto tw:overscroll-contain tw:[scrollbar-gutter:stable]', arrastrando ? 'tw:cursor-grabbing' : 'tw:cursor-grab')
       : (ajustar === 'ancho' && !sinCaja ? 'tw:overflow-auto' : 'tw:overflow-hidden'),

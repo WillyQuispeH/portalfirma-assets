@@ -31,14 +31,10 @@ export default function DetalleOperacion({ d, alActualizar }: { d: IDetalleOpera
             <td>{!s.signed && (
               <div className="link-actions">
                 <Boton variante="secundario" tamano="sm" data-copy={(s.url || '').trim()} onClick={intentar(async () => { await navigator.clipboard.writeText((s.url || '').trim()); toast('Enlace copiado'); })}>Copiar</Boton>
-                <Boton variante="secundario" tamano="sm" data-mail={i} onClick={intentar(async () => {
-                  await envioOperacion.gestionar({ action: 'send_signature_link_by_email', email: s.email, name: s.name, link: (s.url || '').trim(), operation: d.operation });
-                  toast('Enlace enviado por correo a ' + s.email);
-                })}>Correo</Boton>
-                <Boton variante="secundario" tamano="sm" data-wa={i} onClick={intentar(async () => {
-                  await envioOperacion.gestionar({ action: 'send_signature_link_by_whatsapp', operation: d.operation, personId: s.personId });
-                  toast('Enlace enviado por WhatsApp');
-                })}>WhatsApp</Boton>
+                <Boton variante="secundario" tamano="sm" data-reenviar={i} disabled={!s.id} onClick={intentar(async () => {
+                  await envioOperacion.reenviar({ operacion: d.operation, firmanteId: s.id });
+                  toast('Enlace reenviado a ' + (s.email || nombre(s)));
+                })}>Reenviar enlace</Boton>
               </div>
             )}</td>
           </tr>
@@ -48,7 +44,7 @@ export default function DetalleOperacion({ d, alActualizar }: { d: IDetalleOpera
     {d.processId != null && <><h3 style={{ marginTop: 14 }}>Documento</h3><Boton variante="secundario" tamano="sm" data-doc onClick={intentar(verDocumento)}>Ver documento</Boton></>}
     <div className="actions" style={{ marginTop: 12 }}>
       <Boton variante="fantasma" tamano="sm" data-refresh onClick={alActualizar}>Actualizar</Boton>
-      {d.status !== 'finalized' && <Boton variante="secundario" tamano="sm" data-resend onClick={intentar(async () => { await envioOperacion.gestionar({ action: 'resend_operation_to_sign', contract_id: d.processId }); toast('Operación reenviada'); })}>Reenviar a todos</Boton>}
+      {d.status !== 'finalized' && <Boton variante="secundario" tamano="sm" data-resend onClick={intentar(async () => { await envioOperacion.reenviar({ operacion: d.operation }); toast('Operación reenviada'); })}>Reenviar a todos</Boton>}
     </div>
   </>;
 }

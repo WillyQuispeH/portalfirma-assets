@@ -2,7 +2,7 @@
 // Partes del kit: VentanaCabecera, VentanaCuerpo y VentanaPie, sueltas en un fragmento. La lógica (pf.bulkUpdate,
 // pf.bulkSend, saldo y pagador) sigue en el JS antiguo y llega como props.
 // Las pruebas usan .bk-sigrow, [data-k], #bkAll, #bkPay, #flPay, #mOk y #mCancel. .bk-sigs ensancha la ventana (styles.css).
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Boton from '../../../ui/Boton';
 import Input from '../../../ui/Input';
 import ListaDatos from '../../../ui/ListaDatos';
@@ -51,23 +51,22 @@ export function FirmantesDocumento({ nombre, tipo, firmantes, requeridos = {}, a
 }
 
 const TRAMITE: Record<string, string> = { none: 'Solo firma electrónica', legalization: 'Legalizar', protocolization: 'Protocolizar' };
-const CORREO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-// Confirmar el envío de varios documentos (modal-22 de Flujos y modal-43 de la carga masiva): saldo, trámite y pagador.
-// Si el correo es válido, cierra y llama a alEnviar(correo).
-export function ConfirmarEnvioLote({ n, saldo, tramite, correo = '', idCorreo, deAUna = false, alEnviar }: {
-  n: number; saldo?: number | null; tramite?: string; correo?: string; idCorreo: string; deAUna?: boolean; alEnviar: (correo: string) => void;
+// Confirmar el envío de varios documentos (modal-22 de Flujos y modal-43 de la carga masiva): saldo y trámite. Cierra y llama a alEnviar().
+// (No pide correo del pagador: el envío lo paga la cuenta de las credenciales de la API de Portalfirma.)
+export function ConfirmarEnvioLote({ n, saldo: saldoInicial, saldoPromesa, tramite, deAUna = false, alEnviar }: {
+  n: number; saldo?: number | null; /** el saldo al día, que se consulta mientras la ventana ya está abierta */ saldoPromesa?: Promise<number | null>; tramite?: string | null; deAUna?: boolean; alEnviar: () => void;
 }) {
-  const [email, setEmail] = useState(correo); const [mal, setMal] = useState(false);
-  const enviar = () => { const e = email.trim(); if (!CORREO.test(e)) { setMal(true); return; } cerrarModal(); alEnviar(e); };
+  const [saldo, setSaldo] = useState<number | null | undefined>(saldoInicial); const [consultando, setConsultando] = useState(!!saldoPromesa);
+  useEffect(() => {
+    let vivo = true; saldoPromesa?.then((v) => { if (vivo && v != null) setSaldo(v); }).catch(() => null).finally(() => { if (vivo) setConsultando(false); });
+    return () => { vivo = false; };
+  }, [saldoPromesa]);
+  const enviar = () => { cerrarModal(); alEnviar(); };
   return <>
     <VentanaCabecera icono="send" titulo={`Enviar ${n} documento(s) a firmar`} />
     <VentanaCuerpo className={FORM}>
       <p className={P}>Se crearán <strong>{n} operaciones</strong> en Portalfirma, una por documento{deAUna ? ', de a una' : ''}. <strong>Cada envío descuenta saldo</strong> según el tipo de firma y el trámite.</p>
-      <ListaDatos datos={[['Saldo actual', saldo != null ? '$' + Number(saldo).toLocaleString('es-CL') : '—'], ['Trámite', TRAMITE[tramite || 'none'] || '—']]} />
-      <Input etiqueta="Correo del pagador" id={idCorreo} value={email} placeholder="pagos@empresa.cl" error={mal ? 'Escribe un correo válido.' : null}
-        className={mal ? 'invalid' : undefined} onChange={(e) => { setEmail(e.target.value); setMal(false); }}
-        onKeyDown={(e) => { if (e.key === 'Enter') enviar(); }} />
+      <ListaDatos datos={[['Saldo actual', consultando && saldo == null ? <span className="tw:inline-flex tw:items-center tw:gap-2 tw:text-muted"><span className="spinner sm" aria-hidden="true" />Consultando…</span> : saldo != null ? '$' + Number(saldo).toLocaleString('es-CL') : '—'], ...(tramite === null ? [] : [['Trámite', TRAMITE[tramite || 'none'] || '—'] as [string, string]])]} />
     </VentanaCuerpo>
     <VentanaPie>
       <Boton id="mCancel" variante="secundario" onClick={cerrarModal}>Cancelar</Boton>

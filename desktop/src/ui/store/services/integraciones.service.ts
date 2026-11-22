@@ -9,6 +9,8 @@ import type { ICanales, IIaEstado, IMlEstado } from '../interfaces/integraciones
 export interface IGoogleConexion { conectada: boolean; estado: string | null; cuenta: string | null; conectadoEn: string | null; error: string | null }
 /** la cuenta de Convecta de la corredora (de donde se importa la cartera) */
 export interface IConvectaEstado { disponible: boolean; conectado: boolean; propia: boolean; conectadoEn?: string | null; error?: string | null; admin: boolean }
+/** las credenciales de la API de Portalfirma de la corredora (nunca vuelven a la pantalla: solo quién las ingresó) */
+export interface IPfApiEstado { conectado: boolean; customerId: string | null; email: string | null; conectadoEn?: string | null; admin: boolean }
 export interface IGoogleEstado { disponible: boolean; admin: boolean; usuario: IGoogleConexion; empresa: IGoogleConexion }
 
 export const integracionesService = {
@@ -16,6 +18,9 @@ export const integracionesService = {
   conectarWechatia: (token: string, locationId: string) => apiCruda<IWaEstado>('pvClaveWa', { token, locationId }),
   canales: () => apiCruda<ICanales>('waCanales'),
   guardarNumeroWa: (numero: string) => apiCruda('waNumero', numero),
+  pfApi: () => apiCruda<IPfApiEstado>('pfApiEstado'),
+  pfApiConectar: (o: { id: string; customerId: string; email: string; password: string }) => apiCruda<IPfApiEstado>('pfApiConectar', o),
+  pfApiDesconectar: () => apiCruda<IPfApiEstado>('pfApiDesconectar'),
   convecta: () => apiCruda<IConvectaEstado>('cvEstado'),
   convectaConectar: (clave: string) => apiCruda<IConvectaEstado>('cvConectar', clave),
   convectaDesconectar: () => apiCruda<IConvectaEstado>('cvDesconectar'),

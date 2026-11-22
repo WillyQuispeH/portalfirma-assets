@@ -254,6 +254,9 @@ pf.onFile((f) => window.editor.openPaths([f.path], true));
 pf.onOpenInEditor((paths) => window.editor.openPaths(paths, true));
 pf.onFileError((m) => toast(m, 4000));
 
+// la barra de lo que corre en segundo plano (análisis y envíos de la carga masiva), visible en cualquier pantalla
+window.ReactUI.montar('SegundoPlano', $('#segundoPlanoRaiz'));
+
 // ---------- Enviar a firmar (React) ----------
 // Las cuatro pantallas se montan una vez; su estado está en src/ui/store/zustand/envio.store.ts.
 ['drop', 'working', 'review', 'done'].forEach((paso) => window.ReactUI.montar('GestionEnviarAFirmar', $('#view-' + paso), { paso }));

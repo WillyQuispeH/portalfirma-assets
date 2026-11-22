@@ -497,6 +497,7 @@ const MUESTRAS: Record<string, () => Record<string, unknown>> = {
     },
     propiedad: { codigo: 'PF-1001', tipo: 'Departamento', direccion: 'Av. Ejemplo 3000, depto. 504, Las Condes' },
     interes: 'Alto',
+    interesClase: 'alto',
     observaciones:
       'El visitante recorrió la propiedad completa y le gustó la luz y la ubicación. Pidió los gastos comunes de los últimos meses.',
     notas: 'Volver a llamarlo el lunes.',
@@ -513,6 +514,18 @@ const MUESTRAS: Record<string, () => Record<string, unknown>> = {
     acuerdos: [{ texto: 'Enviar los gastos comunes por correo' }, { texto: 'Consultar a la dueña por una rebaja' }],
     hayProximos: true,
     proximosPasos: [{ texto: 'Enviar carta oferta si confirma' }, { texto: 'Agendar segunda visita con su pareja' }],
+    hayAudios: true,
+    audios: [
+      { n: 1, origen: 'Grabado en la app', cuando: '14 nov 2026, 11:05', peso: '2,4 MB', extracto: 'Aquí tenemos el living, que da a la terraza. La luz de la tarde es muy buena. Me gusta la distribución…' },
+      { n: 2, origen: 'WhatsApp', cuando: '14 nov 2026, 12:02', peso: '0,6 MB', extracto: 'El interesado quiere mudarse en diciembre; se consulta a la dueña por una rebaja.' },
+    ],
+    hayFotos: true,
+    fotos: [
+      { n: 1, src: PIXEL, pie: 'subida desde Asset' },
+      { n: 2, src: PIXEL, pie: 'por WhatsApp' },
+      { n: 3, src: PIXEL, pie: 'por WhatsApp' },
+    ],
+    fotosMas: 'y 3 fotos más en Asset',
   }),
 };
 

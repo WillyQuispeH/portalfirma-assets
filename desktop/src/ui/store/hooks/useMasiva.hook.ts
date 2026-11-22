@@ -5,11 +5,11 @@ import { masivaService } from '../services/masiva.service';
 
 export function useMasiva() {
   return useMasivaStore(useShallow((s) => ({
-    cola: s.cola, tab: s.tab, opciones: s.opciones, cds: s.cds,
-    masivaSetCola: s.masivaSetCola, masivaSetTab: s.masivaSetTab, masivaSetOpciones: s.masivaSetOpciones, masivaSetCds: s.masivaSetCds,
+    cola: s.cola, opciones: s.opciones,
+    masivaSetCola: s.masivaSetCola, masivaSetOpciones: s.masivaSetOpciones,
   })));
 }
 // las acciones sobre la cola: el proceso principal manda el estado nuevo por pf.onBulk
 export const cola = masivaService;
-// lectura del estado (pruebas y depuración: window.Masiva._bk / _cds)
+// lectura del estado (pruebas y depuración: window.Masiva._bk)
 export const estadoMasiva = () => useMasivaStore.getState();

@@ -2,7 +2,7 @@
 'use strict';
 // «Flujos documentales» está en React: src/ui/components/functional/gestion/flujos y src/ui/store/zustand/flujo.store.ts.
 // Aquí quedan: abrirla, el archivo soltado en la ventana (evento «pf:flujos-nomina»), la «Muestra» de un documento
-// (dibuja el PDF con pdf.js en el modal) y la confirmación del envío (saldo y pagador). La cola en vivo llega a
+// (dibuja el PDF con pdf.js en el modal) y la confirmación del envío (saldo). La cola en vivo llega a
 // React por el evento «pf:bulk» (src/renderer/masiva.js).
 (() => {
 const F = () => window.__estadoFlujos?.() || { vista: 'home', w: null, cola: { items: [] } };
@@ -30,14 +30,12 @@ async function muestra(spec, n) {
 }
 
 async function confirmarEnvio(ids, opts) {
-  const prefs = (await pf.prefs()).data || {};
-  let bal = state.session?.balance; try { const b = await pf.balance(); if (b.ok) bal = b.data; } catch {}
+  const saldoPromesa = pf.balance().then((b) => (b.ok ? b.data : null)).catch(() => null);   // la ventana se abre al tiro; el saldo llega después
   // ventana en React: src/ui/components/functional/gestion/carga-masiva/Ventanas.tsx (ConfirmarEnvioLote)
   window.Ventanas.abrir('gestion.envioLote', {
-    n: ids.length, saldo: bal, tramite: opts.protocolization || 'none', correo: prefs.payerEmail || '', idCorreo: 'flPay',
-    alEnviar: async (email) => {
-      pf.setPrefs({ payerEmail: email });
-      const r = await pf.bulkSend(ids, { email, protocolization: opts.protocolization || 'none', typeSign: opts.typeSign || 'simple' });
+    n: ids.length, saldo: state.session?.balance, saldoPromesa, tramite: opts.protocolization || 'none',
+    alEnviar: async () => {
+      const r = await pf.bulkSend(ids, { protocolization: opts.protocolization || 'none', typeSign: opts.typeSign || 'simple' });
       if (!r.ok) return toast(r.error, 5000);
       window.dispatchEvent(new CustomEvent('pf:bulk', { detail: r.data }));
       const sent = ids.filter((id) => r.data.items.find((x) => x.id === id)?.status === 'sent').length;

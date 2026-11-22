@@ -1,21 +1,22 @@
-// Estado de «Enviar a firmar»: el archivo, lo que detectó Portalfirma, los firmantes, el pago y el resultado.
+// Estado de «Enviar a firmar»: el archivo, lo que detectó la IA de Asset, los firmantes, dónde van sus firmas y el resultado.
 // Las cuatro pantallas (soltar, analizando, revisar y enviado) leen este mismo estado.
 import { create } from 'zustand';
 import { envioService } from '../services/envio.service';
 import { REQUERIDOS_BASE, firmanteVacio, firmantesIniciales, ordenarCampo } from '../../utils/envio';
-import type { IAnalisis, IArchivoEnvio, IDetalleOperacion, IFirmante, IRequeridos, IResultadoEnvio, TCampoFirmante } from '../interfaces/envio.interface';
+import type { IAnalisis, IArchivoEnvio, IDetalleOperacion, IFirmante, IPosicionFirma, IRequeridos, IResultadoEnvio, TCampoFirmante } from '../interfaces/envio.interface';
 
 interface IEnvioState {
   archivo: IArchivoEnvio | null;
   analisis: IAnalisis | null;
   ocupado: boolean;
-  pasoAnalisis: number; // 0 subiendo, 1 detectando firmantes, 2 listo
+  pasoAnalisis: number; // 0 leyendo el documento, 1 detectando firmantes, 2 listo
   firmantes: IFirmante[];
   requeridos: IRequeridos;
   tipoFirma: string;
   protocolizacion: string;
-  pagador: string;
-  descuento: string;
+  posiciones: IPosicionFirma[] | null; // las firmas ubicadas en el PDF; null = página de firmas al final
+  entrada: boolean; // acaba de terminar el análisis: la revisión entra con animación (el PDF pasa a la derecha y aparece la izquierda)
+  paginaExtra: boolean; // agregar además una página de firmas extra (la agrega Portalfirma)
   error: string; // bajo el botón «Enviar a firmar»
   // pantalla «Enviado»
   ultimaOp: number | string | null;
@@ -28,9 +29,9 @@ interface IEnvioState {
   envioSalirCampo: (i: number, k: TCampoFirmante) => void;
   envioAgregar: () => void;
   envioQuitar: (i: number) => void;
-  envioMover: (i: number, d: -1 | 1) => void;
+  envioReordenar: (de: number, a: number) => void;
   envioTocarTodos: () => void;
-  envioDatos: (d: Partial<Pick<IEnvioState, 'tipoFirma' | 'protocolizacion' | 'pagador' | 'descuento' | 'error'>>) => void;
+  envioDatos: (d: Partial<Pick<IEnvioState, 'tipoFirma' | 'protocolizacion' | 'posiciones' | 'paginaExtra' | 'entrada' | 'error'>>) => void;
   envioCancelar: () => void;
   envioListo: (r: IResultadoEnvio) => 'listo' | 'rechazado';
   envioDetalle: (op: number | string) => Promise<void>;
@@ -40,7 +41,7 @@ let reloj: ReturnType<typeof setTimeout> | undefined;
 
 export const useEnvioStore = create<IEnvioState>((set, get) => ({
   archivo: null, analisis: null, ocupado: false, pasoAnalisis: 0,
-  firmantes: [], requeridos: REQUERIDOS_BASE, tipoFirma: 'avanzada', protocolizacion: 'none', pagador: '', descuento: '', error: '',
+  firmantes: [], requeridos: REQUERIDOS_BASE, tipoFirma: 'avanzada', protocolizacion: 'none', posiciones: null, paginaExtra: false, entrada: false, error: '',
   ultimaOp: null, mensaje: '', detalle: null, errorDetalle: '', crudo: null,
 
   envioAnalizar: async (archivo, prellenar = null) => {
@@ -55,9 +56,8 @@ export const useEnvioStore = create<IEnvioState>((set, get) => ({
         analisis: r, archivo: r.file?.converted ? r.file : archivo, // se sube y se envía el PDF convertido
         pasoAnalisis: 2, requeridos: x.required_fields || REQUERIDOS_BASE,
         tipoFirma: x.type_sign || 'avanzada', protocolizacion: x.notarial_procedure || 'none',
-        firmantes: firmantesIniciales(r, prellenar), descuento: '', error: '',
+        firmantes: firmantesIniciales(r, prellenar), posiciones: null, paginaExtra: false, entrada: true, error: '',
       });
-      if (!get().pagador) envioService.preferencias().then((p) => { if (p.ok && !get().pagador) set({ pagador: p.data?.payerEmail || '' }); });
       return 'ok';
     } catch (e) {
       clearTimeout(reloj);
@@ -68,9 +68,10 @@ export const useEnvioStore = create<IEnvioState>((set, get) => ({
   envioSalirCampo: (i, k) => set((s) => ({ firmantes: s.firmantes.map((f, j) => (j === i ? ordenarCampo(f, k) : f)) })),
   envioAgregar: () => set((s) => ({ firmantes: [...s.firmantes, firmanteVacio()] })),
   envioQuitar: (i) => set((s) => ({ firmantes: s.firmantes.length > 1 ? s.firmantes.filter((_, j) => j !== i) : s.firmantes })),
-  envioMover: (i, d) => set((s) => {
-    const a = [...s.firmantes]; const j = i + d; if (j < 0 || j >= a.length) return {};
-    [a[i], a[j]] = [a[j], a[i]]; return { firmantes: a };
+  // quien firma primero se ordena arrastrando: el firmante `de` pasa a la posición `a`
+  envioReordenar: (de, a) => set((s) => {
+    if (de === a || de < 0 || a < 0 || de >= s.firmantes.length || a >= s.firmantes.length) return {};
+    const l = [...s.firmantes]; const [f] = l.splice(de, 1); l.splice(a, 0, f); return { firmantes: l };
   }),
   envioTocarTodos: () => set((s) => ({ firmantes: s.firmantes.map((f) => ({ ...f, tocado: true })) })),
   envioDatos: (d) => set(d),

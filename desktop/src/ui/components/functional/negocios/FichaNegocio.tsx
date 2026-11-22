@@ -274,7 +274,7 @@ export default function FichaNegocio({ n, etapas, corredores, vez, acc }: IFicha
       className="im-ficha ng-ficha"
       cabeceraClassName="im-ft"
       volver={{ texto: 'Negocios', alTocar: acc.volver, id: 'ngBack' }}
-      sobretitulo={<span className="im-code">{TIPO[n.tipo]} · {n.prop?.codigo || ''}</span>}
+      sobretitulo={<span className="im-code">{[n.codigo, TIPO[n.tipo], n.prop?.codigo].filter(Boolean).join(' · ')}</span>}
       titulo={n.prop?.titulo || 'Negocio'}
       subtitulo={<Subtitulo n={n} />}
       acciones={<>

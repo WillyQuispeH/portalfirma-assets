@@ -9,7 +9,7 @@ export interface IArchivoEnvio {
 
 export interface IRequeridos { rut?: boolean; alias?: boolean; name?: boolean; email?: boolean; phone?: boolean }
 
-export interface IFirmanteExtraido { fullName?: string; rut?: string; email?: string; phone?: string; alias?: string }
+export interface IFirmanteExtraido { fullName?: string; rut?: string; email?: string; phone?: string; alias?: string; /** la página donde está su línea de firma (la leyó la IA de Asset) */ pagina?: number }
 
 export interface IExtraccion {
   typeDocument?: string;
@@ -36,18 +36,23 @@ export interface IFirmante {
   email: string;
   phone: string;
   alias: string;
+  pagina?: number; // la página de su firma en el documento, si se sabe
   typeSign: string; // '' = igual que el documento
   tocado?: boolean; // ya salió del campo o intentó enviar: se muestran los errores
   prellenado?: boolean; // vino de una plantilla llenada en el editor
 }
 
+export interface IPosicionFirma { pagina: number; x: number; y: number }
+
 export interface IPayloadEnvio {
   document_id: string | number;
-  email: string;
   signatories: { rut: string; alias: string; fullName: string; email: string; phone: string; typeSign?: string }[];
   document_config_id?: string | number;
   protocolization?: string;
-  code?: string;
+  /** dónde va la firma de cada uno (en el orden de los firmantes); sin esto, Portalfirma agrega una página de firmas */
+  posiciones?: IPosicionFirma[];
+  /** además de las firmas ubicadas, Portalfirma agrega una página de firmas al final */
+  paginaExtra?: boolean;
 }
 
 export interface IResultadoEnvio {
@@ -56,6 +61,8 @@ export interface IResultadoEnvio {
 }
 
 export interface IFirmanteOperacion {
+  /** el id del firmante en Portalfirma: con él se le reenvía el enlace */
+  id?: string;
   name?: string;
   paternalLastName?: string;
   maternalLastName?: string;

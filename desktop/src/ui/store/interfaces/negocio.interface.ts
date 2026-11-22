@@ -28,6 +28,8 @@ export interface IEtapa {
 
 export interface INegocio {
   id: string;
+  /** el código del negocio en la corredora (NG-001…): lo asigna el servidor */
+  codigo?: string;
   tipo: TNegocioTipo;
   estado: TNegocioEstado;
   etapa: string;

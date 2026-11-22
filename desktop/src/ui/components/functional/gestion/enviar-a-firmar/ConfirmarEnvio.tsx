@@ -1,5 +1,5 @@
 // Confirmar el envío (en el modal de la app, con las partes del kit: VentanaCabecera, VentanaCuerpo y VentanaPie):
-// documento, firma, trámite, firmantes, pagador y saldo. #mOk y #mCancel los usan las pruebas.
+// documento, firma, trámite, firmantes, dónde van las firmas y saldo. #mOk y #mCancel los usan las pruebas.
 import { useState } from 'react';
 import Boton from '../../../ui/Boton';
 import ListaDatos from '../../../ui/ListaDatos';
@@ -18,13 +18,12 @@ export default function ConfirmarEnvio({ analisis, archivo, payload: p }: { anal
   const confirmar = async () => {
     setEnviando(true);
     try {
-      envioOperacion.guardarPagador(p.email);
       const r = await envioOperacion.enviar({ ...p, __fileName: archivo.name });
       cerrarModal(); mostrarEnviado(r);
     } catch (e) {
       cerrarModal();
       const m = (e as Error).message;
-      envioEstado().envioDatos({ error: /^Portalfirma/.test(m) ? m : 'Portalfirma rechazó el envío: ' + m });
+      envioEstado().envioDatos({ error: m });
     }
   };
   return <>
@@ -34,7 +33,7 @@ export default function ConfirmarEnvio({ analisis, archivo, payload: p }: { anal
         ['Documento', archivo.name],
         ['Firma', firma], ['Trámite notarial', tramite],
         ['Firmantes', p.signatories.map((s, i) => <span key={i}>{i > 0 && <br />}{i + 1}. {s.fullName} ({s.alias}) — {s.rut}</span>)],
-        ['Pagador', p.email], ['Saldo actual', monto(saldoSesion(), 'CLP')],
+        ['Firmas', p.posiciones ? 'Ubicadas en el documento' : 'En una página para las firmas'], ['Saldo actual', monto(saldoSesion(), 'CLP')],
       ]} />
       <p className="tw:mt-4 tw:mb-0 tw:text-[12.5px] tw:text-muted tw:leading-relaxed">La operación se cobrará según la tarifa de Portalfirma. Los firmantes recibirán su enlace de firma.</p>
     </VentanaCuerpo>

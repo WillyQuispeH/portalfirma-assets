@@ -33,7 +33,8 @@ import { cerrarModal } from '../../../utils/modal';
 import { toast } from '../../../utils/app';
 import { api } from '../../../utils/api';
 import { descargarPdf } from '../../../utils/pdf';
-import VisorPdf, { PdfCargando } from '../agenda/VisorPdf';
+import { PdfCargando } from '../agenda/VisorPdf';
+import PdfConFirmas from '../agenda/PdfConFirmas';
 import { usePdfInicial, type IPdfInicial } from '../agenda/usePdfInicial';
 
 export type TMedidor = 'luz' | 'agua' | 'aguaCaliente' | 'gas' | 'calefaccion';
@@ -145,7 +146,7 @@ export function ActaEntrega({ negocioId, pdf: pdf0, pdfPromesa, errorInicial, en
   const [inicial] = useState(() => normalizarEntrega(entrega));
   const [v, setV] = useState<IEntregaDatos>(inicial);
   const [guardado, setGuardado] = useState<IEntregaDatos>(inicial);
-  const { pdf, setPdf, cargando: cargandoPdf, errorCarga } = usePdfInicial(pdf0, pdfPromesa); const [firmantes, setFirmantes] = useState(firmantes0);
+  const { pdf, setPdf, cargando: cargandoPdf, errorCarga, firmantes: firmantesPdf } = usePdfInicial(pdf0, pdfPromesa); const [firmantes, setFirmantes] = useState(firmantes0);
   const [guardando, setGuardando] = useState(false); const [enviando, setEnviando] = useState(false); const [subiendo, setSubiendo] = useState(false);
   const [error, setError] = useState(errorInicial || '');
   const [tab, setTab] = useState<TPestana>('entrega');
@@ -366,7 +367,7 @@ export function ActaEntrega({ negocioId, pdf: pdf0, pdfPromesa, errorInicial, en
         </div>
 
         <Card titulo="Vista previa" subtitulo="Así se envía a firmar" relleno={true} className="tw:min-w-0 tw:lg:sticky tw:lg:top-0">
-          <div className={guardando ? 'tw:opacity-50 tw:transition-opacity' : 'tw:transition-opacity'}>{pdf ? <VisorPdf base64={pdf} /> : cargandoPdf ? <PdfCargando /> : <p className={NOTA}>No se pudo preparar el PDF: completa la fecha y el inventario y guarda.</p>}</div>
+          <div className={guardando ? 'tw:opacity-50 tw:transition-opacity' : 'tw:transition-opacity'}>{pdf ? <PdfConFirmas pdf={pdf} firmantes={firmantesPdf} plantilla="acta-entrega" /> : cargandoPdf ? <PdfCargando /> : <p className={NOTA}>No se pudo preparar el PDF: completa la fecha y el inventario y guarda.</p>}</div>
         </Card>
       </div>
       <p className={`${NOTA} tw:mt-3`}>Se cobra del saldo de Portalfirma. Cuando firmen ambas partes, la propiedad queda «Arrendada». El texto es un borrador para que lo revise el notario.</p>

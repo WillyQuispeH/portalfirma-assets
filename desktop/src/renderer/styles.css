@@ -1646,3 +1646,7 @@ button.et-chk:focus-visible { outline: 2px solid var(--ui-lav-edge); outline-off
 /* las ventanas se arrastran por su encabezado (app.js): mientras se mueve, el fondo se aclara */
 #modalCard.arrastrando, #modalCard.arrastrando .mdl-cab { cursor: grabbing; user-select: none; }
 .modal:has(#modalCard.arrastrando) { background: rgba(12,16,32,.08); -webkit-backdrop-filter: none; backdrop-filter: none; }
+
+/* el logo de la corredora en la barra de arriba (más ancho que el de PortalFirma): cabe sin deformarse y se lee en los dos temas */
+.brand-logo.propio { max-width: 150px; width: auto; object-fit: contain; }
+html[data-theme="dark"] .brand-logo.propio { filter: none; background: #fff; border-radius: 6px; padding: 2px 6px; box-sizing: content-box; }

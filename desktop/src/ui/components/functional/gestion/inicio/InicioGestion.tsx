@@ -75,7 +75,7 @@ export default function InicioGestion() {
   const hacer = (k: string) => { if (NUEVAS.has(k) && !visto(k)) { marcarVisto(k); setVistos((n) => n + 1); } accionGestion(k); };
   const Nuevo = ({ k }: { k: string }) => (NUEVAS.has(k) && !visto(k) ? <Badge tono="lavanda" variante="tactil" className="new-badge">Nuevo</Badge> : null);
 
-  // tarjeta grande (Enviar a firmar, Mis operaciones) y chica (Abrir, Crear, Combinar, Convertir)
+  // tarjeta grande (Enviar a firmar, Mis operaciones, Firma masiva) y chica (Abrir, Crear, Combinar, Convertir)
   const Tarjeta = ({ k, grande = false }: { k: string; grande?: boolean }) => {
     const [, , t, d] = ACCION[k]; const m = DE_MIEMBROS.has(k); const marca = k === 'send';
     return (
@@ -117,7 +117,7 @@ export default function InicioGestion() {
       <div className="tw:grid tw:items-start tw:gap-ui tw:grid-cols-1 tw:xl:grid-cols-[minmax(0,1fr)_340px]">
         <div className="hub-center tw:flex tw:min-w-0 tw:flex-col tw:gap-ui">
           <Nivel i={0}>
-            <div className="tw:grid tw:grid-cols-2 tw:gap-ui">{NIVELES[0].grandes.map((k) => <Tarjeta key={k} k={k} grande />)}</div>
+            <div className="tw:grid tw:grid-cols-3 tw:gap-ui">{NIVELES[0].grandes.map((k) => <Tarjeta key={k} k={k} grande />)}</div>
             <div className="tw:grid tw:grid-cols-2 tw:gap-ui tw:mt-3 tw:lg:grid-cols-4">{NIVELES[0].chicas.map((k) => <Tarjeta key={k} k={k} />)}</div>
           </Nivel>
 

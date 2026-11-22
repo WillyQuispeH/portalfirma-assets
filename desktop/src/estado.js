@@ -99,7 +99,7 @@ function crear({ inmo, negocios, agenda }) {
     if (!ev.negocioId && agenda.ligarNegocio) agenda.ligarNegocio(ev.id, n.id);
     const antes = n.etapa; let movido = false;
     if (antes === 'interes') { await negocios.mover(n.id, 'visita', 'Visita agendada'); movido = true; }
-    if (['interes', 'visita'].includes(antes)) { const et = etapasDe(n.tipo).find((e) => e.id === 'visita'); const i = (et?.tareas || []).findIndex((t) => /agendar/i.test(t)); if (i >= 0) negocios.tarea(n.id, 'visita', i, true); }
+    if (['interes', 'visita'].includes(antes)) { const et = etapasDe(n.tipo).find((e) => e.id === 'visita'); const i = (et?.tareas || []).findIndex((t) => /agendar/i.test(t)); if (i >= 0) await negocios.tarea(n.id, 'visita', i, true); }
     return { negocioId: n.id, cliente: n.cliente?.nombre || null, antes, etapa: movido ? 'visita' : antes, movido };
   }
 

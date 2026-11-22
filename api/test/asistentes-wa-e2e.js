@@ -94,6 +94,13 @@ function respuestaIa(b) {
   const sis = typeof b.system === 'string' ? b.system : '';
   if (/analista que revisa los documentos/.test(sis)) return texto(JSON.stringify(IA.docs.shift() || { clase: 'otro', legible: false, resumen: '', alertas: [] }));
   if (/analista de una corredora de propiedades/.test(sis)) return texto(JSON.stringify({ resumen: 'Resumen de prueba para el corredor.' }));
+  if (/lee la respuesta de una persona/.test(sis)) { // la respuesta de una parte al contrato en revisión
+    const u0 = (typeof b.messages[0].content === 'string' ? b.messages[0].content : '').split('Lo que escribió:').pop().toLowerCase();
+    if (/apruebo|de acuerdo|conforme/.test(u0)) return texto(JSON.stringify({ decision: 'aprueba', resumen: '' }));
+    if (/corrij|cambi/.test(u0)) return texto(JSON.stringify({ decision: 'comenta', resumen: 'Pide cambiar el plazo a 24 meses' }));
+    if (/\?/.test(u0)) return texto(JSON.stringify({ decision: 'pregunta', resumen: 'Consulta si la garantía es de un mes' }));
+    return texto(JSON.stringify({ decision: 'otro', resumen: '' }));
+  }
   const ult = b.messages.at(-1);
   const contenido = typeof ult.content === 'string' ? ult.content : ult.content.map((x) => x.text || '').join('\n');
   if (/EXTRAER_LEAD/.test(contenido))
@@ -150,10 +157,26 @@ const FORMULARIO = { groups: [
   { type: 'signer', variables: [{ id: 'v-nom', name: 'nombre_visitante_signer', label: 'Nombre del visitante', required: true }, { id: 'v-rut', name: 'rut_visitante_signer', label: 'RUT del visitante', required: true }, { id: 'v-mail', name: 'correo_visitante_signer', label: 'Correo del visitante', required: true }] },
   { type: 'nosigner', variables: [{ id: 'v-fecha', name: 'fecha_visita', label: 'Fecha de la visita', required: true }, { id: 'v-dir', name: 'direccion', label: 'Dirección de la propiedad', required: true }, { id: 'v-foto', name: 'foto', label: 'Foto de la propiedad', kind: 'image', required: true }, { id: 'v-cor', name: 'corredor_nombre', label: 'Nombre del corredor', required: true }] },
 ] };
+const PF_ID = 'id-api-' + SUF; const PF_CUSTOMER = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+// la API de integración de Portalfirma (enviar a firmar): generateToken, sendToSign y getByProcessId; lo demás (plantillas, detalle de operaciones) sigue por el MCP
+async function apiPortalfirma(rq, rs, b) {
+  const json = (st, o) => { rs.writeHead(st, { 'content-type': 'application/json' }).end(JSON.stringify(o)); };
+  if (rq.headers.id !== PF_ID) return json(401, { success: false, data: null, error: 'Acceso denegado' });
+  if (rq.method === 'POST' && rq.url === '/api/auth/generateToken') { const c = JSON.parse(b || '{}'); return c.customer_id === PF_CUSTOMER && c.password === 'clave-pf' ? json(200, { success: true, data: { token: PFTOKEN }, error: null }) : json(401, { success: false, data: null, error: 'Unauthorized' }); }
+  if (rq.headers.authorization !== 'Bearer ' + PFTOKEN) return json(401, { success: false, data: null, error: 'Unauthorized' });
+  if (rq.method === 'POST' && rq.url === '/api/document/sendToSign') {
+    const c = JSON.parse(b || '{}'); INGESTA.push({ nombre: '(API)', pdf: Buffer.from(c.document || '', 'base64') });
+    ENVIOS.push({ documento: 'doc-' + INGESTA.length, paginaFirmas: c.addSignaturePage, protocolizar: c.withProtocolization, firmantes: (c.signatories || []).map((x) => ({ rut: x.signatory.rut, email: x.signatory.email, phone: x.signatory.phone, fullName: [x.signatory.name, x.signatory.paternalLastName, x.signatory.maternalLastName].join(' '), alias: x.signature.alias, tipo: x.signature.type })) });
+    return json(201, { success: true, data: { processId: 'pid-' + INGESTA.length, createdDateAt: new Date().toISOString() }, error: null });
+  }
+  if (rq.method === 'GET' && /^\/api\/document\/getByProcessId\//.test(rq.url || '')) return json(200, { success: true, data: { processId: 'pid-x', operation: OPERACION, signatories: [], status: 'starting' }, error: null });
+  return json(404, { success: false, data: null, error: 'Not Found' });
+}
 function portalfirmaFalso() {
   const s = http.createServer(async (rq, rs) => {
-    if (rq.headers.authorization !== 'Bearer ' + PFTOKEN) { rs.writeHead(401).end(); return; }
     let b = ''; for await (const c of rq) b += c;
+    if ((rq.url || '').startsWith('/api/')) return apiPortalfirma(rq, rs, b);
+    if (rq.headers.authorization !== 'Bearer ' + PFTOKEN) { rs.writeHead(401).end(); return; }
     const srv = new McpServer({ name: 'pf-falso', version: '1.0.0' });
     srv.tool('template_manage_tools', { action: z.string(), query: z.string().optional(), top_k: z.number().optional(), template_version_id: z.string().optional(), property_id: z.string().optional(), values: z.record(z.string(), z.string()).optional() }, async (a) => {
       const t = (x) => ({ content: [{ type: 'text', text: typeof x === 'string' ? x : JSON.stringify(x) }] });
@@ -222,6 +245,7 @@ function iaFalsa() {
     const cx = await db.conexion.findFirst({ where: { corredoraId: co.id, proveedor: 'wechatia' } });
     await db.conexion.update({ where: { id: cx.id }, data: { datos: { ...cx.datos, iaBase, transcribirBase } } });
     await db.conexion.create({ data: { corredoraId: co.id, usuarioId: null, dueno: 'corredora', proveedor: 'portalfirma', tipo: 'oauth', estado: 'activa', accesoCif: cifrar(PFTOKEN), datos: { mcpUrl: `http://127.0.0.1:${pfs.address().port}/mcp` } } });
+    await db.conexion.create({ data: { corredoraId: co.id, usuarioId: null, dueno: 'corredora', proveedor: 'portalfirma_api', tipo: 'clave', estado: 'activa', accesoCif: cifrar(JSON.stringify({ id: PF_ID, password: 'clave-pf' })), datos: { customerId: PF_CUSTOMER, email: 'int@x.cl', apiUrl: `http://127.0.0.1:${pfs.address().port}/api` } } });
     const prop2 = await db.propiedad.create({ data: { corredoraId: co.id, codigo: 'PF-9002', titulo: 'Casa La Reina', tipo: 'casa', venta: true, precioVenta: 9500, monedaVenta: 'UF', direccion: 'Larraín 6200', comuna: 'La Reina', dormitorios: 4, banos: 3, captadorId: c1.id, fotos: { create: [{ url: `${base}/media/casa.jpg`, orden: 0, destacada: true }] } } });
     r = await req('GET', '/whatsapp/asistentes', null, t1);
     ok(r.j.conectado && r.j.ia && r.j.clientesActivo && r.j.enServidor, 'estado: conectado, con IA y la atención de clientes encendida');
@@ -250,7 +274,11 @@ function iaFalsa() {
     antesOv = salidas(cel).length;
     escribe(cel, 'Juanita, prepárame la orden de visita de Ana Visitante para la PF-9002');
     ok(await hasta(() => salidas(cel).slice(antesOv).some((t) => /Datos de la orden: Ana Visitante, 11\.111\.111-1, ana\.visitante@prueba\.cl, 2037-12-01\. ¿La envío\?/.test(t))), 'prepararla muestra los datos del documento (visitante, RUT, correo, fecha) y pregunta si la envía');
-    ok(ENVIOS.length === enviosAntes && !(await db.firma.count({ where: { corredoraId: co.id } })) && !(await db.persona.count({ where: { corredoraId: co.id, rut: '111111111' } })), 'preparar no envía, no cobra, no registra la firma ni crea a la persona');
+    ok(ENVIOS.length === enviosAntes && !(await db.firma.count({ where: { corredoraId: co.id } })), 'preparar no envía, no cobra ni registra la firma');
+    // REGLA: pedir la orden ya abre el negocio, con su interesado, su propiedad y su código NG-XXX
+    const pPrep = await db.persona.findFirst({ where: { corredoraId: co.id, rut: '111111111' } });
+    const nPrep = pPrep && await db.negocio.findFirst({ where: { corredoraId: co.id, propiedadId: prop2.id, clienteId: pPrep.id } });
+    ok(nPrep && nPrep.tipo === 'venta' && nPrep.etapa === 'visita' && /^NG-\d{3,}$/.test(nPrep.datos?.codigo || ''), 'pedir la orden ya crea el negocio (venta, etapa visita) con su código NG-XXX y deja al visitante como interesado');
     antesOv = salidas(cel).length;
     escribe(cel, 'espera, cámbiala para el jueves');
     ok(await hasta(() => salidas(cel).slice(antesOv).some((t) => /Uy: El corredor todavía no confirmó/.test(t))) && ENVIOS.length === enviosAntes, 'si el modelo confirma por su cuenta (sin que el corredor diga que sí), el servidor lo rechaza y no se envía');
@@ -263,7 +291,7 @@ function iaFalsa() {
     if (!enviada) console.log('  respuestas:', JSON.stringify(salidas(cel).slice(antesOv)));
     ok(enviada, 'con el sí del corredor, la envía a firmar (operación ' + OPERACION + ')');
     const env = ENVIOS.at(-1); const fir = env?.firmantes?.[0] || {};
-    ok(ENVIOS.length === enviosAntes + 1 && INGESTA.at(-1)?.pdf.slice(0, 4).toString() === '%PDF' && /orden/i.test(INGESTA.at(-1).nombre || ''), 'la orden sale como PDF armado por Asset (se sube a Portalfirma y se envía a firmar)');
+    ok(ENVIOS.length === enviosAntes + 1 && INGESTA.at(-1)?.pdf.slice(0, 4).toString() === '%PDF' && env.paginaFirmas === true, 'la orden sale como PDF armado por Asset, con página de firmas, a la API de Portalfirma');
     ok(env.firmantes.length === 1 && fir.rut === '11.111.111-1' && fir.email === 'ana.visitante@prueba.cl' && /Ana Visitante/i.test(fir.fullName || ''), 'firma el visitante, con su RUT y correo (ahí le llega el enlace de firma)');
     const fOv = await db.firma.findFirst({ where: { corredoraId: co.id, operacion: OPERACION } });
     ok(fOv && /^Orden de visita( nº [\d.]+)?$/.test(fOv.documento) && fOv.estado === 'en_firma' && fOv.enviadoPorId === c1.id && fOv.propiedadIds.includes(prop2.id) && fOv.firmantes[0].rut === '11.111.111-1', 'la firma queda registrada (en firma, de quien la envió, ligada a la propiedad)');
@@ -271,6 +299,11 @@ function iaFalsa() {
     ok(pAna && pAna.nombre === 'Ana Visitante' && pAna.email === 'ana.visitante@prueba.cl' && pAna.vinculos.some((x) => x.propiedadId === prop2.id && x.rol === 'interesado'), 'el visitante quedó en el CRM y vinculado como interesado');
     const evOv = await db.evento.findFirst({ where: { corredoraId: co.id, propiedadId: prop2.id, tipo: 'visita' } });
     ok(evOv && evOv.hora === '11:00' && evOv.fecha.toISOString().startsWith('2037-12-01') && evOv.datos.orden.operacion === OPERACION, 'la visita quedó en la agenda con su orden');
+    // todo va ligado a un negocio con su interesado y su propiedad (la orden pedida por WhatsApp crea el negocio si no había uno)
+    const negOv = await db.negocio.findFirst({ where: { corredoraId: co.id, propiedadId: prop2.id, clienteId: pAna.id } });
+    ok(negOv && negOv.tipo === 'venta' && negOv.estado === 'abierto' && negOv.etapa === 'visita' && negOv.corredorId === c1.id, 'la orden crea el negocio (venta, en la etapa visita) con el interesado, la propiedad y el corredor que la envió');
+    ok(fOv.negocioId === negOv.id && evOv.negocioId === negOv.id && negOv.id === nPrep.id, 'y la firma y la visita quedan ligadas a ese mismo negocio (no se crea otro al enviar)');
+    ok(!!(await db.actividad.findFirst({ where: { corredoraId: co.id, entidadId: negOv.id, texto: { contains: 'Negocio creado al pedir la orden de visita' } } })), 'y el negocio deja su historial');
     antesOv = salidas(cel).length;
     escribe(cel, 'sí');
     await esperar(6000);
@@ -323,10 +356,10 @@ function iaFalsa() {
     ok(await hasta(() => salidas(cel).some((t) => /Ok, no agrego la foto/.test(t))) && (await fotosDe()) === 3, 'con «no» la descarta');
     ok((await req('GET', '/whatsapp/ejecutivo/entrantes', null, t1)).j.items.length === 0, 'las fotos y sus respuestas no pasan a la cola de su Asset');
     ok((await db.propiedad.findUnique({ where: { id: prop.id } })).version > 1, 'la propiedad sube de versión (la app trae las fotos al sincronizar)');
+    const antesAb = salidas(cel).length;
     escribe(cel, 'Pedro, ¿y los leads?');
-    ok(await hasta(async () => (await req('GET', '/whatsapp/ejecutivo/entrantes', null, t1)).j.items.some((x) => /y los leads/.test(x.body)), 15), 'con su Asset abierto, lo atiende su Asset (no el servidor)');
-    r = await req('POST', '/whatsapp/ejecutivo/responder', { texto: '*Pedro* · Captación\nTienes 1 propiedad.' }, t1);
-    ok(r.s === 200 && salidas(cel).some((t) => /Tienes 1 propiedad/.test(t)), 'la respuesta de su Asset sale a su celular');
+    ok(await hasta(() => salidas(cel).slice(antesAb).some((t) => /^\*Pedro\* · Captación\n/.test(t)), 15), 'con su Asset abierto, también lo atiende el servidor (la lógica vive solo ahí)');
+    ok(!(await req('GET', '/whatsapp/ejecutivo/entrantes', null, t1)).j.items.some((x) => /y los leads/.test(x.body)), 'y no pasa a la cola de su Asset');
     ok(!salidas(cel).some((t) => /Tu Asset está cerrado/.test(t)), 'ya no hace falta el aviso de «Asset cerrado»: el equipo responde igual');
 
     // Secciones 2-8: Sofía y otros asistentes conversando con leads. Desde el puente corredor ↔ interesado (commit 3496ded)
@@ -478,7 +511,7 @@ function iaFalsa() {
     W.contactos['k-c2'] = '+56 9 3333 4444';
     await db.waVinculo.create({ data: { usuarioId: c2.id, corredoraId: co.id, telefono: '+56 9 3333 4444', telefonoNorm: '933334444', contactId: 'k-c2', activo: true, vinculadoEn: new Date() } });
     const leadId = `ld${SUF}`;
-    const asignar = async (corredorId) => { const g = await req('GET', `/leads/${leadId}`, null, tA); return req('PUT', `/leads/${leadId}`, { ...g.j, corredorId }, tA); };
+    const asignar = async (corredorId) => { let x; for (let i = 0; i < 6; i++) { const g = await req('GET', `/leads/${leadId}`, null, tA); x = await req('PUT', `/leads/${leadId}`, { ...g.j, corredorId }, tA); if (x.s !== 409) break; await esperar(500); } return x; };   // un segundo proceso (el análisis del lead) puede cambiarlo entremedio: se reintenta
     const antesPl = (W.plantillas || []).length;
     r = await asignar(c2.id);
     ok(r.s === 200 && r.j.corredorId === c2.id, 'el administrador le asigna el lead a otro corredor');
@@ -671,6 +704,36 @@ function iaFalsa() {
     const vistos = new Set(); let repetido = null;
     for (const e of W.enviados) { const k = `${e.contactId}|${e.message}`; if (vistos.has(k) && !/^(\*\w+\* · |✅ Enviado a )/.test(e.message || '')) repetido = e.message; vistos.add(k); }
     ok(!repetido, 'ninguna respuesta salió dos veces' + (repetido ? ': ' + String(repetido).slice(0, 80) : ''));
+
+    // ---- 8c. la respuesta de una parte al contrato en revisión: se interpreta y se registra sola (aprueba / comenta / pregunta)
+    const rosa = await db.persona.create({ data: { corredoraId: co.id, nombre: 'Rosa Arrendataria', telefono: '+56 9 7000 0002' } });
+    const sara = await db.persona.create({ data: { corredoraId: co.id, nombre: 'Sara Propietaria', telefono: '+56 9 7000 0003' } });
+    const hace = new Date(Date.now() - 60_000).toISOString();
+    const ngC = await db.negocio.create({ data: { id: `nc${SUF}`, corredoraId: co.id, tipo: 'arriendo', etapa: 'contrato', propiedadId: prop.id, clienteId: rosa.id, corredorId: c1.id, datos: { ciclo: { contrato: { versiones: [{ n: 1, fecha: hace, de: 'corredora', nota: '', archivo: { clave: 'x/c.pdf', nombre: 'c.pdf' }, firmantes: [{ personaId: rosa.id, nombre: 'Rosa Arrendataria', rol: 'Arrendatario' }] }] } } } } });
+    const espera = (per, tel, via) => db.registro.create({ data: { corredoraId: co.id, coleccion: 'revisiones_contrato', id: `${ngC.id}:${per.id}`, datos: { estado: 'esperando', a: tel, personaId: per.id, nombre: per.nombre, negocioId: ngC.id, version: 1, via, usuarioId: c1.id, enviadaEn: hace } } });
+    await espera(rosa, '970000002', 'directo');
+    const cRosa = conv({ telefono: '+56 9 7000 0002', nombre: 'Rosa Arrendataria' });
+    const estadoC = async () => (await db.negocio.findUnique({ where: { id: ngC.id } })).datos.ciclo.contrato;
+    let antesC = salidas(cel).length;
+    escribe(cRosa, 'Buenas tardes');
+    await esperar(8000);
+    ok(!(await estadoC()).comentarios && !(await estadoC()).aprobado && !salidas(cel).slice(antesC).some((t) => /contrato/i.test(t)), 'un saludo sin relación con el contrato no registra nada ni molesta al corredor');
+    escribe(cRosa, '¿La garantía es de un mes?');
+    ok(await hasta(() => salidas(cRosa).some((t) => /Se la paso a tu corredor/.test(t))) && await hasta(() => salidas(cel).slice(antesC).some((t) => /Rosa Arrendataria tiene una duda sobre el contrato V1/.test(t))), 'una pregunta de la parte: le responde que se la pasa al corredor y le avisa al corredor');
+    ok((await estadoC()).comentarios?.[0]?.texto?.startsWith('Pregunta:') && (await estadoC()).comentarios[0].version === 1 && (await estadoC()).comentarios[0].de === 'arrendatario', 'y la duda queda como comentario del contrato (versión 1, del arrendatario)');
+    escribe(cRosa, 'Quiero que corrijan el plazo a 24 meses');
+    ok(await hasta(() => salidas(cel).slice(antesC).some((t) => /Rosa Arrendataria comentó el contrato V1[\s\S]*Pide cambiar el plazo a 24 meses/.test(t))), 'un comentario pidiendo un cambio: se le avisa al corredor con lo que pide, para corregir');
+    ok((await estadoC()).comentarios?.length === 2 && !(await estadoC()).aprobado, 'queda anotado en el contrato y NO cuenta como aprobación');
+    escribe(cRosa, 'Está todo bien, apruebo el contrato');
+    ok(await hasta(() => salidas(cRosa).some((t) => /quedó registrada tu aprobación/.test(t))) && await hasta(() => salidas(cel).slice(antesC).some((t) => /Rosa Arrendataria aprobó el contrato V1[\s\S]*Aprobaron 1 de 1[\s\S]*puedes enviarlo a firmar/.test(t))), 'cuando aprueba: queda registrada sola y se le avisa al corredor (ya aprobaron todos)');
+    ok(!!(await estadoC()).aprobado?.[rosa.id] && (await db.registro.findUnique({ where: { corredoraId_coleccion_id: { corredoraId: co.id, coleccion: 'revisiones_contrato', id: `${ngC.id}:${rosa.id}` } } })).datos.estado === 'aprobada', 'la aprobación queda en ciclo.contrato.aprobado y la revisión pendiente se cierra');
+    ok((await db.actividad.count({ where: { corredoraId: co.id, entidadId: ngC.id, texto: { contains: 'respondió por WhatsApp' } } })) === 1, 'y queda en el historial del negocio');
+    // con plantilla: mientras el PDF no le haya llegado, lo que escribe no es sobre el contrato
+    await espera(sara, '970000003', 'plantilla');
+    const cSara = conv({ telefono: '+56 9 7000 0003', nombre: 'Sara Propietaria' });
+    escribe(cSara, 'Apruebo');
+    await esperar(8000);
+    ok(!((await estadoC()).aprobado || {})[sara.id], 'si la plantilla aún no fue respondida (el PDF no le llegó), un «apruebo» no se toma como aprobación');
 
     // ---- desvincular
     ok((await req('POST', '/whatsapp/ejecutivo/desvincular', null, t1)).j.ok && !(await req('GET', '/whatsapp/ejecutivo', null, t1)).j.activo, 'el corredor desvincula su celular');

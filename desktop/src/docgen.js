@@ -188,10 +188,8 @@ function crear({ inmo, negocios, docs, ai, pf, renderPdf, dir, mock = false, fir
     const faltan = validar(o); if (faltan.length) throw err('Faltan datos: ' + faltan.join('; ') + '.');
     const p = o.propId ? inmo.obtener(o.propId) : null; const firm = o.firmantes.filter((f) => f.firma);
     const archivo = archivoDe(o.titulo, p); const bytes = await renderPdf(html({ titulo: o.titulo, parrafos: o.parrafos, firmantes: o.firmantes, propiedad: p })); fs.writeFileSync(archivo, bytes);
-    const ing = await pf.ingest(Buffer.from(bytes).toString('base64'), path.basename(archivo));
-    const docId = ing?.document_id || ing?.fileId || ing?.id; if (!docId) throw err('Portalfirma no recibió el PDF' + (ing?.message ? ': ' + ing.message : '.'));
-    const pagador = String(o.email || corredor().email || '').trim(); if (!pagador) throw err('Falta el correo del pagador (tu cuenta de Portalfirma).');
-    const r = await pf.sendToSign({ document_id: docId, email: pagador, protocolization: 'none', signatories: firm.map((f) => ({ rut: inmo.fmtRut(f.rut), fullName: f.nombre, email: f.email, phone: f.telefono, alias: String(f.alias).trim().toLowerCase(), typeSign: 'simple' })) });
+    // por la API de integración de Portalfirma, a través del servidor de Asset (credenciales de la corredora en Integraciones); sin ellas, error claro
+    const r = await require('./envio-api').enviarPdf({ bytes, nombre: path.basename(archivo), firmantes: firm.map((f) => ({ ...f, alias: String(f.alias).trim().toLowerCase(), tipoFirma: 'simple' })), propId: o.propId || null, negocioId: o.negocioId || null });
     const op = require('./firmas').operacionDe(r); const msg = typeof r?.message === 'string' ? r.message : '';
     if (op == null) throw err(/status code (\d+)/.test(msg) ? `Portalfirma no pudo crear la operación (error ${/status code (\d+)/.exec(msg)[1]}). Revisa «Mis operaciones» antes de reintentar.` : msg || 'Portalfirma no devolvió el número de operación.');
     // personas: corredor a la configuración; clientes nuevos al CRM y vinculados a la propiedad
@@ -207,7 +205,7 @@ function crear({ inmo, negocios, docs, ai, pf, renderPdf, dir, mock = false, fir
     const doc = { operacion: op, plantilla: o.titulo, plantillaId: null, origen: 'asset', tipo: o.tipo, archivo, datos: o.datos || {}, fecha: new Date().toISOString(), estado: 'en_firma',
       firmantes: firm.map((f) => ({ nombre: f.nombre, rut: inmo.fmtRut(f.rut), rol: f.titulo, personaId: f.personaId || null })), negocioId: null };
     let negMsg = null;
-    if (o.negocioId) { const n = negocios.ver(o.negocioId); if (n?.etapaInfo?.firma) { negocios.vincularFirma(n.id, n.etapa, op); doc.negocioId = n.id; negMsg = `Quedó ligado a la etapa «${n.etapaInfo.t}» del negocio: cuando se firme, avanza solo.`; } }
+    if (o.negocioId) { const n = negocios.ver(o.negocioId); if (n?.etapaInfo?.firma) { try { await negocios.vincularFirma(n.id, n.etapa, op); } catch (e) { console.warn('[negocios] vincular la firma:', e.message); } doc.negocioId = n.id; negMsg = `Quedó ligado a la etapa «${n.etapaInfo.t}» del negocio: cuando se firme, avanza solo.`; } }
     firmas?.registrar({ operacion: op, nombre: o.titulo, propId: p?.id || null, negocioId: doc.negocioId, firmantes: firm.map((f) => ({ nombre: f.nombre, rut: f.rut, alias: f.alias, email: f.email, telefono: f.telefono })), origen: 'asset' });
     if (p) inmo.agregarFirma(doc, [p.id], `«${o.titulo}» creado en Asset y enviado a firmar (operación ${op})`);
     else { const l = inmo.config().documentosSueltos || []; l.unshift(doc); inmo.guardarConfig({ documentosSueltos: l.slice(0, 100) }); }

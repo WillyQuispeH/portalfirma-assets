@@ -44,7 +44,7 @@ export default function NegocioCard({ n, alAbrir }: INegocioCardProps) {
       <div className="tw:flex tw:items-start tw:gap-2.5 tw:min-w-0">
         {n.prop && <Miniatura src={n.prop.foto} icono="house" tam={40} />}
         <span className="tw:flex tw:flex-col tw:items-start tw:min-w-0">
-          <small className="ng-cod tw:max-w-full tw:truncate tw:text-[11px] tw:font-semibold tw:tracking-wide">{n.prop?.codigo || ''}{n.prop?.comuna ? ` · ${n.prop.comuna}` : ''}</small>
+          <small className="ng-cod tw:max-w-full tw:truncate tw:text-[11px] tw:font-semibold tw:tracking-wide">{[n.codigo, n.prop?.codigo].filter(Boolean).join(' · ')}{n.prop?.comuna ? ` · ${n.prop.comuna}` : ''}</small>
           <b className="tw:max-w-full tw:truncate tw:text-[13.5px] tw:font-bold tw:leading-snug">{n.prop?.titulo || 'Sin propiedad'}</b>
           {n.valor && <b className="ng-monto tw:mt-1">{monto(n.valor.valor, n.valor.moneda)}</b>}
         </span>

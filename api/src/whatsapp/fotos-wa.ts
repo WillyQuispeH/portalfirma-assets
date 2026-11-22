@@ -24,6 +24,7 @@ const ES_AUDIO = /\.(ogg|oga|opus|mp3|m4a|amr|aac|wav|webm)(\?|$)|audio/i;
 const ES_IMAGEN = /\.(jpe?g|png|webp|heic|heif)(\?|$)|image/i;
 const ES_OTRO = /\.(pdf|docx?|xlsx?|zip|txt|mp4|mov|3gp)(\?|$)|video|application/i;
 const CODIGO = /\b([a-z]{1,4})-?\s?(\d{3,6})\b/i;
+const PAGO = /comprobante|transferencia|dep[oó]sito|abono|\bpago\b|pagu[eé]|reserva|garant[ií]a|comisi[oó]n|\bng-?\d+/i;
 const SI = /^(si|sí|dale|ok|okay|ya|claro|correcto|esa|esa misma|si,? esa|agregalas|agrégalas)\b/;
 const NO = /^(no|nop|cancela|cancelar|descarta|descartalas|ninguna)\b/;
 
@@ -67,7 +68,8 @@ export class FotosWaService {
     let pend = datos.fotosPendientes as Pendientes | undefined;
     if (pend && Date.now() - new Date(pend.desde).getTime() > PENDIENTES_MS) pend = undefined;
 
-    const conFotos = nuevos.filter((m) => m.adjuntos.some((u) => this.esFoto(u)));
+    // una imagen cuyo texto habla de un pago («sube este comprobante al NG-014») es un comprobante, no una foto de la propiedad: sigue su camino al asistente de pagos
+    const conFotos = nuevos.filter((m) => !PAGO.test(m.texto ?? '') && m.adjuntos.some((u) => this.esFoto(u)));
     const resto = nuevos.filter((m) => !conFotos.includes(m));
     const responder = async (t: string) => {
       if (!cv.contactId) return;

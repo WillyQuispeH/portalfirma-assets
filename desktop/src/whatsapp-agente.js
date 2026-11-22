@@ -11,6 +11,7 @@
 //    este Asset está cerrado, el servidor guarda los mensajes y le avisa al ejecutivo. Sin cuenta (PF_MOCK), como antes.
 const guia = require('./herramientas-guia');
 const P = require('./personas');
+const adjunto = require('./adjunto-wa');
 const now = () => new Date().toISOString();
 const dig = (t) => String(t || '').replace(/\D/g, '').slice(-9);
 const norm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
@@ -18,7 +19,7 @@ const CONV_ID = 'whatsapp';
 const SI = /^(s[ií]|si+|confirmo|confirmar|dale|ok|ya|de acuerdo|hazlo|env[ií]a(lo)?)\b/;
 const NO = /^(no|cancela(r)?|mejor no|detente|para)\b/;
 
-function crear({ store, wa, crearAgente, locales, dictado, inmo, convs, leads = null, ai, emitUI = () => {}, fetchFn = (...a) => fetch(...a), mock = false, equipoHoy = null, clientes = null, servidor = null }) {
+function crear({ store, wa, crearAgente, locales, dictado, inmo, convs, leads = null, comprobantes = null, ai, emitUI = () => {}, fetchFn = (...a) => fetch(...a), mock = false, equipoHoy = null, clientes = null, servidor = null }) {
   const srvOn = () => !!servidor?.enApi?.();
   const cfg = () => ({ activo: false, telefono: null, codigo: null, numeroEmpresa: '+56 9 4497 5958', ...(store.get('waAgente') || {}) });
   const setCfg = (o) => { const c = { ...cfg(), ...o }; store.set('waAgente', c); return c; };
@@ -120,16 +121,41 @@ function crear({ store, wa, crearAgente, locales, dictado, inmo, convs, leads = 
     const otros = a.participantes.length > 1 ? `\nSi el cliente no es ${a.cliente || 'ese'}, responde con el número: ${a.participantes.map((p, i) => `${i + 1}) ${p.nombre}`).join(' · ')}` : '';
     return `*Chat de WhatsApp${a.cliente ? ' con ' + a.cliente : ''}*\n${a.total} mensajes, del ${fmtF(a.desde)} al ${fmtF(a.hasta)}${med ? ' · ' + med : ''}.${a.existente ? `\nYa lo tenías: agrego solo ${a.existente.nuevos} mensajes nuevos.` : ''}${!a.telefono && !a.existente ? '\nNo trae su número: mándamelo si lo tienes.' : ''}${otros}\n\nResponde *SÍ* para registrarlo como lead o *NO* para descartarlo.`;
   }
-  async function chatExportado(url, m = {}) {
+  async function chatExportado(url, m = {}, descargado = null) {
     if (!leads) return enviar('Recibí un archivo, pero esta versión de Asset no registra leads.');
     if (S.persona !== 'fernanda') setPersona('fernanda'); // los chats de clientes los ve Fernanda (Leads)
     try {
-      const f = await bajar(url); if (!/\.(txt|zip)$/i.test(f.nombre) && /\.(txt|zip)\b/i.test(String(m.body || ''))) f.nombre = String(m.body).trim().split('\n')[0].slice(0, 120); // el nombre del archivo a veces viene como texto del mensaje
+      const f = descargado || await bajar(url); if (!/\.(txt|zip)$/i.test(f.nombre) && /\.(txt|zip)\b/i.test(String(m.body || ''))) f.nombre = String(m.body).trim().split('\n')[0].slice(0, 120); // el nombre del archivo a veces viene como texto del mensaje
       const a = await leads.analizar({ bytes: f.bytes, nombre: f.nombre, miNombre: cfg().nombre || '' });
       if (!a.cliente) a.cliente = a.participantes.find((p) => !String(p.nombre).toLowerCase().includes(String(cfg().nombre || '~').toLowerCase().split(' ')[0]))?.nombre || a.participantes[0]?.nombre;
       S.lead = { a, telefono: a.telefono || '' }; registrar('user', `(chat exportado) ${f.nombre}`);
       return enviar(resumenLead(a));
     } catch (e) { registrar('user', '(archivo)'); return enviar(e.code === 'NO_CHAT' ? 'Recibí un archivo, pero no es un chat exportado de WhatsApp. Para registrar un lead: en el chat con el cliente › Exportar chat › envíamelo aquí.' : 'No pude leer el archivo: ' + String(e.message).slice(0, 160)); }
+  }
+  // ---------- un documento (PDF o foto): el comprobante de un pago para subir a un negocio ----------
+  const mimeDe = (nombre, bytes) => (Buffer.from(bytes).subarray(0, 4).toString() === '%PDF' ? 'application/pdf'
+    : /\.png$/i.test(nombre) ? 'image/png' : /\.webp$/i.test(nombre) ? 'image/webp' : /\.(jpe?g|jfif)$/i.test(nombre) ? 'image/jpeg' : '');
+  async function documentoRecibido(f, m = {}) {
+    const mime = mimeDe(f.nombre, f.bytes); const nombre = String(f.nombre || 'documento').slice(0, 120);
+    registrar('user', `(archivo) ${nombre}${m.body ? ' · ' + String(m.body).slice(0, 200) : ''}`);
+    if (!mime) return enviar(`Recibí «${nombre}», pero solo sé leer PDF e imágenes. Si es el chat de un cliente, expórtalo como .txt y envíamelo; si es otro documento, súbelo desde Asset.`);
+    if (!comprobantes) return enviar('Recibí un archivo, pero esta versión de Asset no lee comprobantes.');
+    setPersona('diego'); // pagos y negocios: Diego
+    let lectura; try { lectura = await comprobantes.leer({ bytes: f.bytes, mime }); } catch (e) { lectura = { error: String(e.message || e).slice(0, 160) }; }
+    adjunto.poner({ bytes: Buffer.from(f.bytes), nombre, mime, lectura });
+    const l = lectura || {}; const leido = l.error ? `No pude leer el archivo con la IA (${l.error}): pregunta los datos del pago.`
+      : l.esComprobante === false ? 'La IA dice que NO parece un comprobante de pago: pregunta qué quiere hacer con el archivo.'
+        : `Lectura del comprobante (IA): ${JSON.stringify({ monto: l.monto, moneda: l.moneda, fecha: l.fecha, medio: l.medio, banco: l.banco, referencia: l.referencia, emisor: l.emisor, destinatario: l.destinatario, concepto: l.concepto })}${(l.avisos || []).length ? ' · Avisos: ' + l.avisos.join(' · ') : ''}`;
+    const tx = `[ARCHIVO RECIBIDO POR WHATSAPP] «${nombre}» (${Math.max(1, Math.round(f.bytes.length / 1024))} KB). ${leido}\n(El archivo ya está guardado en la conversación: para subirlo a un negocio usa asset_registrar_comprobante; no lo busques ni pidas que lo reenvíen.)\nMensaje del usuario: ${String(m.body || '').trim() || '(sin texto)'}`;
+    if (S.busy) { S.cola.push(tx); return enviar('Sigo con lo anterior; enseguida veo el archivo.'); }
+    return rutear(tx);
+  }
+  async function archivoRecibido(url, m = {}) {
+    let f; try { f = await bajar(url); } catch (e) { registrar('user', '(archivo)'); return enviar('No pude descargar el archivo: ' + String(e.message).slice(0, 120)); }
+    if (!/\.(txt|zip)$/i.test(f.nombre) && /\.(txt|zip)\b/i.test(String(m.body || ''))) f.nombre = String(m.body).trim().split('\n')[0].slice(0, 120); // el nombre del archivo a veces viene como texto del mensaje
+    // el chat exportado es un .txt o .zip; un PDF o una foto no: esos son documentos (comprobantes) y no se mandan al registro de leads
+    if (/\.(txt|zip)$/i.test(f.nombre) || /chat de whatsapp|whatsapp chat/i.test(f.nombre)) return chatExportado(url, m, f);
+    return documentoRecibido(f, m);
   }
   async function confirmarLead(tx) {
     const n = norm(tx); const L = S.lead; const solo = n.replace(/[\s+().-]/g, '');
@@ -150,8 +176,11 @@ function crear({ store, wa, crearAgente, locales, dictado, inmo, convs, leads = 
     S.ultimaActividad = Date.now();
     // un documento adjunto (no audio, foto ni video): puede ser el chat exportado aunque la URL no diga .txt/.zip
     const MEDIA = /\.(ogg|opus|mp3|m4a|amr|aac|wav|webm|jpe?g|png|webp|heic|gif|mp4|mov|3gp)(\?|$)/i;
+    const RE_PAGO = /comprobante|transferencia|dep[oó]sito|abono|\bpago\b|pagu[eé]|reserva|garant[ií]a|comisi[oó]n|\bng-?\d+/i;
+    const foto = (m.attachments || []).find((u) => /\.(jpe?g|png|webp|heic)(\?|$)/i.test(u) || /image/i.test(u));
+    if (foto && RE_PAGO.test(String(m.body || '')) && !(m.attachments || []).some((u) => /\.(ogg|opus|mp3|m4a|amr|aac|wav|webm)(\?|$)/i.test(u))) return archivoRecibido(foto, m);
     const doc = (m.attachments || []).find((u) => ES_CHAT.test(u) || (mock && /^mock:chat/.test(u))) || (m.attachments || []).find((u) => !MEDIA.test(u) && !/audio|image|video/i.test(u) && !(mock && /^mock:/.test(u)));
-    if (doc) return chatExportado(doc, m);
+    if (doc) return archivoRecibido(doc, m);
     if (!(m.attachments || []).length && /^\s*(chat de whatsapp|whatsapp chat)[^\n]*\.(zip|txt)\s*$/i.test(String(m.body || ''))) { registrar('user', m.body); return enviar('Me llegó solo el nombre del archivo, no el archivo. Prueba exportando el chat con *Sin archivos* (queda un .txt) y envíamelo de nuevo. Si lo exportaste con fotos y audios (.zip), mejor arrástralo a Asset › Leads en el computador.'); }
     let tx = await texto(m); if (tx == null) return; let audio = false; let avisosAudio = []; if (typeof tx === 'object') { audio = true; avisosAudio = tx.avisos || []; tx = tx.texto; }
     if (!tx) return; if (!audio) registrar('user', tx);

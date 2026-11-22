@@ -122,8 +122,8 @@ export interface ActaVisita {
   fotos: FotoActa[];
   resumen: ResumenActa | null;
   cerradaEn: string | null;
-  /** el acta enviada a firmar al visitante (acta-firma.ts); el estado lo trae el listado desde la firma */
-  firma?: { operacion: number; enviadaEn: string; ordenNumero: number | null; nombre: string; estado?: string; firmadoEn?: string | null };
+  /** el PDF del acta compartido (acta-pdf.ts): su clave en R2 y cuándo se armó */
+  pdf?: { clave: string; generadoEn: string };
 }
 
 const audioEsquema = z.object({
@@ -228,14 +228,6 @@ export class ActaVisitaService {
       take: 50,
     });
     const items = filas.map((f) => this.publica(f.datos as unknown as ActaVisita));
-    const ops = items.map((x) => x.firma?.operacion).filter((x): x is number => !!x);
-    if (ops.length) {
-      const fs = await this.db.firma.findMany({ where: { corredoraId: u.corredoraId, operacion: { in: ops } }, select: { operacion: true, estado: true, firmadoEn: true } });
-      for (const x of items) {
-        const f = x.firma && fs.find((y) => y.operacion === x.firma?.operacion);
-        if (x.firma && f) x.firma = { ...x.firma, estado: f.estado, firmadoEn: f.firmadoEn ? f.firmadoEn.toISOString() : null };
-      }
-    }
     return { items };
   }
 
@@ -533,9 +525,8 @@ export class ActaVisitaService {
   }
 
   /**
-   * Al cerrar el acta, la cierre quien la cierre (la app o «listo» por WhatsApp), el paso «Acta de visita» queda pendiente:
-   * falta enviarla a firmar al visitante (el paso se logra con su firma, ver acta-firma.ts). Se guarda como marca del paso en el
-   * negocio y se avisa a la app para que lo traiga.
+   * Al cerrar el acta, la cierre quien la cierre (la app o «listo» por WhatsApp), el paso «Acta de visita» queda logrado: el acta no se firma,
+   * se genera su PDF y se comparte (acta-pdf.ts). Se guarda como marca del paso en el negocio y se avisa a quien la hizo.
    */
   private async marcarPaso(corredoraId: string, a: ActaVisita, usuarioId: string | null) {
     try {
@@ -543,7 +534,7 @@ export class ActaVisitaService {
       if (!n || n.corredoraId !== corredoraId) return;
       const datos = { ...((n.datos as Record<string, unknown>) ?? {}) };
       const pasos = { ...((datos.pasos as Record<string, unknown>) ?? {}) };
-      pasos.acta = { e: 'pend', f: null, d: 'El acta está cerrada: envíala a firmar al visitante.', quien: '', vence: null };
+      pasos.acta = { e: 'ok', f: new Date().toISOString(), d: 'Acta de visita cerrada.', quien: '', vence: null };
       await this.db.negocio.update({
         where: { id: n.id },
         data: { datos: { ...datos, pasos } as Prisma.InputJsonValue, version: { increment: 1 } },
@@ -554,7 +545,7 @@ export class ActaVisitaService {
           corredoraId,
           usuarioId: destino,
           tipo: 'acta_cerrada',
-          texto: `Acta de visita del ${a.fecha.slice(8, 10)}/${a.fecha.slice(5, 7)} cerrada: falta enviarla a firmar`,
+          texto: `Acta de visita del ${a.fecha.slice(8, 10)}/${a.fecha.slice(5, 7)} cerrada: ya puedes compartir su PDF`,
           datos: { negocioId: n.id, actaId: a.id },
         });
     } catch (e) {

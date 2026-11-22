@@ -9,13 +9,6 @@ export interface IActaVisita {
   id: string; negocioId: string; propiedadId: string | null; fecha: string; estado: 'abierta' | 'cerrada';
   creadaEn: string; creadaPor: string; notas: string; audios: IActaAudio[]; fotos: IActaFoto[];
   resumen: IActaResumen | null; cerradaEn: string | null;
-  /** el acta enviada a firmar al visitante (con el estado de la firma) */
-  firma?: { operacion: number; enviadaEn: string; ordenNumero: number | null; nombre: string; estado?: string; firmadoEn?: string | null };
-}
-/** la vista previa del acta para firmar: el PDF y lo que lleva (si faltan datos, viene el error y no el PDF) */
-export interface IActaFirmaVista {
-  ok?: boolean; error?: string; pdf?: string; archivo?: string; orden: string;
-  visitante: { id: string; nombre: string; rut: string; email: string; telefono: string };
-  interes: 'alto' | 'medio' | 'bajo' | 'sin_datos'; observaciones: string;
-  propiedad: { codigo: string; titulo: string; direccion: string };
+  /** el PDF ya compartido (cuándo se armó) */
+  pdf?: { generadoEn: string };
 }

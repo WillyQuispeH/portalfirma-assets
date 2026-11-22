@@ -38,10 +38,11 @@ const VARIANTE: Record<TBotonVariante, string> = {
   fantasma: 'tw:bg-transparent tw:border-transparent tw:text-muted tw:enabled:hover:bg-hover tw:enabled:hover:text-text',
 };
 
+// lg = 56px: misma altura que Input/Select con etiqueta (Campo min-h-14), para filas de formulario
 const TAMANO: Record<TBotonTamano, string> = {
   sm: 'tw:h-8 tw:px-3 tw:text-[12.5px]',
   md: 'tw:h-10 tw:px-4 tw:text-sm',
-  lg: 'tw:h-12 tw:px-5 tw:text-[15px]',
+  lg: 'tw:h-14 tw:px-5 tw:text-[15px]',
 };
 const TAM_ICONO: Record<TBotonTamano, number> = { sm: 14, md: 16, lg: 18 };
 

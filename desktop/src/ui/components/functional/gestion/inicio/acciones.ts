@@ -24,14 +24,14 @@ export const ACCIONES: [string, string, string, string, string][] = [
   ['escr', 'users', 'Gestión de firmas presenciales', 'Escrituras públicas, protocolizaciones y reducciones: revisamos el documento, calculamos el valor y coordinamos la firma en la notaría', 'c-slate'],
   ['exp', 'folderOpen', 'Expedientes', 'Una carpeta por caso con sus documentos, fotos de cédulas e historial', 'c-amber'],
   ['flows', 'flow', 'Flujos documentales', 'Recetas: una plantilla + una nómina → muchos documentos enviados a firmar', 'c-teal'],
-  ['bulk', 'files', 'Carga masiva', 'Sube muchos documentos y envíalos a firmar de una vez; firma masiva con certificado', 'c-indigo'],
+  ['bulk', 'files', 'Firma masiva', 'Sube muchos documentos y envíalos a firmar de una vez', 'c-indigo'],
 ];
 export const ACCION = Object.fromEntries(ACCIONES.map((a) => [a[0], a]));
 
 export const NIVELES = [
-  { clave: 'esencial', titulo: 'Lo esencial', sub: 'Para empezar: abrir, preparar y enviar a firmar', grandes: ['send', 'ops'], chicas: ['open', 'new', 'combine', 'convert'], filas: [] as string[] },
+  { clave: 'esencial', titulo: 'Lo esencial', sub: 'Para empezar: abrir, preparar y enviar a firmar', grandes: ['send', 'ops', 'bulk'], chicas: ['open', 'new', 'combine', 'convert'], filas: [] as string[] },
   { clave: 'ahorro', titulo: 'Para ahorrar tiempo', sub: 'Cuando ya envías documentos seguido', grandes: [], chicas: [], filas: ['tpls', 'ai', 'plazos', 'exp'] },
-  { clave: 'avanzado', titulo: 'Avanzado', sub: 'Volúmenes grandes y casos especiales', grandes: [], chicas: [], filas: ['flows', 'bulk', 'plan'] },
+  { clave: 'avanzado', titulo: 'Avanzado', sub: 'Volúmenes grandes y casos especiales', grandes: [], chicas: [], filas: ['flows', 'plan'] },
 ];
 export const HERRAMIENTAS_PDF = ['edittext', 'ocr', 'organize', 'split', 'compress', 'export', 'print'];
 // solo para clientes de Portalfirma (IA y firma)

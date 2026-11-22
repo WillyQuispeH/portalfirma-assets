@@ -42,7 +42,7 @@ export default function Metas() {
         : (
           <form key={vez} id="cfgMetas" onSubmit={guardar} className="tw:flex tw:flex-col tw:gap-4">
             {equipo.map((c) => (
-              <div key={c.id} className="tw:flex tw:flex-wrap tw:items-end tw:gap-3">
+              <div key={c.id} className="tw:flex tw:flex-wrap tw:items-end tw:gap-ui">
                 <span className="tw:flex tw:min-w-[200px] tw:flex-[1_1_200px] tw:items-center tw:gap-2.5"><Avatar nombre={c.nombre} tamano="md" /><b className="tw:text-sm">{c.nombre}</b></span>
                 <Input name={`f-${c.id}`} type="number" min={0} step={100000} etiqueta="Facturación al mes" sufijo="$" defaultValue={metas[c.id]?.facturacion || ''} clasesCampo="tw:w-48" />
                 <Input name={`c-${c.id}`} type="number" min={0} step={1} etiqueta="Captaciones al mes" sufijo="props." defaultValue={metas[c.id]?.captacion || ''} clasesCampo="tw:w-40" />

@@ -214,7 +214,7 @@ app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) creat
 
 // ---- IPC: cada handler devuelve {ok, data} o {ok:false, error, code} ----
 // Canales que solo usa el administrador (rol ADMIN del usuario de Asset; el resto lo usa también el corredor)
-const SOLO_ADMIN = { 'gdrive:connect': 'conexiones', 'gdrive:setClient': 'conexiones', 'gdrive:disconnect': 'conexiones', 'ml:conectar': 'conexiones', 'kv:llave': 'conexiones', 'kv:quitarLlave': 'conexiones', 'kv:toctoc': 'conexiones', 'kv:toctocQuitar': 'conexiones', 'ml:desconectar': 'conexiones', 'ml:contacto': 'conexiones', 'pub:configurar': 'conexiones', 'pub:feeds': 'conexiones', 'pub:feedsRotar': 'conexiones',
+const SOLO_ADMIN = { 'gdrive:connect': 'conexiones', 'gdrive:setClient': 'conexiones', 'gdrive:disconnect': 'conexiones', 'ml:conectar': 'conexiones', 'kv:llave': 'conexiones', 'pfapi:conectar': 'conexiones', 'pfapi:desconectar': 'conexiones', 'kv:quitarLlave': 'conexiones', 'kv:toctoc': 'conexiones', 'kv:toctocQuitar': 'conexiones', 'ml:desconectar': 'conexiones', 'ml:contacto': 'conexiones', 'pub:configurar': 'conexiones', 'pub:feeds': 'conexiones', 'pub:feedsRotar': 'conexiones',
   'res:configurar': 'conexiones', 'pv:claveWa': 'conexiones', 'obs:configurar': 'conexiones', 'dir:configurar': 'conexiones', 'ops:setFileKey': 'conexiones', 'ai:config': 'conexiones',
   'pv:configurar': 'fernanda', 'wallet:topup': 'saldo', 'inmo:propArchivar': 'borrar', 'inmo:perBorrar': 'borrar', 'leads:borrar': 'borrar', 'neg:borrar': 'borrar',
   'leads:asignar': 'reasignar', 'neg:corredor': 'reasignar', 'inmo:importar': 'importar', 'pv:importar': 'importar', 'fmt:configurar': 'documentos', 'usr:listar': 'usuarios', 'usr:crear': 'usuarios', 'usr:editar': 'usuarios', 'usr:clave': 'usuarios' };
@@ -455,49 +455,70 @@ async function asPdfForSigning(filePath) {
   fs.writeFileSync(out, Buffer.from(r.bytes));
   return { path: out, converted: 'Word', original: path.basename(filePath) };
 }
+// Enviar un archivo a firmar (editor de PDF): quién firma lo lee la IA de Asset (PDF normal o escaneado) y el envío va por la API de
+// integración de Portalfirma a través del servidor de Asset (src/envio-api.js). Nada de esto usa el MCP de Portalfirma.
+const analizados = new Set();   // PDF que pasaron por «analizar»: solo esos se pueden enviar (la ruta viaja por la pantalla)
+// la vista previa mientras se analiza: el PDF que se va a leer (un Word se convierte una sola vez; «analizar» usa esa misma conversión)
+const vistas = new Map();
+const convertir = (p) => { if (!vistas.has(p)) vistas.set(p, asPdfForSigning(p)); return vistas.get(p); };
+handle('doc:vista', async (ruta) => {
+  const p = String(ruta || '');
+  if (!/\.(pdf|docx)$/i.test(p) || !fs.existsSync(p)) return null;
+  try { const conv = await convertir(p); return fs.readFileSync(conv.path).toString('base64'); } catch { vistas.delete(p); return null; }
+});
 handle('doc:analyze', async (originalPath) => {
-  const conv = await asPdfForSigning(originalPath);
+  const conv = await convertir(originalPath); vistas.delete(originalPath);
   const filePath = conv.path;
   const info = { ...readDoc(filePath), converted: conv.converted, original: conv.original };
-  const b64 = fs.readFileSync(filePath).toString('base64');
-  const ing = await pf.ingest(b64, info.name);
-  if (!ing?.document_id) throw new Error(ing?.message || 'Portalfirma no devolvió el documento.');
-  const ext = await pf.extractSigners(ing.document_id);
-  return { file: info, ingest: ing, extract: ext };
+  const ext = await require('./envio-api').extraerFirmantes(fs.readFileSync(filePath));
+  analizados.add(filePath);
+  return {
+    file: info,
+    ingest: { document_id: filePath },   // la ruta del PDF: al enviar se lee de ahí
+    extract: {
+      typeDocument: ext.tipoDocumento || '', summary: (ext.avisos || []).join(' · '),
+      required_fields: { rut: true, alias: true, name: true, email: true, phone: false },   // la API de Portalfirma pide nombre y correo de cada firmante
+      firmantes: (ext.firmantes || []).map((x) => ({ fullName: x.nombre, rut: x.rut, email: x.email, phone: x.telefono, alias: x.rol, pagina: x.pagina || 0 })),
+    },
+  };
 });
-handle('doc:reextract', (documentId, configId) => pf.extractSigners(documentId, configId));
 
 // Paso 3: enviar a firmar
+// el PDF analizado, en base64, para mostrarlo en la pantalla y ubicar las firmas (solo los que pasaron por «analizar»)
+handle('doc:leer', (ruta) => {
+  if (!analizados.has(String(ruta))) throw new Error('Ese documento no está en el análisis.');
+  return fs.readFileSync(String(ruta)).toString('base64');
+});
+
 handle('doc:send', async (payload) => {
-  const r = await pf.sendToSign(payload);
-  const operation = r?.operation ?? r?.operationNumber ?? r?.numberOperation ?? findKey(r, /operation/i);
-  // Sin número de operación y con un mensaje de error, el envío falló (aunque el servidor no lo marque como error).
-  const msg = typeof r?.message === 'string' ? r.message : '';
-  if (operation == null && /error|fall[oó]|failed|status code/i.test(msg)) {
-    const code = /status code (\d+)/.exec(msg)?.[1];
-    throw new Error(code ? `Portalfirma no pudo crear la operación (error ${code} del servidor). Revisa «Mis operaciones» antes de reintentar, para no duplicarla.` : msg);
-  }
+  const ruta = String(payload?.document_id || '');
+  if (!analizados.has(ruta)) throw new Error('Vuelve a abrir el documento antes de enviarlo a firmar.');
+  const r = await require('./envio-api').enviarPdf({
+    bytes: fs.readFileSync(ruta), nombre: payload.__fileName || path.basename(ruta), tramite: payload.protocolization, posiciones: payload.posiciones || null, paginaExtra: !!payload.paginaExtra,
+    firmantes: (payload.signatories || []).map((x) => ({ rut: x.rut, nombre: x.fullName, email: x.email, telefono: x.phone, alias: x.alias, tipoFirma: x.typeSign })),
+  });
+  const operation = r.operation ?? null;
   if (operation) inmo.registrarEnvio({ operation, name: payload.__fileName, origen: 'editor' }); // «Mis operaciones»
-  return { raw: r, operation };
+  return { raw: { operation }, operation };
 });
 
 // ---- Mis operaciones sincronizadas con Portalfirma ----
 const sync = require('./sync'); sync.init(pf, process.env.PF_MOCK === '1' && !process.env.PF_API_BASE ? null : require('./pfapi'));
-handle('ops:status', () => sync.status());
+handle('ops:status', async () => { if (process.env.PF_MOCK && globalThis.__retrasoOpsEstado) await new Promise((r) => setTimeout(r, globalThis.__retrasoOpsEstado)); return sync.status(); });   // las pruebas alargan esta consulta para ver la pantalla de espera
 handle('ops:setPhone', (p) => sync.setPhone(p));
 // 0.16.16 · lo enviado desde Asset muestra a qué propiedad pertenece
 const conProp = (r) => { try { for (const it of r?.items || []) if (it.asset?.propId) { const p = require('./inmo').obtener(it.asset.propId); if (p) it.asset.codigo = p.codigo; } } catch {} return r; };
 handle('ops:sync', async (full) => conProp(await sync.sync({ full: !!full })));
 handle('ops:list', () => conProp(sync.list()));
 handle('ops:detail', (n, refresh) => sync.detail(n, { refresh: !!refresh }));
-handle('ops:file', async (n) => { const f = await sync.file(n); return { path: f, bytes: new Uint8Array(fs.readFileSync(f)) }; });
-handle('ops:saveFile', async (n) => {
-  const f = await sync.file(n);
+handle('ops:file', async (n, version) => { const f = await sync.file(n, version); return { path: f, bytes: new Uint8Array(fs.readFileSync(f)) }; });
+handle('ops:saveFile', async (n, version) => {
+  const f = await sync.file(n, version);
   const r = await dialog.showSaveDialog(win, { defaultPath: path.join(app.getPath('downloads'), path.basename(f)), filters: [{ name: 'PDF', extensions: ['pdf'] }] });
   if (r.canceled || !r.filePath) return null; fs.copyFileSync(f, r.filePath); return r.filePath;
 });
-handle('ops:share', async (n) => {
-  const f = await sync.file(n);
+handle('ops:share', async (n, version) => {
+  const f = await sync.file(n, version);
   if (process.platform === 'darwin') { const { ShareMenu } = require('electron'); new ShareMenu({ filePaths: [f] }).popup({ window: win }); return 'menu'; }
   shell.showItemInFolder(f); return 'folder';
 });
@@ -662,6 +683,9 @@ handle('bulk:pick', async () => {
 handle('bulk:add', (paths) => bulk.add((paths || []).filter((p) => typeof p === 'string' || (p && typeof p.path === 'string')).map((p) => (typeof p === 'string' ? p : { path: p.path, flow: p.flow && typeof p.flow === 'object' ? { expId: String(p.flow.expId || ''), file: String(p.flow.file || '') } : undefined }))));
 handle('bulk:update', (id, patch) => bulk.update(id, patch || {}));
 handle('bulk:applySigners', (signers) => bulk.applySigners(signers || []));
+handle('bulk:sync', (id) => bulk.sync(String(id)));
+handle('bulk:reanalyze', (id) => bulk.reanalyze(String(id)));
+handle('bulk:force', (id) => bulk.force(String(id)));
 handle('bulk:retry', (id) => bulk.retry(id));
 handle('bulk:remove', (id) => bulk.remove(id));
 handle('bulk:clear', (which) => bulk.clear(which));
@@ -706,19 +730,22 @@ handle('flujos:run', (spec) => flujos.run(spec));
 handle('flujos:runs', () => flujos.runs());
 handle('flujos:deleteRun', (id) => flujos.deleteRun(id));
 handle('flujos:state', () => flujos.state());
-// Firma masiva con certificado: la clave va directo a Portalfirma; no se guarda ni se registra
-handle('cds:pending', (rut) => pf.cds({ action: 'list_pending', rut }));
-handle('cds:code', (rut, operations, clave) => pf.cds({ action: 'request_sign_code', rut, operations, clave_certificado: clave }));
-handle('cds:sign', (rut, operations, clave, code) => pf.cds({ action: 'sign_documents', rut, operations, clave_certificado: clave, segundo_factor: code }));
-
 // Seguimiento
+// reenviar el enlace de firma (Portalfirma lo manda por el canal que tenga cada firmante): a uno (firmanteId, el `id` del firmante en el detalle) o a todos
+handle('op:reenviar', async (o) => {
+  const num = String(o?.operacion ?? '').replace(/\D/g, '');
+  if (!num) throw new Error('Falta el número de operación.');
+  const d = await sync.detail(Number(num), { refresh: true });
+  if (!d?.processId) throw new Error('Portalfirma no informó el identificador de la operación.');
+  const api = require('./envio-api');
+  if (o.firmanteId) await api.reenviarFirmante(d.processId, String(o.firmanteId)); else await api.reenviarTodos(d.processId);
+  return { ok: true };
+});
 handle('op:detail', (n) => {
   const num = String(n ?? '').replace(/\D/g, '');
   if (!num) throw new Error('Esta entrada no tiene número de operación: el envío no se completó en Portalfirma.');
-  return pf.processDetail(Number(num));
+  return sync.detail(Number(num));   // por la API de integración de Portalfirma
 });
-handle('op:manage', (args) => pf.manage(args));
-handle('op:byRut', (rut, start, end) => pf.byRut(rut, start, end));
 handle('history:list', () => { // los envíos que fallaron (sin número de operación) no se muestran
   if (inmo.API) return inmo.historialEnvios();
   const h = (store.get('history') || []).filter((x) => x && x.operation != null && x.operation !== '');
@@ -783,7 +810,8 @@ const cambiarPropiedad = async (id, cambios) => {
   const antes = JSON.parse(JSON.stringify(inmo.obtener(id))); const p = await propietarioPendiente(await inmo.guardarPropiedad({ id, ...cambios }));
   return ml.reaccionar(antes, p).catch(() => []);
 };
-negocios.configurar({ alCambiarPropiedad: cambiarPropiedad });
+// con la cuenta de Asset el servidor ya cambió el estado de la propiedad al mover o cerrar un negocio: aquí solo se ajusta el aviso del portal
+negocios.configurar({ alCambiarPropiedad: cambiarPropiedad, alActualizarPropiedad: (antes, p) => ml.reaccionar(antes, p).catch(() => []) });
 // Agenda y herramientas de Asset para el agente (y para los botones que usan la misma lógica)
 const agenda = require('./agenda');
 // 0.16.16 · control del flujo de firma: número de operación, registro en «Mis operaciones», seguimiento automático,
@@ -797,7 +825,6 @@ handle('fir:pendientes', (o) => firmas.pendientes(o || {}));
 handle('fir:revisar', (op) => firmas.revisar(op));
 handle('fir:ronda', () => firmas.ronda());
 handle('fir:reenviar', (o) => firmas.reenviar(o || {}));
-handle('fir:corregir', (o) => firmas.corregir(o || {}));
 handle('fir:revisarContacto', (l) => firmas.revisarFirmantes(l || []));
 // cada 5 minutos (si hay algo en firma y la sesión de Portalfirma está abierta)
 // la revisión automática: con la cuenta de Asset la hace el servidor (cada 5 min, para toda la corredora, aunque la app
@@ -810,7 +837,8 @@ const avisosServidor = require('./avisos').crear({
   manejadores: {
     wa_pedir_vinculo: async (a) => { toUI('agent:event', { type: 'aviso', texto: a.texto }); },
     firmas: async (a) => { try { await inmo.sincronizar(); } catch {} avisarFirmas(a.texto); },
-    // la firma de la etapa actual de un negocio: con el negocio ya sincronizado, avanza (lo hace la app: las etapas viven aquí)
+    // la firma de la etapa actual de un negocio: con la cuenta de Asset el negocio avanza (o se cierra) en el SERVIDOR al firmarse (ronda.ts →
+    // NegocioAccionesService.avanzarPorFirma); aquí solo se trae lo nuevo y se avisa. Sin servidor (demo), negocios.avanzarPorFirma lo mueve.
     // un cliente escribió: el lead se recarga al instante (aviso silencioso del servidor)
     // el arrendatario respondió a la confirmación de su visita: se recarga la agenda y el paso «Visita agendada» se actualiza solo
     // el acta se cerró (en la app o por «listo» de WhatsApp): el servidor ya marcó el paso del negocio; se trae y se recarga
@@ -1304,7 +1332,7 @@ assetTools.push({ name: 'asset_atencion_clientes', modo: 'escribir',
     if (a.siempre_activo !== undefined) { store.set('siempreActivo', !!a.siempre_activo); aplicarSiempreActivo(); }
     return { ok: true, ...clientesWa.estado(), nota: clientesWa.activo() ? 'Tomás responde a las personas del CRM que escriban al número de la empresa, y te avisa por WhatsApp de cada recado. Asset queda activo aunque cierres la ventana y se abre solo al encender el computador; solo deja de responder si el computador está apagado o sin internet.' : 'Apagada: los mensajes de clientes no se responden solos.', siempreActivo: siempreActivo() };
   } });
-const waAgente = require('./whatsapp-agente').crear({ store, wa: require('./postventa').whatsappWechatia(reservas), crearAgente: (o) => require('./agente').crear({ pf, ai: require('./ai'), ...o }),
+const waAgente = require('./whatsapp-agente').crear({ comprobantes: require('./comprobantes'), store, wa: require('./postventa').whatsappWechatia(reservas), crearAgente: (o) => require('./agente').crear({ pf, ai: require('./ai'), ...o }),
   locales: assetTools, dictado, inmo, convs, leads, ai: require('./ai'), equipoHoy: () => ofDatos(), emitUI: (e) => toUI('agent:event', e), mock: process.env.PF_MOCK === '1', clientes: clientesWa, servidor: waSrv });
 // 0.16.26 · el Agente respeta quién usa el equipo: no muestra datos de dueños reservados ni prepara documentos con ellos
 { const DUENO = new Set(['asset_preparar_formato', 'asset_enviar_formato', 'asset_formulario_documento', 'asset_generar_documento']);
@@ -1320,6 +1348,18 @@ handle('wa:numero', (numero) => waSrv.guardarNumero(numero)); // el número de W
 handle('cv:estado', () => (process.env.PF_MOCK === '1' ? { disponible: true, conectado: true, propia: true, admin: true } : asset.llamar('GET', '/convecta/conexion')));
 handle('cv:conectar', (clave) => asset.llamar('PUT', '/convecta/conexion', { clave: String(clave || '').trim() }));
 handle('cv:desconectar', () => asset.llamar('DELETE', '/convecta/conexion'));
+// API de Portalfirma (enviar a firmar, estado y PDF firmado): las credenciales de la corredora (clave id, customer_id, correo y contraseña) las ingresa el administrador; quedan cifradas en el servidor
+handle('pfapi:estado', () => (process.env.PF_MOCK === '1' ? { conectado: true, customerId: 'mock', email: 'mock@asset.cl', admin: true } : asset.llamar('GET', '/portalfirma-api/conexion')));
+handle('pfapi:conectar', (o) => asset.llamar('PUT', '/portalfirma-api/conexion', { id: String(o?.id || '').trim(), customerId: String(o?.customerId || '').trim(), email: String(o?.email || '').trim(), password: String(o?.password || '') }));
+handle('pfapi:desconectar', () => asset.llamar('DELETE', '/portalfirma-api/conexion'));
+// la foto de cada usuario (su avatar): la propia y las del equipo
+handle('perfil:foto', () => asset.llamar('GET', '/perfil/foto'));
+handle('perfil:fotos', () => asset.llamar('GET', '/perfil/fotos'));
+handle('perfil:fotoGuardar', (foto) => asset.llamar('PUT', '/perfil/foto', { foto: String(foto || '') }));
+handle('perfil:fotoQuitar', () => asset.llamar('DELETE', '/perfil/foto'));
+// las firmas que quien envía ubicó arrastrándolas en el PDF (el servidor las usa en el próximo envío de esa plantilla)
+handle('fir:posiciones', (plantilla, posiciones) => asset.llamar('PUT', '/firmas-posiciones/' + encodeURIComponent(String(plantilla)), { posiciones }));
+handle('fir:posicionesQuitar', (plantilla) => asset.llamar('DELETE', '/firmas-posiciones/' + encodeURIComponent(String(plantilla))));
 // los datos de la corredora que llevan los documentos (razón social, RUT, domicilio, representante, logo)
 handle('corredora:datos', () => asset.llamar('GET', '/corredora/datos'));
 handle('corredora:guardar', (o) => asset.llamar('PUT', '/corredora/datos', o || {}));
@@ -1410,8 +1450,9 @@ handle('asset:ejecutar', (name, args) => agente.ejecutarLocal(name, args || {}))
 const etapas = require('./etapas').crear({ agenda, formatos });
 handle('et:pasos', (o) => { const n = o?.negocioId ? inmo.negocios().find((x) => x.id === o.negocioId) : null; const p = o?.propId ? inmo.todas().find((x) => x.id === o.propId) : null; if (!n && !p) throw new Error('No encontré el negocio.'); return etapas.pasos({ n, p: n ? null : p, ambito: o?.ambito || (n ? 'negocio' : 'captacion') }); });
 handle('et:marcar', async (o) => {
-  const r = etapas.marcar(o || {});
-  // arriendo: con la comisión cobrada el negocio se cierra como ganado y parte el postarriendo
+  const r = await etapas.marcar(o || {});   // con el servidor, el paso del negocio lo marca él (POST …/acciones/paso)
+  // arriendo: con la comisión cobrada el negocio se cierra como ganado y parte el postarriendo. Si se registra el pago (negPago) el servidor ya lo cerró;
+  // esto cubre marcar el paso «Comisión cobrada» a mano (y la demo): negocios.cerrar delega en el servidor
   if (o?.paso === 'comision' && o?.estado === 'ok' && o?.negocioId) { const n = inmo.negocios().find((x) => x.id === o.negocioId); if (n?.tipo === 'arriendo' && n.estado === 'abierto') { try { await negocios.cerrar(n.id, 'ganado'); } catch (e) { console.warn('[etapas] cerrar al cobrar la comisión:', e.message); } } }
   return r;
 });
@@ -1420,7 +1461,7 @@ const evaluacion = require('./evaluacion');
 handle('ev:ver', (id) => evaluacion.ver(id));
 handle('ev:solicitar', (o) => evaluacion.solicitar(o || {}));
 handle('ev:recalcular', (id) => evaluacion.recalcular(id));
-handle('ev:decidir', async (o) => { const r = await evaluacion.decidir(o || {}); if (r?.decision?.estado === 'aprobada') { try { etapas.marcar({ negocioId: o.negocioId, paso: 'evaluacion', estado: 'ok', d: o?.personaId ? 'Aprobada: el arrendatario y los avales fueron aprobados' : 'Aprobada por el corredor' }); } catch {} } return r; });   // la aprobación es por persona; el paso queda logrado cuando todos están aprobados
+handle('ev:decidir', async (o) => { const r = await evaluacion.decidir(o || {}); if (r?.decision?.estado === 'aprobada') { try { await etapas.marcar({ negocioId: o.negocioId, paso: 'evaluacion', estado: 'ok', d: o?.personaId ? 'Aprobada: el arrendatario y los avales fueron aprobados' : 'Aprobada por el corredor' }); } catch {} } return r; });   // la aprobación es por persona; el paso queda logrado cuando todos están aprobados
 handle('ev:archivo', (o) => evaluacion.archivo(o || {}));
 handle('ev:clase', (o) => evaluacion.clase(o || {}));
 handle('ev:archivoBytes', (o) => evaluacion.archivoBytes(o || {}));
@@ -1472,11 +1513,10 @@ handle('neg:avisoPreparar', (o) => avisoWsp.preparar(o || {}));
 handle('neg:avisoEnviar', (o) => avisoWsp.enviar(o || {}));
 handle('acta:borrarArchivo', (o) => actaVisita.borrarArchivo(o || {}));
 // al cerrar el acta, el paso «Acta de visita» del negocio queda logrado
-// cerrar el acta: el paso «Acta de visita» queda pendiente (falta enviarla a firmar al visitante); el servidor lo marca y avisa a la app
+// cerrar el acta: el paso «Acta de visita» queda logrado (no se firma: se comparte su PDF); el servidor lo marca y avisa a la app
 handle('acta:cerrar', (o) => actaVisita.cerrar(o?.actaId));
-handle('acta:firmaVistaPrevia', (id) => actaVisita.firmaVistaPrevia(id));
-handle('acta:firmaAjustes', (o) => actaVisita.firmaAjustes(o || {}));
-handle('acta:firmaEnviar', async (id) => { const r = await actaVisita.firmaEnviar(id); try { await inmo.sincronizar(); } catch { /* se trae en la próxima sincronización */ } return r; });
+handle('acta:pdf', (id) => actaVisita.pdf(id));
+handle('acta:compartir', (id) => actaVisita.compartir(id));
 // 0.16.11 · Cartera: el avance de captación de cada propiedad (lo logrado y lo que falta)
 handle('et:captaciones', () => Object.fromEntries(inmo.todas().filter((p) => !p.archivada).map((p) => { const r = etapas.pasos({ p, ambito: 'captacion' }); const e = r.etapas[0];
   return [p.id, { ok: e.ok, total: e.total, completa: !r.actual, falta: e.pasos.filter((x) => x.e !== 'ok').map((x) => x.t), actual: r.actual ? { t: r.actual.t, e: r.actual.e } : null, mandato: (() => { const m = e.pasos.find((x) => x.id === 'mandato'); return m?.e === 'ok' && m.f ? String(m.f).slice(0, 10) : null; })() }]; })));
@@ -1506,7 +1546,7 @@ handle('neg:listar', () => { const r = negocios.listar(); return { ...r, negocio
 handle('neg:obtener', async (id) => { const n = await negocios.obtener(id); if (!permisos.verNegocio(n)) throw new Error('Ese negocio es de otro corredor.'); return n; });
 // 0.16.27 · cada negocio es de un corredor (el que lo abrió o el dueño del lead); el administrador lo puede reasignar
 handle('neg:corredor', async (id, corredorId) => { const n = await negocios.obtener(id); const c = corredorId ? equipo.porId(corredorId) : null; if (corredorId && !c) throw new Error('Ese usuario no es de tu corredora.');
-  const antes = n.corredorId ? equipo.nombre(n.corredorId) : null; negocios.guardar({ id, corredorId: c?.id || null, corredor: c?.nombre || '' });
+  const antes = n.corredorId ? equipo.nombre(n.corredorId) : null; await negocios.guardar({ id, corredorId: c?.id || null, corredor: c?.nombre || '' });
   try { await negocios.nota(id, c ? (antes ? `Pasó de ${antes} a ${c.nombre}` : `Asignado a ${c.nombre}`) : 'Quedó sin corredor'); } catch {} return negocios.obtener(id); });
 // metas mensuales por corredor (las define el administrador): { [usuarioId]: { facturacion, captacion } }, guardadas en la configuración de la corredora
 handle('metas:get', () => inmo.config().metasNegocios || {});
@@ -1525,6 +1565,15 @@ handle('neg:borrar', (id) => negocios.borrar(id));
 handle('neg:firmaVincular', (id, e, op) => negocios.vincularFirma(id, e, op));
 handle('neg:firmaQuitar', (id, e) => negocios.quitarFirma(id, e));
 handle('neg:firmasRevisar', (id) => negocios.revisarFirmas(pf, id));
+// pagos, factura, aceptación, contrato y postarriendo: con la cuenta de Asset los hace el servidor (negocio-acciones.ts); en la demo, negocios.js
+const delNegocio = (id) => { if (!permisos.verNegocio(negocios.ver(id))) throw new Error('Ese negocio es de otro corredor.'); };
+handle('neg:pago', (o) => { delNegocio(o?.negocioId); const { negocioId, ...resto } = o; return negocios.pago(negocioId, resto); });
+handle('neg:pagoQuitar', (id, tipo) => { delNegocio(id); return negocios.quitarPago(id, tipo); });
+handle('neg:factura', (id, o) => { delNegocio(id); return negocios.factura(id, o || {}); });
+handle('neg:facturaQuitar', (id) => { delNegocio(id); return negocios.quitarFactura(id); });
+handle('neg:aceptacion', (id, o) => { delNegocio(id); return negocios.aceptacion(id, o || {}); });
+handle('neg:contratoAprobar', (id, o) => { delNegocio(id); return negocios.contratoAprobar(id, o || {}); });
+handle('neg:postarriendo', (id, o) => { delNegocio(id); return negocios.postarriendo(id, o || {}); });
 handle('ml:estado', () => ml.estado());
 handle('ml:conectar', () => ml.conectar(win));
 handle('ml:desconectar', () => ml.desconectar());

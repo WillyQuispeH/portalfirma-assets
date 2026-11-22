@@ -235,20 +235,19 @@ function crear({ inmo, pf, renderPdf, dir, cambiarPropiedad, firmas = null, nego
     if (!pr.listo) throw err('Faltan datos: ' + pr.faltan.map((x) => (x.motivo ? `${x.t} (${x.motivo})` : x.t)).join(', ') + '.');
     const esOrden = f.hito === 'orden'; if (esOrden) o.numero = conf().ovNumero || 1;
     const fir = firmantes(f, p, o); const a = archivo(f, p); const bytes = await renderPdf(await html(f, p, o), { cabecera: cabecera(f) }); fs.writeFileSync(a, bytes);
-    const ing = await pf.ingest(Buffer.from(bytes).toString('base64'), path.basename(a));
-    const docId = ing?.document_id || ing?.fileId || ing?.id; if (!docId) throw err('Portalfirma no recibió el PDF' + (ing?.message ? ': ' + ing.message : '.'));
-    const pagador = String(email || pagadorDe() || inmo.config().corredor?.email || inmo.config().contacto?.email || '').trim(); if (!pagador) throw err('Falta el correo de tu cuenta de Portalfirma.');
+    // por la API de integración de Portalfirma, a través del servidor de Asset (credenciales de la corredora en Integraciones); sin ellas, error claro
     const fm = firmaDe(f);
-    // propietario empresa: firman personas; Portalfirma las identifica en el documento (su representante) — Asset no las arma
-    let sig = fir;
+    let sig = fir;   // quienes firman (con un propietario empresa se reemplaza por sus representantes)
+    // propietario empresa: firman personas; la IA de Asset las identifica en el documento (su representante)
     if (!esOrden && esEmpresa(p)) {
-      let ex = null; try { ex = await pf.extractSigners(docId); } catch {}
-      const rep = fir.find((s) => s.rol === 'representante'); const otros = (ex?.firmantes || ex?.signatories || []).filter((x) => x.rut && inmo.fmtRut(x.rut) !== inmo.fmtRut(rep?.rut || '') && inmo.fmtRut(x.rut) !== inmo.fmtRut(fir[0].rut));
-      if (!otros.length) throw err(`El propietario es una empresa (${fir[0].nombre}). Portalfirma no identificó en el documento a la persona que firma por ella: envíalo desde Portalfirma («Enviar a firmar»), donde se indica el representante.`);
+      let ex = null; try { ex = await require('./envio-api').extraerFirmantes(bytes); } catch (e) { if (e.code === 'NEEDS_PF_API') throw e; }
+      const rep = fir.find((s) => s.rol === 'representante'); const otros = (ex?.firmantes || []).filter((x) => x.rut && inmo.fmtRut(x.rut) !== inmo.fmtRut(rep?.rut || '') && inmo.fmtRut(x.rut) !== inmo.fmtRut(fir[0].rut));
+      if (!otros.length) throw err(`El propietario es una empresa (${fir[0].nombre}). No pude identificar en el documento a la persona que firma por ella: envíalo desde Portalfirma («Enviar a firmar»), donde se indica el representante.`);
       const dd = fir.find((s) => s.rol === 'propietario');
-      sig = [...otros.map((x) => ({ ...dd, rut: x.rut, nombre: x.fullName || x.nombre, email: x.email || dd.email, telefono: x.phone || dd.telefono, alias: dd.alias })), ...fir.filter((s) => s.rol !== 'propietario')];
+      sig = [...otros.map((x) => ({ ...dd, rut: x.rut, nombre: x.nombre, email: x.email || dd.email, telefono: x.telefono || dd.telefono, alias: dd.alias })), ...fir.filter((s) => s.rol !== 'propietario')];
     }
-    const r = await pf.sendToSign({ document_id: docId, email: pagador, protocolization: fm.tramite, signatories: sig.map((s) => ({ rut: inmo.fmtRut(s.rut), fullName: s.nombre, email: s.email, phone: s.telefono, alias: s.alias, typeSign: fm.tipo })) });
+    const enviado = await require('./envio-api').enviarPdf({ bytes, nombre: path.basename(a), firmantes: sig.map((s) => ({ ...s, tipoFirma: fm.tipo })), tramite: fm.tramite, propId: p.id });
+    const r = { operation: enviado.operation };
     const op = FIR.operacionDe(r); const msg = typeof r?.message === 'string' ? r.message : '';
     if (op == null) throw err(/status code (\d+)/.test(msg) ? `Portalfirma no pudo crear la operación (error ${/status code (\d+)/.exec(msg)[1]}). Revisa «Mis operaciones» antes de reintentar.` : msg || 'Portalfirma no devolvió el número de operación.');
     if (esOrden) inmo.guardarConfig({ formatos: { ...conf(), ovNumero: o.numero + 1 } });

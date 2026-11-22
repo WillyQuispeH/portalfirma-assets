@@ -5,7 +5,8 @@
 //     manda el contrato por WhatsApp, con el PDF adjunto) y «Aprueba» (se marca cuando ese firmante aprueba el borrador). El paso se logra
 //     cuando TODOS aprobaron la última versión; esa misma versión es la que se envía a firmar en «Contrato firmado»;
 //  3. los COMENTARIOS que dejó cada uno.
-// Todo queda en el negocio (ciclo.contrato: versiones, aprobado[personaId], envios, comentarios) con negGuardar; los archivos van a R2.
+// La aprobación de cada firmante va por negContratoAprobar (el servidor aplica la regla). Las versiones, los comentarios y los envíos (ciclo.contrato)
+// aún no tienen acción en el servidor: se guardan con negGuardar; los archivos van a R2.
 // Los id (#rcPanel, #rcArmar, #rcVer, #rcRevisar, #rcMensaje, #rcEnviar, #rcComentario, #rcTexto, #rcGuardar, #rcVisor, #rcVisorCerrar,
 // #rcEnviar-<personaId>, #rcAprueba-<personaId>, [data-rc-firmante], [data-version]) los usan las pruebas.
 /* eslint-disable @typescript-eslint/no-explicit-any -- el negocio llega del proceso principal sin tipos */
@@ -117,7 +118,7 @@ export default function RevisionContrato({ negocioId, alCambio, reabrir }: { neg
     } catch (e) { setError(mensaje(e)); }
     setTrabajando(false);
   };
-  const aprueba = (f: IFirmante, si: boolean) => guardar((c) => { const a = { ...(c.aprobado || {}) }; if (si) a[f.personaId] = new Date().toISOString(); else delete a[f.personaId]; c.aprobado = a; }, si ? `${f.nombre} aprobó el contrato.` : 'Aprobación quitada.').catch((e) => setError(mensaje(e)));
+  const aprueba = (f: IFirmante, si: boolean) => api('negContratoAprobar', negocioId, { personaId: f.personaId, aprobado: si }).then(async () => { toast(si ? `${f.nombre} aprobó el contrato.` : 'Aprobación quitada.'); await cargar(); alCambio?.(); }).catch((e) => setError(mensaje(e)));
   const alternarEnvio = (id: string, si: boolean) => setElegidos((s) => { const x = new Set(s); if (si) x.add(id); else x.delete(id); return x; });
 
   // enviar a revisión: el mensaje sale armado (con {nombre} para cada uno), se edita y SOLO se envía si la corredora lo confirma

@@ -74,8 +74,6 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     ok(new RegExp(`peración ${doc.operacion}`).test(t) && /firmaron/.test(t), `el agente encuentra la operación sin que le den el número (${t.slice(0, 100)})`);
     const rv = await call('firRevisar', doc.operacion); ok(rv.firmantes.length && rv.pendientes.length >= 1, 'la revisión trae quién falta por firmar');
     { const it2 = (await call('opsList')).items.find((x) => x.operation === doc.operacion); ok(it2 && it2.signed === 1 && it2.signers === 2, '0.16.25 · lo que detecta el seguimiento (1 de 2 firmó) se ve al tiro en «Mis operaciones»'); }
-    const co = await call('firCorregir', { operacion: doc.operacion, firmante: rv.pendientes[0].nombre, email: 'correcto@correo.cl' });
-    ok(co.ok && co.email === 'correcto@correo.cl' && co.enlace === 'reenviado', 'se corrige el correo de un firmante en Portalfirma y se le reenvía el enlace');
     // 0.16.17 · orden de visita con el formato de The Living: sale del CRM y de la ficha; firma solo el visitante
     const vis = await call('inmoPerGuardar', { nombre: 'Pedro Visitante Soto', rut: '15.555.555-6', email: 'pedro@correo.cl', telefono: '', roles: ['interesado'] });
     let ov = await call('fmtPreparar', { formatoId: 'orden_visita', propId: p.id, personaId: vis.id });

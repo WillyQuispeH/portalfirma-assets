@@ -43,6 +43,7 @@ import { PostventaWaService } from './postventa';
 import { ObservadorService, canalDe } from './observador';
 import { IaService } from './ia';
 import { PuenteService } from './puente';
+import { RevisionContratoWaService } from './revision-contrato';
 import { EvaluacionService } from './evaluacion';
 import { ConfirmacionVisitaService } from './confirmacion-visita';
 import { DocumentoRevisionService } from './documento-revision';
@@ -84,6 +85,7 @@ export class LectorService implements OnModuleInit, OnModuleDestroy {
     private readonly evaluacion: EvaluacionService,
     private readonly confirmacionVisita: ConfirmacionVisitaService,
     private readonly documentoRevision: DocumentoRevisionService,
+    private readonly revisionContrato: RevisionContratoWaService,
     private readonly puente: PuenteService,
     private readonly asistentes: AsistentesConfigService,
     config: ConfigService<Env, true>,
@@ -261,6 +263,12 @@ export class LectorService implements OnModuleInit, OnModuleDestroy {
     }
     // 2c. respondió a la plantilla de un documento a revisión: se le manda el PDF (la ventana de 24 h ya está abierta)
     nuevos = await this.documentoRevision.interceptar(wa, corredoraId, cv, nuevos);
+    if (!nuevos.length) {
+      await this.rapido(corredoraId);
+      return;
+    }
+    // 2d. la respuesta de una parte al contrato que se le mandó a revisión: se interpreta (aprueba / comenta / pregunta) y se registra sola
+    nuevos = await this.revisionContrato.interceptar(wa, corredoraId, cv, nuevos);
     if (!nuevos.length) {
       await this.rapido(corredoraId);
       return;

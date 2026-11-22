@@ -276,6 +276,7 @@ export class PromesaCompraventaService {
       archivo: `Promesa de compraventa ${x.prop.codigo} - ${x.persona.nombre}.pdf`,
       comprador: x.persona.nombre,
       propiedad: x.prop.codigo,
+      firmantes: x.firmantes.map((f) => ({ nombre: f.nombre, rol: f.rol })),
     };
   }
 

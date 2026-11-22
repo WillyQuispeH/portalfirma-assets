@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, type CSSProperties, type ReactNode, type Ref } from 'react';
 import CabeceraPagina from './CabeceraPagina';
+import FooterPagina from './FooterPagina';
 import type { IMiga } from './Migas';
 import { cx } from '../../utils/cx';
 import { abrirInicio } from '../../utils/app';
@@ -47,6 +48,11 @@ interface ILayoutProps extends Partial<TCabecera> {
   className?: string;
   contenidoClassName?: string;
   cabeceraClassName?: string;
+  pieClassName?: string;
+  /** componentes a la izquierda del pie (FooterPagina) */
+  pieIzquierda?: ReactNode;
+  /** botones / acciones a la derecha del pie, pegados al borde */
+  pieAcciones?: ReactNode;
   fondo?: false | ReactNode;
   ref?: Ref<HTMLDivElement>;
   migas?: IMiga[] | false;
@@ -54,7 +60,10 @@ interface ILayoutProps extends Partial<TCabecera> {
   altoCompleto?: boolean;
 }
 
-export default function Layout({ barra, children, tinte, espacio: _espacio = 'normal', id, className, contenidoClassName, cabeceraClassName, fondo, ref, titulo, migas, miga, volver, altoCompleto, ...cabecera }: ILayoutProps) {
+export default function Layout({
+  barra, children, tinte, espacio: _espacio = 'normal', id, className, contenidoClassName, cabeceraClassName,
+  pieClassName, pieIzquierda, pieAcciones, fondo, ref, titulo, migas, miga, volver, altoCompleto, ...cabecera
+}: ILayoutProps) {
   useAnchoBarra();
   useDesplazada();
   const color = tinte ?? cabecera.ilustracion?.tinte ?? 'var(--brand)';
@@ -63,11 +72,16 @@ export default function Layout({ barra, children, tinte, espacio: _espacio = 'no
       + ` radial-gradient(900px 340px at 100% 0%, color-mix(in srgb, ${color} 4%, transparent), transparent 70%), var(--bg)`,
   };
   const rastro = migas === false ? undefined : migas ?? rastroPorDefecto(volver, miga ?? (typeof titulo === 'string' ? titulo : ''));
+  const conPie = pieIzquierda != null || pieAcciones != null;
   return (
     // entre la cabecera, la barra y el contenido, el mismo margen que a los costados y abajo (ver main:has(…) en globals.css)
-    <div ref={ref} id={id} data-layout data-alto-completo={altoCompleto ? '' : undefined}
-      // alto completo: la ventana menos el menú principal (56px), el padding de arriba de main (20px) y el margen de abajo
-      className={cx('im-wrap tw:relative tw:flex tw:flex-col tw:gap-ui', altoCompleto && 'tw:h-[calc(100vh-76px-var(--ui-margen-pantalla))] tw:min-h-[560px]', className)}>
+    <div ref={ref} id={id} data-layout data-con-pie={conPie ? '' : undefined} data-alto-completo={altoCompleto ? '' : undefined}
+      // alto completo: la ventana menos el menú principal (56px), el padding de arriba de main (20px), el margen de abajo y el pie
+      className={cx(
+        // altoCompleto: la altura la pone globals.css (.im-wrap[data-alto-completo]); sin overflow aquí para no cortar la cabecera
+        'im-wrap tw:relative tw:flex tw:flex-col tw:gap-ui',
+        className,
+      )}>
       {/* el fondo general: fijo detrás de la pantalla; se va con ella cuando la vista se oculta */}
       {fondo === undefined
         ? <div aria-hidden data-layout-fondo className="tw:pointer-events-none tw:fixed tw:inset-0 tw:-z-10" style={tintado} />
@@ -75,12 +89,15 @@ export default function Layout({ barra, children, tinte, espacio: _espacio = 'no
       {titulo != null && (
         <CabeceraPagina pegada migas={rastro} titulo={titulo} {...cabecera}
           // con la ventana quieta no hace falta que se pegue: relative (no static) por la ilustración en ::before
-          className={cx(altoCompleto && 'tw:relative! tw:top-auto!', cabeceraClassName)} />
+          className={cx(altoCompleto && 'tw:relative! tw:top-auto! tw:shrink-0', cabeceraClassName)} />
       )}
-      {barra && <div data-layout-barra className="tw:flex tw:flex-wrap tw:items-center tw:gap-ui">{barra}</div>}
-      <div data-layout-contenido className={cx('tw:flex tw:min-w-0 tw:flex-col tw:gap-ui', altoCompleto && 'tw:min-h-0 tw:flex-1', contenidoClassName)}>
+      {barra && <div data-layout-barra className={cx('tw:flex tw:flex-wrap tw:items-center tw:gap-ui', altoCompleto && 'tw:shrink-0')}>{barra}</div>}
+      <div data-layout-contenido className={cx('tw:flex tw:min-w-0 tw:flex-col tw:gap-ui', altoCompleto && 'tw:min-h-0 tw:flex-1 tw:overflow-hidden tw:[&>*]:min-h-0', contenidoClassName)}>
         {children}
       </div>
+      {conPie && (
+        <FooterPagina pegada izquierda={pieIzquierda} acciones={pieAcciones} className={pieClassName} />
+      )}
     </div>
   );
 }

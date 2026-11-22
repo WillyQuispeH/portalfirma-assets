@@ -268,6 +268,15 @@ html[data-theme="dark"] {
   }
 }
 
+/* «Enviar a firmar» mientras se analiza el documento (gestion/enviar-a-firmar/Analizando.tsx) */
+.esq-aparece { animation: esq-aparece .45s ease-out both; }
+@keyframes esq-aparece { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.esq-barrido { animation: esq-barrido 2.2s ease-in-out infinite; }
+@keyframes esq-barrido { 0% { top: 0; opacity: 0; } 8% { opacity: 1; } 92% { opacity: 1; } 100% { top: calc(100% - 3px); opacity: 0; } }
+.esq-puntos::after { content: ''; animation: esq-puntos 1.4s steps(1, end) infinite; }
+@keyframes esq-puntos { 0% { content: ''; } 25% { content: '.'; } 50% { content: '..'; } 75% { content: '...'; } }
+@media (prefers-reduced-motion: reduce) { .esq-aparece, .esq-barrido, .esq-puntos::after { animation: none; } }
+
 
 .es {
   --es-line: color-mix(in srgb, var(--line) 75%, transparent);
@@ -403,6 +412,187 @@ main:has(> .view:not(.hidden) [data-layout]) {
   padding-bottom: 0;
 }
 
+/* pantallas con Layout: se desplazan, pero sin barra de scroll visible (ventana y paneles internos) */
+html:has(.view:not(.hidden) [data-layout]) {
+  scrollbar-width: none;
+}
+html:has(.view:not(.hidden) [data-layout])::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+.im-wrap[data-layout],
+.im-wrap[data-layout] * {
+  scrollbar-width: none;
+}
+.im-wrap[data-layout] *::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+/* alto completo: la ventana no se desplaza; cada panel interno sí (sin barra) */
+html:has(.view:not(.hidden) [data-layout][data-alto-completo]),
+body:has(.view:not(.hidden) [data-layout][data-alto-completo]) {
+  overflow: hidden;
+}
+
+/* altura fija (menú 56 + padding top de main 20 + margen + pie). En CSS para que no dependa del arbitrary de Tailwind. */
+.im-wrap[data-layout][data-alto-completo] {
+  height: calc(100vh - 76px - var(--ui-margen-pantalla) - var(--pie-alto, 0px));
+  min-height: 560px;
+  max-height: calc(100vh - 76px - var(--ui-margen-pantalla) - var(--pie-alto, 0px));
+}
+
+/* Enviar a firmar: dos columnas a alto fijo; la izquierda se desplaza por dentro (mismo truco que .ld-cols / .ld-items) */
+.im-wrap[data-layout][data-alto-completo] > [data-layout-contenido] {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-gap);
+}
+
+/* el título de las Card (components/ui/Card.tsx): degradado de la marca; los íconos dentro del título conservan su color */
+.ui-titulo-degradado {
+  width: fit-content;
+  max-width: 100%;
+  background: var(--grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.ui-titulo-degradado svg { color: var(--brand); }
+
+/* Mis operaciones: lista + detalle a alto fijo (mismo truco que .envio-cols / .ld-cols) */
+.op-cols {
+  display: flex;
+  flex: 1 1 0;
+  height: 100%;
+  min-height: 0;
+  gap: var(--ui-gap);
+  align-items: stretch;
+}
+.op-cols > .op-lista-card {
+  flex: 0 0 360px;
+  width: 360px;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.op-cols > .op-lista-card > div {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.op-lista {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.op-cols > .op-detalle {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.op-cols > .op-detalle > div {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+}
+/* el documento (derecha) llena su tarjeta sin desplazarse: la hoja se ajusta; solo la columna de la izquierda tiene scroll */
+.op-prev { display: flex; flex-direction: column; min-height: 0; }
+.op-prev > div:last-child { flex: 1 1 0; min-height: 0; }
+.op-lado { overscroll-behavior: contain; }
+.op-lado > * { flex-shrink: 0; }
+.op-detalle-cuerpo {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+/* vacío / error / carga: la tarjeta llena el panel y el mensaje queda al centro */
+.op-detalle-cuerpo > .op-detalle-lleno {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.op-detalle-cuerpo > .op-detalle-lleno > div {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.op-detalle-cuerpo > .op-vacio {
+  flex: 1 1 0;
+  min-height: 0;
+  margin: 0;
+}
+@media (max-width: 1023px) {
+  .op-cols { flex-direction: column; height: auto; }
+  .op-cols > .op-lista-card { flex: 0 1 auto; width: 100%; height: auto; max-height: min(48vh, 420px); }
+  .op-cols > .op-detalle { flex: 1 1 0; height: auto; min-height: 280px; }
+}
+
+.envio-cols {
+  display: flex;
+  flex: 1 1 0;
+  min-height: 0;
+  gap: var(--ui-gap);
+  align-items: stretch;
+}
+
+.envio-izq {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-gap);
+}
+
+.envio-izq > * { flex-shrink: 0; }   /* las tarjetas no se achican: la columna se desplaza */
+
+.envio-der {
+  flex: 1.2 1 0;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Antes de tener documento analizado solo hay una cosa en pantalla (cargar o analizar: data-solo) y el PDF ocupa todo el ancho.
+   Al quitar data-solo, la izquierda se abre con suavidad, el PDF se corre a la derecha y los datos aparecen. */
+.envio-cols { transition: column-gap .8s cubic-bezier(.22, 1, .36, 1); }
+.envio-izq { transition: flex-grow .8s cubic-bezier(.22, 1, .36, 1), opacity .55s ease .25s, transform .75s cubic-bezier(.22, 1, .36, 1) .15s; }
+.envio-der { transition: flex-grow .8s cubic-bezier(.22, 1, .36, 1); }
+.envio-cols[data-solo] { column-gap: 0; }
+.envio-cols[data-solo] .envio-izq { flex-grow: 0; opacity: 0; transform: translateX(-32px); overflow: hidden; pointer-events: none; transition-delay: 0s; }
+.envio-cols[data-solo] .envio-der { flex-grow: 1; }
+@media (prefers-reduced-motion: reduce) { .envio-cols, .envio-izq, .envio-der { transition: none; } }
+
+@media (max-width: 1023px) {
+  .envio-cols[data-solo] .envio-izq { display: none; }
+  .envio-cols { flex-direction: column; }
+  .envio-izq { flex: 0 1 auto; max-height: min(48vh, 420px); }
+  .envio-der { flex: 1 1 0; min-height: 280px; }
+}
+
 .ui-cabecera-pegada {
   --cab-lado: calc(50vw - 50% - var(--ancho-barra, 0px) / 2);
   --cab-fondo: color-mix(in srgb, var(--text) 6%, var(--card));
@@ -453,4 +643,33 @@ html:has(.view:not(.hidden) .ui-cabecera-pegada) {
 
 body:has(.view:not(.hidden) .ui-cabecera-pegada) {
   overflow-x: clip;
+}
+
+/* pie de pantalla (FooterPagina pegada): franja fija al fondo, a todo el ancho, espejo de la cabecera */
+.ui-pie-pegado {
+  --pie-fondo: color-mix(in srgb, var(--text) 6%, var(--card));
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 4;
+  /* el texto conserva 24px desde el borde, como la cabecera */
+  padding: 14px 24px;
+  background: var(--pie-fondo);
+  border-top: 3px solid var(--ui-edge-b);
+  box-shadow: 0 -12px 24px -16px rgb(16 24 64 / .28);
+}
+
+/* con pie fijo, el Layout reserva su alto (--pie-alto lo pone FooterPagina) y main no suma otro margen abajo.
+   En altoCompleto el alto del Layout ya descuenta el pie: no hay que sumar otro padding. */
+.im-wrap[data-layout][data-con-pie]:not([data-alto-completo]) {
+  padding-bottom: var(--pie-alto, 0px);
+}
+
+main:has(> .view:not(.hidden) [data-layout][data-con-pie]) {
+  padding-bottom: 0;
+}
+
+html:has(.view:not(.hidden) .ui-pie-pegado) {
+  scroll-padding-bottom: calc(var(--pie-alto, 0px) + 12px);
 }

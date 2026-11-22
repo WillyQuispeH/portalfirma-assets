@@ -10,6 +10,8 @@ import {
   ForbiddenException,
   Get,
   Injectable,
+  Logger,
+  OnApplicationBootstrap,
   Param,
   Post,
   Put,
@@ -68,9 +70,44 @@ export const negocioApp = (n: Negocio) => ({
   ...metaApp(n),
 });
 
+/**
+ * El código de cada negocio (NG-001, NG-002…) es de la corredora: lo asigna SOLO el servidor al guardarlo por primera vez y no cambia. Así se puede
+ * nombrar un negocio sin equivocarse («sube este comprobante al NG-014»), también por WhatsApp. Los negocios anteriores lo reciben al iniciar la API.
+ */
+const SQL_CODIGOS = `
+WITH base AS (
+  SELECT corredora_id, COALESCE(MAX(substring(datos->>'codigo' from 4)::int), 0) AS m
+  FROM negocios WHERE datos->>'codigo' ~ '^NG-[0-9]+$' GROUP BY corredora_id
+), nuevos AS (
+  SELECT n.id, n.corredora_id, row_number() OVER (PARTITION BY n.corredora_id ORDER BY n.creado_en, n.id) AS k
+  FROM negocios n WHERE NOT jsonb_exists(n.datos, 'codigo') OR COALESCE(n.datos->>'codigo', '') = ''
+)
+UPDATE negocios n SET datos = jsonb_set(n.datos, '{codigo}', to_jsonb('NG-' || lpad((COALESCE(b.m, 0) + nuevos.k)::text, 3, '0')), true), actualizado_en = now()
+FROM nuevos LEFT JOIN base b ON b.corredora_id = nuevos.corredora_id WHERE n.id = nuevos.id`;
+
 @Injectable()
-export class NegociosService {
+export class NegociosService implements OnApplicationBootstrap {
+  private readonly log = new Logger('Negocios');
   constructor(private readonly db: PrismaService) {}
+
+  /** a los negocios que ya existían sin código se les da el suyo, por orden de creación (no cambia su versión: la app los trae por su fecha de cambio) */
+  async onApplicationBootstrap() {
+    try {
+      const n = await this.db.$executeRawUnsafe(SQL_CODIGOS);
+      if (n) this.log.log(`${n} negocios recibieron su código NG-XXX`);
+    } catch (e) {
+      this.log.warn(`no pude asignar los códigos de los negocios: ${(e as Error).message}`);
+    }
+  }
+
+  /** el siguiente código de la corredora dentro de una transacción con candado (dos negocios nuevos al mismo tiempo no repiten número) */
+  private async conCodigo<T>(corredoraId: string, fn: (codigo: string, tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+    return this.db.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'negocio-codigo:' + corredoraId}))`;
+      const f = await tx.$queryRaw<{ m: number | null }[]>`SELECT MAX(substring(datos->>'codigo' from 4)::int) AS m FROM negocios WHERE corredora_id = ${corredoraId}::uuid AND datos->>'codigo' ~ '^NG-[0-9]+$'`;
+      return fn(`NG-${String((f[0]?.m ?? 0) + 1).padStart(3, '0')}`, tx);
+    });
+  }
 
   listar(u: UsuarioToken, f: ListarAsignados) {
     return listar(this.db.negocio, u, f, negocioApp);
@@ -107,7 +144,11 @@ export class NegociosService {
       : o.corredorId !== undefined
         ? (o.corredorId ?? null)
         : (previa?.corredorId ?? null);
-    const datos = restoDatos(o, COLUMNAS) as Prisma.InputJsonValue;
+    // el código lo manda el servidor: lo que traiga el cliente se ignora (si ya tenía, se conserva)
+    const codigoPrevio = String((previa?.datos as { codigo?: unknown } | null)?.codigo ?? '');
+    const sinCodigo = restoDatos(o, COLUMNAS) as Record<string, unknown>;
+    delete sinCodigo.codigo;
+    let datos = (codigoPrevio ? { ...sinCodigo, codigo: codigoPrevio } : sinCodigo) as Prisma.InputJsonValue;
     const cols = {
       tipo: o.tipo,
       estado: o.estado,
@@ -119,22 +160,34 @@ export class NegociosService {
     };
     if (!previa) {
       try {
-        const n = await this.db.negocio.create({
-          data: {
-            id,
-            corredoraId: u.corredoraId,
-            creadoPorId: u.sub,
-            ...(o.creado ? { creadoEn: new Date(o.creado) } : {}),
-            ...cols,
-            datos,
-          },
-        });
+        const n = await this.conCodigo(u.corredoraId, (codigo, tx) =>
+          tx.negocio.create({
+            data: {
+              id,
+              corredoraId: u.corredoraId,
+              creadoPorId: u.sub,
+              ...(o.creado ? { creadoEn: new Date(o.creado) } : {}),
+              ...cols,
+              datos: { ...(datos as object), codigo },
+            },
+          }),
+        );
         return negocioApp(n);
       } catch (e) {
         if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002')
           throw new ConflictException({ message: 'Ese negocio se acaba de crear en otro equipo.', code: 'VERSION' });
         throw e;
       }
+    }
+    // un negocio anterior sin código lo recibe en su primer guardado (si no lo recibió ya al iniciar la API)
+    if (!codigoPrevio) {
+      const actual = await this.conCodigo(u.corredoraId, async (codigo, tx) => {
+        const d = { ...(datos as object), codigo } as Prisma.InputJsonValue;
+        const rr = await tx.negocio.updateMany({ where: { id, version: previa.version }, data: { ...cols, datos: d, version: { increment: 1 } } });
+        if (!rr.count) throw new ConflictException({ message: 'Otra persona cambió el negocio recién.', code: 'VERSION' });
+        return tx.negocio.findUnique({ where: { id } });
+      });
+      return negocioApp(actual!);
     }
     const igual =
       igualJson(datos, previa.datos) &&
@@ -184,25 +237,35 @@ export class NegociosService {
       personas: nuevos.map((v) => v.o.clienteId),
       usuarios: nuevos.map((v) => v.o.corredorId),
     });
-    const r = await this.db.negocio.createMany({
-      skipDuplicates: true,
-      data: nuevos.map(({ id, o }) => ({
-        id,
-        corredoraId: u.corredoraId,
-        creadoPorId: u.sub,
-        ...(o.creado ? { creadoEn: new Date(o.creado) } : {}),
-        tipo: o.tipo,
-        estado: o.estado,
-        etapa: o.etapa,
-        // lo que ya no existe en la base queda sin ligar (el negocio se conserva)
-        propiedadId: o.propId && ref.propiedades.has(o.propId) ? o.propId : null,
-        clienteId: o.clienteId && ref.personas.has(o.clienteId) ? o.clienteId : null,
-        corredorId: o.corredorId && ref.usuarios.has(o.corredorId) ? o.corredorId : esAdmin(u) ? null : u.sub,
-        proximaFecha: fechaDe(o),
-        datos: restoDatos(o, COLUMNAS) as Prisma.InputJsonValue,
-      })),
-    });
-    return { nuevos: r.count, existentes: validos.length - nuevos.length, rechazados };
+    let creados = 0;
+    for (const { id, o } of nuevos) {
+      const sinCodigo = restoDatos(o, COLUMNAS) as Record<string, unknown>;
+      delete sinCodigo.codigo;
+      const hecho = await this.conCodigo(u.corredoraId, (codigo, tx) =>
+        tx.negocio.createMany({
+          skipDuplicates: true,
+          data: [
+            {
+              id,
+              corredoraId: u.corredoraId,
+              creadoPorId: u.sub,
+              ...(o.creado ? { creadoEn: new Date(o.creado) } : {}),
+              tipo: o.tipo,
+              estado: o.estado,
+              etapa: o.etapa,
+              // lo que ya no existe en la base queda sin ligar (el negocio se conserva)
+              propiedadId: o.propId && ref.propiedades.has(o.propId) ? o.propId : null,
+              clienteId: o.clienteId && ref.personas.has(o.clienteId) ? o.clienteId : null,
+              corredorId: o.corredorId && ref.usuarios.has(o.corredorId) ? o.corredorId : esAdmin(u) ? null : u.sub,
+              proximaFecha: fechaDe(o),
+              datos: { ...sinCodigo, codigo } as Prisma.InputJsonValue,
+            },
+          ],
+        }),
+      );
+      creados += hecho.count;
+    }
+    return { nuevos: creados, existentes: validos.length - nuevos.length, rechazados };
   }
 }
 

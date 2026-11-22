@@ -1,51 +1,66 @@
 <!doctype html>
 <!--
-  ACTA DE VISITA de PortalFirma Asset: la constancia de que la visita se realizó, con lo conversado y el interés del visitante.
-  Va con el número de la orden de visita. La firma el visitante. Es un HTML normal: se edita el texto y el estilo aquí.
-  Las variables van entre llaves dobles y se reemplazan solas al generar el PDF:
+  ACTA DE VISITA de PortalFirma Asset: constancia de que la visita se realizó, con lo conversado, el interés del visitante y el registro
+  de la visita (audios y fotos). NO se firma: se genera el PDF y se comparte (por ejemplo, por WhatsApp). Es un HTML normal: se edita el
+  texto y el estilo aquí. Las variables van entre llaves dobles y se reemplazan solas al generar el PDF:
 
     {{fechaVisita}}  {{fechaEmision}}  {{orden.texto}} («Orden de visita nº 12» o «Sin orden de visita registrada»)
-    {{corredora.nombre}}  {{corredora.rut}}   {{corredor.nombre}}  {{corredor.email}}
+    {{corredora.nombre}}  {{corredora.rut}}  {{corredora.logo}}   {{corredor.nombre}}  {{corredor.email}}
     {{visitante.nombre}}  {{visitante.rut}}   {{visitante.email}}  {{visitante.telefono}}
     {{propiedad.codigo}}  {{propiedad.tipo}}  {{propiedad.direccion}}
-    {{interes}}  («Alto», «Medio», «Bajo» o «Sin datos»)   {{observaciones}}   {{notas}}
+    {{interes}}  («Alto», «Medio», «Bajo» o «Sin datos»)   {{interesClase}} (alto, medio, bajo, sin)   {{observaciones}}   {{notas}}
     listas con  {{#interesado}}{{texto}}{{/interesado}}  —  interesado, comentarioCorredor, objeciones, acuerdos, proximosPasos
+    audios:  {{#audios}} {{n}} {{origen}} {{cuando}} {{peso}} {{extracto}} {{/audios}}      fotos:  {{#fotos}} {{n}} {{src}} {{pie}} {{/fotos}}  {{fotosMas}}
 
-  Un bloque  {{#algo}} … {{/algo}}  solo aparece si «algo» tiene valor (o lista) .
-  Este documento NO lleva cajas ni líneas de firma: Portalfirma agrega su propia hoja de firma al enviarlo.
-  Este texto es un borrador para que lo revise el notario.
+  Un bloque  {{#algo}} … {{/algo}}  solo aparece si «algo» tiene valor (o lista).
+  Este documento no lleva cajas ni líneas de firma.
 -->
 <html lang="es">
 <head>
 <meta charset="utf-8">
 <title>Acta de visita</title>
 <style>
-  @page { size: A4; margin: 13mm 15mm 14mm; }
+  @page { size: A4; margin: 14mm 15mm 16mm;
+    @bottom-left { content: "{{corredora.nombre}}  ·  Acta de visita {{propiedad.codigo}}"; font: 7.5pt "Helvetica Neue", Arial, sans-serif; color: #7a8294; }
+    @bottom-right { content: "Página " counter(page) " de " counter(pages); font: 7.5pt "Helvetica Neue", Arial, sans-serif; color: #7a8294; } }
   * { box-sizing: border-box; }
-  body { font-family: "Helvetica Neue", Arial, sans-serif; font-size: 10pt; line-height: 1.4; color: #1c2230; margin: 0; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { font-family: "Helvetica Neue", Arial, "Liberation Sans", sans-serif; font-size: 9.8pt; line-height: 1.45; color: #1c2230; margin: 0; }
   .top { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #1c2230; padding-bottom: 10px; margin-bottom: 14px; }
-  .top h1 { margin: 0; font-size: 17pt; letter-spacing: .02em; }
+  .top h1 { margin: 0; font-size: 18pt; letter-spacing: .06em; }
   .top .emp { font-size: 9.5pt; color: #4a5266; margin-top: 2px; }
-  .top .n { text-align: right; font-size: 9.5pt; color: #4a5266; }
+  .top .n { text-align: right; font-size: 9.2pt; color: #4a5266; }
   .top .n b { display: block; font-size: 12pt; color: #1c2230; }
-  h2 { font-size: 10pt; text-transform: uppercase; letter-spacing: .06em; color: #4a5266; margin: 13px 0 5px; }
-  .caja { border: 1px solid #cfd5e2; border-radius: 6px; padding: 10px 12px; }
-  .datos { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 18px; }
-  .datos span { color: #4a5266; font-size: 9pt; display: block; }
+  h2 { font-size: 8.8pt; text-transform: uppercase; letter-spacing: .12em; color: #b4592f; margin: 15px 0 6px; padding-bottom: 3px; border-bottom: 1px solid #e3e6ee; }
+  h3 { font-size: 9.4pt; margin: 9px 0 2px; color: #1c2230; }
+  .caja { border: 1px solid #d5d9e2; border-radius: 6px; padding: 9px 12px; background: #f8f9fc; }
+  .datos { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 18px; }
+  .datos span { color: #5a6376; font-size: 8.4pt; display: block; text-transform: uppercase; letter-spacing: .05em; }
   .datos b { font-weight: 600; }
   .datos .ancho { grid-column: 1 / -1; }
   .obs { white-space: pre-wrap; text-align: justify; }
-  ul { margin: 3px 0 8px; padding-left: 18px; }
+  .interes { display: inline-block; padding: 2px 11px; border-radius: 99px; font-weight: 700; font-size: 9pt; letter-spacing: .03em; }
+  .interes.alto { background: #dff3e6; color: #17653b; } .interes.medio { background: #fdf0cf; color: #8a5a07; }
+  .interes.bajo { background: #fbe0e0; color: #9b2c2c; } .interes.sin { background: #e9ebf1; color: #4a5266; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px; }
+  ul { margin: 3px 0 8px; padding-left: 17px; }
   li { margin-bottom: 2px; }
-  h3 { font-size: 9.5pt; margin: 8px 0 2px; }
-  .leg p { margin: 0 0 6px; text-align: justify; font-size: 9.5pt; }
+  .aud { border: 1px solid #d5d9e2; border-left: 3px solid #b4592f; border-radius: 4px; padding: 7px 11px; margin-bottom: 7px; page-break-inside: avoid; }
+  .aud .cab { display: flex; justify-content: space-between; gap: 10px; font-size: 8.6pt; color: #5a6376; }
+  .aud .cab b { color: #1c2230; font-size: 9.6pt; }
+  .aud p { margin: 4px 0 0; font-size: 9pt; color: #394155; font-style: italic; text-align: justify; }
+  .fotos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .fotos figure { margin: 0; page-break-inside: avoid; }
+  .fotos img { display: block; width: 100%; height: 44mm; object-fit: cover; border: 1px solid #d5d9e2; border-radius: 4px; }
+  .fotos figcaption { margin-top: 2px; font-size: 8pt; color: #5a6376; text-align: center; }
+  .cierre { margin-top: 18px; padding-top: 8px; border-top: 1px solid #e3e6ee; font-size: 8.8pt; color: #5a6376; text-align: center; }
 </style>
 </head>
 <body>
 
 <div class="top">
   <div>
-{{#corredora.logo}}<div style="text-align:center;margin-bottom:6px"><img src="{{corredora.logo}}" alt="" style="max-height:14mm;max-width:55mm;object-fit:contain"></div>{{/corredora.logo}}
+{{#corredora.logo}}<div style="margin-bottom:6px"><img src="{{corredora.logo}}" alt="" style="max-height:14mm;max-width:55mm;object-fit:contain"></div>{{/corredora.logo}}
     <h1>ACTA DE VISITA</h1>
     <div class="emp">{{corredora.nombre}}{{#corredora.rut}} · RUT {{corredora.rut}}{{/corredora.rut}}</div>
   </div>
@@ -68,25 +83,34 @@
 </div>
 
 <h2>Constancia</h2>
-<p style="margin: 0; text-align: justify;">Se deja constancia de que el día {{fechaVisita}} {{visitante.nombre}} visitó la propiedad individualizada, atendido(a) por {{corredor.nombre}} de {{corredora.nombre}}, en cumplimiento de la {{orden.texto}}.</p>
+<p style="margin: 0; text-align: justify;">Se deja constancia de que el día {{fechaVisita}} {{visitante.nombre}} visitó la propiedad individualizada, atendido(a) por {{corredor.nombre}} de {{corredora.nombre}}, en el marco de la {{orden.texto}}.</p>
 
-<h2>Observaciones de la visita</h2>
+<h2>Resumen de la visita</h2>
+<p style="margin: 0 0 6px"><span class="interes {{interesClase}}">Interés: {{interes}}</span></p>
 <div class="obs">{{observaciones}}</div>
-{{#hayInteresado}}<h3>Lo que comentó el visitante</h3><ul>{{#interesado}}<li>{{texto}}</li>{{/interesado}}</ul>{{/hayInteresado}}
-{{#hayCorredor}}<h3>Lo que comentó el corredor</h3><ul>{{#comentarioCorredor}}<li>{{texto}}</li>{{/comentarioCorredor}}</ul>{{/hayCorredor}}
-{{#hayObjeciones}}<h3>Objeciones</h3><ul>{{#objeciones}}<li>{{texto}}</li>{{/objeciones}}</ul>{{/hayObjeciones}}
-{{#hayAcuerdos}}<h3>Acuerdos</h3><ul>{{#acuerdos}}<li>{{texto}}</li>{{/acuerdos}}</ul>{{/hayAcuerdos}}
+<div class="cols">
+  <div>
+    {{#hayInteresado}}<h3>Lo que comentó el visitante</h3><ul>{{#interesado}}<li>{{texto}}</li>{{/interesado}}</ul>{{/hayInteresado}}
+    {{#hayObjeciones}}<h3>Objeciones</h3><ul>{{#objeciones}}<li>{{texto}}</li>{{/objeciones}}</ul>{{/hayObjeciones}}
+  </div>
+  <div>
+    {{#hayCorredor}}<h3>Lo que comentó el corredor</h3><ul>{{#comentarioCorredor}}<li>{{texto}}</li>{{/comentarioCorredor}}</ul>{{/hayCorredor}}
+    {{#hayAcuerdos}}<h3>Acuerdos</h3><ul>{{#acuerdos}}<li>{{texto}}</li>{{/acuerdos}}</ul>{{/hayAcuerdos}}
+  </div>
+</div>
 {{#hayProximos}}<h3>Próximos pasos</h3><ul>{{#proximosPasos}}<li>{{texto}}</li>{{/proximosPasos}}</ul>{{/hayProximos}}
-
-<h2>Interés del visitante</h2>
-<div class="caja datos"><div class="ancho"><span>Nivel de interés</span><b>{{interes}}</b></div></div>
 {{#notas}}<h2>Notas del corredor</h2><div class="obs">{{notas}}</div>{{/notas}}
 
-<h2>Declaración del visitante</h2>
-<div class="leg">
-  <p>El visitante declara que la visita se realizó en la fecha indicada y que lo anotado en esta acta refleja lo conversado durante ella.</p>
-  <p>Esta acta se firma electrónicamente con Portalfirma.</p>
-</div>
+{{#hayAudios}}<h2>Audios de la visita</h2>
+{{#audios}}<div class="aud"><div class="cab"><b>Audio {{n}}</b><span>{{origen}} · {{cuando}}{{#peso}} · {{peso}}{{/peso}}</span></div>{{#extracto}}<p>«{{extracto}}»</p>{{/extracto}}</div>{{/audios}}
+{{/hayAudios}}
+
+{{#hayFotos}}<h2>Fotografías de la visita</h2>
+<div class="fotos">{{#fotos}}<figure><img src="{{src}}" alt=""><figcaption>Foto {{n}} · {{pie}}</figcaption></figure>{{/fotos}}</div>
+{{#fotosMas}}<p style="margin:6px 0 0;font-size:8.6pt;color:#5a6376;text-align:center">{{fotosMas}}</p>{{/fotosMas}}
+{{/hayFotos}}
+
+<div class="cierre">Acta emitida el {{fechaEmision}} por {{corredor.nombre}} · {{corredora.nombre}}</div>
 
 </body>
 </html>

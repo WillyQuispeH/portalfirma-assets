@@ -16,12 +16,18 @@ function init(client, { asPdf, onUpdate, sent }) {
   pf = client; toPdf = asPdf; emit = onUpdate; if (sent) onSent = sent;
   items = (store.get('bulkQueue') || []).map((it) => (['uploading', 'analyzing', 'converting'].includes(it.status) ? { ...it, status: 'queued' } : it.status === 'sending' ? { ...it, status: 'send_error', error: 'La app se cerró mientras se enviaba: revisa «Mis operaciones» antes de reintentar.' } : it));
   paused = !!store.get('bulkPaused');
+  // lo omitido que quedó guardado de versiones anteriores también se puede reintentar
+  for (const it of items) if (it.status === 'skipped' && it.forzable === undefined && (it.dupSent || /ya se envi|repetido|No se pudo leer/i.test(it.error || ''))) it.forzable = true;
 }
 let saveT = null;
 const persist = () => { clearTimeout(saveT); saveT = setTimeout(() => store.set('bulkQueue', items.map(({ b64, ...x }) => x)), 300); };
 let emitT = null;
 const changed = () => { persist(); clearTimeout(emitT); emitT = setTimeout(() => emit(state()), 80); };
-const state = () => ({ items, paused, running: active, sending, coolUntil });
+// Avance para la barra de «segundo plano»: cuántos documentos lleva el análisis en curso y el envío en curso
+let anTot = 0; let anHechos = 0; let envTot = 0; let envHechos = 0; let envErr = 0;
+const hayCola = () => active > 0 || items.some((x) => x.status === 'queued');
+const contarAnalisis = (n, estabaOcioso) => { if (estabaOcioso) { anTot = 0; anHechos = 0; } anTot += n; };   // un lote nuevo parte de cero
+const state = () => ({ items, paused, running: active, sending, coolUntil, progreso: { analisis: anTot ? { total: anTot, hechos: anHechos, activo: hayCola() } : null, envio: sending ? { total: envTot, hechos: envHechos, errores: envErr } : null } });
 const uid = () => 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 // Huellas (sha1) de los archivos ya enviados a firmar desde la carga masiva: para no enviar dos veces el mismo. Con la
 // cuenta de Asset son de toda la corredora (colección envios_masivos, id = huella), así otro equipo tampoco lo repite;
@@ -41,6 +47,7 @@ require('./inmo').alCargar?.(async () => {
 const sha = (file) => new Promise((res, rej) => { const h = crypto.createHash('sha1'); fs.createReadStream(file).on('data', (d) => h.update(d)).on('end', () => res(h.digest('hex'))).on('error', rej); });
 
 async function add(paths) {
+  const ocioso = !hayCola(); const antes = items.length;
   const known = new Set(items.map((x) => x.hash));
   const sent = enviadas();
   for (const entry of paths) {
@@ -55,13 +62,14 @@ async function add(paths) {
       else if (st.size > MAX_BYTES && /\.pdf$/i.test(p)) Object.assign(it, { status: 'skipped', error: 'Pesa más de 20 MB: ábrelo en el editor y usa «Comprimir PDF».' });
       else {
         it.hash = await sha(p);
-        if (sent.has(it.hash)) Object.assign(it, { status: 'skipped', error: 'Este mismo archivo ya se envió a firmar desde la carga masiva.', dupSent: true });
-        else if (known.has(it.hash)) Object.assign(it, { status: 'skipped', error: 'Está repetido en la cola.' });
+        if (sent.has(it.hash)) Object.assign(it, { status: 'skipped', error: 'Este mismo archivo ya se envió a firmar.', dupSent: true, forzable: true });
+        else if (known.has(it.hash)) Object.assign(it, { status: 'skipped', error: 'Está repetido en la lista.', forzable: true });
         known.add(it.hash);
       }
-    } catch { Object.assign(it, { status: 'skipped', error: 'No se pudo leer el archivo.' }); }
+    } catch { Object.assign(it, { status: 'skipped', error: 'No se pudo leer el archivo.', forzable: true }); }
     items.push(it);
   }
+  contarAnalisis(items.slice(antes).filter((x) => x.status === 'queued').length, ocioso);
   changed(); pump();
   return state();
 }
@@ -74,7 +82,7 @@ function pump() {
   while (active < CONCURRENCY) {
     const it = items.find((x) => x.status === 'queued' && (!x.retryAt || x.retryAt <= Date.now()));
     if (!it) { const next = items.filter((x) => x.status === 'queued' && x.retryAt).map((x) => x.retryAt).sort()[0]; if (next) setTimeout(pump, Math.max(200, next - Date.now())); break; }
-    active++; work(it).finally(() => { active--; changed(); pump(); });
+    active++; work(it).finally(() => { active--; if (it.status !== 'queued') anHechos++; changed(); pump(); });
   }
 }
 let convertLock = Promise.resolve(); // las conversiones de Word van de a una (son pesadas)
@@ -87,21 +95,22 @@ async function work(it) {
       file = (await run).path; it.pdfPath = file;
       if (fs.statSync(file).size > MAX_BYTES) throw Object.assign(new Error('Convertido a PDF pesa más de 20 MB.'), { final: true });
     }
+    // el documento se lee aquí y por la IA de Asset (PDF normal o escaneado): no se sube a Portalfirma hasta enviarlo
     it.status = 'uploading'; changed();
-    const b64 = (await fs.promises.readFile(file)).toString('base64');
-    const ing = await pf.ingest(b64, path.basename(file).replace(/\.docx$/i, '.pdf'));
-    if (!ing?.document_id) throw new Error(ing?.message || 'Portalfirma no devolvió el documento.');
-    it.documentId = ing.document_id;
+    const bytes = await fs.promises.readFile(file); it.pdfPath = file;
+    try { it.pages = (await require('pdf-lib').PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false })).getPageCount(); } catch { it.pages = 0; }   // para ubicar las firmas si no lleva página aparte
     it.status = 'analyzing'; changed();
-    const ext = await pf.extractSigners(ing.document_id);
-    it.typeDocument = ext?.typeDocument || ''; it.configId = ext?.document_config_id || null;
-    it.required = ext?.required_fields || {}; it.typeSign = ext?.type_sign || null; it.notarial = ext?.notarial_procedure || null;
-    it.signers = (ext?.firmantes || []).map((s) => ({ fullName: s.fullName || '', rut: s.rut || '', email: s.email || '', phone: s.phone || '', alias: s.alias || '' }));
+    const ext = await require('./envio-api').extraerFirmantes(bytes);
+    it.typeDocument = ext?.tipoDocumento || ''; it.avisos = ext?.avisos || [];
+    it.required = { name: true, email: true };   // la API de Portalfirma pide nombre y correo de cada firmante
+    it.signers = (ext?.firmantes || []).map((s) => ({ fullName: s.nombre || '', rut: s.rut || '', email: s.email || '', phone: s.telefono || '', alias: s.rol || '', pagina: s.pagina || 0 }));
+    it.analizado = true;
     if (it.preset?.length) it.signers = it.preset.map((s) => ({ ...s })); // el flujo ya sabe quién firma
     it.status = 'ready'; it.error = ''; failStreak = 0;
     validate(it);
   } catch (e) {
     it.tries++;
+    if (e.code === 'NEEDS_PF_API') e.final = true;   // sin credenciales de la API no sirve reintentar
     if (!e.final && transient(e) && it.tries < MAX_TRIES) {
       it.status = 'queued'; it.retryAt = Date.now() + [2000, 6000, 15000][it.tries - 1]; it.error = 'Reintentando…';
       failStreak++; if (failStreak >= 3) { coolUntil = Date.now() + 30000; failStreak = 0; } // Portalfirma con problemas: pausa breve
@@ -122,17 +131,57 @@ function validate(it) {
   if (it.status === 'ready' || it.status === 'needs_data') it.status = miss.length ? 'needs_data' : 'ready';
   return it;
 }
+const TIPOS = ['simple', 'avanzada', 'visada', 'enrolada'];
+const limpiarFirmante = (s) => ({
+  fullName: String(s.fullName || '').trim(), rut: String(s.rut || '').trim(), email: String(s.email || '').trim(), phone: String(s.phone || '').trim(), alias: String(s.alias || '').trim(),
+  ...(TIPOS.includes(s.typeSign) ? { typeSign: s.typeSign } : {}), ...(s.pagina ? { pagina: Number(s.pagina) || 0 } : {}),
+});
+// dónde va la firma de cada firmante: donde se ubicó, o si no, en la hoja donde está su línea (o la última), de a dos por fila
+function posicionesDe(it) {
+  const ult = it.pages || 1;
+  if (Array.isArray(it.posiciones) && it.posiciones.length === it.signers.length) return it.posiciones.map((p) => ({ ...p }));
+  return it.signers.map((s, i) => ({ pagina: Math.min(Math.max(1, s.pagina || ult), ult), x: 60 + (i % 2) * 250, y: 70 + Math.floor(i / 2) * 110 }));
+}
 function update(id, patch) {
   const it = items.find((x) => x.id === id); if (!it) return state();
-  if (patch.signers) it.signers = patch.signers.map((s) => ({ fullName: String(s.fullName || '').trim(), rut: String(s.rut || '').trim(), email: String(s.email || '').trim(), phone: String(s.phone || '').trim(), alias: String(s.alias || '').trim() }));
+  if (patch.signers) { const antes = it.signers?.length; it.signers = patch.signers.map(limpiarFirmante); if (antes !== it.signers.length) it.posiciones = null; }   // otra cantidad de firmantes: las firmas ubicadas ya no sirven
+  if (patch.posiciones !== undefined) it.posiciones = Array.isArray(patch.posiciones) ? patch.posiciones.filter((p) => p && p.pagina >= 1 && Number.isFinite(+p.x) && Number.isFinite(+p.y)).map((p) => ({ pagina: Math.round(p.pagina), x: Math.round(p.x), y: Math.round(p.y) })) : null;
   if (patch.selected !== undefined) it.selected = !!patch.selected;
+  if (patch.tramite !== undefined) it.tramite = ['none', 'legalization', 'protocolization'].includes(patch.tramite) ? patch.tramite : 'none';
+  if (patch.paginaExtra !== undefined) it.paginaExtra = !!patch.paginaExtra;
   validate(it); changed(); return state();
 }
 function applySigners(signers) {
   for (const it of items) if (['ready', 'needs_data'].includes(it.status)) { it.signers = signers.map((s) => ({ ...s })); validate(it); }
   changed(); return state();
 }
-function retry(id) { for (const it of items) if ((id ? it.id === id : true) && it.status === 'error') { it.status = 'queued'; it.tries = 0; it.retryAt = 0; it.error = ''; } changed(); pump(); return state(); }
+// «Sincronizar PDF»: la configuración de un documento (firmantes, tipo de firma, página de firmas y trámite) pasa a todos los demás que aún no se envían
+function sync(fromId) {
+  const src = items.find((x) => x.id === fromId); if (!src?.signers?.length) throw new Error('Ese documento todavía no tiene firmantes.');
+  let n = 0;
+  for (const it of items) {
+    if (it === src || !['ready', 'needs_data'].includes(it.status)) continue;
+    it.signers = src.signers.map((s) => ({ ...s })); it.tramite = src.tramite; it.paginaExtra = src.paginaExtra;
+    // las firmas van en la misma hoja y lugar que en el documento de origen (si no se habían movido, donde las ve el usuario ahí)
+    it.posiciones = posicionesDe(src).map((p) => ({ ...p, pagina: Math.min(p.pagina, it.pages || p.pagina) }));
+    it.syncRev = (it.syncRev || 0) + 1;   // la pantalla vuelve a armar su PDF con estas firmas
+    validate(it); n++;
+  }
+  changed(); return { ...state(), sincronizados: n };
+}
+// «Analizar» de un documento: se lee de nuevo (se pierden los firmantes que se habían editado)
+function reanalyze(id) { const it = items.find((x) => x.id === id); if (it && ['ready', 'needs_data', 'error'].includes(it.status)) { contarAnalisis(1, !hayCola()); it.status = 'queued'; it.tries = 0; it.retryAt = 0; it.error = ''; it.signers = []; it.missing = []; it.posiciones = null; } changed(); pump(); return state(); }
+// «Reintentar» un documento omitido: si era por repetido, por ya enviado o porque no se pudo leer, se carga de todos modos
+async function force(id) {
+  const it = items.find((x) => x.id === id);
+  if (it && it.status === 'skipped' && it.forzable) {
+    try { it.size = fs.statSync(it.path).size; if (!it.hash) it.hash = await sha(it.path); }   // si no se pudo leer, se vuelve a intentar
+    catch { it.error = 'No se pudo leer el archivo.'; changed(); return state(); }
+    contarAnalisis(1, !hayCola()); Object.assign(it, { status: 'queued', error: '', dupSent: false, forzable: false, tries: 0, retryAt: 0 });
+  }
+  changed(); pump(); return state();
+}
+function retry(id) { const ocioso = !hayCola(); for (const it of items) if ((id ? it.id === id : true) && it.status === 'error') { contarAnalisis(1, ocioso && anTot === anHechos); it.status = 'queued'; it.tries = 0; it.retryAt = 0; it.error = ''; } changed(); pump(); return state(); }
 function remove(id) { items = items.filter((x) => x.id !== id || ['uploading', 'analyzing', 'converting', 'sending'].includes(x.status)); changed(); return state(); }
 function clear(which) {
   const keep = (x) => ['uploading', 'analyzing', 'converting', 'sending'].includes(x.status);
@@ -141,30 +190,32 @@ function clear(which) {
 function pause(v) { paused = !!v; store.set('bulkPaused', paused); changed(); if (!paused) pump(); return state(); }
 
 // Envío: de a uno, nunca se reintenta solo (para no duplicar operaciones ni cobros)
-async function send(ids, { email, protocolization = 'none', typeSign = 'simple' }) {
+async function send(ids, { protocolization = 'none', typeSign = 'simple' } = {}) {
   if (sending) throw new Error('Ya hay un envío en curso.');
-  if (!email) throw new Error('Falta el correo del pagador.');
   const list = items.filter((x) => ids.includes(x.id) && x.status === 'ready');
   if (!list.length) throw new Error('No hay documentos listos para enviar.');
-  sending = true; cancelSend = false; changed();
+  sending = true; cancelSend = false; envTot = list.length; envHechos = 0; envErr = 0; changed();
   const history = store.get('history') || [];
   try {
     for (const it of list) {
       if (cancelSend) break;
       it.status = 'sending'; changed();
       try {
-        const payload = { document_id: it.documentId, email, signatories: it.signers.map((s) => ({ ...s, ...(it.configId ? {} : { typeSign }) })) };
-        if (it.configId) payload.document_config_id = it.configId; else payload.protocolization = protocolization;
-        const r = await pf.sendToSign(payload);
-        const op = r?.operation ?? r?.operationNumber ?? null;
-        const msg = typeof r?.message === 'string' ? r.message : '';
-        if (op == null) throw new Error(/status code (\d+)/.test(msg) ? `Portalfirma no pudo crear la operación (error ${/status code (\d+)/.exec(msg)[1]}). Revisa «Mis operaciones» antes de reintentar.` : msg || 'Portalfirma no devolvió el número de operación.');
+        const bytes = await fs.promises.readFile(it.pdfPath || it.path);
+        // las firmas van donde se ubicaron; si no se ubicaron, en la hoja donde está la línea de cada una (o la última), de a dos por fila.
+        // Con «página para las firmas» no llevan lugar: la agrega Portalfirma
+        const paginaExtra = it.paginaExtra === true;
+        const posiciones = paginaExtra ? null : posicionesDe(it);
+        const r = await require('./envio-api').enviarPdf({ bytes, nombre: it.name, tramite: it.tramite || protocolization, posiciones, paginaExtra: false, firmantes: it.signers.map((s) => ({ rut: s.rut, nombre: s.fullName, email: s.email, telefono: s.phone, alias: s.alias, tipoFirma: s.typeSign || typeSign })) });
+        const op = r.operation ?? null;
+        if (op == null) throw new Error('Portalfirma no devolvió el número de operación. Revisa «Mis operaciones» antes de reintentar, para no duplicarla.');
         it.status = 'sent'; it.operation = op; it.error = '';
         if (it.hash) anotarEnviada(it.hash, { operacion: op, nombre: it.name, fecha: new Date().toISOString() });
         // «Mis operaciones»: con la cuenta de Asset va a la base (firmas); en modo de prueba, al historial local
         { const inmo = require('./inmo'); if (inmo.API) inmo.registrarEnvio({ operation: op, name: it.name, origen: 'masiva', bulk: true }); else history.unshift({ operation: op, name: it.name, date: new Date().toISOString(), bulk: true }); }
         try { onSent(it); } catch {}
-      } catch (e) { it.status = 'send_error'; it.error = e.message || String(e); }
+      } catch (e) { it.status = 'send_error'; it.error = e.message || String(e); envErr++; }
+      envHechos++;
       if (!require('./inmo').API) store.set('history', history.slice(0, 500));
       changed();
     }
@@ -175,4 +226,4 @@ function stopSend() { cancelSend = true; return state(); }
 // Un envío con error queda para revisar; se puede volver a «listo» a mano (después de revisar Mis operaciones)
 function rearm(id) { const it = items.find((x) => x.id === id); if (it && it.status === 'send_error') { it.status = 'ready'; validate(it); } changed(); return state(); }
 
-module.exports = { init, state, add, update, applySigners, retry, remove, clear, pause, send, stopSend, rearm };
+module.exports = { init, state, add, update, applySigners, sync, reanalyze, force, retry, remove, clear, pause, send, stopSend, rearm };

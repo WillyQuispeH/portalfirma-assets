@@ -1,4 +1,4 @@
-// Tarjeta: superficie con borde táctil, título opcional, acción y pie.
+// Tarjeta: superficie con borde táctil, título opcional (con el degradado de la marca, salvo en las de color), acción y pie.
 //   <Card titulo="Últimos pagos" subtitulo="2 clientes" accion={<Boton …/>}>…</Card>
 //   <Card tono="verde" titulo="Comisiones">…</Card>           (de color, con franja a la izquierda)
 //   <Card relleno={false}>…<Tabla/></Card>                      (sin padding, para tablas)
@@ -39,7 +39,7 @@ export default function Card({ titulo, subtitulo, accion, pie, tono, relleno = t
       {cabecera && (
         <header className={cx('tw:flex tw:items-start tw:gap-ui', relleno ? 'tw:px-5 tw:pt-4' : 'tw:px-5 tw:py-4 tw:border-b tw:border-edge')}>
           <div className="tw:min-w-0 tw:flex-1">
-            {titulo && <h3 className="tw:m-0 tw:text-[17px] tw:font-bold tw:leading-tight">{titulo}</h3>}
+            {titulo && <h3 className={cx('tw:m-0 tw:text-[17px] tw:font-bold tw:leading-tight', !tono && 'ui-titulo-degradado')}>{titulo}</h3>}
             {subtitulo && <p className={cx('tw:mt-1 tw:mb-0 tw:text-[13px]', tono ? 'tw:opacity-75' : 'tw:text-muted')}>{subtitulo}</p>}
           </div>
           {accion && <div className="tw:flex-none">{accion}</div>}

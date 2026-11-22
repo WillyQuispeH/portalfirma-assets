@@ -4,7 +4,7 @@
 //  · Registra cada envío en «Mis operaciones» con su propiedad, negocio, documento y firmantes (con su calidad).
 //  · Sigue solo cada operación en firma: quién firmó, quién falta, cuándo quedó lista o legalizada; avisa al ejecutivo.
 //  · Revisa correo y celular de cada firmante ANTES de enviar (para que el enlace de Portalfirma llegue) y permite
-//    corregir el dato de un firmante y reenviarle el enlace. Los enlaces los envía Portalfirma, no Asset.
+//    reenviarle el enlace de firma. Los enlaces los envía Portalfirma, no Asset.
 //  · Con la cuenta de Asset, el registro vive en la base (tabla firmas, vía inmo: agregarFirma, actualizarFirma,
 //    todasLasFirmas, registrarEnvio): toda la corredora ve qué está en firma. La ronda la hace el equipo de quien
 //    envió (la consulta a Portalfirma va con su cuenta) y lo que encuentra queda en la base para todos.
@@ -97,7 +97,8 @@ function crear({ inmo, pf, negocios = null, aviso = () => {}, alDetalle = () => 
   const dias = (iso) => Math.floor((Date.now() - new Date(iso).getTime()) / 864e5);
   // detalle de Portalfirma → estado normalizado
   function leerDetalle(d, previo) {
-    const sig = (d?.signatories || []).map((s) => ({ nombre: [s.name, s.paternalLastName, s.maternalLastName].filter(Boolean).join(' ') || s.fullName || '', rut: s.rut || '', email: s.email || '', telefono: s.phone || '', firmo: !!s.signed,
+    const lista = (v) => (Array.isArray(v) ? v : v && typeof v === 'object' ? Object.values(v) : []);   // Portalfirma entrega listas, pero según el endpoint pueden venir como objeto
+    const sig = lista(d?.signatories).map((s) => ({ nombre: [s.name, s.paternalLastName, s.maternalLastName].filter(Boolean).join(' ') || s.fullName || '', rut: s.rut || '', email: s.email || '', telefono: s.phone || '', firmo: !!s.signed,
       personId: s.personId || s.person_id || null, firmanteId: s.contractSignatoryId || s.id || null, entidadId: s.contractEntityPersonId || null, calidad: s.alias || null, url: s.url || null }));
     const firmados = sig.filter((s) => s.firmo).length;
     const legal = !!(d?.legalized || d?.protocolizationNumber && d.protocolizationNumber !== 'none' && d?.status === 'finalized');
@@ -105,12 +106,12 @@ function crear({ inmo, pf, negocios = null, aviso = () => {}, alDetalle = () => 
     // calidades: las que mandó Asset (por RUT) si Portalfirma no las informa
     const m = previo?.firmantes || [];
     for (const s of sig) if (!s.calidad) s.calidad = (m.find((x) => x.rut && inmo.fmtRut(x.rut) === inmo.fmtRut(s.rut)) || {}).calidad || (m.find((x) => x.rol && x.rut === s.rut) || {}).rol || null;
-    return { estado, firmados, total: sig.length, firmantes: sig, legalizado: legal, tramite: d?.protocolizationNumber || 'none', archivos: (d?.files || []).map((x) => x.fileName) };
+    return { estado, firmados, total: sig.length, firmantes: sig, legalizado: legal, tramite: d?.protocolizationNumber || 'none', archivos: lista(d?.files).map((x) => (typeof x === 'string' ? x : x?.fileName)).filter(Boolean) };
   }
+  // el detalle sale de la API de integración de Portalfirma (credenciales de la corredora en Integraciones)
   async function detalle(op) {
-    const r = await pf.callRaw('process_detail_get_by_operation', { operation: Number(op) });
-    let d = null; try { d = JSON.parse(r.text); } catch {}
-    if (r.isError || !d) throw err('Portalfirma no entregó el detalle de la operación ' + op + (r.text ? ': ' + String(r.text).slice(0, 160) : '.'));
+    const d = await require('./envio-api').detalleOperacion(op);
+    if (!d || typeof d !== 'object') throw err('Portalfirma no entregó el detalle de la operación ' + op + '.');
     try { alDetalle(Number(op), d); } catch {}
     return d;
   }
@@ -166,7 +167,7 @@ function crear({ inmo, pf, negocios = null, aviso = () => {}, alDetalle = () => 
       atrasada: dias(f.fecha) >= 3 && (f.firmantes || []).some((s) => !s.firmo) }));
   }
 
-  // ---------- reenviar el enlace y corregir el dato de un firmante ----------
+  // ---------- reenviar el enlace de firma (corregir los datos de un firmante ya enviado no se puede por ahora) ----------
   async function firmanteDe(op, ref) {
     const d = await detalle(op); const x = leerDetalle(d, meta(op)); const r = norm(ref); const rr = String(ref || '').replace(/[^0-9kK]/g, '').toUpperCase();
     const l = x.firmantes.filter((s) => (rr.length > 6 && String(s.rut).replace(/[^0-9kK]/g, '').toUpperCase() === rr) || norm(s.nombre).includes(r) || (s.calidad && norm(s.calidad) === r));
@@ -175,25 +176,13 @@ function crear({ inmo, pf, negocios = null, aviso = () => {}, alDetalle = () => 
     return { s: l[0], d };
   }
   async function reenviar({ operacion, firmante, via = 'correo' }) {
-    const { s } = await firmanteDe(operacion, firmante); if (s.firmo) throw err(`${s.nombre} ya firmó.`);
-    if (via === 'whatsapp') { if (!celular(s.telefono).ok && !s.personId) throw err(`${s.nombre} no tiene un celular válido en la operación: corrígelo primero.`); await pf.manage({ action: 'send_signature_link_by_whatsapp', operation: Number(operacion), personId: s.personId }); }
-    else { const c = correo(s.email); if (!c.ok) throw err(`El correo de ${s.nombre} (${s.email || 'sin correo'}) ${c.motivo}: corrígelo primero.`); await pf.manage({ action: 'send_signature_link_by_email', email: s.email, name: s.nombre, link: String(s.url || '').trim(), operation: Number(operacion) }); }
+    const { s, d } = await firmanteDe(operacion, firmante); if (s.firmo) throw err(`${s.nombre} ya firmó.`);
+    if (!d?.processId || !s.firmanteId) throw err('Portalfirma no informó el identificador de la operación o del firmante: no puedo reenviar el enlace.');
+    await require('./envio-api').reenviarFirmante(d.processId, s.firmanteId);   // Portalfirma lo manda por el canal que tenga el firmante
     return { ok: true, operacion: Number(operacion), firmante: s.nombre, via, a: via === 'whatsapp' ? s.telefono : s.email };
   }
-  async function corregir({ operacion, firmante, email = null, telefono = null, reenviarLink = true }) {
-    const { s, d } = await firmanteDe(operacion, firmante); if (s.firmo) throw err(`${s.nombre} ya firmó: no hace falta corregir.`);
-    const c = email ? correo(email) : null; if (c && !c.ok) throw err(`El correo nuevo ${c.motivo}.`);
-    const t = telefono ? celular(telefono) : null; if (t && !t.ok) throw err(`El celular nuevo ${t.motivo}.`);
-    if (!c && !t) throw err('Indica el correo o el celular correcto.');
-    await pf.manage({ action: 'update_signatory_data', contract_id: d.contractId || d.contract_id || '', contractSignatoryId: s.firmanteId || '', contractEntityPersonId: s.entidadId || '', person_id: s.personId || '', ...(c ? { email: c.valor } : {}), ...(t ? { phone: t.valor } : {}) });
-    // el CRM queda corregido también
-    const per = inmo.listar().personas.find((x) => x.rut && s.rut && inmo.fmtRut(x.rut) === inmo.fmtRut(s.rut));
-    if (per) try { await inmo.guardarPersona({ ...per, ...(c ? { email: c.valor } : {}), ...(t ? { telefono: t.valor } : {}) }); inmo.registrar(per.id, `Dato de contacto corregido en la operación ${operacion}`); } catch {}
-    let r = null; if (reenviarLink) { try { await pf.manage({ action: 'resend_signatory_to_sign', contract_id: d.contractId || d.contract_id || '', contractSignatoryId: s.firmanteId || '', person_id: s.personId || '' }); r = 'reenviado'; } catch (e) { r = 'no se pudo reenviar: ' + e.message; } }
-    return { ok: true, operacion: Number(operacion), firmante: s.nombre, email: c?.valor || null, telefono: t?.valor || null, enlace: r, crm: !!per };
-  }
 
-  return { operacionDe, registrar, meta, revisar, ronda, pendientes, reenviar, corregir, revisarFirmantes, correo, celular, CALIDADES, calidad };
+  return { operacionDe, registrar, meta, revisar, ronda, pendientes, reenviar, revisarFirmantes, correo, celular, CALIDADES, calidad };
 }
 
 module.exports = { crear, operacionDe, revisarFirmantes, correo, celular, CALIDADES, calidad };

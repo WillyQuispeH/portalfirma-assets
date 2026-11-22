@@ -5,7 +5,8 @@
 //  · garantía y primer mes: son dos pagos; el paso se logra cuando están los dos;
 //  · comisión: la fecha de facturación sale sola a 30 días de la entrega; se registra la factura (n.º, fecha, monto) y, al
 //    registrar el pago, el negocio se cierra como ganado y parte el postarriendo. La comisión queda asignada al corredor.
-// Todo queda en el negocio (ciclo.pagos / ciclo.comision) con negGuardar; los comprobantes van a R2 (negArchivoSubir).
+// Las reglas viven en el servidor: cada pago, la factura y su baja van por negPago / negPagoQuitar / negFactura / negFacturaQuitar (el comprobante viaja
+// con el pago y el servidor lo sube a R2). La reserva mueve el negocio y el pago de la comisión lo cierra: lo hace el servidor.
 // Los id (#pgPanel, #pgMonto, #pgFecha, #pgGuardar, #pgFactura, #pgFacturaN, #pgFacturaGuardar) los usan las pruebas.
 /* eslint-disable @typescript-eslint/no-explicit-any -- el negocio llega del proceso principal sin tipos */
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
@@ -20,7 +21,8 @@ import { api } from '../../../utils/api';
 import { toast } from '../../../utils/app';
 
 export type TModoPago = 'reserva' | 'garantia' | 'comision';
-interface IPago { monto: number; moneda: string; fecha: string; medio: string; nota: string; comprobante: { clave: string; nombre: string; tipo: string; bytes: number; fecha: string } | null }
+interface IArchivo { nombre: string; mime?: string; bytes: Uint8Array }
+interface IPago { monto: number; moneda: string; fecha: string; medio: string; nota: string; comprobante: { clave: string; nombre: string; tipo: string; bytes: number; fecha: string } | null; archivo?: IArchivo }
 
 const mensaje = (e: unknown) => (e instanceof Error ? e.message : String(e));
 const hoy = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10); };
@@ -62,9 +64,9 @@ function PagoSeccion({ titulo, ayuda, negocioId, pago, monto0, moneda0, alGuarda
     if (!/^\d{4}-\d{2}-\d{2}$/.test(f.fecha)) return setError('Indica la fecha del pago.');
     setTrabajando(true); setError('');
     try {
-      let comprobante = pago?.comprobante ?? null;
-      if (archivo) { comprobante = await api<any>('negArchivoSubir', { negocioId, nombre: archivo.name, mime: archivo.type || undefined, bytes: new Uint8Array(await archivo.arrayBuffer()) }); }
-      await alGuardar({ monto: num(f.monto), moneda: f.moneda, fecha: f.fecha, medio: f.medio, nota: f.nota.trim(), comprobante });
+      // un archivo nuevo viaja con el pago (el servidor lo sube); si no, se conserva el comprobante que ya tenía
+      const nuevo: IArchivo | undefined = archivo ? { nombre: archivo.name, mime: archivo.type || undefined, bytes: new Uint8Array(await archivo.arrayBuffer()) } : undefined;
+      await alGuardar({ monto: num(f.monto), moneda: f.moneda, fecha: f.fecha, medio: f.medio, nota: f.nota.trim(), comprobante: nuevo ? null : pago?.comprobante ?? null, ...(nuevo ? { archivo: nuevo } : {}) });
       setEditando(false);
     } catch (e) { setError(mensaje(e)); }
     setTrabajando(false);
@@ -143,24 +145,25 @@ export default function PagosNegocio({ negocioId, modo, alCambio }: { negocioId:
 
   const renta = n.valor?.valor || null; const monedaRenta = n.valor?.moneda || 'CLP';
   const pagos = cierre.pagos || {};
-  const poner = (clave: string, p: IPago) => guardarCierre((c) => { c.pagos = { ...(c.pagos || {}), [clave]: p }; }, 'Pago registrado.');
-  const quitar = (clave: string) => guardarCierre((c) => { const x = { ...(c.pagos || {}) }; delete x[clave]; c.pagos = x; }, 'Pago eliminado.');
-  // al registrar la reserva, el negocio pasa a «Reserva» y la propiedad queda «Reservada»
-  const ponerReserva = async (p: IPago) => {
-    await poner('reserva', p);
-    if (n.estado === 'abierto' && n.orden < 2) { try { await api('negMover', negocioId, 'reserva', 'Reserva pagada'); toast('El negocio pasó a «Reserva» y la propiedad quedó reservada.'); await cargar(); alCambio?.(); } catch { /* ya estaba más adelante */ } }
+  // el servidor registra el pago y, si toca, mueve el negocio a «Reserva» (la propiedad queda reservada) o lo cierra como ganado (pago de la comisión)
+  const poner = async (tipo: string, p: IPago, aviso = 'Pago registrado.') => {
+    const r = await api<{ mensajes?: string[] }>('negPago', { negocioId, tipo, ...p });
+    const m = (r?.mensajes || []).join(' ');
+    if (/cerró como ganado/.test(m)) toast('¡Negocio cerrado como ganado! Parte el postarriendo.', 5000);
+    else if (/pasó a «Reserva»/.test(m)) toast('El negocio pasó a «Reserva» y la propiedad quedó reservada.');
+    else toast(aviso);
+    await cargar(); alCambio?.();
   };
-  const ponerComisionPago = async (p: IPago) => {
-    await guardarCierre((c) => { c.comision = { ...(c.comision || {}), pago: p }; }, 'Pago de la comisión registrado.');
-    if (n.estado === 'abierto') { try { await api('negCerrar', negocioId, 'ganado'); toast('¡Negocio cerrado como ganado! Parte el postarriendo.', 5000); await cargar(); alCambio?.(); } catch (e) { setError(mensaje(e)); } }
-  };
+  const quitar = async (tipo: string) => { await api('negPagoQuitar', negocioId, tipo); toast('Pago eliminado.'); await cargar(); alCambio?.(); };
+  const ponerReserva = (p: IPago) => poner('reserva', p);
+  const ponerComisionPago = (p: IPago) => poner('comision', p, 'Pago de la comisión registrado.');
 
   return (
     <div className="tw:flex tw:flex-col tw:gap-5" id="pgPanel">
       {modo === 'reserva' && <PagoSeccion id="reserva" titulo="Reserva" ayuda="El interesado paga la reserva para que la propiedad quede apartada mientras se le evalúa. Al registrarla, la propiedad pasa a «Reservada»." negocioId={negocioId} pago={pagos.reserva} moneda0={monedaRenta} alGuardar={ponerReserva} alBorrar={() => quitar('reserva')} />}
       {modo === 'garantia' && <>
         <PagoSeccion id="garantia" titulo="Garantía" ayuda={n.oferta?.garantia ? `Lo pactado: ${n.oferta.garantia}.` : undefined} negocioId={negocioId} pago={pagos.garantia} monto0={/mes/i.test(n.oferta?.garantia || '') && renta ? renta * (Number(/\d+/.exec(n.oferta.garantia)?.[0]) || 1) : null} moneda0={monedaRenta} alGuardar={(p) => poner('garantia', p)} alBorrar={() => quitar('garantia')} />
-        <PagoSeccion id="primerMes" titulo="Primer mes de arriendo" negocioId={negocioId} pago={pagos.primerMes} monto0={renta} moneda0={monedaRenta} alGuardar={(p) => poner('primerMes', p)} alBorrar={() => quitar('primerMes')} />
+        <PagoSeccion id="primerMes" titulo="Primer mes de arriendo" negocioId={negocioId} pago={pagos.primerMes} monto0={renta} moneda0={monedaRenta} alGuardar={(p) => poner('primer_mes', p)} alBorrar={() => quitar('primer_mes')} />
       </>}
       {modo === 'comision' && <>
         <Seccion titulo="Comisión" acciones={<Badge tono="gris">Asignada a {n.corredor || 'el corredor del negocio'}</Badge>}>
@@ -175,7 +178,7 @@ export default function PagosNegocio({ negocioId, modo, alCambio }: { negocioId:
               <div className="tw:min-w-0 tw:flex-1 tw:flex tw:flex-col tw:gap-0.5"><b className="tw:text-[13px]">{co.factura.numero ? `Factura nº ${co.factura.numero}` : 'Factura'} · {fmt(co.factura.monto, co.factura.moneda)}</b><small className="tw:text-xs tw:text-muted">Emitida el {fdmy(co.factura.fecha)}</small></div>
               <MenuMas tamano="sm" etiqueta="Más acciones de la factura" opciones={[{ texto: 'Editar la factura', icono: 'edit', alTocar: () => setFac({ numero: co.factura.numero || '', fecha: co.factura.fecha, monto: numTxt(co.factura.monto), moneda: co.factura.moneda }) }, { texto: 'Eliminar la factura', icono: 'trash', alTocar: () => setBorrarFac(true) }]} />
             </div>
-            <ModalConfirmar abierto={borrarFac} onCerrar={() => setBorrarFac(false)} titulo="¿Eliminar la factura?" peligro textoConfirmar="Eliminar" mensaje="Solo se borra el registro en Asset." onConfirmar={async () => { setBorrarFac(false); await guardarCierre((c) => { const x = { ...(c.comision || {}) }; delete x.factura; c.comision = x; }, 'Factura eliminada.'); }} />
+            <ModalConfirmar abierto={borrarFac} onCerrar={() => setBorrarFac(false)} titulo="¿Eliminar la factura?" peligro textoConfirmar="Eliminar" mensaje="Solo se borra el registro en Asset." onConfirmar={async () => { setBorrarFac(false); try { await api('negFacturaQuitar', negocioId); toast('Factura eliminada.'); await cargar(); alCambio?.(); } catch (e) { setError(mensaje(e)); } }} />
           </Seccion>
         ) : !fac ? (
           <Seccion titulo="Factura"><p className="tw:m-0 tw:text-xs tw:text-muted">Emite la factura de la comisión y regístrala aquí.</p><div className="tw:flex tw:justify-end"><Boton id="pgFactura" icono="plus" variante="secundario" onClick={() => setFac({ numero: '', fecha: hoy(), monto: numTxt(n.comisionMonto), moneda: monedaRenta })}>Registrar la factura</Boton></div></Seccion>
@@ -192,11 +195,11 @@ export default function PagosNegocio({ negocioId, modo, alCambio }: { negocioId:
             {error && <p className="error tw:m-0 tw:text-[13px]" id="pgError">{error}</p>}
             <div className="tw:flex tw:items-center tw:justify-end tw:gap-2 tw:flex-nowrap">
               <Boton variante="secundario" onClick={() => { setFac(null); setError(''); }}>Cancelar</Boton>
-              <Boton id="pgFacturaGuardar" icono="check" onClick={async () => { if (!(num(fac.monto) > 0)) return setError('Escribe el monto de la comisión.'); setError(''); try { await guardarCierre((c) => { c.comision = { ...(c.comision || {}), facturaFecha, corredor: n.corredor || '', factura: { numero: fac.numero.trim(), fecha: fac.fecha, monto: num(fac.monto), moneda: fac.moneda } }; }, 'Factura registrada.'); setFac(null); } catch (e) { setError(mensaje(e)); } }}>Guardar la factura</Boton>
+              <Boton id="pgFacturaGuardar" icono="check" onClick={async () => { if (!(num(fac.monto) > 0)) return setError('Escribe el monto de la comisión.'); setError(''); try { await api('negFactura', negocioId, { numero: fac.numero.trim(), fecha: fac.fecha, monto: num(fac.monto), moneda: fac.moneda, facturaFecha }); toast('Factura registrada.'); await cargar(); alCambio?.(); setFac(null); } catch (e) { setError(mensaje(e)); } }}>Guardar la factura</Boton>
             </div>
           </Seccion>
         )}
-        <PagoSeccion id="comisionPago" titulo="Pago de la comisión" ayuda="Al registrar el pago, el negocio se cierra como ganado y parte el postarriendo." negocioId={negocioId} pago={co.pago} monto0={co.factura?.monto || n.comisionMonto || null} moneda0={co.factura?.moneda || monedaRenta} alGuardar={ponerComisionPago} alBorrar={() => guardarCierre((c) => { const x = { ...(c.comision || {}) }; delete x.pago; c.comision = x; }, 'Pago eliminado.')} />
+        <PagoSeccion id="comisionPago" titulo="Pago de la comisión" ayuda="Al registrar el pago, el negocio se cierra como ganado y parte el postarriendo." negocioId={negocioId} pago={co.pago} monto0={co.factura?.monto || n.comisionMonto || null} moneda0={co.factura?.moneda || monedaRenta} alGuardar={ponerComisionPago} alBorrar={() => quitar('comision')} />
       </>}
       {error && !fac && <p className="error tw:m-0 tw:text-[13px]">{error}</p>}
     </div>

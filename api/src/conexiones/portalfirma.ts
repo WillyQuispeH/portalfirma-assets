@@ -3,7 +3,7 @@
 // administrador), renovándola si hace falta.
 //  · GET  /herramientas           lista de herramientas que publica Portalfirma;
 //  · POST /herramientas/:nombre   { argumentos } → el resultado tal cual lo entrega Portalfirma (content, isError…);
-//  · GET  /archivos/:contrato     el PDF de una operación (servicio oficial de archivos), en base64.
+//  · GET  /archivos/:contrato     el PDF de una operación (API de integración de Portalfirma), en base64.
 // Si la corredora no ha conectado Portalfirma o la sesión venció, responde 409 con codigo NECESITA_CONEXION.
 import {
   BadGatewayException,
@@ -15,33 +15,34 @@ import {
   NotFoundException,
   Param,
   Post,
-  ServiceUnavailableException,
+  Query,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { z } from 'zod';
+
+type VersionArchivo = 'original' | 'signed' | 'legalized';
 import { UsuarioActual, type UsuarioToken } from '../auth/usuario-actual';
 import { ZodPipe } from '../comun/zod.pipe';
 import type { Env } from '../config/env';
 import { ConexionesService, type DuenoConexion } from './conexiones';
 import { herramientaMcp, herramientasMcp, TokenRechazadoError, type ResultadoMcp } from './mcp';
 import { SesionVencidaError } from './proveedores';
+import { PortalfirmaApiService } from './portalfirma-api';
 
-const ARCHIVOS_URL = 'https://api.portalfirma.cl/api/file/getById';
 const nombreValido = /^[a-z][a-z0-9_]{1,80}$/;
 const llamadaEsquema = z.object({ argumentos: z.record(z.string(), z.unknown()).default({}) });
 
 @Injectable()
 export class PortalfirmaService {
   private readonly url: string;
-  private readonly archivosId?: string;
   private readonly produccion: boolean;
 
   constructor(
     private readonly conexiones: ConexionesService,
+    private readonly api: PortalfirmaApiService,
     config: ConfigService<Env, true>,
   ) {
     this.url = config.get('PORTALFIRMA_MCP_URL', { infer: true });
-    this.archivosId = config.get('PORTALFIRMA_ARCHIVOS_ID', { infer: true }) || undefined;
     this.produccion = config.get('NODE_ENV', { infer: true }) === 'production';
   }
 
@@ -96,8 +97,8 @@ export class PortalfirmaService {
   }
 
   /** PDF de una operación. Pide que la corredora tenga Portalfirma conectado (la credencial del servicio es de Asset). */
-  async archivo(u: UsuarioToken, contrato: string) {
-    return this.descargar(this.conexiones.duenoDe(u, 'portalfirma'), contrato);
+  async archivo(u: UsuarioToken, contrato: string, version?: VersionArchivo) {
+    return this.descargar(this.conexiones.duenoDe(u, 'portalfirma'), contrato, version);
   }
 
   /** lo mismo para los procesos del servidor que no tienen un usuario (p. ej. copiar a Drive el documento ya firmado) */
@@ -105,35 +106,10 @@ export class PortalfirmaService {
     return this.descargar({ corredoraId, usuarioId: null }, contrato);
   }
 
-  private async descargar(d: DuenoConexion, contrato: string) {
+  /** el PDF de una operación, por la API de integración de Portalfirma con las credenciales de la corredora (si faltan: 409 NECESITA_CONEXION) */
+  private async descargar(d: DuenoConexion, contrato: string, version?: VersionArchivo) {
     if (!/^[A-Za-z0-9_-]{1,80}$/.test(contrato)) throw new NotFoundException('Contrato no válido');
-    if (!this.archivosId)
-      throw new ServiceUnavailableException('Falta configurar el servicio de archivos de Portalfirma en el servidor.');
-    await this.conToken(d, async () => null);
-    const r = await fetch(ARCHIVOS_URL, {
-      method: 'POST',
-      headers: { Accept: 'application/json', 'Content-Type': 'application/json', id: this.archivosId },
-      body: JSON.stringify({ contract_id: contrato }),
-      signal: AbortSignal.timeout(60_000),
-    }).catch((e: Error) => {
-      throw new BadGatewayException(`No pude conectarme con Portalfirma para traer el documento (${e.message}).`);
-    });
-    const j = (await r.json().catch(() => null)) as {
-      success?: boolean;
-      error?: unknown;
-      data?: { name?: string; base64?: string; updated?: string };
-    } | null;
-    if (!r.ok || !j?.success || !j.data?.base64) {
-      const e = j?.error as { message?: string } | string | undefined;
-      throw new BadGatewayException(
-        `Portalfirma no entregó el documento: ${(typeof e === 'string' ? e : e?.message) || (r.ok ? 'respuesta sin archivo' : 'error ' + r.status)}.`,
-      );
-    }
-    return {
-      nombre: j.data.name ?? null,
-      base64: String(j.data.base64).replace(/^data:[^,]*,/, ''),
-      actualizado: j.data.updated ?? null,
-    };
+    return this.api.archivo(d.corredoraId, contrato, version);
   }
 }
 
@@ -155,8 +131,10 @@ export class PortalfirmaController {
     return this.s.llamar(u, nombre, b.argumentos);
   }
 
+  /** `?version=original|signed|legalized` pide esa versión del documento; sin ella, la más avanzada */
   @Get('archivos/:contrato')
-  archivo(@UsuarioActual() u: UsuarioToken, @Param('contrato') c: string) {
-    return this.s.archivo(u, c);
+  archivo(@UsuarioActual() u: UsuarioToken, @Param('contrato') c: string, @Query('version') v?: string) {
+    const version = v === 'original' || v === 'signed' || v === 'legalized' ? v : undefined;
+    return this.s.archivo(u, c, version);
   }
 }

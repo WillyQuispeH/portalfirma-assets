@@ -18,6 +18,8 @@
 //    (por id de propiedad), y se suma a la copia.
 //  · Modo de prueba (PF_MOCK=1): todo en el JSON local de siempre (userData/inmo/datos.json), sin servidor.
 //    Negocios, eventos de la agenda, leads y firmas enviadas también van a la API (PUT del documento completo; ver «negocios y eventos»).
+//    Las OPERACIONES de un negocio (mover, tareas, pagos, cerrar…) las hace el servidor (accionNegocio, ver «acciones de un negocio»); el PUT del
+//    documento completo queda solo para lo que aún no tiene acción (propiedad o cliente del negocio, corredor, datos del contrato y la entrega).
 // En los dos modos siguen locales: la configuración y la última importación.
 'use strict';
 const fs = require('fs'); const path = require('path');
@@ -324,6 +326,40 @@ async function recargarDoc(tipo, id) {
   try { recibirDoc(tipo, await asset().llamar('GET', `${D.ruta}/${encodeURIComponent(id)}`)); }
   catch (e) { if (e.status === 404 || e.status === 403) recibirDoc(tipo, { id, eliminado: true }); else throw e; }
 }
+// ---------- acciones de un negocio en el servidor ----------
+// La lógica de negocio (mover de etapa, tareas, pagos, cerrar…) vive UNA vez en el servidor (api/src/negocios/negocio-acciones.ts).
+// Con la API, negocios.js le pide cada operación con accionNegocio() y deja la copia local igual a lo que devolvió (el negocio entero:
+// docs 'neg'). Va por la cola serializada: antes salen los cambios locales pendientes del mismo negocio. Con `version` (las acciones que la
+// aceptan) el servidor responde 409 si otra persona (WhatsApp, otro equipo) lo cambió antes: se recarga y se avisa, sin pisar.
+const ACCIONES_CON_VERSION = new Set(['mover', 'tarea', 'proxima-accion', 'condiciones', 'cerrar', 'reabrir', 'aceptacion']);
+/** id null = crear. Devuelve lo que respondió el servidor ({ negocio, avisos, … }). */
+async function accionNegocio(id, accion, cuerpo = {}) {
+  if (!API) throw err('Esta operación necesita la cuenta de Asset.');
+  const ruta = id ? `/negocios/${encodeURIComponent(id)}/acciones/${accion}` : `/negocios/acciones/${accion}`;
+  return enCola(async () => {
+    const x = id ? R.negs.find((y) => y.id === id) : null;
+    const body = { ...cuerpo };
+    if (x?.version && body.version === undefined && ACCIONES_CON_VERSION.has(accion)) body.version = x.version;
+    let r;
+    try { r = await asset().llamar('POST', ruta, body, 60000); }
+    catch (e) {
+      if (id && (e.code === 'VERSION' || e.status === 409)) {
+        try { await recargarDoc('neg', id); } catch {}
+        H.cambio('negocios');
+        throw Object.assign(err('Otra persona cambió el negocio recién: se recargó con sus datos. Revisa y vuelve a intentarlo.', 'VERSION'), { status: 409 });
+      }
+      throw e;
+    }
+    if (r?.negocio?.id) recibirDoc('neg', r.negocio);
+    return r;
+  });
+}
+/** La propiedad como la dejó el servidor (el estado reservada/vendida/arrendada lo aplica él al mover o cerrar un negocio). */
+async function traerProp(id) {
+  try { return recibirProp(await asset().llamar('GET', '/propiedades/' + encodeURIComponent(id))); }
+  catch (e) { if (e.status === 404 || e.status === 403) return null; throw e; }
+}
+
 // lo que estaba en el JSON local de este equipo (antes de la API) se sube una vez; queda un respaldo en datos.json
 async function subirNegociosEventos() {
   const d = db(); const hay = (d.negocios || []).length || (d.eventos || []).length;
@@ -1040,6 +1076,8 @@ async function importarConvecta(pf, progreso = () => {}) {
     const res = { nuevas: 0, actualizadas: 0, sinCambios: 0, personas: 0, captadores: 0, sinCaptador: 0, sinCorredor: [], total: 0, ...r };
     const d = db(); d.ultimaImportacion = { fecha: now(), ...res }; save(); H.cambio('propiedades'); return res;
   }
+  // la cartera se importa SOLO desde Convecta (con la cuenta de Asset, en el servidor): nada se trae de Portalfirma. Este camino local solo existe en el modo demostración.
+  if (process.env.PF_MOCK !== '1') throw err('La cartera se importa desde Convecta: inicia sesión con tu cuenta de Asset.');
   const leido = await leerPF(pf, progreso);
   const res = { nuevas: 0, actualizadas: 0, sinCambios: 0, personas: 0, total: leido.total, ...(leido.errores ? { errores: leido.errores } : {}) };
   const d = db();
@@ -1234,4 +1272,4 @@ const _reset = () => { cache = null; };
 module.exports = { personaDesdeLead, esEmpresa, eventos, negocios, personaPorId, registrar, obtener, parchear, todas, config, guardarConfig, ajusteCorredora, guardarAjusteCorredora, enlaceFirma, guardarEnlaceFirma, registrarLead, guardar: guardarTodo, TIPOS, ESTADOS, ROLES, validRut, fmtRut, listar, resumen, guardarPropiedad, archivarPropiedad, guardarPersona, borrarPersona, vincular, desvincular,
   nota, actividadDe, actividadTodas, agregarDocumentos, quitarDocumento, docPath, mostrarCarpeta, subirFotos, importarConvecta, exportarDatos, _reset,
   // repositorio (sesión de Asset y sincronización)
-  API, configurar, iniciar, cerrar, sincronizar, registros, folio, alCargar, subirArchivoRegistro, bajarArchivoRegistro, borrarArchivosRegistro, firmasDe, todasLasFirmas, agregarFirma, actualizarFirma, firmaDeOperacion, historialEnvios, registrarEnvio, leadsLista: () => R.leads, encolarMensajes, subirR2, recargarLead: (id) => recargarDoc('lead', id), esperarCola, usuario, listo, asignarCaptador, asignarVarios };
+  API, configurar, iniciar, cerrar, sincronizar, registros, folio, alCargar, subirArchivoRegistro, bajarArchivoRegistro, borrarArchivosRegistro, firmasDe, todasLasFirmas, agregarFirma, actualizarFirma, firmaDeOperacion, historialEnvios, registrarEnvio, leadsLista: () => R.leads, encolarMensajes, subirR2, recargarLead: (id) => recargarDoc('lead', id), esperarCola, usuario, listo, asignarCaptador, asignarVarios, accionNegocio, traerProp, recargarPer };

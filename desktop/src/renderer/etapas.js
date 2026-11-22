@@ -129,7 +129,7 @@ async function cartaOferta(negocioId, despues) {
   if (!n0) return toast('No encontré el negocio.');
   if (!n0.cliente) return toast('Primero vincula al ' + (n0.tipo === 'venta' ? 'comprador' : 'arrendatario') + ' del negocio (paso «Interesado registrado»).', 5000);
   window.members(async () => {
-    const pdfPromesa = api('cartaVistaPrevia', { negocioId }).then((r) => ({ pdf: r.pdf || '' })); pdfPromesa.catch(() => {});   // la ventana se abre ya: el documento se arma ahí mismo (o se trae, si ya existe) y la vista previa lo muestra al llegar
+    const pdfPromesa = api('cartaVistaPrevia', { negocioId }).then((r) => ({ pdf: r.pdf || '', firmantes: r.firmantes })); pdfPromesa.catch(() => {});   // la ventana se abre ya: el documento se arma ahí mismo (o se trae, si ya existe) y la vista previa lo muestra al llegar
     if (n0.tipo === 'venta') { try { await cargar(); } catch {} }   // venta: la ficha al día (la inscripción de dominio puede haberse completado o leído desde la copia)
     const per = (IM.data.personas || []).find((x) => x.id === n0.cliente.id) || n0.cliente; const p = (IM.data.propiedades || []).find((x) => x.id === n0.prop?.id) || n0.prop || {};
     const o = n0.oferta || {}; const fmt = (x) => (x ? Number(x).toLocaleString('es-CL', { maximumFractionDigits: 2 }) : '');
@@ -161,7 +161,7 @@ async function cartaOferta(negocioId, despues) {
 // ---------- mandato de arriendo: Asset arma el PDF (plantilla HTML en el servidor); se ve, se puede DESCARGAR sin firmar o enviar a firmar al propietario ----------
 async function mandatoArriendo(propId, despues) {
   window.members(async () => {
-    const pdfPromesa = api('mandatoVistaPrevia', { propiedadId: propId }).then((r) => ({ pdf: r.pdf || '' })); pdfPromesa.catch(() => {});   // la ventana se abre ya: el documento se arma ahí mismo (o se trae, si ya existe) y la vista previa lo muestra al llegar
+    const pdfPromesa = api('mandatoVistaPrevia', { propiedadId: propId }).then((r) => ({ pdf: r.pdf || '', firmantes: r.firmantes })); pdfPromesa.catch(() => {});   // la ventana se abre ya: el documento se arma ahí mismo (o se trae, si ya existe) y la vista previa lo muestra al llegar
     try { await cargar(); } catch {}   // la cartera al día: el propietario y la ficha pueden haber cambiado
     const p = propDe(propId) || {}; const f = p.ficha || {};
     const personas = IM.data.personas || [];
@@ -191,7 +191,7 @@ async function mandatoArriendo(propId, despues) {
 // ---------- mandato de venta: igual que el de arriendo (api/src/negocios/mandato-venta.ts); precio de venta y comisión desde la ficha ----------
 async function mandatoVenta(propId, despues) {
   window.members(async () => {
-    const pdfPromesa = api('mandatoVentaVistaPrevia', { propiedadId: propId }).then((r) => ({ pdf: r.pdf || '' })); pdfPromesa.catch(() => {});
+    const pdfPromesa = api('mandatoVentaVistaPrevia', { propiedadId: propId }).then((r) => ({ pdf: r.pdf || '', firmantes: r.firmantes })); pdfPromesa.catch(() => {});
     try { await cargar(); } catch {}
     const p = propDe(propId) || {}; const f = p.ficha || {};
     const personas = IM.data.personas || [];
@@ -228,7 +228,7 @@ async function promesaCompraventa(negocioId, despues) {
   if (n0.tipo !== 'venta') return toast('La promesa de compraventa es solo para negocios de venta.', 5000);
   if (!n0.cliente) return toast('Primero vincula al comprador del negocio (paso «Interesado registrado»).', 5000);
   window.members(async () => {
-    const pdfPromesa = api('promesaVistaPrevia', { negocioId }).then((r) => ({ pdf: r.pdf || '' })); pdfPromesa.catch(() => {});   // la ventana se abre ya: el documento se arma ahí mismo y la vista previa lo muestra al llegar
+    const pdfPromesa = api('promesaVistaPrevia', { negocioId }).then((r) => ({ pdf: r.pdf || '', firmantes: r.firmantes })); pdfPromesa.catch(() => {});   // la ventana se abre ya: el documento se arma ahí mismo y la vista previa lo muestra al llegar
     try { await cargar(); } catch {}   // la cartera al día: las personas y la propiedad pueden haber cambiado
     const t = (x) => (x == null ? '' : String(x)); const fmt = (x) => (x ? Number(x).toLocaleString('es-CL', { maximumFractionDigits: 2 }) : '');
     const per = (IM.data.personas || []).find((x) => x.id === n0.cliente.id) || n0.cliente; const p = propDe(n0.prop?.id) || n0.prop || {}; const f = p.ficha || {};
@@ -314,7 +314,7 @@ async function contratoArriendo(negocioId, despues, modo = 'borrador') {
     return;
   }
   window.members(async () => {
-    const pdfPromesa = api('contratoVistaPrevia', { negocioId }).then((r) => ({ pdf: r.pdf || '' })); pdfPromesa.catch(() => {});   // la ventana se abre ya: el documento se arma ahí mismo (o se trae, si ya existe) y la vista previa lo muestra al llegar
+    const pdfPromesa = api('contratoVistaPrevia', { negocioId }).then((r) => ({ pdf: r.pdf || '', firmantes: r.firmantes })); pdfPromesa.catch(() => {});   // la ventana se abre ya: el documento se arma ahí mismo (o se trae, si ya existe) y la vista previa lo muestra al llegar
     window.Ventanas.abrir('negocios.contratoArriendo', {
       modo: 'borrador', pdfPromesa, firma: null, datos, propiedad, firmantes,
       ...(n0.prop?.id ? {   // avisos «Falta la inscripción de dominio» y «Falta la cuenta de pago»: completarlos ahí mismo (se guardan en la ficha) o leer el dominio de la copia
@@ -344,7 +344,7 @@ async function actaEntrega(negocioId, despues) {
   window.members(async () => {
     const e = n0.ciclo?.entrega || {}; const p = (IM.data.propiedades || []).find((x) => x.id === n0.prop?.id) || n0.prop || {};
     // sin datos guardados no hay PDF todavía: la ventana se abre para llenarlos; con datos, el PDF se arma ahí mismo
-    const pdfPromesa = e.fecha && e.inventario?.length ? api('entregaVistaPrevia', { negocioId }).then((r) => ({ pdf: r.pdf || '' })) : undefined; pdfPromesa?.catch(() => {});   // la ventana se abre ya: el documento se arma ahí mismo (o se trae, si ya existe) y la vista previa lo muestra al llegar
+    const pdfPromesa = e.fecha && e.inventario?.length ? api('entregaVistaPrevia', { negocioId }).then((r) => ({ pdf: r.pdf || '', firmantes: r.firmantes })) : undefined; pdfPromesa?.catch(() => {});   // la ventana se abre ya: el documento se arma ahí mismo (o se trae, si ya existe) y la vista previa lo muestra al llegar
     const firmantes = [...dueñosDe(n0.prop?.id).map((q) => ({ rol: 'Arrendador', nombre: q.nombre })), { rol: 'Arrendatario', nombre: n0.cliente.nombre }];
     window.Ventanas.abrir('negocios.actaEntrega', {
       negocioId, pdfPromesa, entrega: e, firmantes,
@@ -371,7 +371,7 @@ async function escrituraCompraventa(negocioId, despues) {
   if (n0.tipo !== 'venta') return toast('El borrador de escritura de compraventa es solo para negocios de venta.', 5000);
   if (!n0.cliente) return toast('Primero vincula al comprador del negocio (paso «Interesado registrado»).', 5000);
   window.members(async () => {
-    const pdfPromesa = api('escrituraVistaPrevia', { negocioId }).then((r) => ({ pdf: r.pdf || '' })); pdfPromesa.catch(() => {});   // la ventana se abre ya: el documento se arma ahí mismo y la vista previa lo muestra al llegar
+    const pdfPromesa = api('escrituraVistaPrevia', { negocioId }).then((r) => ({ pdf: r.pdf || '', firmantes: r.firmantes })); pdfPromesa.catch(() => {});   // la ventana se abre ya: el documento se arma ahí mismo y la vista previa lo muestra al llegar
     const per = (IM.data.personas || []).find((x) => x.id === n0.cliente.id) || n0.cliente; const p = propDe(n0.prop?.id) || n0.prop || {}; const f = p.ficha || {};
     const e = n0.ciclo?.escritura || {}; const o = n0.oferta || {}; const t = (x) => (x == null ? '' : String(x)); const fmt = (x) => (x ? Number(x).toLocaleString('es-CL', { maximumFractionDigits: 2 }) : '');
     const dia = (x) => (/^\d{4}-\d{2}-\d{2}/.test(t(x)) ? t(x).slice(0, 10) : '');   // las fechas de la ventana son AAAA-MM-DD

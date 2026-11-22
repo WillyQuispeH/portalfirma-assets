@@ -90,11 +90,14 @@ async function hasta(fn, ms = 12000) { const fin = Date.now() + ms; let v; while
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].emit('focus'));
     ok(await hasta(async () => (await call('negObtener', n.id)).proximaAccion?.texto === 'Pedir la reserva firmada'), 'al volver a la ventana, la app trae el cambio');
 
-    // 5) choque: otro equipo lo cambia justo antes de que esta app envíe lo suyo
+    // 5) choque: otro equipo lo cambia justo antes de que esta app le pida una acción al servidor (que la rechaza por la versión, sin pisar)
     const actual = (await req('GET', `/negocios/${n.id}`, null, tok)).j;
     await req('PUT', `/negocios/${n.id}`, { ...actual, etapa: 'promesa' }, tok); // la app aún cree que está en «reserva»
-    await call('negTarea', n.id, 'reserva', 0, true); // cambio local con la versión vieja → 409 → recarga
-    ok(await hasta(async () => (await call('negObtener', n.id)).etapa === 'promesa'), 'si otro lo cambió antes, la app recarga sus datos (no pisa)');
+    const choque = await w.evaluate(([id]) => window.pf.negTarea(id, 'reserva', 0, true).then((r) => (r.ok ? null : r.error)), [n.id]); // acción con la versión vieja → 409 → recarga y avisa
+    ok(/Otra persona cambió/.test(choque || ''), 'si otro lo cambió antes, el servidor rechaza la acción y la app lo avisa');
+    ok(await hasta(async () => (await call('negObtener', n.id)).etapa === 'promesa'), 'y la app recarga sus datos (no pisa)');
+    await call('negTarea', n.id, 'reserva', 0, true);
+    ok(await hasta(async () => (await db.negocio.findUnique({ where: { id: n.id } })).datos.tareas?.reserva?.[0] === true), 'al repetirla con lo último, se aplica');
 
     // 6) borrar
     await call('agendaBorrar', ev.id);

@@ -12,6 +12,7 @@
 //         del corredor es un sí claro.
 // Al enviar: registra la firma, vincula al visitante y deja la visita en la agenda (ligada al negocio, si lo hay).
 import { Body, Controller, HttpCode, Injectable, Logger, Post } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { createHash, randomBytes } from 'crypto';
 import sharp from 'sharp';
 import { z } from 'zod';
@@ -101,7 +102,7 @@ const RELLENO = new Set([
   'todo',
   'nomas',
 ]);
-const asiente = (texto: string) => {
+export const asiente = (texto: string) => {
   const w = norm(texto)
     .replace(/[^a-z0-9\s]/g, ' ')
     .split(/\s+/)
@@ -194,6 +195,7 @@ export class OrdenVisitaService {
     private readonly personas: PersonasService,
     private readonly actividad: ActividadService,
     private readonly pdfs: PdfService,
+    private readonly modulo: ModuleRef,
   ) {}
 
   /** la foto de la ficha como imagen incrustada en el documento (achicada: el PDF debe pesar poco) */
@@ -436,6 +438,7 @@ export class OrdenVisitaService {
       ok: true,
       pdf: bytes.toString('base64'),
       archivo: `Orden de visita ${x.p.codigo} - ${x.vis.nombre}.pdf`,
+      firmantes: [{ nombre: x.vis.nombre, rol: 'Visitante' }],
       ...this.resumen(x),
     };
   }
@@ -512,6 +515,14 @@ export class OrdenVisitaService {
             create: { propiedadId: q.id, personaId, rol: 'interesado' },
             update: {},
           });
+      // REGLA: todo va ligado a un negocio con su interesado y su propiedad. Si la orden no trae uno, se usa el negocio abierto
+      // de este visitante en esta propiedad (misma operación) o se crea uno nuevo en la etapa «visita»
+      let negocioNuevo = false;
+      if (!x.negocioId && personaId) {
+        const r = await this.negocioDe(c.corredoraId, c.usuarioId, p.id, personaId, x.op);
+        x.negocioId = r.id;
+        negocioNuevo = r.nuevo;
+      }
       await this.db.firma.upsert({
         where: { corredoraId_operacion: { corredoraId: c.corredoraId, operacion } },
         create: {
@@ -600,6 +611,14 @@ export class OrdenVisitaService {
         texto: `Orden de visita nº ${numero} enviada a firmar a ${vis.nombre} (operación ${operacion})`,
         usuarioId: c.usuarioId,
       });
+      if (negocioNuevo && x.negocioId)
+        await this.actividad.registrar({
+          corredoraId: c.corredoraId,
+          entidadTipo: 'negocio',
+          entidadId: x.negocioId,
+          texto: `Negocio creado con la orden de visita nº ${numero}: ${vis.nombre} en ${p.codigo} (${x.op})`,
+          usuarioId: c.usuarioId,
+        });
     } catch (e) {
       // la orden ya salió: lo que falle al registrar no debe esconderlo
       this.log.error(`orden de visita enviada pero sin registrar del todo: ${(e as Error).message}`);
@@ -621,8 +640,81 @@ export class OrdenVisitaService {
       correo: vis.email,
       fecha,
       hora: hora || null,
-      indicacion: `La orden nº ${numero} se envió a firmar (operación ${operacion}): ${vis.nombre} recibe el enlace para firmar en ${vis.email}. Se cobró del saldo de Portalfirma. La visita quedó en la agenda.`,
+      negocio: x.negocioId,
+      indicacion: `La orden nº ${numero} se envió a firmar (operación ${operacion}): ${vis.nombre} recibe el enlace para firmar en ${vis.email}. Se cobró del saldo de Portalfirma. La visita quedó en la agenda${x.negocioId ? ', ligada al negocio de ' + vis.nombre + ' en ' + p.codigo : ''}.`,
     };
+  }
+
+  /**
+   * el negocio abierto de este interesado en esta propiedad y operación, o uno nuevo en la etapa «visita» (a cargo de quien lo pide).
+   * Lo crea el servicio de negocios: así lleva su código NG-XXX y sus reglas (comisión por defecto, estado de la propiedad).
+   */
+  private async negocioDe(
+    corredoraId: string,
+    usuarioId: string,
+    propiedadId: string,
+    clienteId: string,
+    tipo: 'venta' | 'arriendo',
+  ): Promise<{ id: string; codigo: string | null; nuevo: boolean }> {
+    const ya = await this.db.negocio.findFirst({
+      where: { corredoraId, propiedadId, clienteId, tipo, estado: 'abierto', eliminadoEn: null },
+      orderBy: { creadoEn: 'desc' },
+      select: { id: true, datos: true },
+    });
+    if (ya) return { id: ya.id, codigo: (ya.datos as { codigo?: string } | null)?.codigo ?? null, nuevo: false };
+    const u = await this.db.usuario.findUnique({ where: { id: usuarioId }, select: { rol: true } });
+    const servicio = this.modulo.get((await import('../negocios/negocio-acciones.js')).NegocioAccionesService, { strict: false });
+    const r = await servicio.crear(
+      { sub: usuarioId, corredoraId, rol: u?.rol ?? 'CORREDOR', sid: '' } as UsuarioToken,
+      { tipo, propiedadId, clienteId, etapa: 'visita' } as Parameters<typeof servicio.crear>[1],
+    );
+    const doc = r.negocio as { id: string; codigo?: string };
+    return { id: doc.id, codigo: doc.codigo ?? null, nuevo: true };
+  }
+
+  /**
+   * REGLA: todo negocio nace con su interesado y su propiedad y lleva un código NG-XXX. La orden de visita lo crea al pedirse (antes de
+   * enviarla): deja al visitante en el CRM como interesado de la propiedad y abre el negocio en la etapa «visita».
+   */
+  private async asegurarNegocio(x: Armada): Promise<{ id: string; codigo: string | null; nuevo: boolean } | { error: string }> {
+    const { c, p, vis, usuario } = x;
+    try {
+      const token = { sub: c.usuarioId, corredoraId: c.corredoraId, rol: usuario.rol, sid: '' };
+      let personaId = vis.persona?.id ?? null;
+      if (vis.nueva) {
+        const nueva = await this.personas.crear(token, {
+          nombre: vis.nueva.nombre,
+          rut: vis.nueva.rut,
+          email: vis.nueva.email || undefined,
+          telefono: vis.nueva.telefono || undefined,
+          roles: ['interesado'],
+        });
+        personaId = (nueva as { id: string }).id;
+      }
+      if (!personaId) return { error: 'No pude dejar al visitante registrado en el CRM.' };
+      for (const q of x.props)
+        await this.db.propiedadPersona.upsert({
+          where: { propiedadId_personaId_rol: { propiedadId: q.id, personaId, rol: 'interesado' } },
+          create: { propiedadId: q.id, personaId, rol: 'interesado' },
+          update: {},
+        });
+      const r = await this.negocioDe(c.corredoraId, c.usuarioId, p.id, personaId, x.op);
+      if (r.nuevo)
+        await this.actividad
+          .registrar([
+            {
+              corredoraId: c.corredoraId,
+              entidadTipo: 'negocio',
+              entidadId: r.id,
+              texto: `Negocio creado al pedir la orden de visita: ${vis.nombre} en ${p.codigo} (${x.op})`,
+              ref2: p.id,
+            },
+          ])
+          .catch(() => null);
+      return r;
+    } catch (e) {
+      return { error: `No pude abrir el negocio: ${(e as Error).message.slice(0, 200)}` };
+    }
   }
 
   // ---------------------------------------------------------------- la herramienta del equipo por WhatsApp
@@ -646,6 +738,18 @@ export class OrdenVisitaService {
     }
     const x = await this.armar(c, a);
     if ('error' in x) return { error: x.error };
+    // REGLA: la orden pedida por WhatsApp abre el negocio (con su código NG-XXX) en ese momento, antes de confirmar el envío
+    let codigoNegocio: string | null = null;
+    if (!x.negocioId) {
+      const nego = await this.asegurarNegocio(x);
+      if ('error' in nego) return { error: nego.error };
+      x.negocioId = nego.id;
+      codigoNegocio = nego.codigo;
+      a = { ...a, negocio_id: nego.id };
+    } else {
+      const f = await this.db.negocio.findUnique({ where: { id: x.negocioId }, select: { datos: true } });
+      codigoNegocio = (f?.datos as { codigo?: string } | null)?.codigo ?? null;
+    }
     const clave = createHash('sha1')
       .update(
         JSON.stringify([
@@ -671,9 +775,10 @@ export class OrdenVisitaService {
         ok: true,
         enviada: false,
         necesitaConfirmacion: true,
+        negocio: codigoNegocio,
         ...this.resumen(x),
         indicacion:
-          'La orden NO se envió, NO se cobró y NO se agendó. Muéstrale estos datos y pregúntale si la envías (se cobra del saldo de Portalfirma y el visitante recibe el enlace para firmar en su correo). Cuando conteste que sí, vuelve a llamar esta herramienta con confirmado: true y EXACTAMENTE los mismos datos. Sin su sí, no la envíes.',
+          'El negocio ya quedó creado (campo negocio: su código NG-XXX, en la etapa Visita): díselo al corredor. La orden NO se envió, NO se cobró y NO se agendó. Muéstrale estos datos y pregúntale si la envías (se cobra del saldo de Portalfirma y el visitante recibe el enlace para firmar en su correo). Cuando conteste que sí, vuelve a llamar esta herramienta con confirmado: true y EXACTAMENTE los mismos datos. Sin su sí, no la envíes.',
       };
     }
 

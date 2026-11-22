@@ -1,4 +1,4 @@
-// Mis operaciones sincronizadas, versiones, vista previa, descargar/compartir; carga masiva y firma masiva.
+// Mis operaciones sincronizadas, versiones, vista previa, descargar/compartir; carga masiva (la firma masiva con certificado se quitó).
 const { _electron: electron } = require('playwright'); const path = require('path'); const fs = require('fs'); const os = require('os');
 const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  ✔ ' + m); };
 (async () => {
@@ -22,27 +22,44 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
   await w.waitForFunction(() => document.querySelectorAll('.op-fila').length >= 10, null, { timeout: 30000 });
   const n = await w.locator('.op-fila').count(); ok(n === 15, `sincroniza todas las operaciones, también las de más de un año (${n})`);
   await w.waitForFunction(() => !window.Operaciones._ops.prefetching && window.Operaciones._ops.items.every((x) => x.status), null, { timeout: 60000 });
-  const f = await w.evaluate(() => Object.fromEntries([...document.querySelectorAll('#opsFilters [data-f]')].map((b) => [b.dataset.f, Number(b.lastElementChild.textContent)])));
+  const f = await w.evaluate(() => Object.fromEntries([...document.querySelector('#opsFilters').options].map((o) => [o.value, Number((o.textContent.match(/\((\d+)\)/) || [])[1] || 0)])));
   console.log('    filtros:', JSON.stringify(f));
   ok(f.notary > 0 && f.signed > 0 && f.pending > 0 && f.all === 15, 'filtros con conteos (firmadas, legalizadas, en firma)');
-  await w.click('#opsFilters [data-f="notary"]'); await sleep(200);
+  await w.selectOption('#opsFilters', 'notary'); await sleep(200);
   ok(await w.locator('.op-fila').count() === f.notary, 'filtrar legalizadas/protocolizadas');
-  await w.click('#opsFilters [data-f="all"]'); await w.fill('#opsQ', 'mandato'); await sleep(200);
+  await w.selectOption('#opsFilters', 'all'); await w.fill('#opsQ', 'mandato'); await sleep(200);
   ok(await w.locator('.op-fila').count() >= 1 && (await w.locator('.op-fila').allTextContents()).every((t) => /Mandato/i.test(t)), 'buscar por nombre');
   await w.fill('#opsQ', ''); await sleep(100);
-  await w.click('.op-fila[data-op="20900"]'); await w.waitForSelector('.op-etapas');
-  const steps = await w.evaluate(() => [...document.querySelectorAll('.op-etapa')].map((s) => s.textContent.replace(/\s+/g, ' ').trim()));
-  console.log('    etapas:', steps.join(' → '));
-  ok(steps.length === 3 && /Enviado/.test(steps[0]) && /Legalizado/.test(steps[2]), 'etapas Enviado → Firmado → Legalizado (solo estado)');
-  await w.waitForSelector('#opdCanvas canvas', { timeout: 20000 }); ok(true, 'vista previa del documento (servicio getById)');
+  await w.click('.op-fila[data-op="20900"]'); await w.waitForSelector('.op-versiones');
+  const vs = await w.evaluate(() => [...document.querySelectorAll('.op-version')].map((e) => e.dataset.version + ':' + (e.hasAttribute('data-listo') ? 'completado' : 'pendiente')));
+  console.log('    versiones:', vs.join(' · '));
+  ok(vs.join() === 'original:completado,signed:completado,legalized:completado', 'versiones del documento (original, firmado, legalizado), cada una con su estado');
+  ok(/Documento Legalizado/.test(await w.textContent('.op-prev header, .op-prev')) && !(await w.$('.op-etapas')), 'a la derecha se ve la versión más avanzada, con su nombre (ya no hay barra de etapas)');
+  await w.waitForSelector('#opdCanvas canvas', { timeout: 20000 }); ok(true, 'vista previa del documento');
   ok(/2 de 2 firmaron/.test(await w.textContent('.op-firmas header')), 'firmantes y estado');
+  await sleep(500);
+  const g = await w.evaluate(() => {
+    const det = document.querySelector('.op-detalle'); const barra = document.querySelector('#opdBarra'); const prev = document.querySelector('.op-prev'); const cv = document.querySelector('#opdCanvas canvas'); const lado = document.querySelector('.op-lado');
+    const tit = document.querySelector('.op-versiones h3'); const pr = prev.getBoundingClientRect(); const c = cv.getBoundingClientRect();
+    return { tag: det.tagName, borde: getComputedStyle(det).borderTopWidth, textoBarra: barra.textContent, refresca: !!barra.querySelector('#opdRef'), titulo: getComputedStyle(tit).backgroundClip, prevScroll: prev.scrollHeight - prev.clientHeight, canvasDentro: c.bottom <= pr.bottom + 1 && c.top >= pr.top, ladoScroll: getComputedStyle(lado).overflowY, ladoDesborda: lado.scrollHeight > lado.clientHeight, cardsDirectas: [...document.querySelector('#opsDetail .op-det').children].every((e) => e.id === 'opdBarra' || e.classList.contains('op-cuerpo')) };
+  });
+  ok(/Operación\s*20900/.test(g.textoBarra) && /Fecha\s*\d\d\/\d\d\/\d{4} \d\d:\d\d/.test(g.textoBarra) && /Estado\s*\S+/.test(g.textoBarra) && g.refresca, `arriba hay una barra con número de operación, fecha, estado y el botón de actualizar («${g.textoBarra.replace(/\s+/g, ' ').trim()}»)`);
+  ok(g.tag === 'DIV' && g.borde === '0px' && g.cardsDirectas, 'el detalle no tiene contenedor: solo la barra y las cards ordenadas');
+  ok(g.titulo === 'text', 'el título de las Card tiene el degradado de la marca');
+  ok(g.canvasDentro && g.prevScroll <= 1, 'el documento se ve entero, sin scroll (la hoja se ajusta a su espacio)');
+  ok(g.ladoScroll === 'auto' && g.ladoDesborda, 'solo el lado izquierdo tiene scroll');
   await w.screenshot({ path: path.resolve(__dirname, 'o1-operacion.png') });
-  ok(!(await w.$('#opdAll')) && !(await w.$('[data-v]')), 'sin descargas por versión: un solo documento por operación');
+  // «Ver» cambia la versión que se muestra (y la que se pide a Portalfirma)
+  await w.click('.op-version[data-version="original"] [data-ver]'); await w.waitForFunction(() => /Documento Original/.test(document.querySelector('.op-prev').textContent)); await w.waitForSelector('#opdCanvas canvas', { timeout: 20000 });
+  ok(await app.evaluate(() => (globalThis.__llamadasIntegracion || []).some((x) => /archivos\/.+\?version=original/.test(x.ruta))), '«Ver» el original pide ese archivo a Portalfirma (?version=original)');
+  ok(!(await w.$('#opdAll')) && !(await w.$('[data-v]')), 'sin descargas por versión: se baja la que se está viendo');
   await w.click('#opdDl'); await sleep(900); console.log('    toast:', await w.textContent('#toast'), fs.readdirSync(tmp).join(','));
-  ok(fs.readdirSync(tmp).some((x) => /^20900 - Contrato de arrendamiento\.pdf$/.test(x)), 'descargar el documento con el nombre que entrega getById');
+  ok(fs.readdirSync(tmp).some((x) => /^20900 - Contrato de arrendamiento \(original\)\.pdf$/.test(x)), 'descargar baja la versión que se ve (con su nombre)');
   await w.click('.op-fila[data-op="20886"]'); await w.waitForSelector('.op-reenviar');
   ok(await w.locator('.op-reenviar').count() === 1, 'operación en firma: acciones para el firmante pendiente');
-  await w.click('.op-reenviar [data-mail]'); await w.waitForSelector('#mOk:has-text("Enviar")'); ok(/por correo/.test(await w.textContent('#modalCard')), 'reenviar enlace pide confirmación'); await w.click('#mCancel');
+  ok(await w.evaluate(() => [...document.querySelectorAll('.op-version')].map((e) => e.dataset.version + ':' + (e.hasAttribute('data-listo') ? 'ok' : 'pend')).join()) === 'original:ok,signed:pend', 'una operación aún en firma: el original está completado y el firmado pendiente (sin «Ver»)');
+  ok(await w.locator('.op-version[data-version="signed"] [data-ver][disabled]').count() === 1, 'el botón «Ver» de lo pendiente está desactivado');
+  await w.click('.op-reenviar [data-reenviar]'); await w.waitForSelector('#mOk:has-text("Reenviar")'); ok(/canal que tenga/.test(await w.textContent('#modalCard')), 'reenviar enlace pide confirmación (Portalfirma elige el canal)'); await w.click('#mCancel');
 
   console.log('Carga masiva');
   await w.click('#opsBulk'); await w.waitForSelector('#bkDrop');
@@ -53,41 +70,12 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
   ok(st.filter((x) => x.startsWith('needs_data')).length === 8, '8 analizados (incluido el Word convertido); avisa que faltan correo y teléfono');
   ok(st.some((x) => /skipped:Copia/.test(x)) && st.some((x) => /skipped:nota/.test(x)), 'omite duplicados y formatos no admitidos');
   ok(await w.evaluate(() => /rol real/.test((window.Masiva._bk.st.items[0].missing || []).join(' '))), 'un rol genérico («cliente») se pide antes de enviar: Portalfirma lo rechaza');
-  const maxPar = await w.evaluate(() => window.__maxPar || 0); void maxPar;
+  ok(await w.locator('.bk-card').count() === 10 && !(await w.$('#bkTable')), 'cada documento es una tarjeta con su PDF, en una fila (no hay tabla)');
   await w.screenshot({ path: path.resolve(__dirname, 'o2-masiva.png') });
-  // editar firmantes de uno
-  await w.click('.bk-row.needs_data >> nth=0 >> [data-a="edit"]'); await w.waitForSelector('.bk-sigrow');
-  await w.fill('.bk-sigrow >> nth=0 >> [data-k="email"]', 'juan@correo.cl'); await w.fill('.bk-sigrow >> nth=0 >> [data-k="phone"]', '+56911111111');
-  await w.fill('.bk-sigrow >> nth=1 >> [data-k="email"]', 'maria@correo.cl'); await w.fill('.bk-sigrow >> nth=1 >> [data-k="phone"]', '+56922222222'); await w.fill('.bk-sigrow >> nth=1 >> [data-k="alias"]', 'mandante'); // «cliente» es un rol genérico que Portalfirma rechaza
-  await w.click('#mOk'); await sleep(400);
-  ok(await w.evaluate(() => window.Masiva._bk.st.items.filter((x) => x.status === 'ready').length) === 1, 'editar firmantes: ese documento queda listo');
-  await w.click('.bk-row.ready >> [data-a="edit"]'); await w.waitForSelector('.bk-sigrow'); await w.click('#bkAll'); await sleep(500);
-  ok(await w.evaluate(() => window.Masiva._bk.st.items.filter((x) => x.status === 'ready').length) === 8, '«Usar en todos»: 8 listos');
-  await w.click('.bk-row.ready >> nth=1 >> label'); await sleep(300); // casilla del kit: el input es sr-only, se marca con su etiqueta
-  await w.click('[data-a="send"]'); await w.waitForSelector('#bkPay');
-  ok(/descuenta saldo/.test(await w.textContent('#modalCard')) && /Enviar 7/.test(await w.textContent('#mOk')), 'una sola confirmación, avisa el cobro (7 seleccionados)');
-  await w.fill('#bkPay', 'pagos@empresa.cl'); await w.click('#mOk');
-  await w.waitForFunction(() => window.Masiva._bk.st.items.filter((x) => x.status === 'sent').length === 7 && !window.Masiva._bk.st.sending, null, { timeout: 60000 });
-  ok(true, '7 enviados a firmar, de a uno');
-  ok(await w.evaluate(() => window.Masiva._bk.st.items.filter((x) => x.status === 'ready').length) === 1, 'el desmarcado queda listo, sin enviar');
-  await w.evaluate((p) => window.pf.bulkAdd([p]), docs[2]); await sleep(800);
-  ok(await w.evaluate(() => window.Masiva._bk.st.items.at(-1).dupSent === true), 'avisa si un archivo ya se envió antes');
-  await w.click('.bk-row.sent >> nth=0 >> [data-a="seeop"]'); await w.waitForSelector('.op-etapas', { timeout: 20000 });
-  ok(true, 'del envío a su operación en Mis operaciones');
 
-  console.log('Firma masiva con certificado');
-  await w.evaluate(() => window.Masiva.open('cds')); await w.waitForSelector('#cdsRut');
-  await w.fill('#cdsRut', '12.345.678-5'); await w.click('#cdsList'); await w.waitForSelector('.cds-op');
-  ok(await w.locator('.cds-op').count() === 3, 'lista las operaciones pendientes');
-  await w.click('.cds-op label >> nth=2'); await sleep(100);
-  await w.fill('#cdsKey', 'clave-secreta'); await w.click('#cdsAsk'); await w.waitForSelector('#cdsCode');
-  ok((await w.inputValue('#cdsCode')) === '', 'el campo del código parte vacío (no arrastra la clave del certificado)');
-  await w.fill('#cdsCode', '123456'); await w.click('#cdsSign'); await w.waitForSelector('.cds-res');
-  ok(/2 de 2/.test(await w.textContent('.cds-res')), 'firma las 2 elegidas con un solo código');
-  ok(await w.evaluate(() => !JSON.stringify(window.Masiva._cds).includes('clave-secreta') && !document.querySelector('#cdsKey')?.value), 'la clave del certificado se borra al terminar (no queda en el estado ni en el campo)');
-  const disk = fs.readFileSync(path.join(userData, 'portalfirma.json'), 'utf8');
-  ok(!disk.includes('clave-secreta'), 'la clave nunca se guarda en disco');
-  await w.screenshot({ path: path.resolve(__dirname, 'o3-cds.png') });
+  // la firma masiva con certificado ya no existe (la API de integración de Portalfirma no la ofrece): ni la pestaña ni sus llamadas
+  ok(!(await w.$('#bkTabs')) && !(await w.$('#cdsRut')), 'la carga masiva ya no ofrece la firma con certificado');
+  ok(await w.evaluate(() => typeof window.pf.cdsPending === 'undefined' && typeof window.pf.manage === 'undefined' && typeof window.pf.byRut === 'undefined'), 'y la app ya no expone esas llamadas del MCP');
   const bad = errs.filter((e) => !/Warning|deprecated|font|TT:/i.test(e)); console.log('errores:', bad); if (bad.length) process.exitCode = 1;
   await w.evaluate(() => window.pf.closeNow()).catch(() => {}); await app.close().catch(() => {}); process.exit(process.exitCode || 0);
 })().catch((e) => { console.error('FAIL', e); console.error(global.__errs); process.exit(1); });

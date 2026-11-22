@@ -137,7 +137,7 @@ function crear({ agenda = null, formatos = null } = {}) {
         if (prog.length) return { e: 'fail', d: `La visita del ${cuando(prog[prog.length - 1])} ya pasó: márcala como realizada o reprográmala.` };
         if (vs.length) return { e: 'fail', d: `La visita del ${cuando(vs[vs.length - 1])} se canceló.` };
         return null; }
-      case 'acta': { // la firma de ESTE negocio: firmada → logrado; enviada → esperando al visitante
+      case 'acta': { // (el acta de visita ya no se firma: el paso se logra al cerrarla, lo marca el servidor; esto solo respeta lo firmado antes)
         const f = firmaNeg(p, n, /^acta de visita/i);
         if (!f) return null;   // el acta sin firma: la deja pendiente el servidor al cerrarla
         return f.estado === 'firmado' ? { e: 'ok', f: f.firmado || f.fecha, d: `Firmada${f.operacion ? ' · operación ' + f.operacion : ''}` } : { e: 'pend', q: 'otro', quien: 'la firma del visitante', d: `Enviada el ${fdm(f.fecha)}${f.operacion ? ' · operación ' + f.operacion : ''}.` }; }
@@ -231,11 +231,14 @@ function crear({ agenda = null, formatos = null } = {}) {
   }
 
   // marcar a mano: estado 'ok' | 'fail' | 'pend' | null (volver a lo automático); quien = «esperando a…»; vence = fecha límite
+  // (el cálculo de los pasos es solo para MOSTRAR: la regla vive en el servidor, api/src/negocios/negocio-reglas.ts; negocios-paridad-unit.js las compara)
   function marcar({ negocioId, propId, paso, estado, d = '', quien = '', vence = null }) {
     const ok = ['ok', 'fail', 'pend', null].includes(estado); if (!ok) throw new Error('Estado no válido.');
     const tgt = negocioId ? inmo.negocios().find((x) => x.id === negocioId) : inmo.todas().find((x) => x.id === propId);
     if (!tgt) throw new Error(negocioId ? 'El negocio ya no existe.' : 'La propiedad ya no existe.');
     const def = [...CAPT, ...COM, ...POST.venta, ...COM_ARR, ...CIERRE_ARR, ...POSTARR].find((x) => x.id === paso); if (!def) throw new Error('Paso desconocido.');
+    // con la cuenta de Asset la marca de un paso del NEGOCIO la hace el servidor (POST …/acciones/paso); devuelve una promesa. La captación (pasos de la propiedad) sigue aquí.
+    if (negocioId && inmo.API) return require('./negocios').paso(negocioId, { paso, estado, detalle: String(d || ''), quien: String(quien || ''), vence }).then(() => true);
     tgt.pasos ||= {};
     if (estado == null) delete tgt.pasos[paso];
     else tgt.pasos[paso] = { e: estado, f: estado === 'ok' ? now() : null, d: String(d || '').slice(0, 240), quien: String(quien || '').slice(0, 80), vence: /^\d{4}-\d{2}-\d{2}$/.test(vence || '') ? vence : null };

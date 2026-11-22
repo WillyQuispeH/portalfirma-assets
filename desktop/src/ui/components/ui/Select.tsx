@@ -65,7 +65,7 @@ export default function Select({
   const disparador = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
   const [abierto, setAbierto] = useState(false);
-  const [pos, setPos] = useState({ top: 0, left: 0, width: 0 });
+  const [pos, setPos] = useState({ top: 0, left: 0, width: 0, maxH: 280, origen: 'top' as 'top' | 'bottom' });
   const [interno, setInterno] = useState(String(defaultValue ?? ''));
   const controlado = value !== undefined;
   const actual = String(controlado ? value : interno);
@@ -87,19 +87,44 @@ export default function Select({
     disparador.current?.focus();
   };
 
+  /** debajo del disparador; si no cabe (pie fijo, borde de ventana), abre hacia arriba */
   const ubicar = () => {
     const caja = disparador.current?.closest('[data-campo]') as HTMLElement | null;
     const r = (caja || disparador.current)?.getBoundingClientRect();
     if (!r) return;
-    setPos({ top: r.bottom + 6, left: r.left, width: Math.max(r.width, 160) });
+    const gap = 6;
+    const margen = 8;
+    const pie = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--pie-alto')) || 0;
+    const suelo = window.innerHeight - pie - margen;
+    const techo = margen;
+    const abajo = Math.max(0, suelo - (r.bottom + gap));
+    const arriba = Math.max(0, r.top - gap - techo);
+    const preferido = Math.min(280, Math.round(window.innerHeight * 0.5));
+    const mh = menu.current?.offsetHeight || preferido;
+    const width = Math.max(r.width, 160);
+    let top = r.bottom + gap;
+    let maxH = preferido;
+    let origen: 'top' | 'bottom' = 'top';
+    if (mh > abajo && arriba > abajo) {
+      maxH = Math.min(preferido, Math.floor(arriba));
+      top = r.top - gap - Math.min(mh, maxH);
+      origen = 'bottom';
+    } else {
+      maxH = Math.min(preferido, Math.floor(abajo));
+      if (top + Math.min(mh, maxH) > suelo) top = Math.max(techo, suelo - Math.min(mh, maxH));
+    }
+    setPos({ top, left: r.left, width, maxH: Math.max(120, maxH), origen });
   };
 
   useLayoutEffect(() => {
     if (!abierto) return;
     ubicar();
+    // segunda pasada: ya medimos el alto real del menú (con las opciones pintadas)
+    const id = requestAnimationFrame(ubicar);
     const sel = menu.current?.querySelector<HTMLElement>('[aria-selected="true"]')
       || menu.current?.querySelector<HTMLElement>('[role="option"]');
     sel?.focus();
+    return () => cancelAnimationFrame(id);
   }, [abierto]);
 
   useEffect(() => {
@@ -170,8 +195,12 @@ export default function Select({
 
       {abierto && createPortal(
         <div ref={menu} id={listaId} role="listbox" data-menu-select aria-label={typeof etiqueta === 'string' ? etiqueta : undefined}
-          onKeyDown={tecladoMenu} style={{ top: pos.top, left: pos.left, width: pos.width }}
-          className="tw:fixed tw:z-[1600] tw:max-h-[min(280px,50vh)] tw:overflow-y-auto tw:p-1.5 tw:rounded-card tw:border tw:border-solid tw:border-edge tw:border-b-[3px] tw:border-b-edge-b tw:bg-card tw:shadow-[0_16px_40px_-12px_rgb(16_24_64/.28)] tw:origin-top tw:animate-[menu-entra_.16s_cubic-bezier(.25,1,.5,1)] tw:motion-reduce:animate-none">
+          onKeyDown={tecladoMenu}
+          style={{ top: pos.top, left: pos.left, width: pos.width, maxHeight: pos.maxH }}
+          className={cx(
+            'tw:fixed tw:z-[1600] tw:overflow-y-auto tw:p-1.5 tw:rounded-card tw:border tw:border-solid tw:border-edge tw:border-b-[3px] tw:border-b-edge-b tw:bg-card tw:shadow-[0_16px_40px_-12px_rgb(16_24_64/.28)] tw:animate-[menu-entra_.16s_cubic-bezier(.25,1,.5,1)] tw:motion-reduce:animate-none',
+            pos.origen === 'bottom' ? 'tw:origin-bottom' : 'tw:origin-top',
+          )}>
           {items.map(([v, t]) => {
             const on = v === actual;
             return (

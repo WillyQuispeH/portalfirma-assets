@@ -3,7 +3,8 @@
 // Revisa: la conexión con Portalfirma es la de la corredora
 // en el servidor (si la corredora la tiene, «restaurar» trae la cuenta pasando por la API); «revisar ahora» se lo pide
 // al servidor; un aviso de firmas del servidor llega a la app y se toma una sola vez; el de la firma de la etapa actual
-// de un negocio lo hace avanzar a la siguiente etapa (en la base). Al final borra lo que creó.
+// de un negocio NO lo mueve la app: el negocio avanza en el servidor (ronda.ts → avanzarPorFirma), la app solo trae lo nuevo y avisa
+// (así no se mueve dos veces). Al final borra lo que creó.
 // Requiere la API corriendo. Uso: node test/firmas-servidor-api-e2e.js [url-de-la-api]
 const { _electron: electron } = require('playwright'); const path = require('path'); const fs = require('fs'); const os = require('os');
 const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  ✔ ' + m); };
@@ -26,14 +27,19 @@ const req = async (metodo, ruta, cuerpo, token) => {
   if (!salud?.db) { console.error(`La API no responde en ${API}. Levántala con start-dev.ps1.`); process.exit(1); }
   const db = new PrismaClient();
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-fs-'));
-  const NEG = `n${SUF}fs`; let admin = null; let app = null;
+  let NEG = null; let admin = null; let app = null; const creados = { props: [], personas: [] };
   try {
     admin = await db.usuario.findUnique({ where: { email: String(env.SEMBRAR_ADMIN_EMAIL).toLowerCase() } }); const co = admin.corredoraId;
     const tok = (await req('POST', '/auth/ingresar', { email: env.SEMBRAR_ADMIN_EMAIL, clave: env.SEMBRAR_ADMIN_CLAVE })).j.tokenAcceso;
     const pfCorredora = await db.conexion.findFirst({ where: { corredoraId: co, proveedor: 'portalfirma', dueno: 'corredora', estado: 'activa' } });
     // un negocio en «promesa» cuya firma el servidor ya vio firmada (con «avanzar»)
-    let r = await req('PUT', `/negocios/${NEG}`, { tipo: 'venta', etapa: 'promesa', estado: 'abierto', corredorId: admin.id, firmas: { promesa: { operacion: 912345678, estado: 'firmado', firmado: new Date().toISOString(), avanzar: true } } }, tok);
+    const prop = (await req('POST', '/propiedades', { titulo: `E2E Firmas ${SUF}`, tipo: 'casa', venta: true }, tok)).j; creados.props.push(prop.id);
+    const cli = (await req('POST', '/personas', { nombre: `E2E Firmas ${SUF}`, email: `fs-${SUF}@prueba.cl`, roles: ['comprador'] }, tok)).j; creados.personas.push(cli.id);
+    let r = await req('POST', '/negocios/acciones/crear', { tipo: 'venta', propiedadId: prop.id, clienteId: cli.id, etapa: 'promesa' }, tok);
     if (r.s !== 200) throw new Error('no se creó el negocio: ' + JSON.stringify(r.j));
+    NEG = r.j.negocio.id;
+    r = await req('PUT', `/negocios/${NEG}`, { ...r.j.negocio, firmas: { promesa: { operacion: 912345678, estado: 'firmado', firmado: new Date().toISOString(), avanzar: true } } }, tok);
+    if (r.s !== 200) throw new Error('no se dejó la firma en el negocio: ' + JSON.stringify(r.j));
 
     const inmoDir = path.join(tmp, 'inmo'); fs.mkdirSync(inmoDir, { recursive: true });
     const ud = path.join(tmp, 'ud'); fs.mkdirSync(ud, { recursive: true });
@@ -56,14 +62,24 @@ const req = async (metodo, ruta, cuerpo, token) => {
     const av = await db.aviso.create({ data: { corredoraId: co, usuarioId: admin.id, tipo: 'firma_negocio', texto: `E2E ${SUF}: se firmó el documento de la etapa «promesa».`, datos: { negocioId: NEG, etapa: 'promesa', operacion: 912345678, avanzar: true } } });
     const av2 = await db.aviso.create({ data: { corredoraId: co, usuarioId: admin.id, tipo: 'firmas', texto: `Ana firmó «Doc E2E ${SUF}» (operación 912345679)` } });
     ok(await hasta(async () => (await db.aviso.findUnique({ where: { id: av.id } })).tomadoEn && (await db.aviso.findUnique({ where: { id: av2.id } })).tomadoEn, 40000), 'la app toma los avisos del servidor (a lo más en 30 s)');
-    const n = await hasta(async () => { const x = await db.negocio.findUnique({ where: { id: NEG } }); return x.etapa === 'escritura' ? x : null; }, 20000);
-    ok(n && !n.datos.firmas.promesa.avanzar && n.datos.firmas.promesa.estado === 'firmado', 'el negocio avanzó solo a «escritura» y la marca «avanzar» se quitó');
+    // el aviso trae `avanzar`, pero mover el negocio le toca al servidor: la app no lo mueve (ni quita la marca) y su copia queda igual a la base
+    await dormir(6000);
+    const n = await db.negocio.findUnique({ where: { id: NEG } });
+    // (la ronda del servidor, cada 5 min, puede haberlo avanzado ya: entonces lo hizo UNA sola vez; si no, queda como estaba)
+    const avances = await db.actividad.count({ where: { entidadId: NEG, texto: { contains: 'Avanzó solo' } } });
+    ok((n.etapa === 'promesa' && n.datos.firmas.promesa.avanzar === true && avances === 0) || (n.etapa === 'escritura' && !n.datos.firmas.promesa.avanzar && avances === 1), `la app no movió el negocio por su cuenta: o sigue en «promesa» con la marca (lo hace el servidor) o el servidor lo avanzó una sola vez (etapa ${n.etapa}, avances ${avances})`);
+    const loc = await call('negObtener', NEG);
+    ok(loc.ok && loc.data.etapa === n.etapa && loc.data.version === n.version, 'y su copia local es igual a la base');
   } finally {
     if (app) await app.close().catch(() => {});
     if (admin) {
       await db.aviso.deleteMany({ where: { usuarioId: admin.id, texto: { contains: SUF } } });
       await db.actividad.deleteMany({ where: { corredoraId: admin.corredoraId, OR: [{ entidadId: NEG }, { ref2: NEG }] } });
-      await db.negocio.deleteMany({ where: { id: NEG } });
+      await db.negocio.deleteMany({ where: { OR: [{ id: NEG || 'x' }, { propiedadId: { in: creados.props } }] } });
+      await db.actividad.deleteMany({ where: { OR: [{ entidadId: { in: [...creados.props, ...creados.personas] } }, { ref2: { in: [...creados.props, ...creados.personas] } }] } });
+      await db.propiedadPersona.deleteMany({ where: { propiedadId: { in: creados.props } } });
+      await db.propiedad.deleteMany({ where: { id: { in: creados.props } } });
+      await db.persona.deleteMany({ where: { id: { in: creados.personas } } });
     }
     await db.$disconnect();
     try { fs.rmSync(tmp, { recursive: true, force: true }); } catch {}

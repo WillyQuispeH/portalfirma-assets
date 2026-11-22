@@ -2,6 +2,7 @@
 // actas): razón social, RUT, domicilio, representante legal y logo. Los edita el administrador; los demás los ven.
 // Viven en el servidor (GET/PUT /v1/corredora/datos, IPC corredora:datos / corredora:guardar).
 // Ids para pruebas: #cfgCorredora, #ccRazon, #ccRut, #ccDomicilio, #ccRepNombre, #ccRepRut, #ccLogo, #cfgCorredoraGuardar.
+import { useMarca } from '../../../store/zustand/marca.store';
 import { useEffect, useState, type FormEvent } from 'react';
 import Card from '../../ui/Card';
 import Boton from '../../ui/Boton';
@@ -65,7 +66,7 @@ export default function Corredora() {
         representanteNombre: t('representanteNombre'), representanteRut: t('representanteRut'),
         representanteVentaNombre: t('representanteVentaNombre'), representanteVentaRut: t('representanteVentaRut'), logo,
       });
-      setD(x); setLogo(x.logo || ''); setVez((v) => v + 1); toast('Datos de la corredora guardados.');
+      setD(x); setLogo(x.logo || ''); setVez((v) => v + 1); useMarca.getState().marcaLogo(x.logo || null); toast('Datos de la corredora guardados.');
     } catch (e) { toast((e as Error).message, 6000); }
     setGuardando(false);
   };

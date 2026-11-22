@@ -1,10 +1,10 @@
 /* global pf, $, toast, closeModal, show, state, liberar */
 'use strict';
 // La carga masiva está en React: src/ui/components/functional/gestion/carga-masiva. Aquí quedan editar los
-// firmantes de un documento, la confirmación del envío (saldo y correo del pagador) y la cola en vivo
+// firmantes de un documento, la confirmación del envío (saldo) y la cola en vivo
 // (pf.onBulk), que se le pasa a React como evento «pf:bulk».
 (() => {
-const estado = () => window.__estadoMasiva?.() || { cola: { items: [] }, cds: {} };
+const estado = () => window.__estadoMasiva?.() || { cola: { items: [] } };
 function open(tab) {
   if (!window.isMember()) return window.members(() => open(tab), 'La carga masiva es exclusiva para clientes de Portalfirma. Inicia sesión con tu cuenta.');
   show('bulk'); const el = $('#view-bulk');
@@ -22,13 +22,12 @@ function editSigners(it) {
 }
 async function confirmarEnvio(ids, opts) {
   const ready = estado().cola.items.filter((x) => ids.includes(x.id));
-  const prefs = (await pf.prefs()).data || {};
-  let bal = state.session?.balance; try { const b = await pf.balance(); if (b.ok) bal = b.data; } catch {}
+  // la ventana se abre al tiro; el saldo al día se consulta mientras tanto (si tarda, dice «Consultando…»)
+  const saldoPromesa = pf.balance().then((b) => (b.ok ? b.data : null)).catch(() => null);
   window.Ventanas.abrir('gestion.envioLote', {
-    n: ready.length, saldo: bal, tramite: opts.protocolization, correo: prefs.payerEmail || '', idCorreo: 'bkPay', deAUna: true,
-    alEnviar: async (email) => {
-      pf.setPrefs({ payerEmail: email });
-      const r = await pf.bulkSend(ready.map((x) => x.id), { email, ...opts });
+    n: ready.length, saldo: state.session?.balance, saldoPromesa, tramite: null, deAUna: true,
+    alEnviar: async () => {
+      const r = await pf.bulkSend(ready.map((x) => x.id), { ...opts });
       if (!r.ok) return toast(r.error, 5000);
       const sent = r.data.items.filter((x) => ready.some((y) => y.id === x.id) && x.status === 'sent').length;
       toast(`${sent} de ${ready.length} documento(s) enviados a firmar.`, 5000);
@@ -36,5 +35,5 @@ async function confirmarEnvio(ids, opts) {
   }, { clave: 'modal-43' });
 }
 
-window.Masiva = { open, editarFirmantes: editSigners, confirmarEnvio, get _bk() { return { st: estado().cola }; }, get _cds() { return estado().cds; } };
+window.Masiva = { open, editarFirmantes: editSigners, confirmarEnvio, get _bk() { return { st: estado().cola }; } };
 })();

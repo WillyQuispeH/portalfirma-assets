@@ -7,19 +7,20 @@
 // · setPdf lo usa «Guardar y actualizar PDF»: si ya trajo uno nuevo, el inicial que llegue tarde no lo pisa.
 import { useEffect, useRef, useState } from 'react';
 
-export interface IPdfInicial { pdf: string; aviso?: string }
+export interface IPdfInicial { pdf: string; aviso?: string; /** quienes firman, en el orden en que se envían (para ubicar sus firmas en el PDF) */ firmantes?: { nombre: string; rol?: string }[] }
 
 export function usePdfInicial(pdf0?: string, promesa?: Promise<IPdfInicial>) {
   const [pdf, setPdfEstado] = useState(pdf0 || '');
   const [cargando, setCargando] = useState(!pdf0 && !!promesa);
   const [errorCarga, setErrorCarga] = useState('');
   const [aviso, setAviso] = useState('');
+  const [firmantes, setFirmantes] = useState<{ nombre: string; rol?: string }[]>([]);
   const tocado = useRef(false);
 
   useEffect(() => {
     if (!promesa || pdf0) return undefined;
     let vivo = true;
-    promesa.then((r) => { if (!vivo) return; if (!tocado.current) setPdfEstado(r.pdf || ''); if (r.aviso) setAviso(r.aviso); })
+    promesa.then((r) => { if (!vivo) return; if (!tocado.current) setPdfEstado(r.pdf || ''); if (r.aviso) setAviso(r.aviso); if (r.firmantes) setFirmantes(r.firmantes); })
       .catch((e: unknown) => { if (vivo) setErrorCarga(e instanceof Error ? e.message : String(e)); })
       .finally(() => { if (vivo) setCargando(false); });
     return () => { vivo = false; };
@@ -27,5 +28,5 @@ export function usePdfInicial(pdf0?: string, promesa?: Promise<IPdfInicial>) {
   }, []);
 
   const setPdf = (p: string) => { tocado.current = true; setPdfEstado(p); setCargando(false); setErrorCarga(''); };
-  return { pdf, setPdf, cargando, errorCarga, aviso };
+  return { pdf, setPdf, cargando, errorCarga, aviso, firmantes };
 }

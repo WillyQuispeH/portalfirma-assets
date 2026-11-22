@@ -34,6 +34,7 @@ const GUIA = {
   asset_proxima_accion: { dominio: 'NEGOCIOS', cuando: 'definen qué hay que hacer después en un negocio y para cuándo', canal: 'chat-y-whatsapp' },
   asset_vincular_firma: { dominio: 'NEGOCIOS', cuando: 'ligan una operación de firma ya existente a la etapa actual de un negocio', canal: 'chat-y-whatsapp' },
   asset_cerrar_negocio: { dominio: 'NEGOCIOS', cuando: 'un negocio se gana o se pierde', canal: 'chat-y-whatsapp' },
+  asset_registrar_comprobante: { dominio: 'NEGOCIOS', cuando: 'el usuario manda por WhatsApp el comprobante de un pago para subirlo a un negocio', canal: 'chat-y-whatsapp' },
   // ---------------- agenda ----------------
   asset_crear_evento: { dominio: 'AGENDA', cuando: 'piden agendar o coordinar una visita, reunión, firma, llamada o tarea (solo calendario, sin documentos)', no: 'la ORDEN de visita, que es un documento a firmar (asset_orden_visita)', canal: 'chat-y-whatsapp' },
   asset_actualizar_evento: { dominio: 'AGENDA', cuando: 'reprograman, cancelan o marcan como hecho un evento', canal: 'chat-y-whatsapp' },
@@ -44,8 +45,7 @@ const GUIA = {
   asset_preparar_formato: { dominio: 'DOCUMENTOS', cuando: 'piden el MANDATO (de venta o de arriendo) de una propiedad y la cuenta tiene formatos propios: revisa qué ya está y qué falta', no: 'otros documentos (asset_buscar_documento) ni la orden de visita (asset_orden_visita)', canal: 'chat-y-whatsapp' },
   asset_enviar_formato: { dominio: 'DOCUMENTOS', cuando: 'el mandato ya está completo (asset_preparar_formato sin faltantes) y el usuario quiere enviarlo a firmar', canal: 'chat-y-whatsapp' },
   asset_firmas_pendientes: { dominio: 'FIRMAS', cuando: 'preguntan qué falta por firmar, quién no ha firmado, o hay que hacer seguimiento de las firmas en curso', no: 'una operación puntual ya conocida (asset_seguimiento_firma)', canal: 'chat-y-whatsapp' },
-  asset_reenviar_firma: { dominio: 'FIRMAS', cuando: 'hay que mandar de nuevo el enlace de firma a alguien que no ha firmado (lo envía Portalfirma)', no: 'corregir un correo o celular malo (asset_corregir_firmante)', canal: 'chat-y-whatsapp' },
-  asset_corregir_firmante: { dominio: 'FIRMAS', cuando: 'a un firmante no le llegó el enlace porque su correo o celular estaba malo: se corrige en Portalfirma y en el CRM y se reenvía', canal: 'chat-y-whatsapp' },
+  asset_reenviar_firma: { dominio: 'FIRMAS', cuando: 'hay que mandar de nuevo el enlace de firma a alguien que no ha firmado (lo envía Portalfirma)', no: 'corregir un correo o celular malo (por ahora no se puede en un proceso ya enviado)', canal: 'chat-y-whatsapp' },
   asset_coordinar_visita: { dominio: 'AGENDA', cuando: 'piden CONTACTAR a alguien para que agende una visita («escríbele a Juan para que agende», «coordina la visita con Ana»): le escribe por WhatsApp y Sofía (la asistente de leads) le ofrece horarios y la agenda', no: 'agendar con día y hora ya definidos (asset_crear_evento)', canal: 'chat-y-whatsapp' },
   asset_buscar_documento: { dominio: 'DOCUMENTOS', cuando: 'piden cualquier otro documento por su nombre (contrato, comprobante, recibo, acta, carta, mandato…): busca la plantilla y, si no hay, ofrece crearlo', no: 'la orden de visita (asset_orden_visita)', canal: 'chat-y-whatsapp' },
   asset_plantillas: { dominio: 'DOCUMENTOS', cuando: 'quieren ver la lista de plantillas disponibles', no: 'pedir un documento por su nombre (asset_buscar_documento)', canal: 'chat-y-whatsapp' },

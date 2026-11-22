@@ -24,7 +24,7 @@ const FX = path.join(__dirname, 'fixtures');
     const nFirm = await w.$$eval('#signers .signer', (x) => x.length);
     ok(nFirm >= 1 && /contrato_prueba/.test(await txt('#fileChip')), `revisar: documento y ${nFirm} firmante(s) detectados`);
     await w.click('#sendBtn'); await w.waitForTimeout(200);
-    ok(/Revisa los datos del firmante|correo del pagador/.test(await txt('#reviewError')), 'no deja enviar con datos incompletos: ' + await txt('#reviewError'));
+    ok(/Revisa los datos del firmante/.test(await txt('#reviewError')), 'no deja enviar con datos incompletos: ' + await txt('#reviewError'));
     for (let i = 0; i < nFirm; i++) {
       for (const [k, v] of [['fullName', `Persona ${i + 1}`], ['rut', ['11.111.111-1', '22.222.222-2', '33.333.333-3'][i % 3]], ['alias', ['arrendador', 'arrendatario', 'aval'][i % 3]], ['email', `p${i}@correo.cl`], ['phone', '912345678']]) {
         const s = `input[data-i="${i}"][data-k="${k}"]`; if (!(await w.inputValue(s))) await w.fill(s, v); else if (k === 'rut' || k === 'alias') await w.fill(s, v);
@@ -34,10 +34,8 @@ const FX = path.join(__dirname, 'fixtures');
     ok(/\+56912345678/.test(await w.inputValue('input[data-i="0"][data-k="phone"]')), 'al salir del campo, el teléfono queda con su código');
     await w.click('#addSigner'); ok((await w.$$('#signers .signer')).length === nFirm + 1, 'agregar firmante');
     await w.click(`button[data-act="del"][data-i="${nFirm}"]`); ok((await w.$$('#signers .signer')).length === nFirm, 'quitar firmante');
-    if (await w.isVisible('#typeSignAll')) await w.selectOption('#typeSignAll', 'simple');
-    await w.fill('#payerEmail', 'pagos@correo.cl');
     await w.click('#sendBtn'); await w.waitForSelector('#modal:not(.hidden) #mOk');
-    ok(/Confirmar envío/.test(await txt('#modalCard')) && /pagos@correo.cl/.test(await txt('#modalCard')), 'confirmación del envío (React en el modal de la app)');
+    ok(/Confirmar envío/.test(await txt('#modalCard')) && /Firmas/.test(await txt('#modalCard')), 'confirmación del envío (React en el modal de la app)');
     await w.click('#mOk'); await w.waitForSelector('#view-done:visible', { timeout: 20000 });
     ok((await txt('#doneOp')).trim().length > 0, 'enviado: operación ' + (await txt('#doneOp')).trim());
     await w.waitForFunction(() => !/Cargando/.test(document.querySelector('#doneDetail')?.textContent || ''), null, { timeout: 15000 });

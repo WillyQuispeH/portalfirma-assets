@@ -16,11 +16,11 @@ import { ModalConfirmar } from '../../ui/Modal';
 import MenuMas from '../../ui/MenuMas';
 import Icono from '../../ui/Icono';
 import VisorArchivo, { type IArchivoVisor } from './VisorArchivo';
-import { ActaFirma } from './ActaFirma';
+import { ActaPdf } from './ActaPdf';
 import { actaVisitaService } from '../../../store/services/acta-visita.service';
 import { api } from '../../../utils/api';
 import { abrirModal, cerrarModal } from '../../../utils/modal';
-import { toast } from '../../../utils/app';
+import { abrirUrl, toast } from '../../../utils/app';
 import type { IActaVisita } from '../../../store/interfaces/acta-visita.interface';
 
 const MAX_SEG = 45 * 60;
@@ -151,20 +151,21 @@ export default function ActaVisita({ negocioId, alCerrada }: { negocioId: string
     toast(`Te escribí por WhatsApp${r.telefono ? ' al ' + r.telefono : ''}: manda el audio y las fotos, y escribe «listo» al terminar.`, 7000);
   });
   const borrarArchivo = async (x: { acta: IActaVisita; tipo: 'audio' | 'foto'; n: number }) => { poner(await actaVisitaService.borrarArchivo(x.acta.id, x.tipo, x.n)); toast(x.tipo === 'audio' ? 'Audio eliminado.' : 'Foto eliminada.'); };
-  // el acta cerrada se envía a firmar al visitante: ventana con el PDF, editable y guardado en su origen (persona del CRM y acta)
-  const abrirFirma = (a: IActaVisita) => hacer('firma', async () => {
-    const r = await actaVisitaService.firmaVistaPrevia(a.id);
-    if (!r.visitante) throw new Error(r.error || 'No pude preparar el acta para firmar.');
-    abrirModal(<ActaFirma pdf={r.pdf} errorInicial={r.pdf ? '' : r.error} orden={r.orden} propiedad={r.propiedad}
-      datos={{ nombre: r.visitante.nombre, rut: r.visitante.rut, email: r.visitante.email, telefono: r.visitante.telefono, interes: r.interes, observaciones: r.observaciones }}
-      alGuardar={async (d) => {
-        await actaVisitaService.firmaAjustes(a.id, { observaciones: d.observaciones, interes: d.interes, visitante: { nombre: d.nombre, rut: d.rut, email: d.email, telefono: d.telefono } });
-        const n = await actaVisitaService.firmaVistaPrevia(a.id);
-        if (!n.pdf) throw new Error(n.error || 'No pude armar el PDF.');
-        try { await (window as unknown as { cargar?: () => Promise<void> }).cargar?.(); } catch { /* la cartera se refresca después */ }
-        return { pdf: n.pdf };
-      }}
-      alConfirmar={async () => { const e = await actaVisitaService.firmaEnviar(a.id); cerrarModal(); toast(`Acta de visita enviada a firmar: operación ${e.operacion}.`, 5000); alCerrada?.(); }} />, { ancho: true, clave: 'modal-126' });
+  // el acta cerrada no se firma: su PDF se ve, se guarda y se comparte por WhatsApp (el servidor lo arma con los audios y las fotos)
+  const abrirPdf = (a: IActaVisita) => hacer('pdf', async () => {
+    const r = await actaVisitaService.pdf(a.id);
+    abrirModal(<ActaPdf pdf={r.pdf} archivo={r.archivo}
+      alGuardar={async () => { const ruta = await window.pf.edSave(Uint8Array.from(atob(r.pdf), (c) => c.charCodeAt(0)), r.archivo); if (ruta) toast('PDF guardado.'); }}
+      alCompartir={async () => {
+        const c = await actaVisitaService.compartir(a.id);
+        abrirUrl(c.wa);
+        toast(c.telefono ? `Se abrió WhatsApp con el mensaje para ${c.visitante ?? c.telefono}.` : 'Se abrió WhatsApp: elige a quién enviarlo.', 5000);
+      }} />, { ancho: true, clave: 'modal-126' });
+  });
+  const compartirYa = (a: IActaVisita) => hacer('wa-pdf', async () => {
+    const c = await actaVisitaService.compartir(a.id);
+    abrirUrl(c.wa);
+    toast(c.telefono ? `Se abrió WhatsApp con el mensaje para ${c.visitante ?? c.telefono}.` : 'Se abrió WhatsApp: elige a quién enviarlo.', 5000);
   });
   // el visitante no quedó interesado: se cierra el negocio como perdido, con el motivo
   const noInteresado = () => (window as unknown as { Ventanas: { abrir: (n: string, p: object, o: object) => void } }).Ventanas.abrir('negocios.perdido', {
@@ -191,9 +192,8 @@ export default function ActaVisita({ negocioId, alCerrada }: { negocioId: string
         <div className="tw:flex tw:items-center tw:gap-2 tw:flex-nowrap">
           <Badge tono={a.estado === 'cerrada' ? 'verde' : 'amarillo'} punto>{a.estado === 'cerrada' ? 'Cerrada' : 'Abierta'}</Badge>
           {a.resumen && <Badge tono={INTERES[a.resumen.interes][0]}>{INTERES[a.resumen.interes][1]}</Badge>}
-          {a.firma && <Badge tono={a.firma.estado === 'firmado' ? 'verde' : 'amarillo'} icono={a.firma.estado === 'firmado' ? 'check' : 'clock'}>{a.firma.estado === 'firmado' ? 'Firmada' : 'En firma'}</Badge>}
           <MenuMas tamano="sm" etiqueta="Más acciones del acta" opciones={[
-            ...(a.estado === 'cerrada' && !a.firma ? [{ id: 'actaNoInteresado', texto: 'El visitante no quedó interesado…', icono: 'x', disabled: !!trabajando, alTocar: noInteresado }] : []),
+            ...(a.estado === 'cerrada' ? [{ id: 'actaNoInteresado', texto: 'El visitante no quedó interesado…', icono: 'x', disabled: !!trabajando, alTocar: noInteresado }] : []),
             { id: 'actaEliminar', texto: 'Eliminar acta', icono: 'trash', disabled: !!trabajando || grab.grabando, alTocar: () => setAEliminar(a) },
           ]} />
         </div>}>
@@ -262,10 +262,11 @@ export default function ActaVisita({ negocioId, alCerrada }: { negocioId: string
         </div>
       )}
 
-      {!editable && !a.firma && (
+      {!editable && (
         <div className="tw:flex tw:items-center tw:justify-end tw:gap-2 tw:flex-nowrap">
-          <span className="tw:mr-auto tw:text-xs tw:text-muted">El paso se logra cuando el visitante firma el acta.</span>
-          <Boton id="actaFirmar" icono="sign" cargando={trabajando === 'firma'} disabled={!!trabajando} onClick={() => abrirFirma(a)}>Enviar el acta a firmar</Boton>
+          <span className="tw:mr-auto tw:text-xs tw:text-muted">El acta no se firma: se comparte su PDF.</span>
+          <Boton id="actaVerPdf" variante="secundario" icono="file" cargando={trabajando === 'pdf'} disabled={!!trabajando} onClick={() => abrirPdf(a)}>Ver PDF</Boton>
+          <Boton id="actaCompartir" icono="whatsapp" cargando={trabajando === 'wa-pdf'} disabled={!!trabajando} onClick={() => compartirYa(a)}>Compartir por WhatsApp</Boton>
         </div>
       )}
       {editable && (

@@ -263,6 +263,8 @@ export class CartaOfertaService {
       archivo: `Carta oferta ${x.prop.codigo} - ${x.persona.nombre}.pdf`,
       oferente: x.persona.nombre,
       propiedad: x.prop.codigo,
+      // quienes firman, en el orden en que se envían: la ventana deja ubicar cada firma en el PDF
+      firmantes: x.firmantes.map((f) => ({ nombre: f.nombre, rol: f.rol })),
     };
   }
 

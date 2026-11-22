@@ -4,7 +4,7 @@
 //  · Documentos en firma (tabla firmas): estado, firmantes (quién firmó), legalizado. Si algo cambió, queda en el
 //    historial de sus propiedades y se avisa a quien lo envió (tabla avisos: la app lo muestra y se lo dice por WhatsApp).
 //  · Firmas ligadas a etapas de negocios (negocios.datos.firmas[etapa]): avance, y al quedar firmada, aviso al corredor
-//    a cargo con `avanzar` si es la etapa actual (su app mueve el negocio a la siguiente etapa: las etapas viven en la app).
+//    a cargo y el servidor mueve el negocio a la siguiente etapa (o lo cierra ganado si era la última), con la app abierta o cerrada.
 //  · Cada documento se revisa a lo más cada 4 min. Los cambios se guardan con `version`: si la app cambió el documento
 //    entremedio, se deja para la próxima vuelta (y el aviso sale una sola vez, con el cambio que sí se guardó).
 //  · POST /v1/firmas/revisar: «revisar ahora» (cualquier usuario, para su corredora; lo de hace menos de 30 s no se repite).
@@ -21,12 +21,14 @@ import {
   type OnModuleInit,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { ModuleRef } from '@nestjs/core';
 import type { Firma, Negocio, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { UsuarioActual, type UsuarioToken } from '../auth/usuario-actual';
 import { ActividadService } from '../comun/actividad.service';
 import { AvisosService, type NuevoAviso } from '../avisos/avisos';
 import { PortalfirmaService } from '../conexiones/portalfirma';
+import { PortalfirmaApiService } from '../conexiones/portalfirma-api';
 import { GoogleService } from '../conexiones/google';
 import { tipoDeDocumento } from '../documentos/drive';
 import type { Env } from '../config/env';
@@ -111,9 +113,11 @@ export class FirmasRondaService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly db: PrismaService,
     private readonly pf: PortalfirmaService,
+    private readonly api: PortalfirmaApiService,
     private readonly actividad: ActividadService,
     private readonly avisos: AvisosService,
     private readonly google: GoogleService,
+    private readonly modulo: ModuleRef,
     config: ConfigService<Env, true>,
   ) {
     this.cadaMs = config.get('FIRMAS_CADA_SEG', { infer: true }) * 1000;
@@ -131,7 +135,7 @@ export class FirmasRondaService implements OnModuleInit, OnModuleDestroy {
   /** todas las corredoras con Portalfirma conectado */
   async ronda() {
     const cs = await this.db.conexion.findMany({
-      where: { proveedor: 'portalfirma', dueno: 'corredora', estado: 'activa' },
+      where: { proveedor: 'portalfirma_api', dueno: 'corredora', estado: 'activa' },
       select: { corredoraId: true },
     });
     for (const c of cs)
@@ -151,22 +155,9 @@ export class FirmasRondaService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async detalle(corredoraId: string, op: number): Promise<Detalle> {
-    const r = await this.pf.llamarComo({ corredoraId, usuarioId: null }, 'process_detail_get_by_operation', {
-      operation: op,
-    });
-    const t = (r.content || [])
-      .filter((c) => c.type === 'text')
-      .map((c) => c.text ?? '')
-      .join('\n');
-    let d: Detalle | null = null;
-    try {
-      d = JSON.parse(t) as Detalle;
-    } catch {
-      /* no es JSON */
-    }
-    if (r.isError || !d || typeof d !== 'object')
-      throw new Error(`Portalfirma no entregó el detalle de la operación ${op}${t ? ': ' + t.slice(0, 160) : '.'}`);
-    return d;
+    const d = await this.api.detallePorOperacion(corredoraId, op);
+    if (!d || typeof d !== 'object') throw new Error(`Portalfirma no entregó el detalle de la operación ${op}.`);
+    return d as Detalle;
   }
 
   private async vuelta(corredoraId: string, minimoMs: number) {
@@ -336,7 +327,7 @@ export class FirmasRondaService implements OnModuleInit, OnModuleDestroy {
         if (d.status === 'finalized') {
           f.estado = 'firmado';
           f.firmado = new Date().toISOString();
-          if (n.etapa === etapaId || etapaId === 'entrega_acta') f.avanzar = true; // la app del corredor mueve el negocio (el acta de entrega: deja la propiedad arrendada)
+          if (n.etapa === etapaId || etapaId === 'entrega_acta') f.avanzar = true; // el servidor mueve el negocio (el acta de entrega: deja la propiedad arrendada)
           const m = `${titulo}: se firmó el documento de la etapa «${etapaId}» (operación ${f.operacion}).`;
           cambios.push(m);
           const quien = n.corredorId ?? n.creadoPorId;
@@ -377,6 +368,13 @@ export class FirmasRondaService implements OnModuleInit, OnModuleDestroy {
         )
         .catch(() => null);
       await this.avisos.crear(avisos);
+      // el negocio avanza solo en el servidor (a la etapa siguiente o cerrado): ya no depende de que el corredor tenga su app abierta
+      for (const [etapaId, f] of Object.entries(firmas))
+        if (f.avanzar)
+          await this.modulo
+            .get((await import('../negocios/negocio-acciones.js')).NegocioAccionesService, { strict: false })
+            .avanzarPorFirma(n.corredoraId, n.id, etapaId)
+            .catch((e: Error) => this.log.warn(`avance del negocio ${n.id}: ${e.message}`));
     }
     return { revisadas, cambios };
   }

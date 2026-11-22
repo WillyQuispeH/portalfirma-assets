@@ -338,6 +338,22 @@ function mockAgent(messages) {
   if (last.role === 'user') {
     const t = String(last.content).split('[Lo que pide ahora]\n').pop().toLowerCase(); // con contexto de otro personaje: el guion mira solo el pedido
     const man = new Date(Date.now() + 864e5).toISOString().slice(0, 10);
+    // un comprobante de pago que llegó por WhatsApp (guion de prueba): lista los negocios de la propiedad, pregunta a cuál, pide solo lo que falta y lo sube
+    { const iM = messages.map((m, i) => (m.role === 'user' && /\[ARCHIVO RECIBIDO POR WHATSAPP\]/.test(String(m.content)) ? i : -1)).filter((i) => i >= 0).pop();
+      if (iM !== undefined && iM >= messages.length - 8 && !messages.slice(iM).some((m) => m.role === 'tool' && /subí el comprobante/.test(String(m.content)))) {
+        const lec = (() => { try { return JSON.parse(/Lectura del comprobante \(IA\): (\{.*?\})(?: · Avisos|\n)/.exec(String(messages[iM].content))[1]); } catch { return {}; } })();
+        const dicho = messages.slice(iM).filter((m) => m.role === 'user').map((m) => String(m.content).split('[Lo que pide ahora]\n').pop().split('Mensaje del usuario: ').pop()).join(' \n ').toLowerCase();
+        const code = (dicho.match(/\bng-\d+\b/) || [])[0]; const propc = (dicho.match(/\b[a-z]{2,4}-\d{3,}\b/) || [])[0];
+        if (!code) return propc && !messages.slice(iM).some((m) => m.role === 'tool') ? call('asset_listar_negocios', { texto: propc }) : say('¿A qué negocio lo subo? Dime su código NG-XXX.');
+        const tipo = /primer mes/.test(dicho) ? 'primer_mes' : /garant/.test(dicho) ? 'garantia' : /comisi/.test(dicho) ? 'comision' : /reserva/.test(dicho) ? 'reserva' : /\botro\b/.test(dicho) ? 'otro' : '';
+        if (!tipo) return say('¿A qué corresponde el pago: reserva, garantía, primer mes, comisión u otro?');
+        const f = dicho.match(/(\d{2})\/(\d{2})\/(\d{4})/); const fecha = lec.fecha || (f ? `${f[3]}-${f[2]}-${f[1]}` : '');
+        const mm = /monto[: ]+\$?\s?([\d.]+)/.exec(dicho); const monto = lec.monto || (mm ? Number(mm[1].replace(/\./g, '')) : 0);
+        const moneda = lec.moneda || (/\buf\b/.test(dicho) ? 'UF' : /pesos|clp/.test(dicho) ? 'CLP' : ''); const medio = lec.medio || (/transferencia/.test(dicho) ? 'transferencia' : /efectivo/.test(dicho) ? 'efectivo' : '');
+        const falta = [!monto && 'el monto', !moneda && 'la moneda', !fecha && 'la fecha', !medio && 'el medio de pago'].filter(Boolean);
+        if (falta.length) return say(`Me falta ${falta.join(', ')} del pago: ¿me lo dices?`);
+        return call('asset_registrar_comprobante', { negocio: code.toUpperCase(), tipo_pago: tipo, monto, moneda, fecha, medio, ...(lec.referencia ? { referencia: lec.referencia } : {}) });
+      } }
     // Agente de PortalFirma Asset (guion de prueba)
     if (/propiedad nueva|sube una propiedad|crea una propiedad|capt[eé] un|estoy captando/.test(t)) return call('asset_dictar_propiedad', { texto: String(last.content).replace(/^[^:]*:\s*/, '') });
     if (/habl[eé] con|me llam[oó]|llam[eé] a/.test(t)) return call('asset_anotar', { propiedad: 'CV-9002', texto: String(last.content), tipo: 'llamada' });
@@ -375,6 +391,8 @@ function mockAgent(messages) {
     if (/cancel/i.test(last.content)) return say('Entendido: no hice nada.');
     if (/^asset_/.test(name)) {
       if (r.error) return say('No pude hacerlo: ' + r.error);
+      if (name === 'asset_listar_negocios' && messages.some((m) => m.role === 'user' && /\[ARCHIVO RECIBIDO POR WHATSAPP\]/.test(String(m.content)))) return say(r.total ? `Encontré ${r.total} ${r.total === 1 ? 'negocio' : 'negocios'} de ${args.texto}: ${r.negocios.map((n, i) => `${i + 1}) ${n.codigo} · ${n.tipo} · ${n.etapa} · ${n.cliente}`).join(' | ')}. ¿A cuál lo subo?` : `No encontré negocios de ${args.texto}. ¿Me das el código NG-XXX?`);
+      if (name === 'asset_registrar_comprobante') return say(r.mensaje + (r.avisos?.length ? ' ' + r.avisos.join(' ') : ''));
       if (name === 'asset_crear_propiedad') return say(`Listo: creé ${r.propiedad.codigo} · ${r.propiedad.titulo} (${r.propiedad.arriendo?.precio || ''}).`);
       if (name === 'asset_crear_evento') return say(`Agendé la visita a ${r.evento.propiedad} el ${r.evento.fecha} a las ${r.evento.hora} con ${r.evento.personas.join(', ')}.`);
       if (name === 'asset_preparar_formato') return say(r.faltan.length ? `Para el mandato me falta: ${r.faltan.map((x) => x.t).join(', ')}.` : `Listo para enviar: ${r.documentos.map((d) => d.titulo).join(' y ')}. ¿Lo envío a firmar?`);

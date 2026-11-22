@@ -1,5 +1,5 @@
 // Postarriendo (etapa 3): los avisos de lo que viene después de entregar la propiedad. Salen de los datos del contrato (n.ciclo.contrato.datos:
-// inicio, plazo, reajuste, aviso de término) y se registran en n.ciclo.postarriendo con negGuardar:
+// inicio, plazo, reajuste, aviso de término) y se registran con negPostarriendo (el servidor los guarda en n.ciclo.postarriendo y aplica las reglas):
 //  · reajustes: cada 6 o 12 meses según el IPC pactado; se registra el IPC aplicado y la renta nueva (n.º y fecha de cada reajuste);
 //  · renovación o término: hasta el límite de aviso (término menos los días de aviso) se decide renovar (por cuántos meses, renta) o terminar;
 //  · devolución de la garantía: recepción de la propiedad contra el inventario, descuentos y lo que se devuelve (con comprobante).
@@ -60,9 +60,8 @@ export default function PostarriendoNegocio({ negocioId, modo, alCambio }: { neg
   const termino = mas(k.inicio, Number(k.plazoMeses) + extra); const limite = mas(termino, 0, -(Number(k.avisoDias) || 0));
   const ultimoRef = reajustes.length ? reajustes[reajustes.length - 1].desde : k.inicio; const proximo = periodo ? mas(ultimoRef, periodo) : '';
 
-  const guardar = async (mut: (p: any) => void, aviso: string) => {
-    const base = JSON.parse(JSON.stringify((await api<any>('negObtener', negocioId)).ciclo || {})); base.postarriendo ||= {}; mut(base.postarriendo);
-    await api('negGuardar', { id: negocioId, ciclo: base }); toast(aviso); setF(null); setArchivo(null); setError(''); await cargar(); alCambio?.();
+  const guardar = async (cuerpo: Record<string, unknown>, aviso: string) => {
+    await api('negPostarriendo', negocioId, cuerpo); toast(aviso); setF(null); setArchivo(null); setError(''); await cargar(); alCambio?.();
   };
   const campo = (c: string) => ({ value: f?.[c] ?? '', onChange: (e: { target: { value: string } }) => { setF((x) => ({ ...(x || {}), [c]: e.target.value })); setError(''); } });
   const correr = async (fn: () => Promise<void>) => { setTrabajando(true); setError(''); try { await fn(); } catch (e) { setError(mensaje(e)); } setTrabajando(false); };
@@ -100,7 +99,7 @@ export default function PostarriendoNegocio({ negocioId, modo, alCambio }: { neg
           if (!Number.isFinite(ipc) || ipc === 0 && !f.ipc) return setError('Escribe el IPC aplicado.');
           if (!(nueva > 0)) return setError('Escribe la renta nueva.');
           if (!/^\d{4}-\d{2}-\d{2}$/.test(f.desde)) return setError('Indica desde cuándo rige.');
-          await guardar((p) => { p.reajustes = [...(p.reajustes || []), { desde: f.desde, ipc, rentaAntes: renta, rentaNueva: nueva, registrado: new Date().toISOString() }]; p.rentaActual = nueva; }, 'Reajuste registrado.');
+          await guardar({ tipo: 'reajuste', desde: f.desde, ipc, rentaNueva: nueva }, 'Reajuste registrado.');
         })}</Seccion>
           : <div className="tw:flex tw:justify-end"><Boton id="paRegistrar" icono="plus" variante="secundario" onClick={() => setF({ desde: proximo, ipc: '', rentaNueva: '' })}>Registrar el reajuste</Boton></div>)}
       </>}
@@ -116,7 +115,7 @@ export default function PostarriendoNegocio({ negocioId, modo, alCambio }: { neg
           <Seccion titulo="Decisión">
             <div className="tw:flex tw:items-center tw:gap-2 tw:flex-nowrap" data-decision={reno.decision}>
               <span className="tw:min-w-0 tw:flex-1 tw:text-[13px]"><b>{reno.decision === 'renovar' ? `Renovado por ${reno.meses} meses` : 'No se renueva: el contrato termina'}</b>{reno.nota ? <span className="tw:block tw:text-muted">{reno.nota}</span> : null}<span className="tw:block tw:text-xs tw:text-muted">Decidido el {fdmy(String(reno.fecha).slice(0, 10))}</span></span>
-              <MenuMas tamano="sm" etiqueta="Más acciones" opciones={[{ texto: 'Cambiar la decisión', icono: 'edit', alTocar: () => setF({ decision: reno.decision, meses: String(reno.meses || 12), nota: reno.nota || '' }) }, { texto: 'Quitar la decisión', icono: 'x', alTocar: () => guardar((p) => { delete p.renovacion; }, 'Decisión quitada.').catch((e) => setError(mensaje(e))) }]} />
+              <MenuMas tamano="sm" etiqueta="Más acciones" opciones={[{ texto: 'Cambiar la decisión', icono: 'edit', alTocar: () => setF({ decision: reno.decision, meses: String(reno.meses || 12), nota: reno.nota || '' }) }, { texto: 'Quitar la decisión', icono: 'x', alTocar: () => guardar({ tipo: 'quitar_renovacion' }, 'Decisión quitada.').catch((e) => setError(mensaje(e))) }]} />
             </div>
           </Seccion>
         ) : !f ? (
@@ -128,7 +127,7 @@ export default function PostarriendoNegocio({ negocioId, modo, alCambio }: { neg
             <Textarea etiqueta={<>Nota <span className="tw:font-normal tw:text-muted">(opcional)</span></>} rows={2} {...campo('nota')} />
           </>, () => setF(null), 'paDecidir', 'Guardar la decisión', async () => {
             if (f.decision === 'renovar' && !(Number(f.meses) >= 1)) return setError('Indica por cuántos meses se renueva.');
-            await guardar((p) => { p.renovacion = { decision: f.decision, meses: f.decision === 'renovar' ? Number(f.meses) : 0, nota: (f.nota || '').trim(), fecha: new Date().toISOString() }; }, f.decision === 'renovar' ? 'Renovación registrada.' : 'Término registrado.');
+            await guardar({ tipo: 'renovacion', decision: f.decision, ...(f.decision === 'renovar' ? { meses: Number(f.meses) } : {}), nota: (f.nota || '').trim() }, f.decision === 'renovar' ? 'Renovación registrada.' : 'Término registrado.');
           })}</Seccion>
         )}
       </>}
@@ -149,7 +148,7 @@ export default function PostarriendoNegocio({ negocioId, modo, alCambio }: { neg
               <div className="tw:flex tw:items-center tw:gap-2 tw:flex-nowrap" data-devolucion>
                 <span className="tw:min-w-0 tw:flex-1 tw:text-[13px]"><b>{fmt(dev.devuelto, dev.moneda)} devueltos el {fdmy(dev.fechaDevolucion)}</b><span className="tw:block tw:text-xs tw:text-muted">Recepción el {fdmy(dev.fechaRecepcion)} · {dev.conforme ? 'conforme con el inventario' : 'con observaciones'}{dev.descuento ? ` · descuento ${fmt(dev.descuento, dev.moneda)}${dev.motivo ? ` (${dev.motivo})` : ''}` : ''}</span></span>
                 {dev.comprobante && <Boton tamano="sm" variante="secundario" icono="file" onClick={() => api('negArchivoAbrir', { negocioId, clave: dev.comprobante.clave, nombre: dev.comprobante.nombre }).catch((e) => setError(mensaje(e)))}>Ver comprobante</Boton>}
-                <MenuMas tamano="sm" etiqueta="Más acciones" opciones={[{ texto: 'Quitar el registro', icono: 'trash', alTocar: () => guardar((p) => { delete p.devolucion; }, 'Registro eliminado.').catch((e) => setError(mensaje(e))) }]} />
+                <MenuMas tamano="sm" etiqueta="Más acciones" opciones={[{ texto: 'Quitar el registro', icono: 'trash', alTocar: () => guardar({ tipo: 'quitar_devolucion' }, 'Registro eliminado.').catch((e) => setError(mensaje(e))) }]} />
               </div>
             </Seccion>
           ) : !f ? (
@@ -169,8 +168,8 @@ export default function PostarriendoNegocio({ negocioId, modo, alCambio }: { neg
               if (!garantia) return setError('Primero registra la garantía recibida (paso «Garantía y primer mes recibidos»).');
               if (desc < 0 || desc > garantia.monto) return setError('El descuento no puede ser mayor que la garantía.');
               if (desc > 0 && !(f.motivo || '').trim()) return setError('Escribe el motivo del descuento.');
-              const comprobante = archivo ? await api<any>('negArchivoSubir', { negocioId, nombre: archivo.name, mime: archivo.type || undefined, bytes: new Uint8Array(await archivo.arrayBuffer()) }) : null;
-              await guardar((p) => { p.devolucion = { fechaRecepcion: f.fechaRecepcion, conforme: f.conforme === 'si', descuento: desc, motivo: (f.motivo || '').trim(), devuelto: devolver, moneda: garantia.moneda, fechaDevolucion: f.fechaDevolucion, comprobante }; }, 'Devolución registrada.');
+              const adjunto = archivo ? { nombre: archivo.name, mime: archivo.type || undefined, bytes: new Uint8Array(await archivo.arrayBuffer()) } : undefined;   // el servidor lo sube
+              await guardar({ tipo: 'devolucion', fechaRecepcion: f.fechaRecepcion, conforme: f.conforme === 'si', descuento: desc, motivo: (f.motivo || '').trim(), fechaDevolucion: f.fechaDevolucion, ...(adjunto ? { archivo: adjunto } : {}) }, 'Devolución registrada.');
             })}</Seccion>
           )}
         </>;

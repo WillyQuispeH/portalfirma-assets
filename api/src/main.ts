@@ -12,6 +12,11 @@ async function bootstrap() {
   app.use(helmet());
   // los documentos que se suben a Portalfirma van en base64 dentro del JSON (hasta 20 MB → ~27 MB); el resto, 100 kB
   app.use('/v1/portalfirma/herramientas', json({ limit: '30mb' }));
+  // un PDF armado en la app, en base64, para enviarlo a firmar con la API de Portalfirma (hasta ~28 MB de PDF)
+  app.use('/v1/firmas-envio', json({ limit: '42mb' }));
+  // el comprobante de un pago (base64) en las acciones de un negocio
+  app.use(/^\/v1\/negocios\/[\w-]+\/acciones\/(pago|postarriendo)\/?$/, json({ limit: '30mb' }));
+  app.use('/v1/documentos', json({ limit: '30mb' }));   // el comprobante de pago (PDF o foto) llega en base64
   // una conversación del Agente completa (hasta 3 MB) y el lote que se sube al iniciar sesión
   app.use('/v1/agente/conversaciones', json({ limit: '8mb' }));
   // las reglas de la plataforma (hasta 2 MB) y los casos corregidos (lotes de hasta 50)

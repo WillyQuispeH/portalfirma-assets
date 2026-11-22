@@ -25,7 +25,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     ok(n >= 1 && /contrato_prueba/.test(await txt('#fileChip')), `revisar: documento y ${n} firmante(s)`);
     await w.click('#sendBtn'); await w.waitForTimeout(300);
     const e1 = await txt('#reviewError'); console.log('   error mostrado:', e1);
-    ok(/Revisa los datos del firmante|correo del pagador/.test(e1), 'no deja enviar con datos incompletos');
+    ok(/Revisa los datos del firmante/.test(e1), 'no deja enviar con datos incompletos');
     // completar datos faltantes
     const fill = async (i, k, v) => { const s = `input[data-i="${i}"][data-k="${k}"]`; await w.fill(s, v); await w.locator(s).blur(); };
     const datos = [['Juan Pérez', '11.111.111-1', 'arrendador', 'juan@correo.cl', '912345678'], ['María Soto', '22.222.222-2', 'arrendatario', 'maria@correo.cl', '987654321'], ['Pedro Rojas', '33.333.333-3', 'aval', 'pedro@correo.cl', '955555555']];
@@ -34,12 +34,11 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
       if (!(await w.inputValue(`input[data-i="${i}"][data-k="fullName"]`))) await fill(i, 'fullName', nom);
       await fill(i, 'rut', rut); await fill(i, 'alias', alias); await fill(i, 'email', email); await fill(i, 'phone', tel);
     }
-    ok(await w.isVisible('#typeSignAll') && await w.isVisible('#protocolization'), 'formalización libre: tipo de firma y trámite notarial');
-    await w.selectOption('#typeSignAll', 'visada'); await w.selectOption('#protocolization', 'legalization');
-    await w.fill('#payerEmail', 'jgomez@portalfirma.cl');
+    ok(!(await w.$('#typeSignAll')) && await w.isVisible('#protocolization') && await w.isVisible('#signers select[data-k="typeSign"]'), 'formalización libre: solo el trámite notarial; el tipo de firma se elige en cada firmante');
+    await w.selectOption('#signers select[data-i="0"][data-k="typeSign"]', 'visada'); await w.selectOption('#protocolization', 'legalization');
     await w.click('#sendBtn'); await w.waitForSelector('#modal:not(.hidden) #mOk');
     const conf = await txt('#modalCard');
-    ok(/Confirmar envío/.test(conf) && /jgomez@portalfirma\.cl/.test(conf), 'confirmación del envío con el pagador'); await shot('4-confirm.png');
+    ok(/Confirmar envío/.test(conf) && /página de firmas|Ubicadas/.test(conf) && !/Pagador/.test(conf), 'confirmación del envío (sin pagador: dice dónde van las firmas)'); await shot('4-confirm.png');
     await w.click('#mOk'); await w.waitForSelector('#view-done:visible', { timeout: 20000 }); await w.waitForTimeout(800);
     const op = (await txt('#doneOp')).trim(); ok(/^\d+$/.test(op), 'enviado: operación ' + op);
     await w.screenshot({ path: path.join(__dirname, '5-done.png'), fullPage: true }).catch(() => {});

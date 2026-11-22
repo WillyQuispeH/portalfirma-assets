@@ -81,28 +81,23 @@ const ingresar = async (email, clave) => (await req('POST', '/auth/ingresar', { 
     const res = await db.actividad.findFirst({ where: { corredoraId: co.id, entidadId: ng.id, texto: { startsWith: 'Resumen del acta de visita' } } });
     ok(!!res, 'el resumen del acta queda también en el historial del negocio');
     const ngDb = await db.negocio.findUnique({ where: { id: ng.id } });
-    ok(ngDb.datos?.pasos?.acta?.e === 'pend' && /firmar/.test(ngDb.datos.pasos.acta.d), 'al cerrar el acta, el paso «Acta de visita» queda pendiente: falta enviarla a firmar (se logra con la firma del visitante)');
+    ok(ngDb.datos?.pasos?.acta?.e === 'ok', 'al cerrar el acta, el paso «Acta de visita» queda logrado: el acta no se firma, se genera su PDF')
     const av = await db.aviso.findFirst({ where: { corredoraId: co.id, tipo: 'acta_cerrada' } });
     ok(!!av && av.datos?.negocioId === ng.id, 'se avisa a la app para que traiga el negocio al día');
     ok((await req('DELETE', `/actas-visita/${id}/archivo/foto/1`, null, tA)).s === 400, 'de un acta cerrada ya no se quitan archivos');
 
-    // 0.18.10 · acta firmada: PDF con el número de la orden, ajustes guardados en la persona y envío a firmar al visitante
-    r = await req('POST', `/actas-visita/${id}/firma/vista-previa`, {}, tA);
-    ok(r.s === 200 && /no tiene RUT/.test(r.j.error) && r.j.visitante?.nombre === 'Ana Interesada' && !r.j.pdf, 'sin RUT del visitante, la vista previa lo dice claro y trae sus datos para completarlos');
-    r = await req('POST', `/actas-visita/${id}/firma/ajustes`, { visitante: { nombre: 'Ana Interesada', rut: '7.654.321-6', email: 'ana@correo.cl' }, observaciones: 'Le gustó mucho la propiedad.', interes: 'alto' }, tA);
-    ok(r.s === 200 && r.j.ok, 'los ajustes (visitante, observaciones e interés) se guardan');
-    const perDb = await db.persona.findUnique({ where: { id: per.id } });
-    ok(perDb.email === 'ana@correo.cl' && /7\.654\.321-6/.test(perDb.rutFormato || perDb.rut), 'los datos del visitante quedaron guardados en la persona del CRM');
-    r = await req('POST', `/actas-visita/${id}/firma/vista-previa`, {}, tA);
-    ok(r.s === 200 && !r.j.error && Buffer.from(r.j.pdf, 'base64').slice(0, 4).toString() === '%PDF' && r.j.interes === 'alto' && /gustó mucho/.test(r.j.observaciones), 'con los datos completos devuelve el PDF del acta con las observaciones y el interés');
+    // el acta NO se firma: se genera su PDF (con el número de la orden, los audios y las fotos) y se comparte
+    r = await req('POST', `/actas-visita/${id}/pdf`, {}, tA);
+    ok(r.s === 200 && Buffer.from(r.j.pdf, 'base64').slice(0, 4).toString() === '%PDF' && /^Acta de visita/.test(r.j.archivo), 'el PDF del acta se arma aunque el visitante no tenga RUT ni correo (no se firma)');
+    ok(r.j.fotos === 1 && r.j.audios === 1, 'el PDF lleva los audios y las fotos del acta');
     ok(r.j.orden === 'Sin orden de visita registrada', 'sin orden de visita, el acta lo dice');
     await db.firma.create({ data: { id: 'op' + SUF, corredoraId: co.id, operacion: Number('9' + Date.now().toString().slice(-6)), documento: 'Orden de visita nº 7', origen: 'asset', estado: 'firmado', negocioId: ng.id, propiedadIds: [prop.id], firmantes: [], datos: { numero: 7 } } });
-    r = await req('POST', `/actas-visita/${id}/firma/vista-previa`, {}, tA);
+    r = await req('POST', `/actas-visita/${id}/pdf`, {}, tA);
     ok(r.j.orden === 'Orden de visita nº 7', 'el acta va con el número de la orden de visita del negocio');
-    ok((await req('POST', `/actas-visita/${id}/firma/vista-previa`, {}, tB)).s === 403, 'otro corredor no puede ver el acta de un negocio ajeno');
-    r = await req('POST', `/actas-visita/${id}/firma/enviar`, {}, tA);
-    ok(r.s === 200 && /Portalfirma/.test(r.j.error || ''), 'sin Portalfirma conectado, enviar a firmar lo dice claro y no registra nada');
-    ok(!(await db.firma.findFirst({ where: { corredoraId: co.id, documento: { startsWith: 'Acta de visita' } } })), 'si no se pudo enviar, no queda ninguna firma registrada');
+    ok((await req('POST', `/actas-visita/${id}/pdf`, {}, tB)).s === 403, 'otro corredor no puede ver el acta de un negocio ajeno');
+    r = await req('POST', `/actas-visita/${id}/compartir`, {}, tA);
+    ok(r.s === 200 && /^https?:\/\//.test(r.j.enlace) && /^https:\/\/wa\.me\//.test(r.j.wa) && /Acta de visita/.test(r.j.archivo) && /acta/.test(decodeURIComponent(r.j.wa)), 'compartir deja el PDF con un enlace de descarga y el enlace de WhatsApp con el mensaje listo');
+    ok(!(await db.firma.findFirst({ where: { corredoraId: co.id, documento: { startsWith: 'Acta de visita' } } })), 'el acta no crea ninguna firma en Portalfirma');
 
     r = await req('POST', `/actas-visita/negocio/${ng.id}`, {}, tA);
     ok(r.s === 200 && r.j.id !== id, 'se puede abrir otra acta (otra visita) del mismo negocio');

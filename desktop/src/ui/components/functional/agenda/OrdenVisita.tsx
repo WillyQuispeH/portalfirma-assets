@@ -23,7 +23,8 @@ import { cerrarModal } from '../../../utils/modal';
 import { toast } from '../../../utils/app';
 import { descargarPdf } from '../../../utils/pdf';
 import { correoValido, formatearRut, rutValido } from '../../../utils/rut';
-import VisorPdf, { PdfCargando } from './VisorPdf';
+import { PdfCargando } from './VisorPdf';
+import PdfConFirmas from './PdfConFirmas';
 import { usePdfInicial, type IPdfInicial } from './usePdfInicial';
 
 export interface IOrdenDatos { nombre: string; rut: string; email: string; telefono: string; nacionalidad: string; fecha: string; hora: string; operacion: 'venta' | 'arriendo'; vigencia: string; garantia: string }
@@ -57,7 +58,7 @@ export function ConfirmarOrden({ aviso, pdf: pdf0, pdfPromesa, errorInicial, vis
     operacion: condiciones?.operacion || 'venta', vigencia: condiciones?.vigencia || '250', garantia: condiciones?.garantia || '$250.000' };
   const [v, setV] = useState<IOrdenDatos>(inicial);
   const [guardado, setGuardado] = useState<IOrdenDatos>(inicial);
-  const { pdf, setPdf, cargando: cargandoPdf, errorCarga, aviso: avisoCarga } = usePdfInicial(pdf0, pdfPromesa);
+  const { pdf, setPdf, cargando: cargandoPdf, errorCarga, aviso: avisoCarga, firmantes: firmantesPdf } = usePdfInicial(pdf0, pdfPromesa);
   const [guardando, setGuardando] = useState(false); const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState(errorInicial || '');
   const sucio = JSON.stringify(v) !== JSON.stringify(guardado);
@@ -135,7 +136,7 @@ export function ConfirmarOrden({ aviso, pdf: pdf0, pdfPromesa, errorInicial, vis
         </div>
 
         <Card titulo="Vista previa" subtitulo="Así se envía a firmar" relleno={true} className="tw:min-w-0 tw:lg:sticky tw:lg:top-0">
-          <div className={guardando ? 'tw:opacity-50 tw:transition-opacity' : 'tw:transition-opacity'}>{pdf ? <VisorPdf base64={pdf} /> : cargandoPdf ? <PdfCargando /> : <p className={NOTA}>No se pudo preparar el PDF.</p>}</div>
+          <div className={guardando ? 'tw:opacity-50 tw:transition-opacity' : 'tw:transition-opacity'}>{pdf ? <PdfConFirmas pdf={pdf} firmantes={firmantesPdf} plantilla="orden-visita" /> : cargandoPdf ? <PdfCargando /> : <p className={NOTA}>No se pudo preparar el PDF.</p>}</div>
         </Card>
       </div>
       {(aviso || avisoCarga) && <p className={`${NOTA} tw:mt-3`}>{aviso || avisoCarga}</p>}

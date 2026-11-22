@@ -8,8 +8,8 @@ export const envioService = {
   analizar: (ruta: string) => api<IAnalisis>('analyze', ruta),
   enviar: (payload: IPayloadEnvio & { __fileName: string }) => api<IResultadoEnvio>('send', payload),
   detalle: (op: number | string) => api<IDetalleOperacion>('detail', op),
-  gestionar: (o: Record<string, unknown>) => api<unknown>('manage', o),
-  preferencias: () => apiCruda<{ payerEmail?: string }>('prefs'),
-  guardarPagador: (correo: string) => apiCruda('setPrefs', { payerEmail: correo }),
+  reenviar: (o: { operacion: number | string; firmanteId?: string }) => api<{ ok: boolean }>('opReenviar', o),
+  leerPdf: (ruta: string) => api<string>('docLeer', ruta),
+  vistaPrevia: (ruta: string) => api<string | null>('docVista', ruta),
   archivoOperacion: (op: number | string) => apiCruda<{ path: string }>('opsFile', op),
 };

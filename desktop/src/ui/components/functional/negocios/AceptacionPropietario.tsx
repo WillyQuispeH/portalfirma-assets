@@ -5,7 +5,8 @@
 //  3. registra la respuesta: el propietario acepta, rechaza o hace una contraoferta; si hay contraoferta, después se registra
 //     lo que responde el interesado (acepta, hace otra oferta o desiste). Se logra cuando se aceptan las condiciones finales:
 //     entonces el monto y las condiciones del negocio quedan con lo acordado (el contrato parte de ahí).
-// Todo se guarda en el negocio (aceptacion.rondas) con negGuardar. Los id (#acPanel, #acWsp, #acResp, #acGuardar, #acEnviar,
+// Las reglas de la negociación viven en el servidor: cada respuesta va por negAceptacion (el servidor arma la ronda y, al aceptarse, deja el monto y
+// las condiciones del negocio con lo acordado). Los id (#acPanel, #acWsp, #acResp, #acGuardar, #acEnviar,
 // #acMonto, #acNota) los usan las pruebas.
 /* eslint-disable @typescript-eslint/no-explicit-any -- el negocio llega del proceso principal sin tipos */
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
@@ -72,16 +73,7 @@ export default function AceptacionPropietario({ negocioId, alCambio }: { negocio
     if (f.accion === 'rechaza' && !f.nota.trim()) return setError('Escribe el motivo.');
     setTrabajando(true); setError('');
     try {
-      const por = interesado ? 'interesado' : 'propietario';
-      const base = { fecha: new Date().toISOString(), nota: f.nota.trim() };
-      const cond = { monto: num(f.monto), moneda: f.moneda, garantia: f.garantia.trim(), plazo: f.plazo.trim(), condiciones: f.condiciones.trim() };
-      const ronda = f.accion === 'acepta' ? { ...base, tipo: 'aceptada', por, monto: vig.monto, moneda: vig.moneda, garantia: vig.garantia, plazo: vig.plazo, condiciones: vig.condiciones }
-        : f.accion === 'rechaza' ? { ...base, tipo: 'rechazada', por }
-          : f.accion === 'contraoferta' ? { ...base, tipo: 'contraoferta', por: 'propietario', ...cond } : { ...base, tipo: 'oferta', por: 'interesado', ...cond };
-      const cuerpo: Record<string, unknown> = { id: negocioId, aceptacion: { rondas: [...rondas, ronda] } };
-      // aceptado: el negocio queda con las condiciones finales (de ahí parte el contrato)
-      if (f.accion === 'acepta') { cuerpo.valor = { valor: vig.monto, moneda: vig.moneda }; cuerpo.oferta = { garantia: vig.garantia, plazo: vig.plazo, vigencia: n.oferta?.vigencia || '', condiciones: vig.condiciones }; }
-      await api('negGuardar', cuerpo);
+      await api('negAceptacion', negocioId, { accion: f.accion, monto: nueva ? num(f.monto) : undefined, moneda: f.moneda, garantia: f.garantia.trim(), plazo: f.plazo.trim(), condiciones: f.condiciones.trim(), nota: f.nota.trim() });
       toast(f.accion === 'acepta' ? 'Aceptada: el negocio quedó con las condiciones finales.' : f.accion === 'rechaza' ? 'Respuesta registrada: rechazada.' : 'Respuesta registrada.');
       setForm(null); await cargar(); alCambio?.();
     } catch (e) { setError(mensaje(e)); }
@@ -89,7 +81,7 @@ export default function AceptacionPropietario({ negocioId, alCambio }: { negocio
   };
   const volverANegociar = async () => {
     setTrabajando(true);
-    try { await api('negGuardar', { id: negocioId, aceptacion: { rondas: [...rondas, { fecha: new Date().toISOString(), tipo: 'oferta', por: 'interesado', monto: vig.monto, moneda: vig.moneda, garantia: vig.garantia, plazo: vig.plazo, condiciones: vig.condiciones, nota: 'Se retomó la negociación.' }] } }); await cargar(); alCambio?.(); } catch (e) { setError(mensaje(e)); }
+    try { await api('negAceptacion', negocioId, { accion: 'oferta', monto: vig.monto, moneda: vig.moneda, garantia: vig.garantia, plazo: vig.plazo, condiciones: vig.condiciones, nota: 'Se retomó la negociación.' }); await cargar(); alCambio?.(); } catch (e) { setError(mensaje(e)); }
     setTrabajando(false);
   };
   const perder = () => (window as any).Ventanas.abrir('negocios.perdido', { alGuardar: async (m: string) => { await api('negCerrar', negocioId, 'perdido', m); (window as any).closeModal(); toast('Negocio marcado como perdido.'); alCambio?.(); } }, { clave: 'modal-46' });

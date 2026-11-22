@@ -78,7 +78,7 @@ export class AlmacenamientoService {
   }
 
   /** URL firmada para bajar un documento con su nombre original. */
-  urlDescarga(clave: string, nombre: string) {
+  urlDescarga(clave: string, nombre: string, segundos = DESCARGA_SEGUNDOS) {
     const ascii = nombre.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '');
     return getSignedUrl(
       this.s3,
@@ -87,7 +87,7 @@ export class AlmacenamientoService {
         Key: clave,
         ResponseContentDisposition: `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(nombre)}`,
       }),
-      { expiresIn: DESCARGA_SEGUNDOS },
+      { expiresIn: segundos },
     );
   }
 

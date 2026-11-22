@@ -29,10 +29,13 @@ interface IAvatarProps {
   nombre: string;
   tamano?: TAvatarTamano;
   tono?: TTono; // si no se da, sale del nombre
+  /** la foto de la persona (data URL): se ve en lugar de las iniciales */
+  foto?: string;
   className?: string;
 }
 
-export default function Avatar({ nombre, tamano = 'md', tono, className }: IAvatarProps) {
+export default function Avatar({ nombre, tamano = 'md', tono, className, foto }: IAvatarProps) {
+  if (foto) return <img src={foto} alt={nombre} className={cx('tw:inline-block tw:flex-none tw:object-cover', TAMANO[tamano].replace(/tw:text-\[?[\w-]+\]?/, ''), className)} />;
   return (
     <span aria-hidden="true" className={cx('tw:inline-grid tw:flex-none tw:place-items-center tw:font-bold tw:tracking-tight tw:select-none', TAMANO[tamano], SUAVE[tono ?? tonoDe(nombre)], className)}>
       {iniciales(nombre)}

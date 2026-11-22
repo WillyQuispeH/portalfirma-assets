@@ -12,6 +12,7 @@ import { MandatoVenta } from '../negocios/MandatoVenta';
 import { PromesaCompraventa } from '../negocios/PromesaCompraventa';
 import { EscrituraCompraventa } from '../negocios/EscrituraCompraventa';
 import { NuevoContratista, NuevoReclamo } from '../postventa/VentanasAntiguas';
+import { ActaPdf } from '../acta-visita/ActaPdf';
 
 export const ventanas: TVentanas = {
   // negocios.js
@@ -33,6 +34,7 @@ export const ventanas: TVentanas = {
   'negocios.mandatoVenta': MandatoVenta, // modal-131
   'negocios.promesaCompraventa': PromesaCompraventa, // modal-147
   'negocios.escrituraCompraventa': EscrituraCompraventa, // modal-148
+  'negocios.actaPdf': ActaPdf, // modal-126 (el PDF del acta de visita; se abre desde ActaVisita.tsx)
   // postventa.js
   'negocios.postventaContratista': NuevoContratista, // modal-53
   'negocios.postventaReclamo': NuevoReclamo, // modal-54

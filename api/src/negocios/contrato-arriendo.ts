@@ -19,7 +19,7 @@ import { EnviadosService } from '../whatsapp/enviados';
 import { DocumentoRevisionService } from '../whatsapp/documento-revision';
 import { EnvioFirmaService, type FirmanteEnvio } from '../documentos/envio-firma';
 import { llenar } from '../documentos/plantilla';
-import { hoy } from '../whatsapp/comun';
+import { hoy, telNorm } from '../whatsapp/comun';
 import { describir, dominioDe, unir } from '../documentos/comparecientes';
 import { datosCorredora } from '../documentos/corredora-doc';
 import { PlantillasDocService } from '../documentos/plantillas-doc';
@@ -394,6 +394,30 @@ export class ContratoArriendoService {
         archivo: b.nombre,
       });
       plantilla = true;
+    }
+    // queda esperando su respuesta: cuando escriba, el servidor la interpreta (aprueba / comenta / pregunta) y la registra sola
+    try {
+      const vs = ((n.datos as { ciclo?: { contrato?: { versiones?: { n: number; archivo?: { clave?: string } | null }[] } } })?.ciclo?.contrato?.versiones ?? []);
+      const ver = vs.find((x) => x.archivo?.clave === b.clave) ?? vs[vs.length - 1];
+      const datos = {
+        estado: 'esperando',
+        a: telNorm(persona.telefono),
+        personaId: persona.id,
+        nombre: persona.nombre,
+        negocioId: n.id,
+        version: ver?.n ?? vs.length,
+        via: plantilla ? 'plantilla' : 'directo',
+        usuarioId: u.sub,
+        enviadaEn: new Date().toISOString(),
+      } as unknown as Prisma.InputJsonValue;
+      const id = `${n.id}:${persona.id}`;
+      await this.db.registro.upsert({
+        where: { corredoraId_coleccion_id: { corredoraId: u.corredoraId, coleccion: 'revisiones_contrato', id } },
+        create: { corredoraId: u.corredoraId, coleccion: 'revisiones_contrato', id, datos, creadoPorId: u.sub },
+        update: { datos, eliminadoEn: null, version: { increment: 1 } },
+      });
+    } catch (e) {
+      this.log.warn(`revisión del contrato sin registrar: ${(e as Error).message}`);
     }
     await this.actividad.registrar([
       {

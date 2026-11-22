@@ -1,6 +1,6 @@
 // Prueba de punta a punta de la revisión de firmas en el servidor (src/firmas/ronda.ts) y de los avisos (/v1/avisos),
-// contra la API corriendo (yarn dev) y asset_dev, con un Portalfirma FALSO (servidor MCP) que levanta esta prueba: la
-// sesión de Portalfirma de la corredora de prueba guarda su dirección en datos.mcpUrl (solo fuera de producción).
+// contra la API corriendo (yarn dev) y asset_dev, con un Portalfirma FALSO (la API de integración) que levanta esta prueba: la
+// conexión de la corredora de prueba guarda su dirección en datos.apiUrl (solo fuera de producción).
 // Crea una corredora de prueba (con su sesión) y otra sin sesión, y al final las borra con todo lo suyo.
 // Uso: node test/firmas-ronda-e2e.js [url]
 // Revisa: «revisar ahora» consulta lo que está en firma con la sesión de la corredora (lo pide cualquier usuario);
@@ -14,9 +14,6 @@ const http = require('http');
 const crypto = require('crypto');
 const argon2 = require('argon2');
 const { PrismaClient } = require('@prisma/client');
-const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js');
-const { StreamableHTTPServerTransport } = require('@modelcontextprotocol/sdk/server/streamableHttp.js');
-const { z } = require('zod');
 
 const env = Object.fromEntries(
   fs.readFileSync(path.join(__dirname, '..', '.env'), 'utf8').split(/\r?\n/).map((l) => /^([A-Z0-9_]+)=(.*)$/.exec(l)).filter(Boolean).map((m) => [m[1], m[2].trim().replace(/^"(.*)"$/, '$1')]),
@@ -38,23 +35,27 @@ function cifrar(texto) {
 }
 
 // ---------------------------------------------------------------- Portalfirma falso
-const TOKEN = 'tok-prueba-' + SUF;
+const TOKEN = 'tok-prueba-' + SUF; const ID_API = 'id-api-' + SUF; const CUSTOMER = '11111111-2222-3333-4444-555555555555';
 const OP = 900000000 + Math.floor(Math.random() * 90000000); // números de operación que no chocan con los reales
 const DET = {}; const consultas = [];
+// la API de integración: POST /api/auth/generateToken (credenciales → token) y GET /api/document/getByOperation/:op (con `id` y Bearer)
 function portalfirmaFalso() {
   const s = http.createServer(async (rq, rs) => {
-    if (rq.headers.authorization !== 'Bearer ' + TOKEN) { rs.writeHead(401).end(); return; }
+    const json = (st, o) => { rs.writeHead(st, { 'content-type': 'application/json' }).end(JSON.stringify(o)); };
     let b = ''; for await (const c of rq) b += c;
-    const srv = new McpServer({ name: 'pf-falso', version: '1.0.0' });
-    srv.tool('process_detail_get_by_operation', { operation: z.number() }, async ({ operation }) => {
-      consultas.push(operation); const d = DET[operation];
-      if (d === 'error') return { content: [{ type: 'text', text: 'Error: operación no encontrada' }], isError: true };
-      return { content: [{ type: 'text', text: JSON.stringify(d || {}) }] };
-    });
-    const t = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
-    rs.on('close', () => { t.close(); srv.close(); });
-    await srv.connect(t);
-    await t.handleRequest(rq, rs, b ? JSON.parse(b) : undefined);
+    if (rq.headers.id !== ID_API) return json(401, { success: false, data: null, error: 'Acceso denegado' });
+    if (rq.method === 'POST' && rq.url === '/api/auth/generateToken') {
+      const c = JSON.parse(b || '{}');
+      return c.email === 'int@x.cl' && c.password === 'clave-pf' && c.customer_id === CUSTOMER ? json(200, { success: true, data: { token: TOKEN }, error: null }) : json(401, { success: false, data: null, error: 'Unauthorized' });
+    }
+    if (rq.headers.authorization !== 'Bearer ' + TOKEN) return json(401, { success: false, data: null, error: 'Unauthorized' });
+    const m = /^\/api\/document\/getByOperation\/(\d+)$/.exec(rq.url || '');
+    if (rq.method === 'GET' && m) {
+      const operation = Number(m[1]); consultas.push(operation); const d = DET[operation];
+      if (d === 'error') return json(404, { success: false, data: null, error: 'operación no encontrada' });
+      return json(200, { success: true, data: d || {}, error: null });
+    }
+    return json(404, { success: false, data: null, error: 'Not Found' });
   });
   return new Promise((r) => s.listen(0, '127.0.0.1', () => r(s)));
 }
@@ -62,7 +63,7 @@ const firmante = (name, rut, signed, alias) => ({ name, rut, signed, email: name
 
 (async () => {
   const db = new PrismaClient();
-  const srv = await portalfirmaFalso(); const mcpUrl = `http://127.0.0.1:${srv.address().port}/mcp`;
+  const srv = await portalfirmaFalso(); const apiUrl = `http://127.0.0.1:${srv.address().port}/api`;
   let co = null; let otra = null; const usuarios = [];
   try {
     const hash = await argon2.hash('clave-e2e-123', { type: argon2.argon2id });
@@ -72,7 +73,7 @@ const firmante = (name, rut, signed, alias) => ({ name, rut, signed, email: name
     const c1 = await nu(co.id, '1'); const c2 = await nu(co.id, '2'); const o1 = await nu(otra.id, 'o', 'ADMIN');
     const t1 = await ingresar(c1.email, 'clave-e2e-123'); const t2 = await ingresar(c2.email, 'clave-e2e-123'); const tO = await ingresar(o1.email, 'clave-e2e-123');
     ok(t1 && t2 && tO, 'ingresan dos corredores y el administrador de otra corredora');
-    await db.conexion.create({ data: { corredoraId: co.id, usuarioId: null, dueno: 'corredora', proveedor: 'portalfirma', tipo: 'oauth', estado: 'activa', accesoCif: cifrar(TOKEN), datos: { mcpUrl } } });
+    await db.conexion.create({ data: { corredoraId: co.id, usuarioId: null, dueno: 'corredora', proveedor: 'portalfirma_api', tipo: 'clave', estado: 'activa', accesoCif: cifrar(JSON.stringify({ id: ID_API, password: 'clave-pf' })), datos: { customerId: CUSTOMER, email: 'int@x.cl', apiUrl } } });
 
     // ---- lo que está en firma (lo envió c1)
     const ops = [OP + 1, OP + 2, OP + 3, OP + 4, OP + 5]; const [o1n, o2n, o3n, o4n, o5n] = ops;
@@ -110,9 +111,9 @@ const firmante = (name, rut, signed, alias) => ({ name, rut, signed, email: name
 
     // ---- el negocio
     const n = await db.negocio.findUnique({ where: { id: NEG } });
-    ok(n.datos.firmas.promesa.estado === 'firmado' && n.datos.firmas.promesa.avanzar === true && n.datos.firmas.promesa.firmados === 2 && n.version === 2, 'la firma de la etapa actual del negocio queda firmada, con «avanzar» para la app');
-    const actN = await db.actividad.findFirst({ where: { corredoraId: co.id, entidadId: NEG } });
-    ok(actN && /promesa/.test(actN.texto), 'y queda en el historial del negocio');
+    ok(n.datos.firmas.promesa.estado === 'firmado' && n.datos.firmas.promesa.avanzar === undefined && n.datos.firmas.promesa.firmados === 2 && n.etapa === 'escritura' && n.version >= 3, 'la firma de la etapa actual del negocio queda firmada y el servidor mueve el negocio a la etapa siguiente (con la app cerrada)');
+    const actsN = await db.actividad.findMany({ where: { corredoraId: co.id, entidadId: NEG } });
+    ok(actsN.some((x) => /se firmó el documento de la etapa «promesa»/.test(x.texto)) && actsN.some((x) => /Avanzó solo/.test(x.texto)), 'y queda en el historial del negocio (la firma y el avance)');
 
     // ---- avisos
     let av = (await req('GET', '/avisos', null, t1)).j.items;

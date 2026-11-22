@@ -20,15 +20,15 @@ function demoOps() {
 }
 function demoDetail(o) {
   const fin = o.stage === 'finalized';
-  const files = [{ fileName: o.name, fileUrl: 'demo://f/' + o.operation + '/s' }, { fileName: 'original.pdf', fileUrl: 'demo://f/' + o.operation + '/o' }];
+  const files = [{ fileName: o.name, kind: 'signed', fileUrl: 'demo://f/' + o.operation + '/s' }, { fileName: 'original.pdf', kind: 'original', fileUrl: 'demo://f/' + o.operation + '/o' }];
   if (!fin) files.splice(0, 1);
-  if (fin && o.proc === 'legalization') files.push({ fileName: 'legalized.pdf', fileUrl: 'demo://f/' + o.operation + '/l' });
-  if (fin && o.proc === 'protocolization') files.push({ fileName: 'protocolized.pdf', fileUrl: 'demo://f/' + o.operation + '/p' });
+  if (fin && o.proc === 'legalization') files.push({ fileName: 'legalized.pdf', kind: 'legalized', fileUrl: 'demo://f/' + o.operation + '/l' });
+  if (fin && o.proc === 'protocolization') files.push({ fileName: 'protocolized.pdf', kind: 'legalized', fileUrl: 'demo://f/' + o.operation + '/p' });
   return { processId: 'demo-' + o.operation, operation: o.operation, status: fin ? 'finalized' : 'in_progress', protocolizationNumber: o.proc, repertoireNumber: fin && o.proc !== 'none' ? '1234-2026' : '',
     createdDateAt: o.created, updatedDateAt: o.updated, files,
     signatories: [
-      { personId: 'pa' + o.operation, contractSignatoryId: 'csa', contractEntityPerson_id: 'cepa', rut: '11.111.111-1', name: 'Juan', paternalLastName: 'Pérez', maternalLastName: 'Soto', email: 'juan@correo.cl', phone: '+56911111111', url: 'https://cliente.portalfirma.cl/v?c=demoa' + o.operation, signed: true },
-      { personId: 'pb' + o.operation, contractSignatoryId: 'csb', contractEntityPerson_id: 'cepb', rut: '22.222.222-2', name: 'María', paternalLastName: 'González', maternalLastName: 'Rojas', email: 'maria@correo.cl', phone: '+56922222222', url: 'https://cliente.portalfirma.cl/v?c=demob' + o.operation, signed: fin },
+      { personId: 'pa' + o.operation, id: 'csa', contractSignatoryId: 'csa', contractEntityPerson_id: 'cepa', rut: '11.111.111-1', name: 'Juan', paternalLastName: 'Pérez', maternalLastName: 'Soto', email: 'juan@correo.cl', phone: '+56911111111', url: 'https://cliente.portalfirma.cl/v?c=demoa' + o.operation, signed: true },
+      { personId: 'pb' + o.operation, id: 'csb', contractSignatoryId: 'csb', contractEntityPerson_id: 'cepb', rut: '22.222.222-2', name: 'María', paternalLastName: 'González', maternalLastName: 'Rojas', email: 'maria@correo.cl', phone: '+56922222222', url: 'https://cliente.portalfirma.cl/v?c=demob' + o.operation, signed: fin },
     ] };
 }
 
@@ -71,7 +71,7 @@ module.exports = {
   async logout() { logged = false; },
   async tryRestore() { return logged ? { partner, balance: 247424 } : null; },
   async session() { return { partner, balance: 247424 }; },
-  async balance() { return 247424; },
+  async balance() { if (globalThis.__retrasoSaldo) await wait(globalThis.__retrasoSaldo); return 247424; },   // las pruebas alargan la consulta del saldo
   async ingest(_b64, filename) { await wait(700); return { document_id: 'demo-doc-' + Date.now(), name: filename, indexed: true }; },
   async extractSigners() {
     await wait(900);
@@ -98,7 +98,7 @@ module.exports = {
       processId: 'demo-process-' + n, operation: n, status: 'in_progress', protocolizationNumber: p.protocolization || 'none',
       createdDateAt: new Date().toISOString(), updatedDateAt: new Date().toISOString(),
       signatories: p.signatories.map((s, i) => ({
-        personId: 'p' + i, contractSignatoryId: 'cs' + i, contractEntityPerson_id: 'cep' + i, rut: s.rut,
+        personId: 'p' + i, id: 'cs' + i, contractSignatoryId: 'cs' + i, contractEntityPerson_id: 'cep' + i, rut: s.rut,
         name: s.fullName, paternalLastName: '', maternalLastName: '', email: s.email, phone: s.phone,
         url: `https://cliente.portalfirma.cl/v?c=demo${n}${i}&h=portalfirma`, signed: false,
       })),
@@ -114,6 +114,39 @@ module.exports = {
     await wait(250);
     const all = demoOps().filter((o) => o.created.slice(0, 10) >= start && o.created.slice(0, 10) <= end);
     return { totalInRange: all.length, operations: all.slice(0, limit).map((o) => ({ contract_id: 'c' + o.operation, operation: o.operation, stage: o.stage, document_name: o.name, createdAt: o.created, updatedAt: o.updated })) };
+  },
+  // La API de integración de Portalfirma (en la app real la consulta el servidor de Asset: /portalfirma-api): en el modo demostración responde con
+  // las mismas operaciones de ejemplo. getAll «no está habilitado» (listo: false), así se prueba también el listado por teléfono.
+  async integracion(metodo, ruta, cuerpo) {
+    (globalThis.__llamadasIntegracion ||= []).push({ metodo, ruta, cuerpo });   // para las pruebas: lo que iría al servidor de Asset
+    if (ruta === '/portalfirma-api/conexion') return { conectado: true, admin: true, customerId: 'demo', email: 'demo@asset.cl' };
+    if (ruta.startsWith('/portalfirma-api/operaciones?')) return { listo: false, motivo: 'Petición en mantenimiento', filas: [] };
+    if (ruta === '/portalfirma-api/operaciones') return this.byPhone(cuerpo.phone, cuerpo.desde, cuerpo.hasta, cuerpo.limit);
+    if (ruta === '/portalfirma-api/reenviar') return { ok: true };
+    // enviar a firmar y extraer firmantes (en la app real los hace el servidor de Asset: API de integración + IA propia)
+    if (ruta === '/firmas-envio/firmantes') {
+      if (globalThis.__retrasoExtraer) await new Promise((r) => setTimeout(r, globalThis.__retrasoExtraer));   // las pruebas alargan el análisis para ver los esqueletos
+      const ing = await this.ingest(cuerpo.pdf, 'documento.pdf'); const ex = await this.extractSigners(ing.document_id);
+      return { legible: true, escaneado: false, tipoDocumento: ex.typeDocument || '', avisos: ['Firman el prestador y la arrendataria.', 'No aparecen teléfonos de los firmantes.'], firmantes: (ex.firmantes || []).map((f) => ({ nombre: f.fullName || '', rut: f.rut || '', rutValido: true, rol: f.alias || '', email: f.email || '', telefono: f.phone || '', pagina: 1 })) };
+    }
+    if (ruta === '/firmas-envio/pdf') {
+      if (globalThis.__retrasoEnvio) await new Promise((r) => setTimeout(r, globalThis.__retrasoEnvio));   // las pruebas alargan el envío para ver el «enviando»
+      const ing = await this.ingest(cuerpo.pdf, cuerpo.nombre);
+      const r = await this.sendToSign({ document_id: ing.document_id, email: 'demo@asset.cl', protocolization: cuerpo.tramite, signatories: cuerpo.firmantes.map((f) => ({ rut: f.rut, fullName: f.nombre, email: f.email, phone: f.telefono, alias: f.alias, typeSign: f.tipoFirma })) });
+      if (r.operation == null) {   // como responde hoy un fallo del servidor: sin operación y con el motivo
+        const code = /status code (\d+)/.exec(r.message || '')?.[1];
+        throw new Error(code ? `Portalfirma no pudo crear la operación (error ${code} del servidor). Revisa «Mis operaciones» antes de reintentar, para no duplicarla.` : r.message || 'Portalfirma no devolvió el número de operación.');
+      }
+      return { operacion: r.operation, processId: null, paginaFirmas: true };
+    }
+    const d = /^\/portalfirma-api\/operacion\/(\d+)$/.exec(ruta);
+    if (d) {   // las operaciones de ejemplo de la lista tienen su detalle; las que se enviaron en la demostración, el seguimiento de siempre (1 de 2 firmó)
+      const n = Number(d[1]);
+      if (demoOps().some((o) => o.operation === n)) return this.processDetail(n);
+      return JSON.parse((await this.callRaw('process_detail_get_by_operation', { operation: n })).text);
+    }
+    const f = /^\/portalfirma\/archivos\/([^?]+)(?:\?version=(\w+))?$/.exec(ruta); if (f) { const r = await this.fileById(decodeURIComponent(f[1])); const b = Buffer.concat([Buffer.from(r.bytes), Buffer.from('\n%v-' + (f[2] || 'auto') + '\n')]); return { nombre: r.name, base64: b.toString('base64'), actualizado: null }; }
+    return null;
   },
   async cds(a) {
     await wait(400);
@@ -162,7 +195,7 @@ module.exports = {
     const ok = (j) => ({ text: JSON.stringify(j), isError: false }); const err = (m) => ({ text: m, isError: true });
     switch (name) {
       case 'process_detail_get_by_operation': return ok({ processId: 'demo', operation: Number(args.operation), status: 'in_progress',
-        signatories: [{ name: 'Juan Pérez Soto', rut: '11.111.111-1', email: 'demo@correo.cl', signed: true }, { name: 'María González Rojas', rut: '22.222.222-2', signed: false }],
+        signatories: [{ id: 'cs0', name: 'Juan Pérez Soto', rut: '11.111.111-1', email: 'demo@correo.cl', signed: true }, { id: 'cs1', name: 'María González Rojas', rut: '22.222.222-2', signed: false }],
         files: [{ fileName: 'signed.pdf', fileUrl: 'https://cliente.portalfirma.cl/mcp/file?fileId=demo' }] });
       case 'wallet_manage_balance_tools': return args.action === 'add_amount_flow' ? ok({ url: 'https://www.flow.cl/app/web/pay.php?token=demo', amount: args.amount, email: args.email }) : ok({ amount: 247424, history: [] });
       case 'ingest_document_tools': return args.base64 && args.filename ? ok({ fileId: 'demo-file-1', name: args.filename }) : err('Falta base64');
@@ -211,7 +244,7 @@ module.exports = {
     await wait(700);
     const n = ++op;
     ops[n] = { processId: 'demo-process-' + n, operation: n, status: 'in_progress', protocolizationNumber: 'none', createdDateAt: new Date().toISOString(),
-      signatories: [{ personId: 'p0', contractSignatoryId: 'cs0', contractEntityPerson_id: 'cep0', rut: values.rut_mandante_signer, name: values.nombre_mandante_signer, email: values.email_mandante_signer, phone: values.telefono_mandante_signer, url: 'https://cliente.portalfirma.cl/v?c=demo&h=portalfirma', signed: false }], files: [] };
+      signatories: [{ personId: 'p0', id: 'cs0', contractSignatoryId: 'cs0', contractEntityPerson_id: 'cep0', rut: values.rut_mandante_signer, name: values.nombre_mandante_signer, email: values.email_mandante_signer, phone: values.telefono_mandante_signer, url: 'https://cliente.portalfirma.cl/v?c=demo&h=portalfirma', signed: false }], files: [] };
     return { success: true, operation: n, message: 'Documento generado y enviado a firmar (demo).' };
   },
 };

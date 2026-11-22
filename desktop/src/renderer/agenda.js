@@ -36,7 +36,7 @@ async function ordenVisita(e, despues) {
     const operacion0 = e.operacion || (prop0.arriendo && !prop0.venta ? 'arriendo' : 'venta');
     args.operacion = operacion0;
     // la ventana se abre ya: la orden se arma ahí mismo y, si falta algo (p. ej. el correo del visitante), se completa y se guarda
-    const pdfPromesa = api('assetPreparar', 'asset_orden_visita', args).then((d) => ({ pdf: d.pdf || '', aviso: d.aviso || '' })); pdfPromesa.catch(() => {});
+    const pdfPromesa = api('assetPreparar', 'asset_orden_visita', args).then((d) => ({ pdf: d.pdf || '', aviso: d.aviso || '', firmantes: d.firmantes })); pdfPromesa.catch(() => {});
     // los datos de la orden se pueden editar en la ventana: se guardan en su origen (la persona del CRM y la visita de la agenda) y el PDF se vuelve a armar
     const per = (IM.data.personas || []).find((x) => x.id === e.personas[0].id) || e.personas[0];
     const propiedad = (IM.data.propiedades || []).find((x) => x.id === e.prop.id) || e.prop;

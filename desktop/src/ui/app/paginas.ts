@@ -3,6 +3,7 @@
 // En Asset no hay rutas por URL: cada pestaña se abre desde app.js (src/renderer).
 import type { ComponentType } from 'react';
 import ActividadPage from './actividad/page';
+import SegundoPlanoPage from './segundo-plano/page';
 import AgendaPage from './agenda/page';
 import ArriendosPage from './arriendos/page';
 import CarteraPage from './cartera/page';
@@ -38,6 +39,7 @@ import PublicarAvisoPage from './publicaciones/publicar/page';
 export const paginas: Record<string, ComponentType<any>> = {
   Actividad: ActividadPage, // desde Inicio: window.Actividad.abrir() en src/renderer/actividad.js
   Agenda: AgendaPage,
+  SegundoPlano: SegundoPlanoPage, // la barra fija de lo que corre en segundo plano (#segundoPlanoRaiz): se monta una vez en src/renderer/app.js
   Arriendos: ArriendosPage, // pestaña Arriendos: abrirArriendos() en src/renderer/app.js // pestaña Agenda: abrirAgenda() en src/renderer/agenda.js
   Cartera: CarteraPage,
   FichaPropiedad: FichaPropiedadPage, // { id, vez }: Inmo.abrirFicha(id) en src/renderer/inmo.js, en #view-cartera

@@ -159,6 +159,7 @@ export class MandatoArriendoService {
       archivo: `Mandato de arriendo ${x.prop.codigo}.pdf`,
       propiedad: x.prop.codigo,
       propietarios: x.firmantes.map((p) => p.nombre),
+      firmantes: x.firmantes.map((p) => ({ nombre: p.nombre, rol: 'Mandante' })),
     };
   }
 

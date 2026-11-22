@@ -17,7 +17,7 @@ import Esqueleto, { EsqueletoZona } from '../../ui/Esqueleto';
 import { useIntegraciones } from '../../../store/hooks/useIntegraciones.hook';
 import { useCuenta } from '../../../store/hooks/useCuenta.hook';
 import { useAcceso } from '../../../store/hooks/useAcceso.hook';
-import { integracionesService as svc, type IConvectaEstado, type IGoogleEstado } from '../../../store/services/integraciones.service';
+import { integracionesService as svc, type IConvectaEstado, type IGoogleEstado, type IPfApiEstado } from '../../../store/services/integraciones.service';
 import { refrescarCuenta } from '../cuenta/controlador';
 import { abrirConfiguracion } from './controlador';
 import { abrirPublicaciones, abrirUrl, pedirInicioSesion, toast } from '../../../utils/app';
@@ -65,6 +65,16 @@ function Lista({ children }: { children: ReactNode }) {
   return <div className="tw:flex tw:flex-col tw:divide-y tw:divide-line tw:[&>*]:py-3 tw:-my-3">{children}</div>;
 }
 
+/** notas de un formulario, debajo de los campos (no van bajo cada input: desarman la fila) */
+function NotasForm({ items }: { items: string[] }) {
+  if (!items.length) return null;
+  return (
+    <ul className="tw:m-0 tw:flex tw:list-none tw:flex-col tw:gap-1 tw:p-0 tw:text-xs tw:text-muted">
+      {items.map((t) => <li key={t}>· {t}</li>)}
+    </ul>
+  );
+}
+
 // ---------------------------------------------------------------- pantalla
 
 /** las tarjetas de las integraciones (pantalla Configuración › Integraciones) */
@@ -85,6 +95,17 @@ export function IntegracionesContenido() {
     setOcupadoG(null);
     if (r.ok) { setGoogle(r.data ?? null); toast(listo); } else toast(r.error || 'No se pudo completar.', 6000);
   };
+  // API de Portalfirma: clave id, customer_id, correo y contraseña de la corredora (quedan cifradas en el servidor)
+  const [pfApi, setPfApi] = useState<IPfApiEstado | null>(null); const [ocupadoPa, setOcupadoPa] = useState(false);
+  const [paAbierto, setPaAbierto] = useState(false); const [pa, setPa] = useState({ id: '', customerId: '', email: '', password: '' });
+  const cargarPfApi = () => { svc.pfApi().then((r) => setPfApi(r.ok ? r.data ?? null : null)).catch(() => setPfApi(null)); };
+  const accionPfApi = async (fn: () => ReturnType<typeof svc.pfApiDesconectar>, listo: string) => {
+    setOcupadoPa(true);
+    const r = await fn().catch((e: Error) => ({ ok: false, error: e.message, data: undefined }));
+    setOcupadoPa(false);
+    if (r.ok) { setPfApi(r.data ?? null); setPaAbierto(false); setPa({ id: '', customerId: '', email: '', password: '' }); toast(listo); } else toast(r.error || 'No se pudo completar.', 6000);
+  };
+  const paListo = !!(pa.id.trim() && pa.customerId.trim() && pa.email.trim() && pa.password);
   // Convecta: la cuenta de la corredora de donde se importa la cartera (la clave queda en el servidor)
   const [convecta, setConvecta] = useState<IConvectaEstado | null>(null); const [ocupadoCv, setOcupadoCv] = useState(false);
   const [cvAbierto, setCvAbierto] = useState(false); const [cvClave, setCvClave] = useState('');
@@ -95,7 +116,7 @@ export function IntegracionesContenido() {
     setOcupadoCv(false);
     if (r.ok) { setConvecta(r.data ?? null); setCvAbierto(false); setCvClave(''); toast(listo); } else toast(r.error || 'No se pudo completar.', 6000);
   };
-  useEffect(() => { integCargar(); refrescarCuenta(); cargarPortales(); cargarGoogle(); cargarConvecta(); }, [integCargar]);
+  useEffect(() => { integCargar(); refrescarCuenta(); cargarPortales(); cargarGoogle(); cargarConvecta(); cargarPfApi(); }, [integCargar]);
 
   const accion = async (id: string, fn: () => Promise<{ ok: boolean; error?: string }>, listo?: string) => {
     const error = await integAccion(id, fn);
@@ -124,6 +145,31 @@ export function IntegracionesContenido() {
               </Boton>
             )}
           </Fila>
+          <Fila id="portalfirmaApi" logo={<Logo icono="sign" color="#3346c7" />} nombre="API de Portalfirma"
+            detalle={pfApi?.conectado ? `Enviar a firmar, seguir las firmas y bajar el PDF firmado${pfApi.email ? ' · ' + pfApi.email : ''}.` : 'Ingresa la clave «id», el customer_id, el correo y la contraseña del usuario de integración de tu empresa en Portalfirma.'}
+            estado={pfApi?.conectado ? 'conectado' : 'sin-conectar'}>
+            {pfApi?.admin ? (pfApi.conectado
+              ? <Boton tamano="sm" variante="fantasma" cargando={ocupadoPa} onClick={() => accionPfApi(svc.pfApiDesconectar, 'API de Portalfirma desconectada.')}>Desconectar</Boton>
+              : <Boton tamano="sm" icono="link" onClick={() => setPaAbierto((x) => !x)}>{paAbierto ? 'Cerrar' : 'Conectar'}</Boton>)
+              : !pfApi?.conectado && <Boton tamano="sm" icono="link" disabled title="La conecta el administrador de la corredora">Conectar</Boton>}
+          </Fila>
+          {paAbierto && pfApi?.admin && !pfApi.conectado && (
+            <form className="tw:flex tw:flex-col tw:gap-ui tw:pl-[52px]"
+              onSubmit={(e) => { e.preventDefault(); accionPfApi(() => svc.pfApiConectar({ id: pa.id.trim(), customerId: pa.customerId.trim(), email: pa.email.trim(), password: pa.password }), 'API de Portalfirma conectada.'); }}>
+              <div className="tw:flex tw:flex-wrap tw:items-end tw:justify-end tw:gap-ui">
+                <Input id="paId" autoFocus clasesCampo="tw:flex-1 tw:min-w-[220px]" etiqueta="Clave «id» de la API" type="password" autoComplete="off" value={pa.id} onChange={(e) => setPa({ ...pa, id: e.target.value })} />
+                <Input id="paCustomer" clasesCampo="tw:flex-1 tw:min-w-[220px]" etiqueta="customer_id" autoComplete="off" value={pa.customerId} onChange={(e) => setPa({ ...pa, customerId: e.target.value })} />
+                <Input id="paEmail" clasesCampo="tw:flex-1 tw:min-w-[220px]" etiqueta="Correo del usuario" type="email" autoComplete="off" value={pa.email} onChange={(e) => setPa({ ...pa, email: e.target.value })} />
+                <Input id="paClave" clasesCampo="tw:flex-1 tw:min-w-[220px]" etiqueta="Contraseña" type="password" autoComplete="new-password" value={pa.password} onChange={(e) => setPa({ ...pa, password: e.target.value })} />
+                <Boton variante="secundario" tamano="lg" type="button" onClick={() => setPaAbierto(false)}>Cancelar</Boton>
+                <Boton tamano="lg" type="submit" cargando={ocupadoPa} disabled={!paListo}>Guardar</Boton>
+              </div>
+              <NotasForm items={[
+                'customer_id: el id de la empresa (entity_id), en Portalfirma › Configuración › Integraciones.',
+                'Contraseña: se prueba con Portalfirma antes de guardarla y queda cifrada en el servidor.',
+              ]} />
+            </form>
+          )}
         </Lista>
       </Card>
 
@@ -153,12 +199,15 @@ export function IntegracionesContenido() {
               : <Boton tamano="sm" icono="link" onClick={() => setCvAbierto((x) => !x)}>Conectar</Boton>)}
           </Fila>
           {cvAbierto && convecta?.admin && (
-            <form className="tw:flex tw:flex-wrap tw:items-end tw:justify-end tw:gap-3 tw:pl-[52px]"
+            <form className="tw:flex tw:flex-col tw:gap-ui tw:pl-[52px]"
               onSubmit={(e) => { e.preventDefault(); accionConvecta(() => svc.convectaConectar(cvClave.trim()), 'Convecta conectado.'); }}>
-              <Input id="cvClave" clasesCampo="tw:flex-1 tw:min-w-[220px]" etiqueta="Clave de suscripción de Convecta" type="password" autoComplete="off"
-                value={cvClave} onChange={(e) => setCvClave(e.target.value)} ayuda="La entrega Convecta («Ocp-Apim-Subscription-Key»). Se prueba antes de guardarla." />
-              <Boton variante="secundario" type="button" onClick={() => setCvAbierto(false)}>Cancelar</Boton>
-              <Boton type="submit" cargando={ocupadoCv} disabled={cvClave.trim().length < 10}>Guardar</Boton>
+              <div className="tw:flex tw:flex-wrap tw:items-end tw:justify-end tw:gap-ui">
+                <Input id="cvClave" clasesCampo="tw:flex-1 tw:min-w-[220px]" etiqueta="Clave de suscripción de Convecta" type="password" autoComplete="off"
+                  value={cvClave} onChange={(e) => setCvClave(e.target.value)} />
+                <Boton variante="secundario" tamano="lg" type="button" onClick={() => setCvAbierto(false)}>Cancelar</Boton>
+                <Boton tamano="lg" type="submit" cargando={ocupadoCv} disabled={cvClave.trim().length < 10}>Guardar</Boton>
+              </div>
+              <NotasForm items={['La entrega Convecta («Ocp-Apim-Subscription-Key»). Se prueba antes de guardarla.']} />
             </form>
           )}
         </Lista>
@@ -279,12 +328,15 @@ function PortalesKonver({ ml, admin, ocupado, accion }: { ml: IMlEstado; admin: 
           : <Boton tamano="sm" icono="link" disabled={!admin || ocupado === 'konver'} title={soloAdmin('La pega')} onClick={() => setLlaveAbierta((x) => !x)}>{llaveAbierta ? 'Cerrar' : 'Conectar'}</Boton>}
       </Fila>
       {llaveAbierta && !kv?.conectado && admin && (
-        <form className="tw:flex tw:flex-wrap tw:items-end tw:justify-end tw:gap-3 tw:pl-[52px]"
+        <form className="tw:flex tw:flex-col tw:gap-ui tw:pl-[52px]"
           onSubmit={async (e) => { e.preventDefault(); if (await accion('konver', () => svc.kvLlave(llave.trim()), 'KONVER conectado.')) { setLlave(''); setLlaveAbierta(false); } }}>
-          <Input id="kvLlave" autoFocus clasesCampo="tw:flex-1 tw:min-w-[220px]" etiqueta="Llave de KONVER" type="password" autoComplete="off" placeholder="kp_…"
-            value={llave} onChange={(e) => setLlave(e.target.value)} ayuda="Empieza con «kp_». Se prueba antes de guardarla y queda cifrada en el servidor." />
-          <Boton variante="secundario" type="button" onClick={() => setLlaveAbierta(false)}>Cancelar</Boton>
-          <Boton type="submit" cargando={ocupado === 'konver'} disabled={!/^kp_\S{20,}$/.test(llave.trim())}>Guardar</Boton>
+          <div className="tw:flex tw:flex-wrap tw:items-end tw:justify-end tw:gap-ui">
+            <Input id="kvLlave" autoFocus clasesCampo="tw:flex-1 tw:min-w-[220px]" etiqueta="Llave de KONVER" type="password" autoComplete="off" placeholder="kp_…"
+              value={llave} onChange={(e) => setLlave(e.target.value)} />
+            <Boton variante="secundario" tamano="lg" type="button" onClick={() => setLlaveAbierta(false)}>Cancelar</Boton>
+            <Boton tamano="lg" type="submit" cargando={ocupado === 'konver'} disabled={!/^kp_\S{20,}$/.test(llave.trim())}>Guardar</Boton>
+          </div>
+          <NotasForm items={['Empieza con «kp_». Se prueba antes de guardarla y queda cifrada en el servidor.']} />
         </form>
       )}
       {desconectando === 'konver' && kv?.conectado && admin && (
@@ -329,13 +381,13 @@ function PortalesKonver({ ml, admin, ocupado, accion }: { ml: IMlEstado; admin: 
         </Confirmar>
       )}
       {ttAbierto && kv?.conectado && !tt?.conectado && admin && (
-        <form className="tw:flex tw:flex-wrap tw:items-end tw:justify-end tw:gap-3 tw:pl-[52px]"
+        <form className="tw:flex tw:flex-wrap tw:items-end tw:justify-end tw:gap-ui tw:pl-[52px]"
           onSubmit={async (e) => { e.preventDefault(); if (await accion('toctoc', () => svc.kvToctoc({ keyCliente: tl.keyCliente.trim(), keyIntegrador: tl.keyIntegrador.trim(), corredorId: tl.corredorId.trim() }), 'TOCTOC conectado.')) { setTl({ keyCliente: '', keyIntegrador: '', corredorId: '' }); setTtAbierto(false); } }}>
           <Input id="ttCliente" autoFocus clasesCampo="tw:flex-1 tw:min-w-[180px]" etiqueta="Llave del cliente" type="password" autoComplete="off" value={tl.keyCliente} onChange={(e) => setTl({ ...tl, keyCliente: e.target.value })} />
           <Input id="ttIntegrador" clasesCampo="tw:flex-1 tw:min-w-[180px]" etiqueta="Llave del integrador" type="password" autoComplete="off" value={tl.keyIntegrador} onChange={(e) => setTl({ ...tl, keyIntegrador: e.target.value })} />
           <Input id="ttCorredor" clasesCampo="tw:w-[140px]" etiqueta="Id del corredor" autoComplete="off" value={tl.corredorId} onChange={(e) => setTl({ ...tl, corredorId: e.target.value })} />
-          <Boton variante="secundario" type="button" onClick={() => setTtAbierto(false)}>Cancelar</Boton>
-          <Boton type="submit" cargando={ocupado === 'toctoc'} disabled={!ttListo}>Guardar</Boton>
+          <Boton variante="secundario" tamano="lg" type="button" onClick={() => setTtAbierto(false)}>Cancelar</Boton>
+          <Boton tamano="lg" type="submit" cargando={ocupado === 'toctoc'} disabled={!ttListo}>Guardar</Boton>
         </form>
       )}
     </>
@@ -376,13 +428,15 @@ function Wechatia({ conectado, locationId, numero, panel, admin, ocupado, conect
       </Boton>}
     </Fila>
     {abierto && admin && (
-      <form className="tw:flex tw:flex-wrap tw:items-end tw:gap-3 tw:pl-[52px]"
+      <form className="tw:flex tw:flex-col tw:gap-ui tw:pl-[52px]"
         onSubmit={(e) => { e.preventDefault(); conectar(token.trim(), loc.trim()); setToken(''); setAbierto(false); }}>
-        <Input clasesCampo="tw:flex-1 tw:min-w-[220px]" etiqueta="Clave de la integración privada" type="password" autoComplete="off"
-          value={token} onChange={(e) => setToken(e.target.value)} placeholder="pit-…" />
-        <Input clasesCampo="tw:w-[220px]" etiqueta="Id de la cuenta (location)" value={loc} onChange={(e) => setLoc(e.target.value)}
-          ayuda="Está en la dirección del panel: …/location/XXXX/…" />
-        <Boton type="submit" cargando={ocupado} disabled={token.trim().length < 20 || loc.trim().length < 4}>Guardar</Boton>
+        <div className="tw:flex tw:flex-wrap tw:items-end tw:gap-ui">
+          <Input clasesCampo="tw:flex-1 tw:min-w-[220px]" etiqueta="Clave de la integración privada" type="password" autoComplete="off"
+            value={token} onChange={(e) => setToken(e.target.value)} placeholder="pit-…" />
+          <Input clasesCampo="tw:w-[220px]" etiqueta="Id de la cuenta (location)" value={loc} onChange={(e) => setLoc(e.target.value)} />
+          <Boton tamano="lg" type="submit" cargando={ocupado} disabled={token.trim().length < 20 || loc.trim().length < 4}>Guardar</Boton>
+        </div>
+        <NotasForm items={['Id de la cuenta: está en la dirección del panel (…/location/XXXX/…).']} />
       </form>
     )}
     {conectado && (
@@ -394,13 +448,17 @@ function Wechatia({ conectado, locationId, numero, panel, admin, ocupado, conect
       </Fila>
     )}
     {conectado && editNum && admin && (
-      <form className="tw:flex tw:flex-wrap tw:items-end tw:justify-end tw:gap-3 tw:pl-[52px]"
+      <form className="tw:flex tw:flex-col tw:gap-ui tw:pl-[52px]"
         onSubmit={(e) => { e.preventDefault(); guardarNumero(num.trim()); setEditNum(false); }}>
-        <Input id="waNumeroEmpresa" clasesCampo="tw:flex-1 tw:min-w-[220px]" etiqueta="Celular de WhatsApp de la empresa" value={num}
-          onChange={(e) => setNum(e.target.value)} placeholder="+56 9 1234 5678"
-          ayuda={numValido ? 'El número conectado en la cuenta de wechatia de la corredora. Déjalo vacío para no filtrar.' : 'Escribe un celular chileno: +56 9 y 8 dígitos.'} />
-        <Boton variante="secundario" type="button" onClick={() => setEditNum(false)}>Cancelar</Boton>
-        <Boton type="submit" cargando={ocupado} disabled={!numValido}>Guardar</Boton>
+        <div className="tw:flex tw:flex-wrap tw:items-end tw:justify-end tw:gap-ui">
+          <Input id="waNumeroEmpresa" clasesCampo="tw:flex-1 tw:min-w-[220px]" etiqueta="Celular de WhatsApp de la empresa" value={num}
+            onChange={(e) => setNum(e.target.value)} placeholder="+56 9 1234 5678" />
+          <Boton variante="secundario" tamano="lg" type="button" onClick={() => setEditNum(false)}>Cancelar</Boton>
+          <Boton tamano="lg" type="submit" cargando={ocupado} disabled={!numValido}>Guardar</Boton>
+        </div>
+        <NotasForm items={[numValido
+          ? 'El número conectado en la cuenta de wechatia de la corredora. Déjalo vacío para no filtrar.'
+          : 'Escribe un celular chileno: +56 9 y 8 dígitos.']} />
       </form>
     )}
   </>;

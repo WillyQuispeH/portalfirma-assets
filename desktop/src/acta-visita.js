@@ -18,10 +18,9 @@ module.exports = {
   cerrar: (actaId) => api('POST', `/actas-visita/${id(actaId)}/cerrar`, {}, 120000),
   whatsapp: (actaId) => api('POST', `/actas-visita/${id(actaId)}/whatsapp`, {}),
   eliminar: (actaId) => api('DELETE', `/actas-visita/${id(actaId)}`),
-  // acta firmada: el PDF con el número de la orden (el servidor lo arma), ajustes que se guardan en su origen y el envío a firmar al visitante
-  firmaVistaPrevia: (actaId) => api('POST', `/actas-visita/${id(actaId)}/firma/vista-previa`, {}, 90000),   // si faltan datos (RUT, correo) trae el error Y los datos para completarlos
-  firmaAjustes: ({ actaId, ...b }) => api('POST', `/actas-visita/${id(actaId)}/firma/ajustes`, b),
-  firmaEnviar: async (actaId) => { const r = await api('POST', `/actas-visita/${id(actaId)}/firma/enviar`, {}, 90000); if (r?.error) throw err(r.error); return r; },
+  // el PDF del acta (con el número de la orden, los audios y las fotos) y su enlace para compartir por WhatsApp. El acta no se firma
+  pdf: (actaId) => api('POST', `/actas-visita/${id(actaId)}/pdf`, {}, 120000),
+  compartir: (actaId) => api('POST', `/actas-visita/${id(actaId)}/compartir`, {}, 120000),
   borrarArchivo: ({ actaId, tipo, n }) => api('DELETE', `/actas-visita/${id(actaId)}/archivo/${id(tipo)}/${Number(n) || 0}`),
   archivo: ({ actaId, tipo, n }) => api('GET', `/actas-visita/${id(actaId)}/archivo/${id(tipo)}/${Number(n) || 0}`),
 };
