@@ -8,7 +8,7 @@ const assert = require('assert');
 const Module = require('module');
 const path = require('path');
 const src = path.join(__dirname, '..', 'src');
-let getAllListo = true; let st2; let guardado = {}; let conApi = true; let sinCredenciales = false; const llamadas = [];
+let getAllNuevo = false; let getAllListo = true; let st2; let guardado = {}; let conApi = true; let sinCredenciales = false; const llamadas = [];
 const falso = {
   electron: { app: { getPath: () => require('os').tmpdir() } },
   [path.join(src, 'store.js')]: { get: (k) => guardado[k], set: (k, v) => { guardado[k] = v; } },
@@ -17,6 +17,7 @@ const falso = {
     llamadas.push({ m, ruta, cuerpo });
     if (sinCredenciales) throw Object.assign(new Error('sin conexión'), { code: 'NECESITA_CONEXION', status: 409 });
     if (ruta === '/portalfirma-api/conexion') return { conectado: true };
+    if (ruta.startsWith('/portalfirma-api/operaciones?') && getAllNuevo) return { listo: true, motivo: null, filas: [{ operation: 777, contractId: 'c-7', creado: '2026-11-18T10:00:00', actualizado: '2026-11-19T10:00:00', nombre: 'Contrato de arriendo', estado: 'process', firmantes: 3, firmaron: 1, legalizado: false, sinEnviar: false }, { operation: 778, contractId: 'c-8', creado: '2026-11-01T10:00:00', actualizado: '2026-11-02T10:00:00', nombre: 'Mandato', estado: 'finalized', firmantes: 1, firmaron: 1, legalizado: true, sinEnviar: false }] };
     if (ruta.startsWith('/portalfirma-api/operaciones?')) return getAllListo ? { listo: true, motivo: null, filas: [{ operation: 555, contractId: 'c-1', creado: '2026-11-19T10:00:00Z', firmantes: 2 }] } : { listo: false, motivo: 'Petición en mantenimiento', filas: [] };
     if (ruta === '/portalfirma-api/operaciones') return { totalInRange: 1, operations: [{ contract_id: 'c-1', operation: 555, stage: 'process', document_name: 'Orden de visita', createdDateAt: '2026-11-19T10:00:00Z', updatedDateAt: '2026-11-20T10:00:00Z' }] };
     if (ruta === '/portalfirma-api/operacion/555') return { processId: 'c-1', operation: 555, status: 'process', signatories: [{ name: 'Ana', signed: true }, { name: 'Bruno', signed: false }], files: { original: { id: 'f1', name: 'Orden.pdf' }, signed: null, legalized: null }, updatedDateAt: '2026-11-20T10:00:00Z' };
@@ -64,5 +65,14 @@ sync.init();
   guardado = { opsCache: { items: { 1: { operation: 1, name: 'Viejo del MCP', stage: 'process' } }, details: {}, lastSync: '2026-01-01T00:00:00Z', phone: '56987276858' } };
   assert.strictEqual(sync.list().items.length, 0, 'la copia de otra fuente no se muestra');
   assert.strictEqual((await sync.status()).count, 0);
+  // getAll nuevo (paginado por etapa): ya trae el nombre, la etapa y los firmantes, y se pide UNA vez por todo el rango
+  guardado = {}; conApi = true; getAllNuevo = true; llamadas.length = 0;
+  r = await sync.sync({ full: true });
+  assert.strictEqual(llamadas.filter((l) => l.ruta.startsWith('/portalfirma-api/operaciones?')).length, 1, 'una sola consulta por todo el rango');
+  const n7 = r.items.find((x) => x.operation === 777); const n8 = r.items.find((x) => x.operation === 778);
+  assert.ok(n7 && n7.name === 'Contrato de arriendo' && n7.stage === 'process' && n7.signers === 3 && n7.signed === 1, 'el nombre y los firmantes salen del listado, sin pedir el detalle');
+  assert.ok(n8 && n8.stage === 'finalized' && n8.name === 'Mandato', 'cada operación con su etapa');
+  assert.ok(!llamadas.some((l) => /\/portalfirma-api\/operacion\/\d+$/.test(l.ruta)), 'no pide el detalle de cada operación al sincronizar');
+  getAllNuevo = false;
   console.log('sync-api-unit OK');
 })().catch((e) => { console.error(e); process.exit(1); });

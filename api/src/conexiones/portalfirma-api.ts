@@ -244,23 +244,113 @@ export class PortalfirmaApiService {
   }
 
   /**
+   * Todas las operaciones de la cuenta (POST /document/getAll, paginado por etapa: starting · process · finalized · inactive, de a 100):
+   * cada fila ya trae el nombre del documento, sus fechas y los firmantes con su estado, así que no hace falta pedir el detalle de cada una.
+   * No tiene filtro de fechas: se filtra aquí por la fecha de creación. Falla (y se usa el listado anterior) si la respuesta no tiene la forma esperada.
+   */
+  private async listadoPorEtapas(corredoraId: string, desde: string, hasta: string) {
+    const ini = `${desde}T00:00:00`;
+    const fin = `${hasta}T23:59:59.999`;
+    const vistas = new Map<number, Json>();
+    for (const etapa of ['process', 'finalized', 'starting', 'inactive'] as const) {
+      for (let pagina = 1; pagina <= 200; pagina++) {
+        const r = await this.pedir<{ data?: unknown; pagination?: { totalPages?: number } }>(corredoraId, 'POST', '/document/getAll', {
+          page: pagina,
+          pageSize: 100,
+          stage: etapa,
+        });
+        if (!r || typeof r !== 'object' || !Array.isArray(r.data)) throw new Error('la respuesta no trae la lista de procesos');
+        for (const x of r.data as Json[]) {
+          const c = x?.contract;
+          const operation = Number(c?.operation);
+          const creado = String(c?.createdDate ?? '');
+          if (!Number.isFinite(operation) || operation <= 0 || vistas.has(operation)) continue;
+          if (creado && (creado < ini || creado > fin)) continue;
+          const firmantes = Array.isArray(x?.signers) ? (x.signers as Json[]).filter((q) => q?.isSignatory !== false) : [];
+          vistas.set(operation, {
+            operation,
+            contractId: String(c?.id ?? ''),
+            creado,
+            actualizado: String(c?.updateDate ?? creado),
+            nombre: String(c?.document_name ?? '').trim(),
+            estado: etapa,
+            estadoPortalfirma: String(x?.status ?? ''),
+            firmantes: firmantes.length,
+            firmaron: firmantes.filter((q) => q?.signed === true).length,
+            legalizado: !!c?.legalized,
+            sinEnviar: false,
+          });
+        }
+        const total = Number(r.pagination?.totalPages ?? 1);
+        if (!Number.isFinite(total) || pagina >= total) break;
+      }
+    }
+    const filas = [...vistas.values()].sort((a, b) => Number(b.operation) - Number(a.operation));
+    return { listo: true as const, motivo: null, filas };
+  }
+
+  /**
    * Todas las operaciones de la empresa en un rango de fechas (GET /document/getAll/YYYYMMDD/YYYYMMDD): una fila por operación con
    * su proceso, fecha y cantidad de firmantes. Mientras Portalfirma la tenga en mantenimiento (responde un texto en vez del resumen),
    * devuelve `listo: false` para que la app use el listado por teléfono.
    */
   async operacionesDeLaEmpresa(corredoraId: string, desde: string, hasta: string) {
+    // la forma nueva (POST /document/getAll paginado por etapa); si Portalfirma aún no la tiene, sigue la de siempre (GET con fechas)
+    const nueva = await this.listadoPorEtapas(corredoraId, desde, hasta).catch((e: Error) => {
+      this.log.warn(`getAll por etapas no disponible, se usa el listado anterior: ${e.message.slice(0, 160)}`);
+      return null;
+    });
+    if (nueva) return nueva;
+    // el listado anterior acepta como mucho un año por consulta: un rango mayor se parte en tramos y se juntan las filas
+    const dia = 86_400_000;
+    const tramos: [string, string][] = [];
+    for (let fin = new Date(`${hasta}T00:00:00Z`).getTime(), ini0 = new Date(`${desde}T00:00:00Z`).getTime(); fin >= ini0; fin -= 365 * dia + dia) {
+      tramos.push([new Date(Math.max(ini0, fin - 364 * dia)).toISOString().slice(0, 10), new Date(fin).toISOString().slice(0, 10)]);
+      if (tramos.length >= 12) break;
+    }
+    const todas = new Map<number, Json>();
+    let ultimo: Awaited<ReturnType<PortalfirmaApiService['listadoAnterior']>> | null = null;
+    for (const [i, f] of tramos) {
+      ultimo = await this.listadoAnterior(corredoraId, i, f);
+      if (!ultimo.listo) return ultimo;
+      for (const x of ultimo.filas) if (!todas.has(Number(x.operation))) todas.set(Number(x.operation), x);
+    }
+    return { listo: true as const, motivo: null, filas: [...todas.values()].sort((a, b) => Number(b.operation) - Number(a.operation)) };
+  }
+
+  /** el listado anterior de la empresa (GET /document/getAll/AAAAMMDD/AAAAMMDD, hasta un año por consulta) */
+  private async listadoAnterior(corredoraId: string, desde: string, hasta: string) {
     const d = await this.pedir<unknown>(corredoraId, 'GET', `/document/getAll/${desde.replace(/-/g, '')}/${hasta.replace(/-/g, '')}`);
-    const total = (d as Json | null)?.total as { data?: unknown } | undefined;
-    if (!d || typeof d !== 'object' || !Array.isArray(total?.data))
+    // el resumen viene en cubos: `total`, `active`, `signed`… traen solo el CONTEO (su `data` va vacío); las filas con su operación están en
+    // `processSent` (enviadas a firmar), `processSigned` y `processNotSent` (creadas sin enviar). `inactive.data` son solo números de operación.
+    const r0 = d && typeof d === 'object' ? (d as Json) : null;
+    const cubo = (k: string) => (Array.isArray((r0?.[k] as { data?: unknown } | undefined)?.data) ? ((r0![k] as { data: Json[] }).data) : null);
+    const enviadas = cubo('processSent');
+    const firmadas = cubo('processSigned');
+    const sinEnviar = cubo('processNotSent');
+    const resto = cubo('total'); // por si Portalfirma vuelve a llenarlo
+    if (!r0 || (!enviadas && !firmadas && !sinEnviar && !resto))
       return { listo: false as const, motivo: typeof d === 'string' ? d : 'Portalfirma no entregó el resumen', filas: [] as Json[] };
-    const filas = (total!.data as Json[])
-      .map((r) => ({
-        operation: Number(r?.contract?.operation),
-        contractId: String(r?.contract?.id ?? ''),
-        creado: String(r?.contract?.createdDate ?? ''),
-        firmantes: Number(r?.signersCount ?? 0),
-      }))
-      .filter((f) => Number.isFinite(f.operation) && f.operation > 0);
+    const vistas = new Map<number, { operation: number; contractId: string; creado: string; firmantes: number; sinEnviar: boolean }>();
+    const sumar = (lista: Json[] | null, sin: boolean) => {
+      for (const r of lista ?? []) {
+        if (!r || typeof r !== 'object') continue;
+        const operation = Number(r?.contract?.operation);
+        if (!Number.isFinite(operation) || operation <= 0 || vistas.has(operation)) continue;
+        vistas.set(operation, {
+          operation,
+          contractId: String(r?.contract?.id ?? ''),
+          creado: String(r?.contract?.createdDate ?? ''),
+          firmantes: Number(r?.signersCount ?? 0),
+          sinEnviar: sin,
+        });
+      }
+    };
+    sumar(enviadas, false);
+    sumar(firmadas, false);
+    sumar(resto, false);
+    sumar(sinEnviar, true);
+    const filas = [...vistas.values()].sort((a, b) => b.operation - a.operation);
     return { listo: true as const, motivo: null, filas };
   }
 

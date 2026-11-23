@@ -78,22 +78,27 @@ async function integracionSync(full) {
   let c = cache();
   const now = Date.now(); const from = !full && c.lastSync ? new Date(c.lastSync).getTime() - 45 * DAY : now - YEARS_BACK * 365 * DAY;
   const vistas = new Set(); let completo = true;
-  for (let end = now; end > from; end -= 366 * DAY) {
-    const ini = Math.max(from, end - 365 * DAY);
-    const r = await requiereApi('GET', `/portalfirma-api/operaciones?desde=${iso(ini)}&hasta=${iso(end)}`);
-    if (!r.listo) return null;
+  // una sola consulta por todo el rango: el servidor junta las páginas (getAll nuevo, con nombre y firmantes de cada operación) o parte el
+  // rango en tramos de un año si Portalfirma solo tiene el listado anterior
+  {
+    const r = await requiereApi('GET', `/portalfirma-api/operaciones?desde=${iso(from)}&hasta=${iso(now)}`);
+    if (!r.listo) { c.fuente = 'telefono'; c.motivoFuente = String(r.motivo || 'Portalfirma no entregó el listado de la empresa').slice(0, 200); save(c); return null; }   // queda anotado: «Mis operaciones» avisa que solo muestra las del teléfono
     for (const o of r.filas || []) {
       const n = Number(o.operation); if (!n) continue; vistas.add(n);
       const prev = c.items[n];
-      c.items[n] = { stage: 'process', name: `Operación ${n}`, ...prev, operation: n, contractId: o.contractId || prev?.contractId || '', created: o.creado || prev?.created || '', signersCount: o.firmantes };
+      const conDatos = o.nombre !== undefined;   // getAll nuevo: ya trae el nombre, la etapa y los firmantes
+      const stage = o.sinEnviar ? 'draft' : conDatos ? (o.estado || 'process') : prev?.stage === 'draft' ? 'process' : prev?.stage || 'process';
+      const sig = conDatos && o.firmantes ? Array.from({ length: o.firmantes }, (_, k) => ({ signed: k < (o.firmaron || 0) })) : prev?.sig;
+      c.items[n] = { name: `Operación ${n}`, ...prev, stage, operation: n, contractId: o.contractId || prev?.contractId || '', created: o.creado || prev?.created || '', signersCount: o.firmantes,
+        ...(conDatos ? { ...(o.nombre ? { name: o.nombre } : {}), updated: o.actualizado || prev?.updated || '', legalized: !!o.legalizado, ...(sig ? { sig } : {}) } : {}) };
     }
   }
   if (full) for (const n of Object.keys(c.items)) if (!vistas.has(Number(n)) && !c.items[n].local) { delete c.items[n]; delete c.details[n]; }
   // lo enviado desde esta app también aparece (aunque Portalfirma todavía no lo liste)
   for (const h of historial()) { const n = Number(String(h.operation ?? '').replace(/\D/g, '')); if (!n || c.items[n]) continue; c.items[n] = { operation: n, name: h.name || 'Documento', stage: 'process', created: h.date, updated: h.date, local: true }; }
-  c.lastSync = new Date().toISOString(); save(c);
+  c.fuente = 'empresa'; c.motivoFuente = ''; c.lastSync = new Date().toISOString(); save(c);
   // el detalle de las más recientes (y de las que siguen en curso): da nombre, etapa y firmas; el resto se pide al abrirlas
-  const pend = Object.values(c.items).filter((it) => !it.local && (GENERICO.test(it.name || '') || !c.details[it.operation] || (c.details[it.operation].d.status !== 'finalized' && Date.now() - c.details[it.operation].t > DETAIL_TTL)))
+  const pend = Object.values(c.items).filter((it) => !it.local && it.stage !== 'draft' && !(it.sig && !GENERICO.test(it.name || '')) && (GENERICO.test(it.name || '') || !c.details[it.operation] || (c.details[it.operation].d.status !== 'finalized' && Date.now() - c.details[it.operation].t > DETAIL_TTL)))
     .sort((a, b) => String(b.created).localeCompare(String(a.created))).slice(0, 40);
   for (let i = 0; i < pend.length; i += 4) await Promise.all(pend.slice(i, i + 4).map((it) => detail(it.operation, { refresh: true }).catch(() => null)));
   return { ...list(), found: vistas.size };
@@ -138,7 +143,7 @@ function list() {
   const base = { ...c.items }; for (const [n, h] of Object.entries(hist)) if (!base[n]) base[n] = { operation: Number(n), name: h.name || 'Documento', stage: 'process', created: h.date, updated: h.date, local: true };   // recién enviado desde Asset
   const items = Object.values(base).map((it) => { const h = hist[it.operation]; return { ...it, ...apiSummary(it), ...summary(c.details[it.operation]?.d), ...(h?.propId || h?.origen ? { asset: { propId: h.propId || null, negocioId: h.negocioId || null, origen: h.origen || null, firmantes: h.firmantes || [], tipoFirma: h.tipoFirma || null, tramite: h.tramite || null } } : {}) }; })
     .sort((a, b) => String(b.updated || b.created).localeCompare(String(a.updated || a.created)));
-  return { items, lastSync: c.lastSync, phone: telefono() };
+  return { items, lastSync: c.lastSync, phone: telefono(), fuente: c.fuente || null, motivoFuente: c.motivoFuente || '' };
 }
 // Resumen que se agrega a la lista cuando ya se conoce el detalle
 function summary(d) {

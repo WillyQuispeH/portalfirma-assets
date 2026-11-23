@@ -24,7 +24,7 @@ const SUF = Date.now().toString(36);
 
 // ---------------------------------------------------------------- Portalfirma falso (la API de integración)
 const ID_API = 'id-api-' + SUF; const CUSTOMER = '11111111-2222-3333-4444-555555555555'; const OP = 700000000 + Math.floor(Math.random() * 90000000);
-let tokenDirecto = false; const consultasTel = []; const getAllPedidos = []; let getAllListo = true; let tokenVigente = 'tok-1'; let pedidosToken = 0; const envios = []; const reenvios = []; const cabeceras = [];
+let tokenDirecto = false; const consultasTel = []; const getAllPedidos = []; let getAllListo = true; let getAllNuevo = false; const getAllNuevoPedidos = []; let tokenVigente = 'tok-1'; let pedidosToken = 0; const envios = []; const reenvios = []; const cabeceras = [];
 function portalfirmaFalso() {
   const s = http.createServer(async (rq, rs) => {
     const json = (st, o) => { rs.writeHead(st, { 'content-type': 'application/json' }).end(JSON.stringify(o)); };
@@ -42,12 +42,25 @@ function portalfirmaFalso() {
       return json(200, { success: true, data: { processId: 'a0000000-0000-4000-8000-000000000001', operation: OP, status: 'process', signatories: [{ id: 'b0000000-0000-4000-8000-000000000001', name: 'Ana', signed: false }], files: { original: { id: 'f0000000-0000-4000-8000-000000000001', name: 'Orden.pdf' }, signed: null }, updatedDateAt: '2026-11-20T10:00:00Z' }, error: null });
     if (rq.method === 'GET' && rq.url === `/api/document/getByOperation/${OP}`) return json(200, { success: true, data: { processId: 'a0000000-0000-4000-8000-000000000001', operation: OP, status: 'process', signatories: [{ id: 'b0000000-0000-4000-8000-000000000001', name: 'Ana', signed: false }] }, error: null });
     if (rq.method === 'GET' && rq.url === '/api/file/f0000000-0000-4000-8000-000000000001') return json(200, { success: true, data: Buffer.from('%PDF-1.4 original').toString('base64'), error: null });
+    if (rq.method === 'POST' && rq.url === '/api/document/getAll') { // la forma nueva: paginada por etapa, con nombre y firmantes en cada fila
+      if (!getAllNuevo) return json(404, { success: false, data: null, error: 'Not Found' });
+      const c = JSON.parse(b); getAllNuevoPedidos.push(c);
+      const f = (op, f2, nombre, firm, st) => ({ status: st, contract: { id: 'c000000' + op, operation: op, updateDate: f2, createdDate: f2, document_name: nombre }, signers: firm });
+      const porEtapa = {
+        process: [[f(OP + 5, '2026-11-18T10:00:00', 'Contrato A', [{ signed: true, isSignatory: true, fullName: 'Ana' }, { signed: false, isSignatory: true, fullName: 'Beto' }], 'process')], [f(OP + 4, '2026-11-10T10:00:00', 'Promesa B', [{ signed: false, isSignatory: true, fullName: 'Cami' }], 'process')]],
+        finalized: [[f(OP + 3, '2026-09-01T10:00:00', 'Mandato C', [{ signed: true, isSignatory: true, fullName: 'Dani' }], 'finalized'), f(OP - 100, '2024-01-01T10:00:00', 'Muy antiguo', [], 'finalized')]],
+        starting: [[]], inactive: [[f(OP + 2, '2026-08-01T10:00:00', 'Sin pagar D', [], 'unPayed')]],
+      };
+      const pags = porEtapa[c.stage] || [[]]; const i = Math.max(1, c.page) - 1;
+      return json(200, { success: true, data: { data: pags[i] || [], pagination: { limit: c.pageSize, totalPages: pags.length, currentPage: c.page, totalRecords: pags.flat().length } }, error: null });
+    }
     if (rq.method === 'GET' && /^\/api\/document\/getAll\/\d{8}\/\d{8}$/.test(rq.url || '')) {
       getAllPedidos.push(rq.url);
       if (!getAllListo) return json(200, { success: true, data: 'Petición en mantenimiento', error: null });
       const fila = (op, id, f, n) => ({ contract: { id, operation: op, createdDate: f }, signersCount: n });
       const todas = [fila(OP, 'a0000000-0000-4000-8000-000000000001', '2026-11-19T10:00:00Z', 2), fila(OP + 1, 'a0000000-0000-4000-8000-000000000002', '2026-10-01T10:00:00Z', 1)];
-      return json(200, { success: true, data: { total: { total: 2, data: todas }, inactive: { total: 0, data: [] }, active: { total: 1, data: [todas[0]] }, processSent: { total: 2, data: todas }, processNotSent: { total: 0, data: [] }, signed: { total: 1, data: [todas[1]] }, totalSigns: { total: 3, data: todas }, processSigned: { total: 1, data: [todas[1]] } }, error: null });
+      // como responde Portalfirma de verdad: los cubos de conteo (total, active, signed…) vienen con `data` vacío; las filas están en processSent / processNotSent
+      return json(200, { success: true, data: { total: { total: 4, data: [] }, inactive: { total: 1, data: [9999] }, active: { total: 3, data: [] }, processSent: { total: 2, data: todas }, processNotSent: { total: 1, data: [fila(OP + 2, 'a0000000-0000-4000-8000-000000000003', '2026-09-01T10:00:00Z', 0)] }, signed: { total: 1, data: [] }, totalSigns: { total: 1, data: [] }, processSigned: { total: 0, data: [] } }, error: null });
     }
     if (rq.method === 'POST' && rq.url === '/api/document/getOperationsByPhone') {
       const c = JSON.parse(b); consultasTel.push(c);
@@ -124,12 +137,21 @@ const firmantes = [
 
     // ---- «Mis operaciones»: todas las de la empresa con getAll (fechas YYYYMMDD en la ruta)
     r = await req('GET', '/portalfirma-api/operaciones?desde=2026-01-01&hasta=2026-11-20', null, tC);
-    ok(r.s === 200 && r.j.listo === true && r.j.filas.length === 2 && r.j.filas[0].operation === OP && r.j.filas[0].contractId === 'a0000000-0000-4000-8000-000000000001' && r.j.filas[0].firmantes === 2 && r.j.filas[1].creado.startsWith('2026-10-01'), 'lista todas las operaciones de la empresa (getAll): operación, proceso, fecha y firmantes');
+    ok(r.s === 200 && r.j.listo === true && r.j.filas.length === 3 && r.j.filas[0].operation === OP + 2 && r.j.filas[0].sinEnviar === true && r.j.filas[1].operation === OP + 1 && r.j.filas[1].creado.startsWith('2026-10-01') && r.j.filas[2].operation === OP && r.j.filas[2].contractId === 'a0000000-0000-4000-8000-000000000001' && r.j.filas[2].firmantes === 2 && r.j.filas[2].sinEnviar === false, 'lista todas las operaciones de la empresa (getAll): las filas salen de processSent y processNotSent (total viene vacío), con operación, proceso, fecha y firmantes');
     ok(getAllPedidos.at(-1) === '/api/document/getAll/20260101/20261120', 'las fechas van a Portalfirma como AAAAMMDD, sin guiones');
     getAllListo = false;
     r = await req('GET', '/portalfirma-api/operaciones?desde=2026-01-01&hasta=2026-11-20', null, tC);
     ok(r.s === 200 && r.j.listo === false && /mantenimiento/.test(r.j.motivo) && r.j.filas.length === 0, 'mientras getAll siga en mantenimiento: listo = false (la app usa el listado por teléfono)');
     getAllListo = true;
+    // la forma nueva de getAll (POST, por etapa, paginada): trae el nombre y los firmantes de cada operación; filtra por fecha de creación
+    getAllNuevo = true;
+    r = await req('GET', '/portalfirma-api/operaciones?desde=2026-01-01&hasta=2026-11-20', null, tC);
+    const ops = (r.j.filas || []).map((x) => x.operation).sort((x, y) => y - x);
+    ok(r.s === 200 && r.j.listo === true && ops.join() === [OP + 5, OP + 4, OP + 3, OP + 2].join(), 'getAll nuevo: junta las etapas y las páginas, y deja fuera lo anterior al rango (' + ops.join(',') + ')');
+    const fA = r.j.filas.find((x) => x.operation === OP + 5);
+    ok(fA && fA.nombre === 'Contrato A' && fA.firmantes === 2 && fA.firmaron === 1 && fA.estado === 'process' && fA.actualizado.startsWith('2026-11-18'), 'cada fila trae el nombre del documento, los firmantes y cuántos firmaron (sin pedir el detalle)');
+    ok(getAllNuevoPedidos.some((x) => x.stage === 'process' && x.page === 2 && x.pageSize === 100) && getAllNuevoPedidos.every((x) => x.pageSize <= 100), 'pide de a 100 y recorre todas las páginas de cada etapa');
+    getAllNuevo = false;
     ok((await req('GET', '/portalfirma-api/operaciones?desde=01-01-2026&hasta=2026-11-20', null, tC)).s === 400, 'una fecha que no es AAAA-MM-DD se rechaza');
     // ---- «Mis operaciones» por teléfono (respaldo)
     r = await req('POST', '/portalfirma-api/operaciones', { phone: '+56 9 8727 6858', desde: '2026-01-01', hasta: '2026-11-20', limit: 100 }, tC);

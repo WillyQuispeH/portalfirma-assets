@@ -140,7 +140,7 @@ function Detalle({ d, items, alRefrescar }: { d: IDetalleOperacion; items: IOper
 }
 
 export default function Operaciones({ sel: selInicial }: { sel?: number | null }) {
-  const { items, lastSync, cuenta, filtro, q, sel, detalle, errorDetalle, sincronizando, operacionesGetAll, operacionesSincronizar, operacionesCompletar, operacionElegir, operacionesSetFiltro, operacionesSetCuenta } = useOperacion();
+  const { items, lastSync, fuente, motivoFuente, cuenta, filtro, q, sel, detalle, errorDetalle, sincronizando, operacionesGetAll, operacionesSincronizar, operacionesCompletar, operacionElegir, operacionesSetFiltro, operacionesSetCuenta } = useOperacion();
   const [listo, setListo] = useState(items.length > 0);   // con la lista de la vez anterior ya se ve al entrar (se actualiza enseguida)
   const [sinApi, setSinApi] = useState(false);   // la corredora no ha ingresado las credenciales de la API de Portalfirma
 
@@ -204,7 +204,7 @@ export default function Operaciones({ sel: selInicial }: { sel?: number | null }
       altoCompleto
       titulo="Mis operaciones"
       ilustracion={{ imagen: 'img/formas/etapa.svg', tinte: '#6d5bd0' }}
-      subtitulo={<span id="opsWhen">{items.length} operaciones enviadas a firmar · actualizado {hace(lastSync)}</span>}
+      subtitulo={<span id="opsWhen">{items.length} operaciones enviadas a firmar · actualizado {hace(lastSync)}{fuente === 'telefono' && <span id="opsFuente" className="tw:text-[#7a4d00]"> · solo las enviadas con tu teléfono: Portalfirma no entregó el listado de toda la empresa ({motivoFuente})</span>}</span>}
       acciones={<>
         <Boton id="opsSync" icono="rotateR" cargando={sincronizando} disabled={sincronizando} onClick={() => sincronizar()}>Sincronizar</Boton>
         <Boton variante="secundario" id="opsBulk" icono="files" onClick={() => abrirCarga()}>Firma masiva</Boton>

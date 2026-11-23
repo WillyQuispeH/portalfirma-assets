@@ -28,16 +28,17 @@ function Marco({
             + ' linear-gradient(165deg, #f5f7fc 0%, #e9eef8 48%, #e2e8f4 100%)',
         }}
       >
-        <div aria-hidden className="tw:pointer-events-none tw:absolute tw:-right-16 tw:top-24 tw:size-[280px] tw:rounded-full tw:border tw:border-solid tw:border-edge" />
-        <div aria-hidden className="tw:pointer-events-none tw:absolute tw:-right-8 tw:top-32 tw:size-[200px] tw:rounded-full tw:border tw:border-solid tw:border-edge" />
+        {/* bordes y texto fijos: el panel es siempre claro, aunque la app esté en dark */}
+        <div aria-hidden className="tw:pointer-events-none tw:absolute tw:-right-16 tw:top-24 tw:size-[280px] tw:rounded-full tw:border tw:border-solid tw:border-[#d5dceb]" />
+        <div aria-hidden className="tw:pointer-events-none tw:absolute tw:-right-8 tw:top-32 tw:size-[200px] tw:rounded-full tw:border tw:border-solid tw:border-[#d5dceb]" />
         <div aria-hidden className="tw:pointer-events-none tw:absolute tw:-bottom-20 tw:-left-16 tw:size-[260px] tw:rounded-full tw:blur-2xl"
-          style={{ background: 'color-mix(in srgb, var(--brand) 12%, transparent)' }} />
+          style={{ background: 'color-mix(in srgb, #2f49e0 12%, transparent)' }} />
 
         <div className="tw:relative tw:z-[1]">
           <img src="assets/logo.png" alt="" className="tw:block tw:h-auto tw:w-[200px] tw:max-w-full" />
         </div>
-        <div className="tw:relative tw:z-[1] tw:flex tw:max-w-[340px] tw:flex-col tw:gap-3">
-          <p className="tw:m-0 tw:text-[11px] tw:font-semibold tw:uppercase tw:tracking-[0.14em] tw:text-muted">PortalFirma Asset</p>
+        <div className="tw:relative tw:z-[1] tw:flex tw:max-w-[340px] tw:flex-col tw:gap-3" style={{ color: '#1b1f2a' }}>
+          <p className="tw:m-0 tw:text-[11px] tw:font-semibold tw:uppercase tw:tracking-[0.14em]" style={{ color: '#4a5160' }}>PortalFirma Asset</p>
           <h2
             className="tw:m-0 tw:text-[28px] tw:font-bold tw:leading-tight tw:tracking-tight"
             style={{
@@ -51,9 +52,9 @@ function Marco({
           >
             {tituloMarca}
           </h2>
-          <p className="tw:m-0 tw:text-[15px] tw:leading-relaxed tw:text-[color:var(--navy)] tw:opacity-80">{textoMarca}</p>
+          <p className="tw:m-0 tw:text-[15px] tw:leading-relaxed" style={{ color: '#2a3348' }}>{textoMarca}</p>
         </div>
-        <p className="tw:relative tw:z-[1] tw:m-0 tw:text-xs tw:leading-relaxed tw:text-muted">Para corredoras que firman, publican y gestionan en un solo lugar.</p>
+        <p className="tw:relative tw:z-[1] tw:m-0 tw:text-xs tw:leading-relaxed" style={{ color: '#4a5160' }}>Para corredoras que firman, publican y gestionan en un solo lugar.</p>
       </aside>
 
       <main className="tw:relative tw:flex tw:min-w-0 tw:flex-1 tw:flex-col tw:items-center tw:justify-center tw:px-4 tw:py-8">

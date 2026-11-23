@@ -5,7 +5,7 @@ import { operacionService } from '../services/operacion.service';
 
 export function useOperacion() {
   return useOperacionStore(useShallow((s) => ({
-    items: s.items, lastSync: s.lastSync, cuenta: s.cuenta, filtro: s.filtro, q: s.q, sel: s.sel, detalle: s.detalle, errorDetalle: s.errorDetalle,
+    items: s.items, lastSync: s.lastSync, fuente: s.fuente, motivoFuente: s.motivoFuente, cuenta: s.cuenta, filtro: s.filtro, q: s.q, sel: s.sel, detalle: s.detalle, errorDetalle: s.errorDetalle,
     sincronizando: s.sincronizando, operacionesGetAll: s.operacionesGetAll, operacionesSincronizar: s.operacionesSincronizar,
     operacionesCompletar: s.operacionesCompletar, operacionElegir: s.operacionElegir, operacionesSetFiltro: s.operacionesSetFiltro, operacionesSetCuenta: s.operacionesSetCuenta,
   })));

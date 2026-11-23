@@ -7,7 +7,7 @@ import type { IDetalleOperacion, IOperacion } from '../interfaces/operacion.inte
 export type TFiltroOps = 'all' | 'pending' | 'signed' | 'notary' | 'action';
 
 const STAGE: Record<string, [string, string]> = {
-  finalized: ['Firmado', 'ok'], process: ['En firma', 'wait'], in_progress: ['En firma', 'wait'], starting: ['Iniciada', 'muted'],
+  finalized: ['Firmado', 'ok'], process: ['En firma', 'wait'], draft: ['Sin enviar', 'muted'], inactive: ['Sin pagar', 'muted'], in_progress: ['En firma', 'wait'], starting: ['Iniciada', 'muted'],
   unPayed: ['Pendiente de pago', 'bad'], unData: ['Faltan datos', 'bad'], pending: ['Pendiente', 'wait'],
 };
 // [texto, clase] del estado de una operación
@@ -30,6 +30,9 @@ const avance = (d: IDetalleOperacion) => ({ status: d.status, proc: d.protocoliz
 interface IOperacionState {
   items: IOperacion[];
   lastSync: string | null;
+  /** de dónde sale la lista: toda la empresa (getAll) o solo lo enviado con el teléfono del usuario (si getAll no respondió) */
+  fuente: 'empresa' | 'telefono' | null;
+  motivoFuente: string;
   cuenta: string;
   filtro: TFiltroOps;
   q: string;
@@ -47,14 +50,14 @@ interface IOperacionState {
 }
 
 export const useOperacionStore = create<IOperacionState>((set, get) => ({
-  items: [], lastSync: null, cuenta: '', filtro: 'all', q: '', sel: null, detalle: null, errorDetalle: '', sincronizando: false, prefetching: false,
+  items: [], lastSync: null, fuente: null, motivoFuente: '', cuenta: '', filtro: 'all', q: '', sel: null, detalle: null, errorDetalle: '', sincronizando: false, prefetching: false,
 
-  operacionesGetAll: async () => { const l = await operacionService.getAll(); if (l.ok && l.data) set({ items: l.data.items, lastSync: l.data.lastSync }); return !!l.ok; },
+  operacionesGetAll: async () => { const l = await operacionService.getAll(); if (l.ok && l.data) set({ items: l.data.items, lastSync: l.data.lastSync, fuente: l.data.fuente ?? null, motivoFuente: l.data.motivoFuente ?? '' }); return !!l.ok; },
 
   operacionesSincronizar: async (callado) => {
     set({ sincronizando: true }); const r = await operacionService.sincronizar(); set({ sincronizando: false });
     if (!r.ok) return r.code === 'NO_PHONE' ? { sinTelefono: true } : callado ? {} : { error: 'No se pudo sincronizar: ' + r.error };
-    set({ items: r.data!.items, lastSync: r.data!.lastSync });
+    set({ items: r.data!.items, lastSync: r.data!.lastSync, fuente: r.data!.fuente ?? null, motivoFuente: r.data!.motivoFuente ?? '' });
     return !callado && r.data!.found != null ? { mensaje: `Sincronizado: ${r.data!.items.length} operación(es).` } : {};
   },
 

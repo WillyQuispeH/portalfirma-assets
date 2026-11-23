@@ -3,7 +3,7 @@
 import { api, apiCruda } from '../../utils/api';
 import type { IDetalleOperacion, IEstadoCuenta, IOperacion, TVersionDoc } from '../interfaces/operacion.interface';
 
-type TLista = { items: IOperacion[]; lastSync: string | null; found?: number };
+type TLista = { items: IOperacion[]; lastSync: string | null; found?: number; fuente?: 'empresa' | 'telefono' | null; motivoFuente?: string };
 export const operacionService = {
   estado: () => apiCruda<IEstadoCuenta>('opsStatus'),
   getAll: () => apiCruda<TLista>('opsList'),
