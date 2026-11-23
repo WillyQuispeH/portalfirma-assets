@@ -313,7 +313,7 @@ function crear({ store, wa, crearAgente, locales, dictado, inmo, convs, leads = 
 
   return {
     estado: () => {
-      if (srvOn()) { const e = servidor.ejecutivo.estado(); return { activo: !!e.activo, telefono: e.telefono, codigo: e.codigo, numeroEmpresa: e.numeroEmpresa, vinculado: e.vinculado || null, ocupado: S.busy, pendiente: !!(S.pend || S.ficha || S.lead), persona: S.persona, enServidor: true }; }
+      if (srvOn()) { const e = servidor.ejecutivo.estado(); return { activo: !!e.activo, telefono: e.telefono, codigo: e.codigo, numeroEmpresa: e.numeroEmpresa, vinculado: e.vinculado || null, recordatoriosVisita: e.recordatoriosVisita === true, ocupado: S.busy, pendiente: !!(S.pend || S.ficha || S.lead), persona: S.persona, enServidor: true }; }
       const c = cfg(); return { activo: !!c.activo, telefono: c.telefono, codigo: c.codigo, numeroEmpresa: c.numeroEmpresa, vinculado: c.vinculado || null, ocupado: S.busy, pendiente: !!(S.pend || S.ficha || S.lead), persona: S.persona }; },
     vincular: ({ nombre, email } = {}) => {
       if (srvOn()) { setCfg({ nombre: nombre || '', email: email || cfg().email || '' }); return servidor.ejecutivo.vincular({ ...(nombre ? { nombre } : {}), ...(email ? { email } : {}) }); }
@@ -322,7 +322,7 @@ function crear({ store, wa, crearAgente, locales, dictado, inmo, convs, leads = 
       if (srvOn()) { S.pend = null; S.ficha = null; S.espera = null; setPersona(null); return servidor.ejecutivo.desvincular(); }
       setCfg({ telefono: null, codigo: null, activo: false, vinculado: null }); S.pend = null; S.ficha = null; S.espera = null; setPersona(null); return true; },
     configurar: (o = {}) => {
-      if (srvOn()) { if (o.email) setCfg({ email: o.email }); return servidor.ejecutivo.configurar({ ...(o.activo !== undefined ? { activo: !!o.activo } : {}), ...(o.email ? { email: String(o.email) } : {}), ...(o.numeroEmpresa ? { numeroEmpresa: String(o.numeroEmpresa) } : {}) }); }
+      if (srvOn()) { if (o.email) setCfg({ email: o.email }); return servidor.ejecutivo.configurar({ ...(o.activo !== undefined ? { activo: !!o.activo } : {}), ...(o.email ? { email: String(o.email) } : {}), ...(o.numeroEmpresa ? { numeroEmpresa: String(o.numeroEmpresa) } : {}), ...(o.recordatoriosVisita !== undefined ? { recordatoriosVisita: !!o.recordatoriosVisita } : {}) }); }
       const x = {}; if (o.activo !== undefined) x.activo = !!o.activo && !!cfg().telefono; if (o.numeroEmpresa) x.numeroEmpresa = String(o.numeroEmpresa).slice(0, 30); if (o.email) x.email = o.email; setCfg(x); return cfg(); },
     revisar, ritmo, _S: S,
     // un aviso al celular del ejecutivo (p. ej. «le envié el recordatorio a…»), firmado por quien esté activo

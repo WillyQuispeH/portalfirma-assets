@@ -6,7 +6,7 @@
 //  · GET  /whatsapp/ejecutivo              estado del vínculo;
 //  · POST /whatsapp/ejecutivo/vincular     { nombre?, email? } → código «ASSET 1234» para enviar desde el celular;
 //  · POST /whatsapp/ejecutivo/desvincular;
-//  · PUT  /whatsapp/ejecutivo              { activo?, apodo?, email?, numeroEmpresa? };
+//  · PUT  /whatsapp/ejecutivo              { activo?, apodo?, email?, numeroEmpresa?, recordatoriosVisita? };
 //  · GET  /whatsapp/ejecutivo/entrantes    los mensajes nuevos (se toman una sola vez; también es la señal de que su
 //                                           Asset está abierto);
 //  · POST /whatsapp/ejecutivo/responder    { texto } → al celular vinculado;
@@ -43,6 +43,8 @@ const configurarEsquema = z.object({
   apodo: z.string().trim().max(40).optional(),
   email: z.string().trim().max(200).optional(),
   numeroEmpresa: z.string().trim().max(30).optional(),
+  /** recibir por WhatsApp el recordatorio de sus visitas (recordatorio-visita.ts); apagado por defecto */
+  recordatoriosVisita: z.boolean().optional(),
 });
 const responderEsquema = z.object({ texto: z.string().trim().min(1).max(3500) });
 const pedirEsquema = z.object({ usuarioId: z.string().uuid() });
@@ -52,6 +54,7 @@ interface DatosVinculo {
   email?: string;
   apodo?: string;
   numeroEmpresa?: string;
+  recordatoriosVisita?: boolean;
 }
 
 /** el menú del equipo, con los nombres que la corredora les puso (Configuración › Asistentes) */
@@ -90,6 +93,7 @@ export class EjecutivoService {
       nombre: d.nombre ?? '',
       email: d.email ?? '',
       apodo: d.apodo ?? '',
+      recordatoriosVisita: d.recordatoriosVisita === true,
     };
   }
 
@@ -137,6 +141,7 @@ export class EjecutivoService {
     const v = await this.db.waVinculo.findUnique({ where: { usuarioId: u.sub } });
     const datos = { ...((v?.datos ?? {}) as DatosVinculo) };
     for (const k of ['apodo', 'email', 'numeroEmpresa'] as const) if (b[k] !== undefined) datos[k] = b[k];
+    if (b.recordatoriosVisita !== undefined) datos.recordatoriosVisita = b.recordatoriosVisita;
     const activo = b.activo === undefined ? !!v?.activo : b.activo && !!v?.telefonoNorm;
     const r = await this.db.waVinculo.upsert({
       where: { usuarioId: u.sub },

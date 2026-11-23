@@ -114,14 +114,17 @@ function respuestaIa(b) {
     if (r.agendada) return texto(`Listo, quedó tu visita a ${r.agendada.direccion} el ${r.agendada.fecha} a las ${r.agendada.hora}.${r.pedir ? ' ' + r.pedir : ''}`);
     if (r.instruccion) return texto('Perfecto, le paso tu disponibilidad a tu corredor y te confirma.');
     if (r.propiedades) { const p = r.propiedades[0]; return texto(p ? `La propiedad de ${p.direccion} tiene gastos comunes de $${Number(p.gastosComunes || 0).toLocaleString('es-CL')}.` : 'No tengo propiedades tuyas registradas.'); }
+    if (r.necesitaDato === 'incluir_direccion') return texto('Pregunta: ' + r.pregunta);
     if (r.necesitaConfirmacion) return texto(`Datos de la orden: ${r.visitante}, ${r.rut}, ${r.correo}, ${r.fecha}. ¿La envío?`);
     if (r.enviada === true) return texto(`Orden enviada, operación ${r.operacion}.`);
     if (r.guardado) return texto('Gracias, lo anoté.');
     return texto('Uy: ' + (r.error || 'listo'));
   }
   // el equipo del ejecutivo en el servidor (Asset cerrado): consulta el resumen; un contrato lo deja para Asset
-  const ORDEN = { codigo_propiedad: 'PF-9002', visitante: 'Ana Visitante', rut: '11.111.111-1', email: 'ana.visitante@prueba.cl', fecha: '2037-12-01', hora: '11:00' };
+  const ORDEN = { codigo_propiedad: 'PF-9002', visitante: 'Ana Visitante', rut: '11.111.111-1', email: 'ana.visitante@prueba.cl', fecha: '2037-12-01', hora: '11:00', incluir_direccion: true };
   if ((b.tools || []).some((t) => t.name === 'orden_visita')) {
+    if (/orden de visita sin preguntar la dirección/i.test(contenido)) { const { incluir_direccion, ...sinDecidir } = ORDEN; return herramienta('orden_visita', sinDecidir); } // el modelo no le preguntó al corredor
+    if (/orden de visita solo con el RUT/i.test(contenido)) return herramienta('orden_visita', { ...ORDEN, visitante: '10.508.558-3', rut: undefined }); // el modelo pasa un RUT como nombre
     if (/prepárame la orden de visita/i.test(contenido)) return herramienta('orden_visita', ORDEN);
     if (/envía ya la orden/i.test(contenido)) return herramienta('orden_visita', { ...ORDEN, visitante: 'Beto Visitante', rut: '22.222.222-2', email: 'beto@prueba.cl', confirmado: true });
     if (/espera, cámbiala/i.test(contenido)) return herramienta('orden_visita', { ...ORDEN, confirmado: true }); // el modelo se equivoca y confirma solo
@@ -271,6 +274,14 @@ function iaFalsa() {
     let antesOv = salidas(cel).length; const enviosAntes = ENVIOS.length;
     escribe(cel, 'Juanita, envía ya la orden de visita de Beto a la PF-9002');
     ok(await hasta(() => salidas(cel).slice(antesOv).some((t) => /^\*Juanita\* · Documentos\nUy: Primero hay que preparar la orden/.test(t))) && ENVIOS.length === enviosAntes, 'si el modelo intenta enviarla sin prepararla antes, el servidor lo rechaza y no se envía nada');
+    // REGLA: la dirección la decide el corredor; sin su respuesta el servidor no prepara nada (ni abre el negocio)
+    antesOv = salidas(cel).length;
+    escribe(cel, 'Juanita, prepárame la orden de visita sin preguntar la dirección, de Ana Visitante, PF-9002');
+    ok(await hasta(() => salidas(cel).slice(antesOv).some((t) => /Pregunta: ¿Incluyo la dirección de la propiedad en la orden de visita?/.test(t))) && ENVIOS.length === enviosAntes && !(await db.negocio.count({ where: { corredoraId: co.id, propiedadId: prop2.id } })), 'si el modelo no le preguntó al corredor si incluye la dirección, el servidor lo pregunta y no prepara nada (tampoco abre el negocio)');
+    // REGLA: un RUT no es un nombre: si solo llega el RUT y no está en el CRM, no se crea a nadie ni se abre un negocio
+    antesOv = salidas(cel).length;
+    escribe(cel, 'Juanita, prepárame la orden de visita solo con el RUT 10.508.558-3, PF-9002');
+    ok(await hasta(() => salidas(cel).slice(antesOv).some((t) => /Uy: Solo tengo el RUT 10.508.558-3 y no está en el CRM: necesito el nombre completo/.test(t))) && !(await db.persona.count({ where: { corredoraId: co.id, OR: [{ nombre: { contains: '10.508' } }, { rut: '105085583' }] } })), 'si solo llega un RUT que no está en el CRM, pide el nombre y no crea una persona con el RUT de nombre');
     antesOv = salidas(cel).length;
     escribe(cel, 'Juanita, prepárame la orden de visita de Ana Visitante para la PF-9002');
     ok(await hasta(() => salidas(cel).slice(antesOv).some((t) => /Datos de la orden: Ana Visitante, 11\.111\.111-1, ana\.visitante@prueba\.cl, 2037-12-01\. ¿La envío\?/.test(t))), 'prepararla muestra los datos del documento (visitante, RUT, correo, fecha) y pregunta si la envía');

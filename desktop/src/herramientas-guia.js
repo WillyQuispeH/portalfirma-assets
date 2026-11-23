@@ -83,7 +83,7 @@ const RUTEO = `Cómo elegir la herramienta (en caso de duda, esta tabla manda):
 - Describe una propiedad para subirla o captarla («capté un depto…», «sube esta propiedad…», un texto largo con dormitorios, metros, precio) → asset_dictar_propiedad. NUNCA asset_crear_propiedad directo.
 - Cambia datos de una propiedad que ya existe → asset_actualizar_propiedad. Cambia si está disponible/reservada/vendida/arrendada → asset_cambiar_estado.
 - Cuenta algo que YA pasó (llamó, visitó, ofertó) → asset_anotar. Nota interna sobre una persona o negocio → asset_nota.
-- Agendar/coordinar una visita → asset_crear_evento. La ORDEN de visita (documento): «prepárala / déjala lista / para revisarla» → asset_revisar_orden_visita (no envía); «envíala / mándala a firmar» → asset_orden_visita (envía y cobra). Nunca ambos si no lo piden.
+- Agendar/coordinar una visita → asset_crear_evento. La ORDEN de visita (documento): «prepárala / déjala lista / para revisarla» → asset_revisar_orden_visita (no envía); «envíala / mándala a firmar» → asset_orden_visita (envía y cobra). Antes de cualquiera de las dos, pregunta «¿Incluyo la dirección en la orden?» y pasa incluir_direccion. Nunca ambos si no lo piden.
 - Registrar un lead o interesado nuevo (Instagram, portal, referido), aunque no tenga RUT → asset_crear_lead. El RUT nunca es obligatorio para un lead.
 - Cualquier otro documento por su nombre → asset_buscar_documento (y el usuario elige con los botones).
 - Pregunta cómo va una propiedad → asset_estado_propiedad. Qué tengo hoy → asset_resumen. Quién falta por firmar → asset_seguimiento_firma.

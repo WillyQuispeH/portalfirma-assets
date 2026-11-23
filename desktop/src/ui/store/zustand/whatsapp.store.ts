@@ -11,7 +11,7 @@ interface IWhatsAppState {
   waConectar: (token: string, locationId: string) => Promise<string | null>;
   waVincular: (nombre: string, email: string) => Promise<string | null>;
   waDesvincular: () => Promise<string | null>;
-  waConfigurar: (o: { activo?: boolean; numeroEmpresa?: string }) => Promise<string | null>;
+  waConfigurar: (o: { activo?: boolean; numeroEmpresa?: string; recordatoriosVisita?: boolean }) => Promise<string | null>;
   waRevisarVinculo: () => Promise<boolean>; // true si el celular quedó vinculado desde la última revisión
 }
 

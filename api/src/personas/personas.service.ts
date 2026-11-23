@@ -16,6 +16,14 @@ const RAZON_SOCIAL =
 const esEmpresa = (nombre: string, rut?: string | null) =>
   Number(limpiarRut(rut).slice(0, -1) || 0) >= 50_000_000 || RAZON_SOCIAL.test(nombre);
 
+/**
+ * ¿el «nombre» es en realidad un RUT? (10.508.558-3 · 10508558-3). Un celular o un correo como nombre SÍ se acepta: es el
+ * marcador de un interesado que aún no dice cómo se llama.
+ */
+export const nombreEsRut = (n: string) => /^\d{1,2}(\.?\d{3}){2}\s*-\s*[\dkK]$/.test(n.trim());
+const esMarcador = (n: string) => /^[+\d\s().-]+$/.test(n) || /@/.test(n);
+const ult9 = (t?: string | null) => String(t ?? '').replace(/\D/g, '').slice(-9);
+
 /** La persona como la usa la app de escritorio. */
 export function personaApp(p: Persona, reservada = false) {
   const extra = (p.extra ?? {}) as Record<string, unknown>;
@@ -150,7 +158,54 @@ export class PersonasService {
     throw e;
   }
 
-  async crear(u: UsuarioToken, o: PersonaEntrada) {
+  /**
+   * ¿ya hay una persona que calza con esta? Mismo nombre (si ninguna de las dos tiene RUT, o es el mismo RUT), o el mismo
+   * correo o celular. Así no se crea la misma persona dos veces ni se esconde su RUT en otra ficha.
+   */
+  async parecida(corredoraId: string, o: { nombre?: string | null; rut?: string | null; email?: string | null; telefono?: string | null }, excluirId?: string) {
+    const base = { corredoraId, eliminadoEn: null, ...(excluirId ? { id: { not: excluirId } } : {}) };
+    const rut = o.rut ? limpiarRut(o.rut) : '';
+    const n = normalizar(String(o.nombre ?? ''));
+    if (n && !esMarcador(String(o.nombre))) {
+      const l = await this.db.persona.findMany({ where: { ...base, busqueda: { startsWith: n } }, take: 20 });
+      const x = l.find((p) => normalizar(p.nombre) === n && (!rut || !p.rut || p.rut === rut));
+      if (x) return { persona: x, motivo: 'el nombre' };
+    }
+    const em = String(o.email ?? '').trim().toLowerCase();
+    if (em) {
+      const x = await this.db.persona.findFirst({ where: { ...base, email: em } });
+      if (x) return { persona: x, motivo: 'el correo' };
+    }
+    const t = ult9(o.telefono);
+    if (t.length === 9) {
+      const l = await this.db.$queryRaw<{ id: string }[]>`SELECT id FROM personas WHERE corredora_id = ${corredoraId}::uuid AND eliminado_en IS NULL AND telefono IS NOT NULL AND right(regexp_replace(telefono, '\\D', '', 'g'), 9) = ${t} LIMIT 5`;
+      const x = l.find((r) => r.id !== excluirId);
+      if (x) return { persona: await this.db.persona.findUniqueOrThrow({ where: { id: x.id } }), motivo: 'el celular' };
+    }
+    return null;
+  }
+
+  private nombreValido(nombre: string) {
+    if (nombreEsRut(nombre))
+      throw new BadRequestException({
+        message: 'El nombre no puede ser un RUT: escribe el nombre completo (el RUT va en su propio campo).',
+        code: 'NOMBRE_ES_RUT',
+      });
+  }
+
+  /** forzar: crear aunque haya una parecida (solo para quien ya resolvió el duplicado por su cuenta, como la llegada de un lead) */
+  async crear(u: UsuarioToken, o: PersonaEntrada, opciones: { forzar?: boolean } = {}) {
+    this.nombreValido(o.nombre);
+    if (!opciones.forzar) {
+      const dup = await this.parecida(u.corredoraId, o);
+      if (dup)
+        throw new ConflictException({
+          message: `Ya existe «${dup.persona.nombre}»${dup.persona.rutFormato ? ` (RUT ${dup.persona.rutFormato})` : ' (sin RUT)'} con ${dup.motivo === 'el nombre' ? 'ese nombre' : dup.motivo === 'el correo' ? 'ese correo' : 'ese celular'}. Usa esa ficha y complétala; si es otra persona con el mismo nombre, agrega su RUT.`,
+          code: 'DUP_PERSONA',
+          personaId: dup.persona.id,
+          nombre: dup.persona.nombre,
+        });
+    }
     const d = this.datos(o) as Prisma.PersonaUncheckedCreateInput;
     try {
       const p = await this.db.$transaction(async (tx) => {
@@ -176,6 +231,7 @@ export class PersonasService {
   }
 
   async actualizar(u: UsuarioToken, id: string, o: PersonaParcial) {
+    if (o.nombre !== undefined) this.nombreValido(o.nombre);
     const previo = await this.buscar(u, id);
     if ((await this.reservadas(u)).has(id))
       throw new ConflictException('No tienes acceso a los datos de esta persona.');

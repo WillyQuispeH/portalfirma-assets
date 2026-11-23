@@ -38,11 +38,13 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     // ---- orden de visita: revisar y después enviar
     const antes = await app.evaluate(() => (global.__pfMock._ordenes || []).length);
     const ev0 = (await pf('agendaListar', {})).length;
-    r = await call('asset_revisar_orden_visita', { propiedad: 'CV-9002', visitante: 'Juan Pérez', fecha: man });
+    // REGLA: antes de preparar la orden se le pregunta al usuario si incluye la dirección: sin su respuesta no se arma
+    ok(/Incluyo la dirección de la propiedad/.test(await error('asset_revisar_orden_visita', { propiedad: 'CV-9002', visitante: 'Juan Pérez', fecha: man })) && (await app.evaluate(() => (global.__pfMock._ordenes || []).length)) === antes, 'sin saber si lleva la dirección, la orden no se arma y se pregunta');
+    r = await call('asset_revisar_orden_visita', { propiedad: 'CV-9002', visitante: 'Juan Pérez', fecha: man, incluir_direccion: true });
     ok(r.ok && r.enviada === false && r.listo && /CV-9002/.test(r.propiedad) && /JUAN PEREZ/i.test(r.visitante), 'revisar arma la orden y dice que NO se envió');
     ok(Array.isArray(r.datosDelDocumento) && r.datosDelDocumento.length >= 3 && r.datosDelDocumento.some((x) => /11\.111\.111-1/.test(x.valor)) && /NO se envió, NO se cobró y NO se agendó/.test(r.indicacion), 'muestra los datos que llevaría el documento (con el RUT del visitante)');
     ok(await app.evaluate(() => (global.__pfMock._ordenes || []).length) === antes && (await pf('agendaListar', {})).length === ev0, 'no envió nada a firmar y no agendó la visita');
-    r = await call('asset_orden_visita', { propiedad: 'CV-9002', visitante: 'Juan Pérez', fecha: man });
+    r = await call('asset_orden_visita', { propiedad: 'CV-9002', visitante: 'Juan Pérez', fecha: man, incluir_direccion: true });
     ok(r.ok && r.operacion && await app.evaluate(() => (global.__pfMock._ordenes || []).length) === antes + 1 && (await pf('agendaListar', {})).length === ev0 + 1, 'después, pedir enviarla la envía a firmar y agenda la visita');
 
     // ---- agendar: si el día de la semana no coincide con la fecha («jueves 13» cuando el 13 es viernes), no agenda

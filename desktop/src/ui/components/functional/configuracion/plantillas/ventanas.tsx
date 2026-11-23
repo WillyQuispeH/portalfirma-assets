@@ -16,6 +16,7 @@ import Badge from '../../../ui/Badge';
 import Icono from '../../../ui/Icono';
 import { abrirModal, cerrarModal } from '../../../../utils/modal';
 import { fechaHora } from '../../../../utils/formato';
+import { TIPOS_FIRMA_PLANTILLA } from './firma';
 import type { IFirmaPlantilla, IVersionPlantilla } from './tipos';
 
 function NotaVersion({ alResponder }: { alResponder: (nota: string | null) => void }) {
@@ -97,8 +98,8 @@ function ConfigurarFirma({ firma, soloLectura, alResponder }: { firma: IFirmaPla
     <VentanaCabecera titulo="Cómo se firma" descripcion={soloLectura ? 'Solo el administrador de la corredora puede cambiarlo.' : 'Vale para todos los documentos que se arman con esta plantilla.'} icono="sign" onCerrar={() => alResponder(null)} />
     <VentanaCuerpo>
       <form id="plFirmaForm" onSubmit={enviar} className="tw:flex tw:flex-col tw:gap-3">
-        <Select id="plTipoFirma" etiqueta="Tipo de firma" disabled={soloLectura} value={f.tipoFirma} opciones={[['simple', 'Firma simple'], ['avanzada', 'Firma avanzada']]}
-          ayuda={f.tipoFirma === 'avanzada' ? 'Avanzada: se verifica la identidad de quien firma con certificado o Clave Única. Cuesta más en Portalfirma.' : 'Simple: quien firma confirma con un código que le llega por correo o al celular.'}
+        <Select id="plTipoFirma" etiqueta="Tipo de firma" disabled={soloLectura} value={f.tipoFirma} opciones={TIPOS_FIRMA_PLANTILLA.map((t) => [t[0], t[1]])}
+          ayuda={TIPOS_FIRMA_PLANTILLA.find((t) => t[0] === f.tipoFirma)?.[2]}
           onChange={(e) => setF((x) => ({ ...x, tipoFirma: e.target.value as IFirmaPlantilla['tipoFirma'] }))} />
         <Select id="plTramite" etiqueta="Legalización notarial" disabled={soloLectura} value={f.tramite} opciones={[['none', 'Sin trámite'], ['legalization', 'Con legalización notarial']]}
           ayuda="Portalfirma coordina la legalización; tiene un costo adicional."

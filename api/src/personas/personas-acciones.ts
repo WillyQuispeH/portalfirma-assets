@@ -105,7 +105,7 @@ export class PersonasAccionesService {
           telefono: c.telefono ? String(c.telefono).trim() : null,
           roles: ['interesado'],
           ...(c.leadId ? { extra: { leadId: c.leadId } } : {}),
-        })) as { id: string; nombre: string };
+        }, { forzar: true })) as { id: string; nombre: string };
         await this.actividad.registrar({
           corredoraId: u.corredoraId,
           entidadTipo: 'persona',

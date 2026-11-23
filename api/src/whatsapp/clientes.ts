@@ -982,6 +982,7 @@ ${
             ...(cv.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cv.email) ? { email: cv.email } : {}),
             roles: ['interesado'],
           },
+          { forzar: true }, // un lead nuevo: puede llamarse igual que otra persona
         );
         personaId = (p as { id: string }).id;
       } catch (e) {

@@ -982,3 +982,55 @@ model WaPuente {
   @@index([creadoEn])
   @@map("wa_puente")
 }
+
+// ============================================================================ soporte
+
+/// Una incidencia que soporte lleva en asset-admin: un error o problema que reportó una corredora o un usuario (conversación,
+/// persona, negocio, plantilla, WhatsApp, Agente…). Es de la plataforma, no de una corredora: corredora y usuario son datos
+/// de referencia (con su nombre copiado, para que se lea aunque después cambie). Solo la ve soporte (PLATAFORMA_REVISORES).
+/// `estado`: nueva → en_curso → resuelta. `enlace`: la ruta de asset-admin donde se ve lo que falló.
+model Incidencia {
+  id              Int       @id @default(autoincrement())
+  titulo          String
+  descripcion     String    @default("")
+  /// conversacion | persona | negocio | propiedad | plantilla | documento | whatsapp | agente | usuario | otro
+  modulo          String    @default("otro")
+  /// nueva | en_curso | resuelta
+  estado          String    @default("nueva")
+  /// baja | media | alta | urgente
+  prioridad       String    @default("media")
+  /// manual | automatica
+  origen          String    @default("manual")
+  corredoraId     String?   @map("corredora_id") @db.Uuid
+  corredoraNombre String    @default("") @map("corredora_nombre")
+  usuarioId       String?   @map("usuario_id") @db.Uuid
+  usuarioNombre   String    @default("") @map("usuario_nombre")
+  enlace          String    @default("")
+  /// correo de quien la atiende
+  responsable     String?
+  creadaPor       String    @map("creada_por")
+  creadoEn        DateTime  @default(now()) @map("creado_en")
+  actualizadoEn   DateTime  @updatedAt @map("actualizado_en")
+  resueltaEn      DateTime? @map("resuelta_en")
+
+  notas IncidenciaNota[]
+
+  @@index([estado, prioridad, actualizadoEn])
+  @@index([corredoraId, estado])
+  @@map("incidencias")
+}
+
+/// Lo que se fue anotando en una incidencia. `sistema`: lo escribió el sistema al cambiar el estado, la prioridad o el responsable.
+model IncidenciaNota {
+  id           BigInt   @id @default(autoincrement())
+  incidenciaId Int      @map("incidencia_id")
+  autor        String
+  texto        String
+  sistema      Boolean  @default(false)
+  creadoEn     DateTime @default(now()) @map("creado_en")
+
+  incidencia Incidencia @relation(fields: [incidenciaId], references: [id], onDelete: Cascade)
+
+  @@index([incidenciaId, creadoEn])
+  @@map("incidencia_notas")
+}

@@ -12,6 +12,8 @@ export interface IWaEstado {
   codigo?: string | null; // código para vincular, mientras se espera el mensaje
   numeroEmpresa?: string;
   vinculado?: unknown;
+  /** recibe por WhatsApp el recordatorio de sus visitas (apagado por defecto; lo envía el servidor) */
+  recordatoriosVisita?: boolean;
   // este computador responde
   activo?: boolean;
 }

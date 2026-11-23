@@ -37,7 +37,7 @@ const MESES = [
 ];
 const SEMANA = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
 /** «sábado 15 de noviembre» */
-const diaLargo = (f: string) => {
+export const diaLargo = (f: string) => {
   const d = new Date(f + 'T12:00:00Z');
   return `${SEMANA[d.getUTCDay()]} ${d.getUTCDate()} de ${MESES[d.getUTCMonth()]}`;
 };

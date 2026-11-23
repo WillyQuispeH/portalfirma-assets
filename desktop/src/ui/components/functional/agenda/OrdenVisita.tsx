@@ -7,8 +7,8 @@
 // La lógica (guardar en la persona y en la agenda, generar el PDF, enviar) está en src/renderer/agenda.js y llega en las props.
 // Si al abrirla falta algo (p. ej. el correo del visitante), la ventana se abre igual con el aviso: se completa aquí y el PDF se arma al guardar.
 // Todas las variables del documento se editan aquí: visitante (nombre, RUT, nacionalidad, teléfono, correo), visita (día y hora) y condiciones
-// (operación, vigencia y garantía de seriedad); lo del visitante se guarda en su ficha. La propiedad se edita en su ficha.
-// Los id (#ovNombre, #ovRut, #ovNac, #ovTel, #ovEmail, #ovDia, #ovHora, #ovOp, #ovVig, #ovGar, #ovGuardar, #mOk, #mCancel) los usan las pruebas.
+// (operación, vigencia, garantía de seriedad y si lleva la dirección de la propiedad); lo del visitante se guarda en su ficha. La propiedad se edita en su ficha.
+// Los id (#ovNombre, #ovRut, #ovNac, #ovTel, #ovEmail, #ovDia, #ovHora, #ovOp, #ovVig, #ovGar, #ovDir, #ovGuardar, #mOk, #mCancel) los usan las pruebas.
 import { useState } from 'react';
 import Boton from '../../ui/Boton';
 import MenuMas from '../../ui/MenuMas';
@@ -16,6 +16,7 @@ import Badge from '../../ui/Badge';
 import Card from '../../ui/Card';
 import Input from '../../ui/Input';
 import Select from '../../ui/Select';
+import Switch from '../../ui/Switch';
 import { VentanaCabecera, VentanaCuerpo, VentanaPie } from '../../ui/Ventana';
 import { NOTA } from '../gestion/editor-pdf/Modales';
 import { ErrorVentana } from '../negocios/VentanasAntiguas';
@@ -27,7 +28,7 @@ import { PdfCargando } from './VisorPdf';
 import PdfConFirmas from './PdfConFirmas';
 import { usePdfInicial, type IPdfInicial } from './usePdfInicial';
 
-export interface IOrdenDatos { nombre: string; rut: string; email: string; telefono: string; nacionalidad: string; fecha: string; hora: string; operacion: 'venta' | 'arriendo'; vigencia: string; garantia: string }
+export interface IOrdenDatos { nombre: string; rut: string; email: string; telefono: string; nacionalidad: string; fecha: string; hora: string; operacion: 'venta' | 'arriendo'; vigencia: string; garantia: string; incluirDireccion: boolean }
 export interface IOrdenVisitaProps {
   titulo?: string;
   aviso?: string;
@@ -38,7 +39,7 @@ export interface IOrdenVisitaProps {
   pdfPromesa?: Promise<IPdfInicial>;
   visitante: Pick<IOrdenDatos, 'nombre' | 'rut' | 'email' | 'telefono' | 'nacionalidad'>;
   /** las condiciones del documento: operación, vigencia (días hábiles) y garantía de seriedad */
-  condiciones?: Pick<IOrdenDatos, 'operacion' | 'vigencia' | 'garantia'>;
+  condiciones?: Pick<IOrdenDatos, 'operacion' | 'vigencia' | 'garantia'> & { incluirDireccion?: boolean };
   visita: Pick<IOrdenDatos, 'fecha' | 'hora'>;
   propiedades: { codigo: string; titulo: string; direccion: string; precio?: string }[];
   /** guarda los cambios en su origen y devuelve el PDF nuevo (lanza el error si algo falla) */
@@ -55,14 +56,14 @@ const diaTxt = (f: string) => { if (!/^\d{4}-\d{2}-\d{2}$/.test(f)) return 'sin 
 
 export function ConfirmarOrden({ aviso, pdf: pdf0, pdfPromesa, errorInicial, visitante, condiciones, visita, propiedades, alGuardar, alConfirmar }: IOrdenVisitaProps) {
   const inicial: IOrdenDatos = { nombre: visitante.nombre || '', rut: visitante.rut || '', email: visitante.email || '', telefono: visitante.telefono || '', nacionalidad: visitante.nacionalidad || '', fecha: visita.fecha || '', hora: visita.hora || '',
-    operacion: condiciones?.operacion || 'venta', vigencia: condiciones?.vigencia || '250', garantia: condiciones?.garantia || '$250.000' };
+    operacion: condiciones?.operacion || 'venta', vigencia: condiciones?.vigencia || '250', garantia: condiciones?.garantia || '$250.000', incluirDireccion: condiciones?.incluirDireccion !== false };
   const [v, setV] = useState<IOrdenDatos>(inicial);
   const [guardado, setGuardado] = useState<IOrdenDatos>(inicial);
   const { pdf, setPdf, cargando: cargandoPdf, errorCarga, aviso: avisoCarga, firmantes: firmantesPdf } = usePdfInicial(pdf0, pdfPromesa);
   const [guardando, setGuardando] = useState(false); const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState(errorInicial || '');
   const sucio = JSON.stringify(v) !== JSON.stringify(guardado);
-  const campo = (k: keyof IOrdenDatos) => ({ value: v[k], onChange: (e: { target: { value: string } }) => { setV((x) => ({ ...x, [k]: e.target.value })); setError(''); } });
+  const campo = (k: Exclude<keyof IOrdenDatos, 'incluirDireccion'>) => ({ value: v[k], onChange: (e: { target: { value: string } }) => { setV((x) => ({ ...x, [k]: e.target.value })); setError(''); } });
 
   // lo que falta o está mal (se muestra bajo cada campo)
   const err = {
@@ -118,6 +119,8 @@ export function ConfirmarOrden({ aviso, pdf: pdf0, pdfPromesa, errorInicial, vis
                 <Input etiqueta="Vigencia" id="ovVig" inputMode="numeric" sufijo="días hábiles" error={err.vigencia} {...campo('vigencia')} />
                 <Input etiqueta="Garantía de seriedad" id="ovGar" autoComplete="off" placeholder="$250.000" error={err.garantia} {...campo('garantia')} />
               </div>
+              <Switch id="ovDir" activo={v.incluirDireccion} alCambiar={(a) => { setV((x) => ({ ...x, incluirDireccion: a })); setError(''); }} etiqueta="Incluir la dirección de la propiedad"
+                descripcion={v.incluirDireccion ? 'La orden lleva la dirección completa.' : 'La orden lleva solo el tipo y la comuna.'} />
             </div>
           </Card>
 

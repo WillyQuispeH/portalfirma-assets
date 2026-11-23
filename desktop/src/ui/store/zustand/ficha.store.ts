@@ -35,6 +35,7 @@ interface IFichaState {
   fichaVincular: (personaId: string, rol: string) => Promise<TResultado>;
   fichaDesvincular: (personaId: string, rol: string) => Promise<TResultado>;
   fichaSetCaptador: (corredorId: string | null) => Promise<TResultado>;
+  fichaOrdenarFotos: (fotos: string[]) => Promise<TResultado>;
   fichaDocElegir: () => Promise<TResultado>;
   fichaDocQuitar: (docId: string) => Promise<TResultado>;
   fichaDocAbrir: (docId: string) => Promise<TResultado>;
@@ -112,6 +113,10 @@ export const useFichaStore = create<IFichaState>((set, get) => {
         await propiedadService.setCaptadorUno(id(), corredorId); await recargar();
         return { mensaje: corredorId ? 'Captador asignado. Queda en el historial.' : 'La propiedad quedó sin captador.' };
       } catch (e) { return error(e); }
+    },
+    // mismo conjunto de fotos en otro orden (la primera es la portada); el aviso del portal se actualiza solo
+    fichaOrdenarFotos: async (fotos) => {
+      try { await propiedadService.guardar({ id: id(), fotos }); await recargar(); return {}; } catch (e) { return error(e); }
     },
     fichaDocElegir: async () => {
       try { const r = await propiedadService.docElegir(id()); if (!r) return {}; await recargar(); return { mensaje: 'Documento agregado.' }; } catch (e) { return error(e); }

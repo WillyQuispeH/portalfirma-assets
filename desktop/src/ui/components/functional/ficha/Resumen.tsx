@@ -14,6 +14,7 @@ import EstadoVacio from '../../ui/EstadoVacio';
 import { ESTADO, ROL } from '../cartera/catalogos';
 import { ListaActividad, copiarCorreo, num, precio, whatsapp } from './comun';
 import { VincularPersona } from './Modales';
+import { abrirOrdenarFotos } from './OrdenarFotos';
 import { useFicha, type TFichaTab } from '../../../store/hooks/useFicha.hook';
 import { abrirPersona, avisar, bloqueCaptacion, fichaCompleta, fotosDesdeArchivos, fotosDesdeDrive, toast } from '../../../utils/app';
 import { abrirModal } from '../../../utils/modal';
@@ -46,10 +47,11 @@ function Galeria({ p }: { p: IPropiedad }) {
       {fotos.length ? <>
         <div className="im-gmain">{rotas.includes(actual) ? sinFoto : <img key={actual} src={fotos[actual]} alt="" loading="lazy" onError={() => rota(actual)} />}</div>
         {fotos.length > 1 && (
-          <div className="im-thumbs">
+          <div className="im-thumbs tw:items-center">
             {fotos.slice(0, 12).map((u, i) => rotas.includes(i) && i !== actual ? null : (
               <img key={i} src={u} data-i={i} className={i === actual ? 'on' : ''} loading="lazy" alt="" onClick={() => setSel(i)} onError={() => rota(i)} />
             ))}
+            <Boton id="fOrdenar" variante="fantasma" tamano="sm" icono="image" className="tw:ml-auto tw:shrink-0" onClick={() => abrirOrdenarFotos(fotos)}>Ordenar{fotos.length > 12 ? ` (${fotos.length})` : ''}</Boton>
           </div>
         )}
       </> : <div className="im-gmain vacia">{sinFoto}<span className="im-gnote">Sin fotos todavía</span></div>}

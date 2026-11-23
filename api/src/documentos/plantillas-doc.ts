@@ -6,7 +6,7 @@
 //  · PUT  /v1/plantillas/:nombre               { bloques: {clave: texto}, nota } → nueva versión (admin)
 //  · POST /v1/plantillas/:nombre/vista-previa  { bloques? } → PDF de muestra (datos de ejemplo + datos reales de la corredora)
 //  · POST /v1/plantillas/:nombre/aprobar       { revisor, nota } → aprueba la versión vigente (admin)
-//  · PUT  /v1/plantillas/:nombre/firma         { tipoFirma: simple|avanzada, tramite: none|legalization } → cómo se firma (admin)
+//  · PUT  /v1/plantillas/:nombre/firma         { tipoFirma: simple|avanzada|visada|enrolada, tramite: none|legalization } → cómo se firma (admin)
 //  · POST /v1/plantillas/:nombre/restaurar     { version } → vuelve a una versión anterior (0 = la base) como versión nueva
 //
 // Los documentos se arman siempre con la versión vigente (la última guardada). La aprobación queda anotada con quién
@@ -50,8 +50,10 @@ interface Version {
   base: string;
 }
 /** cómo se firma el documento de esta plantilla (lo define el administrador por plantilla) */
+export const TIPOS_FIRMA = ['simple', 'avanzada', 'visada', 'enrolada'] as const;
+export type TipoFirma = (typeof TIPOS_FIRMA)[number];
 export interface ConfigFirma {
-  tipoFirma: 'simple' | 'avanzada';
+  tipoFirma: TipoFirma;
   /** none = sin trámite · legalization = legalización notarial de las firmas */
   tramite: 'none' | 'legalization';
 }
@@ -64,12 +66,12 @@ export async function configFirma(db: PrismaService, corredoraId: string, nombre
   });
   const f = ((r?.datos ?? {}) as { firma?: Partial<ConfigFirma> }).firma ?? {};
   return {
-    tipoFirma: f.tipoFirma === 'avanzada' ? 'avanzada' : 'simple',
+    tipoFirma: TIPOS_FIRMA.find((t) => t === f.tipoFirma) ?? 'simple',
     tramite: f.tramite === 'legalization' ? 'legalization' : 'none',
   };
 }
 
-interface Aprobacion {
+export interface Aprobacion {
   n: number;
   base: string;
   revisor: string;
@@ -96,7 +98,7 @@ const aprobarEsquema = z.object({
 });
 const restaurarEsquema = z.object({ version: z.number().int().min(0) });
 const firmaEsquema = z.object({
-  tipoFirma: z.enum(['simple', 'avanzada']),
+  tipoFirma: z.enum(TIPOS_FIRMA),
   tramite: z.enum(['none', 'legalization']),
 });
 

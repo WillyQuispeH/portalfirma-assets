@@ -76,6 +76,13 @@ import { PostventaWaService } from './whatsapp/postventa';
 import { ObservadorController, ObservadorService } from './whatsapp/observador';
 import { EvaluacionController, EvaluacionService } from './whatsapp/evaluacion';
 import { ConfirmacionVisitaController, ConfirmacionVisitaService } from './whatsapp/confirmacion-visita';
+import { RecordatorioVisitaService } from './whatsapp/recordatorio-visita';
+import { SoporteController, SoporteService } from './soporte/soporte';
+import { IncidenciasController, IncidenciasService } from './soporte/incidencias';
+import { SoporteWaController, SoporteWaService } from './soporte/soporte-wa';
+import { SoportePersonasController, SoportePersonasService } from './soporte/soporte-personas';
+import { SoporteNegociosController, SoporteNegociosService } from './soporte/soporte-negocios';
+import { SoportePlantillasController, SoportePlantillasService } from './soporte/soporte-plantillas';
 import { DocumentoRevisionService } from './whatsapp/documento-revision';
 import { RevisionContratoWaService } from './whatsapp/revision-contrato';
 import { ActaVisitaController, ActaVisitaService } from './whatsapp/acta-visita';
@@ -155,6 +162,12 @@ import { PortalInmobiliarioController, PortalInmobiliarioService } from './conex
     ActaEntregaController,
     ActaPdfController,
     ConfirmacionVisitaController,
+    SoporteController,
+    IncidenciasController,
+    SoporteWaController,
+    SoportePersonasController,
+    SoporteNegociosController,
+    SoportePlantillasController,
     ActaVisitaController,
     PropiedadesAccionesController,
     AgendaAccionesController,
@@ -230,6 +243,13 @@ import { PortalInmobiliarioController, PortalInmobiliarioService } from './conex
     PuenteService,
     EvaluacionService,
     ConfirmacionVisitaService,
+    RecordatorioVisitaService,
+    SoporteService,
+    IncidenciasService,
+    SoporteWaService,
+    SoportePersonasService,
+    SoporteNegociosService,
+    SoportePlantillasService,
     DocumentoRevisionService,
     RevisionContratoWaService,
     ActaVisitaService,

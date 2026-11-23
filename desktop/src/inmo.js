@@ -802,15 +802,25 @@ const porRut = (rut) => C().find((p) => cleanRut(p.rut) === cleanRut(rut));
 const RS = /\b(spa|s\.?p\.?a\.?|ltda\.?|limitada|s\.\s?a\.?|sociedad an[oó]nima|eirl|e\.i\.r\.l\.?|sociedad|inversiones|inmobiliaria|constructora|comercial|servicios)\b/i;
 function esEmpresa(o) { if (!o) return false; if (o.tipo === 'juridica') return true; if (o.tipo === 'natural' && o.tipoFijo) return false;
   const n = Number(String(o.rut || '').replace(/[^0-9kK]/g, '').slice(0, -1)); return n >= 50000000 || RS.test(String(o.nombre || '')); }
-const errDup = (e) => (e.status === 409 && e.code === 'DUP_RUT' ? err('Ya existe una persona con ese RUT.', 'DUP_RUT') : e.status === 409 && e.code === 'EN_USO' ? err(e.message, 'EN_USO') : e);
+const errDup = (e) => (e.status === 409 && e.code === 'DUP_RUT' ? err('Ya existe una persona con ese RUT.', 'DUP_RUT') : e.status === 409 && (e.code === 'EN_USO' || e.code === 'DUP_PERSONA') ? err(e.message, e.code) : e);
+// el nombre de una persona nunca es un RUT (un celular o un correo sí vale: es el marcador de quien aún no dice cómo se llama)
+const nombreEsRut = (n) => /^\d{1,2}(\.?\d{3}){2}\s*-\s*[\dkK]$/.test(String(n || '').trim());
+const nn = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
 async function guardarPersona(o) {
   const nombre = String(o.nombre || '').trim().replace(/\s+/g, ' ');
   if (!nombre) throw err('Indica el nombre o la razón social.');
+  if (nombreEsRut(nombre)) throw err('El nombre no puede ser un RUT: escribe el nombre completo (el RUT va en su propio campo).', 'NOMBRE_ES_RUT');
   // 0.16.23 · el RUT puede faltar (un interesado que aún no lo da); si viene, debe ser válido
   if (String(o.rut || '').trim() && !validRut(o.rut)) throw err('El RUT no es válido.', 'RUT');
   const email = String(o.email || '').trim(); if (email && !emailOk(email)) throw err('El correo no es válido.');
   const dup = String(o.rut || '').trim() ? porRut(o.rut) : null;
   if (dup && dup.id !== o.id) throw err(`Ya existe ${dup.nombre} con ese RUT.`, 'DUP_RUT');
+  // una persona nueva con el nombre de una que ya está (y sin RUT que las distinga): se usa la que ya existe, no se crea otra
+  if (!o.id && !/^[+\d\s().-]+$/.test(nombre) && !/@/.test(nombre)) {
+    const rutNuevo = cleanRut(o.rut);
+    const ya = C().find((p) => !p.eliminado && nn(p.nombre) === nn(nombre) && (!rutNuevo || !cleanRut(p.rut) || cleanRut(p.rut) === rutNuevo));
+    if (ya) throw err(`Ya existe «${ya.nombre}»${ya.rut ? ` (RUT ${ya.rut})` : ' (sin RUT)'}. Ábrela y complétala; si es otra persona con el mismo nombre, agrega su RUT.`, 'DUP_PERSONA');
+  }
   const datos = { nombre, rut: String(o.rut || '').trim() ? fmtRut(o.rut) : '', tipo: o.tipo === 'juridica' || o.tipo === 'natural' ? o.tipo : esEmpresa({ nombre, rut: o.rut }) ? 'juridica' : 'natural', email, telefono: String(o.telefono || '').trim(), direccion: String(o.direccion || '').trim(),
     estadoCivil: String(o.estadoCivil || '').trim(), profesion: String(o.profesion || '').trim(), nacionalidad: String(o.nacionalidad || '').trim() || 'chilena',
     roles: [...new Set((o.roles || []).filter((r) => ROLES.includes(r)))], notas: String(o.notas || '').slice(0, 2000) };

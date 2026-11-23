@@ -59,8 +59,23 @@ export interface ArgsOrden {
   garantia_seriedad?: string;
   /** el negocio del visitante: la firma y la visita quedan ligadas a él */
   negocio_id?: string;
+  /**
+   * ¿el documento lleva la dirección de la propiedad? false: solo el tipo y la comuna (para que el visitante no vaya por su
+   * cuenta). Por WhatsApp el corredor decide cada vez (se le pregunta); desde la app, el interruptor de la orden (por defecto sí).
+   */
+  incluir_direccion?: boolean | string;
   confirmado?: boolean;
 }
+
+/** true / false / «sí» / «no»…; undefined si no se indicó */
+const siNo = (v: unknown): boolean | undefined => {
+  if (v === undefined || v === null || v === '') return undefined;
+  if (typeof v === 'boolean') return v;
+  const t = norm(String(v)).trim();
+  if (['true', 'si', 's', '1', 'incluir', 'con'].includes(t)) return true;
+  if (['false', 'no', 'n', '0', 'sin'].includes(t)) return false;
+  return undefined;
+};
 
 const VIGENCIA_MS = 15 * 60_000;
 // un «sí» puro: solo palabras de asentimiento («sí», «dale, envíala», «ok gracias»). «Sí, pero a las 12» NO lo es: pide
@@ -155,6 +170,8 @@ type Visitante = {
   email: string;
   telefono: string;
   nacionalidad?: string;
+  /** la persona existe pero sin RUT: el que dio el corredor se le guarda al enviar la orden */
+  rutNuevo?: boolean;
 };
 /** todo lo necesario para el documento, ya validado */
 /** corta en la última palabra completa y agrega «…» (la descripción de la propiedad no queda cortada a mitad de frase) */
@@ -174,6 +191,7 @@ interface Armada {
   op: 'venta' | 'arriendo';
   vigenciaDias: string;
   garantiaSeriedad: string;
+  incluirDireccion: boolean;
   fecha: string;
   hora: string;
   negocioId: string | null;
@@ -253,6 +271,11 @@ export class OrdenVisitaService {
     const telefono = String(a.telefono ?? '').trim() || persona?.telefono || '';
     if (email && !emailOk(email)) return { error: `El correo «${email}» no es válido.` };
     if (!persona) {
+      // REGLA: un RUT no es un nombre. Si lo único que llegó es un RUT que no está en el CRM, no se crea a nadie con el RUT de nombre
+      if (porRut && /^[\d.\sk-]+$/i.test(q))
+        return {
+          error: `Solo tengo el RUT ${rutFormato(porRut)} y no está en el CRM: necesito el nombre completo del visitante para crearlo (y su correo).`,
+        };
       const rut = a.rut ? limpioRut(a.rut) : '';
       if (!rut)
         return { error: `«${q}» no está en el CRM: para la orden necesito su nombre completo y su RUT (y su correo).` };
@@ -268,14 +291,29 @@ export class OrdenVisitaService {
         telefono,
       };
     }
-    const rut = persona.rutFormato || persona.rut || '';
-    if (!rut)
-      return { error: `${persona.nombre} no tiene RUT en su ficha: agrégalo para poder enviarle la orden a firmar.` };
-    return { persona, nombre: persona.nombre, rut, email, telefono, nacionalidad: persona.nacionalidad ?? '' };
+    let rut = persona.rutFormato || persona.rut || '';
+    let rutNuevo = false;
+    if (!rut) {
+      // la persona existe sin RUT: si el corredor lo dio, se usa y se le guarda a ella (no se crea otra ficha)
+      const dado = a.rut ? limpioRut(a.rut) : '';
+      if (!dado)
+        return { error: `${persona.nombre} no tiene RUT en su ficha: pídeselo para poder enviarle la orden a firmar.` };
+      if (!rutValido(dado))
+        return { error: `El RUT ${rutFormato(dado)} no es válido (el dígito verificador no calza): pídele que lo confirme.` };
+      const otro = await this.db.persona.findFirst({
+        where: { corredoraId: c.corredoraId, eliminadoEn: null, rut: dado, id: { not: persona.id } },
+        select: { nombre: true },
+      });
+      if (otro)
+        return { error: `El RUT ${rutFormato(dado)} ya está en la ficha de «${otro.nombre}»: revisa si es la misma persona.` };
+      rut = rutFormato(dado);
+      rutNuevo = true;
+    }
+    return { persona, nombre: persona.nombre, rut, email, telefono, nacionalidad: persona.nacionalidad ?? '', rutNuevo };
   }
 
   // ---------------------------------------------------------------- los datos del documento
-  private async datosPropiedad(x: PropConFotos, op: 'venta' | 'arriendo') {
+  private async datosPropiedad(x: PropConFotos, op: 'venta' | 'arriendo', incluirDireccion: boolean) {
     const rasgos: { nombre: string; valor: string }[] = [];
     const r = (nombre: string, valor: unknown) =>
       valor != null && String(valor) !== '' && Number(valor) !== 0 && rasgos.push({ nombre, valor: String(valor) });
@@ -291,7 +329,10 @@ export class OrdenVisitaService {
     return {
       codigo: x.codigo,
       tipo: mayus(String(x.tipo || '').replace(/_/g, ' ')),
-      direccion: [x.direccion, x.unidad ? `depto. ${x.unidad}` : '', x.comuna].filter(Boolean).join(', '),
+      // sin dirección: solo la comuna (el documento no le dice al visitante dónde queda la propiedad)
+      direccion: incluirDireccion
+        ? [x.direccion, x.unidad ? `depto. ${x.unidad}` : '', x.comuna].filter(Boolean).join(', ')
+        : (x.comuna ?? ''),
       operacion: op === 'arriendo' ? 'Arriendo' : 'Venta',
       precio: (op === 'arriendo' ? pa || pv : pv || pa) ?? '',
       descripcion: recortar((x.descripcion ?? '').replace(/\s+/g, ' ').trim(), 320),
@@ -344,7 +385,8 @@ export class OrdenVisitaService {
         : p.arriendo && !p.venta
           ? 'arriendo'
           : 'venta';
-    const propiedades = await Promise.all(props.map((x) => this.datosPropiedad(x, op)));
+    const incluirDireccion = siNo(a.incluir_direccion) ?? true;
+    const propiedades = await Promise.all(props.map((x) => this.datosPropiedad(x, op, incluirDireccion)));
     const vig = String(a.vigencia_dias ?? '').replace(/D/g, '');
     if (vig && (Number(vig) < 1 || Number(vig) > 999))
       return { error: 'La vigencia de la orden va en días hábiles, entre 1 y 999.' };
@@ -354,6 +396,7 @@ export class OrdenVisitaService {
         String(a.garantia_seriedad ?? '')
           .trim()
           .slice(0, 40) || '$250.000',
+      incluirDireccion,
       c,
       p,
       props,
@@ -417,12 +460,14 @@ export class OrdenVisitaService {
       correo: x.vis.email,
       fecha: x.fecha,
       hora: x.hora || null,
+      incluirDireccion: x.incluirDireccion,
       plantilla: 'Orden de visita de Asset',
       datosDelDocumento: [
         { campo: 'Propiedades', valor: x.props.map((q) => q.codigo).join(', ') },
         { campo: 'Visitante', valor: `${x.vis.nombre} · ${x.vis.rut}` },
         { campo: 'Correo', valor: x.vis.email },
         { campo: 'Fecha de la visita', valor: `${x.fecha}${x.hora ? ' ' + x.hora : ''}` },
+        { campo: 'Dirección', valor: x.incluirDireccion ? 'Incluida en la orden' : 'No se incluye (solo la comuna)' },
         { campo: 'Atiende', valor: x.usuario.nombre },
       ],
     };
@@ -499,10 +544,12 @@ export class OrdenVisitaService {
           roles: ['interesado'],
         });
         personaId = (nueva as { id: string }).id;
-      } else if (vis.persona && ((!vis.persona.email && vis.email) || (!vis.persona.telefono && vis.telefono)))
+      } else if (vis.persona && (vis.rutNuevo || (!vis.persona.email && vis.email) || (!vis.persona.telefono && vis.telefono)))
         await this.db.persona.update({
           where: { id: vis.persona.id },
           data: {
+            ...(vis.rutNuevo ? { rut: limpioRut(vis.rut), rutFormato: vis.rut } : {}),
+            ...(vis.rutNuevo ? { busqueda: normalizar(vis.nombre, vis.rut, vis.persona.email || vis.email, vis.persona.telefono || vis.telefono) } : {}),
             ...(vis.persona.email ? {} : { email: vis.email }),
             ...(vis.persona.telefono || !vis.telefono ? {} : { telefono: vis.telefono }),
             version: { increment: 1 },
@@ -720,6 +767,15 @@ export class OrdenVisitaService {
   // ---------------------------------------------------------------- la herramienta del equipo por WhatsApp
   async ejecutar(c: CtxOrden, pedido: ArgsOrden): Promise<Record<string, unknown>> {
     let a = pedido;
+    // REGLA: la dirección la decide el corredor cada vez. Sin su respuesta no se prepara nada (ni se abre el negocio)
+    if (!pedido.confirmado && siNo(pedido.incluir_direccion) === undefined)
+      return {
+        ok: false,
+        necesitaDato: 'incluir_direccion',
+        pregunta: '¿Incluyo la dirección de la propiedad en la orden de visita?',
+        indicacion:
+          'Antes de preparar la orden, pregúntale al corredor EXACTAMENTE: «¿Incluyo la dirección de la propiedad en la orden de visita?» (si dice que no, el documento lleva solo el tipo y la comuna). Cuando conteste, vuelve a llamar esta herramienta con incluir_direccion: true o false y los mismos datos. No decidas tú.',
+      };
     if (pedido.confirmado) {
       // el modelo no recuerda con exactitud los argumentos del turno anterior: se envía EXACTAMENTE lo que se le mostró
       // al corredor (lo último que se preparó), y solo ante un «sí» puro de este turno
@@ -763,6 +819,7 @@ export class OrdenVisitaService {
           x.op,
           x.vigenciaDias,
           x.garantiaSeriedad,
+          x.incluirDireccion,
           x.negocioId,
         ]),
       )
@@ -809,6 +866,8 @@ const pedidoEsquema = z.object({
   operacion: z.enum(['venta', 'arriendo']).optional(),
   vigenciaDias: z.string().trim().max(4).optional(),
   garantiaSeriedad: z.string().trim().max(40).optional(),
+  /** si el documento lleva la dirección de la propiedad (por defecto sí) */
+  incluirDireccion: z.boolean().optional(),
   negocioId: z.string().trim().max(80).optional(),
 });
 type Pedido = z.infer<typeof pedidoEsquema>;
@@ -825,6 +884,7 @@ const aArgs = (b: Pedido): ArgsOrden => ({
   operacion: b.operacion,
   vigencia_dias: b.vigenciaDias,
   garantia_seriedad: b.garantiaSeriedad,
+  incluir_direccion: b.incluirDireccion,
   negocio_id: b.negocioId,
 });
 

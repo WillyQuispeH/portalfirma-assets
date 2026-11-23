@@ -9,7 +9,7 @@ import { UsuarioActual, type UsuarioToken } from '../auth/usuario-actual';
 import { ZodPipe } from '../comun/zod.pipe';
 import { PortalfirmaApiService, partirNombre, type FirmanteApi } from '../conexiones/portalfirma-api';
 import { GoogleService, type IRefDrive } from '../conexiones/google';
-import { configFirma } from './plantillas-doc';
+import { configFirma, type TipoFirma } from './plantillas-doc';
 
 /** la firma de alguien ubicada en el PDF: página (desde 1) y esquina inferior izquierda del recuadro, en puntos (origen abajo a la izquierda) */
 export interface PosicionFirma {
@@ -145,14 +145,14 @@ export class EnvioFirmaService {
     /** además de las firmas ubicadas, que Portalfirma agregue una página de firmas al final */
     paginaExtra?: boolean;
   }): Promise<
-    | { operacion: number; tipoFirma: 'simple' | 'avanzada'; tramite: 'none' | 'legalization'; processId?: string; paginaFirmas?: boolean }
+    | { operacion: number; tipoFirma: TipoFirma; tramite: 'none' | 'legalization'; processId?: string; paginaFirmas?: boolean }
     | { error: string }
   > {
     try {
       const cfg = o.plantilla
         ? await configFirma(this.db, o.corredoraId, o.plantilla)
         : {
-            tipoFirma: o.firmantes.some((f) => f.typeSign === 'avanzada') ? ('avanzada' as const) : ('simple' as const),
+            tipoFirma: o.firmantes.find((f) => f.typeSign && f.typeSign !== 'simple')?.typeSign ?? ('simple' as const),
             tramite: o.protocolizacion ?? ('none' as const),
           };
       const firmantes = o.plantilla ? o.firmantes.map((f) => ({ ...f, typeSign: cfg.tipoFirma })) : o.firmantes;

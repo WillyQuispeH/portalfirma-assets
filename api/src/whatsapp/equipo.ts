@@ -117,7 +117,7 @@ const HERRAMIENTAS: HerramientaIa[] = [
   {
     name: 'orden_visita',
     description:
-      'Prepara y envía a firmar la ORDEN DE VISITA de una propiedad (documento que firma el visitante; cobra del saldo de Portalfirma). SIEMPRE en dos pasos: 1) llámala SIN confirmado: arma el documento y devuelve los datos que llevaría, sin enviar ni cobrar; muéstraselos al corredor. 2) Solo cuando el corredor responda que sí, llámala de nuevo con confirmado: true y EXACTAMENTE los mismos datos. El servidor rechaza el envío si no hubo ese paso previo o si el corredor no confirmó. Si el visitante no está en el CRM necesita nombre completo y RUT; siempre necesita su correo.',
+      'Prepara y envía a firmar la ORDEN DE VISITA de una propiedad (documento que firma el visitante; cobra del saldo de Portalfirma). SIEMPRE en dos pasos: 1) llámala SIN confirmado: arma el documento y devuelve los datos que llevaría, sin enviar ni cobrar; muéstraselos al corredor. 2) Solo cuando el corredor responda que sí, llámala de nuevo con confirmado: true y EXACTAMENTE los mismos datos. ANTES de preparar, pregúntale al corredor «¿Incluyo la dirección de la propiedad en la orden de visita?» y pasa su respuesta en incluir_direccion (sin ella el servidor no prepara nada). El servidor rechaza el envío si no hubo ese paso previo o si el corredor no confirmó. Si el visitante no está en el CRM necesita nombre completo y RUT; siempre necesita su correo.',
     input_schema: {
       type: 'object',
       properties: {
@@ -129,6 +129,11 @@ const HERRAMIENTAS: HerramientaIa[] = [
         fecha: { type: 'string', description: 'fecha de la visita AAAA-MM-DD' },
         hora: { type: 'string', description: 'HH:MM' },
         operacion: { type: 'string', enum: ['venta', 'arriendo'] },
+        incluir_direccion: {
+          type: 'boolean',
+          description:
+            'true: el documento lleva la dirección de la propiedad; false: solo el tipo y la comuna. Lo decide el corredor: pregúntaselo, no lo supongas',
+        },
         confirmado: { type: 'boolean', description: 'true solo después de que el corredor dijo que sí' },
       },
       required: ['codigo_propiedad', 'visitante'],

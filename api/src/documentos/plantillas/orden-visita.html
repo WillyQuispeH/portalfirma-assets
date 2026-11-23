@@ -13,6 +13,7 @@
 
   Las propiedades se repiten con  {{#propiedades}} … {{/propiedades}}  y dentro llevan:
     {{codigo}} {{tipo}} {{direccion}} {{operacion}} {{precio}} {{descripcion}} {{foto}}
+    («direccion» es la dirección completa o, si el corredor eligió no incluirla, solo la comuna: el bloque no aparece si queda vacía)
   y su lista de características con  {{#rasgos}} {{nombre}}: {{valor}} {{/rasgos}}.
 
   Un bloque  {{#algo}} … {{/algo}}  solo aparece si «algo» tiene valor.
@@ -69,7 +70,7 @@
   {{#foto}}<div class="ft"><img src="{{foto}}" alt=""></div>{{/foto}}
   <div>
     <div class="cod">Código {{codigo}}</div>
-    <div class="ti">{{tipo}} · {{direccion}}</div>
+    <div class="ti">{{tipo}}{{#direccion}} · {{direccion}}{{/direccion}}</div>
     <div class="pr">{{operacion}}{{#precio}} · {{precio}}{{/precio}}</div>
     <div class="rs">{{#rasgos}}<span>{{nombre}}: <b>{{valor}}</b></span>{{/rasgos}}</div>
     {{#descripcion}}<div class="de">{{descripcion}}</div>{{/descripcion}}

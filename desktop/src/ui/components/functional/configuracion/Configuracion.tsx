@@ -20,6 +20,7 @@ import Card from '../../ui/Card';
 import ItemLista from '../../ui/ItemLista';
 import Badge from '../../ui/Badge';
 import Boton from '../../ui/Boton';
+import Switch from '../../ui/Switch';
 import Icono from '../../ui/Icono';
 import { cx } from '../../../utils/cx';
 import { api } from '../../../utils/api';
@@ -91,7 +92,7 @@ const fmtTel = (t?: string | null) => { const d = String(t || '').replace(/\D/g,
 
 /** tu celular vinculado (cada usuario el suyo): verlo, cambiarlo (con un código nuevo) o desvincularlo */
 function MiWhatsApp() {
-  const { estado: e, waCargar, waVincular, waDesvincular, waRevisarVinculo } = useWhatsApp();
+  const { estado: e, waCargar, waVincular, waDesvincular, waRevisarVinculo, waConfigurar } = useWhatsApp();
   const { usuario: cuentaPf } = useCuenta();
   const { usuario: yo } = useAcceso();
   const [listo, setListo] = useState(false);
@@ -110,6 +111,10 @@ function MiWhatsApp() {
     const err = await waVincular(yo?.nombre || cuentaPf?.namePerson || '', yo?.email || cuentaPf?.email || '');
     setOcupado(false);
     if (err) toast(err, 6000);
+  };
+  const alternarRecordatorios = async (v: boolean) => {
+    const err = await waConfigurar({ recordatoriosVisita: v });
+    toast(err || (v ? 'Recordatorios de visitas activados.' : 'Recordatorios de visitas desactivados.'), err ? 6000 : 3000);
   };
   const desvincular = async () => { setOcupado(true); await waDesvincular(); setOcupado(false); toast('Celular desvinculado.'); };
   const copiar = async () => { try { await navigator.clipboard.writeText(e?.codigo || ''); toast('Código copiado.'); } catch { /* sin portapapeles */ } };
@@ -143,6 +148,10 @@ function MiWhatsApp() {
               </div>
             </div>
           )}
+        {listo && e?.conectado && e.telefono && !e.codigo && (
+          <Switch id="cfgRecordatorios" activo={e.recordatoriosVisita === true} alCambiar={alternarRecordatorios}
+            etiqueta="Recordatorios de visitas" descripcion="Te escribimos por WhatsApp la tarde anterior (18:00) y 1 hora antes de cada visita, con la fecha, la hora, la propiedad, el interesado y el negocio." />
+        )}
         <p className="tw:m-0 tw:pt-3 tw:border-0 tw:border-t tw:border-solid tw:border-edge tw:text-[13px] tw:text-muted">
           {e?.telefono ? <>Escríbele al <b>{numero}</b> el nombre de quien necesitas: <b>Pedro</b> (captación), <b>Juanita</b> (documentos), <b>Diego</b> (seguimiento) o <b>Fernanda</b> (leads). También puedes mandar audios.</>
             : <>Para cambiar o vincular el número, Asset te da un código y lo envías desde ese celular al <b>{numero}</b>.</>}

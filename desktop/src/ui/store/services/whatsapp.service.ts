@@ -7,5 +7,5 @@ export const whatsappService = {
   conectar: (token: string, locationId: string) => api('pvClaveWa', { token, locationId }),
   vincular: (nombre: string, email: string) => api('waVincular', { nombre, email }),
   desvincular: () => api('waDesvincular'),
-  configurar: (o: { activo?: boolean; numeroEmpresa?: string }) => api('waConfigurar', o),
+  configurar: (o: { activo?: boolean; numeroEmpresa?: string; recordatoriosVisita?: boolean }) => api('waConfigurar', o),
 };

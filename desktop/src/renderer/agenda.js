@@ -34,7 +34,7 @@ async function ordenVisita(e, despues) {
     // si falta algo (p. ej. el correo del visitante) la ventana se abre igual: se completa ahí mismo y el PDF se arma al guardar
     const prop0 = (IM.data.propiedades || []).find((x) => x.id === e.prop.id) || e.prop;
     const operacion0 = e.operacion || (prop0.arriendo && !prop0.venta ? 'arriendo' : 'venta');
-    args.operacion = operacion0;
+    args.operacion = operacion0; args.incluir_direccion = true;   // el interruptor «Incluir la dirección» de la ventana lo cambia
     // la ventana se abre ya: la orden se arma ahí mismo y, si falta algo (p. ej. el correo del visitante), se completa y se guarda
     const pdfPromesa = api('assetPreparar', 'asset_orden_visita', args).then((d) => ({ pdf: d.pdf || '', aviso: d.aviso || '', firmantes: d.firmantes })); pdfPromesa.catch(() => {});
     // los datos de la orden se pueden editar en la ventana: se guardan en su origen (la persona del CRM y la visita de la agenda) y el PDF se vuelve a armar
@@ -44,14 +44,14 @@ async function ordenVisita(e, despues) {
     window.Ventanas.abrir('negocios.agendaOrdenVisita', {
       pdfPromesa,
       visitante: { nombre: per.nombre || '', rut: per.rut || '', email: per.email || '', telefono: per.telefono || '', nacionalidad: per.nacionalidad || 'chilena' },
-      condiciones: { operacion: operacion0, vigencia: '250', garantia: '$250.000' },
+      condiciones: { operacion: operacion0, vigencia: '250', garantia: '$250.000', incluirDireccion: true },
       visita: { ...visita },
       propiedades: [{ codigo: propiedad.codigo, titulo: propiedad.titulo, direccion: [propiedad.direccion, propiedad.unidad ? 'depto. ' + propiedad.unidad : '', propiedad.comuna].filter(Boolean).join(', ') }],
       alGuardar: async (v) => {
         const cambioPersona = ['nombre', 'rut', 'email', 'telefono', 'nacionalidad'].some((k) => (v[k] || '') !== (per[k] || (k === 'nacionalidad' ? 'chilena' : '')));
         if (cambioPersona) { await api('inmoPerGuardar', { ...per, nombre: v.nombre, rut: v.rut, email: v.email, telefono: v.telefono, nacionalidad: v.nacionalidad }); Object.assign(per, { nombre: v.nombre, rut: v.rut, email: v.email, telefono: v.telefono, nacionalidad: v.nacionalidad }); }
         // las condiciones de la orden van en el pedido (no son datos de la persona ni de la visita)
-        args.operacion = v.operacion; args.vigencia_dias = v.vigencia; args.garantia_seriedad = v.garantia;
+        args.operacion = v.operacion; args.vigencia_dias = v.vigencia; args.garantia_seriedad = v.garantia; args.incluir_direccion = v.incluirDireccion !== false;
         if (e.id && v.fecha && (v.fecha !== visita.fecha || (v.hora || '') !== visita.hora)) { await api('agendaActualizar', e.id, { fecha: v.fecha, hora: v.hora || '' }); visita.fecha = v.fecha; visita.hora = v.hora || ''; }
         if (v.fecha) args.fecha = v.fecha; else delete args.fecha; if (v.hora) args.hora = v.hora; else delete args.hora;
         const n = await api('assetPreparar', 'asset_orden_visita', args);   // el servidor lee lo ya guardado

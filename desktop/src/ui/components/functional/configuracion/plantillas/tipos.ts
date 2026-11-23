@@ -18,4 +18,4 @@ export interface IDetallePlantilla {
 }
 
 /** cómo se firma un documento hecho con la plantilla (legalization = legalización notarial de las firmas) */
-export interface IFirmaPlantilla { tipoFirma: 'simple' | 'avanzada'; tramite: 'none' | 'legalization' }
+export interface IFirmaPlantilla { tipoFirma: 'simple' | 'avanzada' | 'visada' | 'enrolada'; tramite: 'none' | 'legalization' }

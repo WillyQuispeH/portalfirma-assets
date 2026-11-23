@@ -58,7 +58,7 @@ function crear() {
     firmaDe,
     /** PUT /plantillas/:nombre/firma: guarda cómo se firma (sin tocar el texto ni la aprobación); vale para cualquier nombre de plantilla */
     firma: (n, o) => {
-      if (!['simple', 'avanzada'].includes(o.tipoFirma)) throw new Error('El tipo de firma no es válido.');
+      if (!['simple', 'avanzada', 'visada', 'enrolada'].includes(o.tipoFirma)) throw new Error('El tipo de firma no es válido.');
       if (!['none', 'legalization'].includes(o.tramite)) throw new Error('El trámite no es válido.');
       firmas[n] = { tipoFirma: o.tipoFirma, tramite: o.tramite };
       return n === BASE.nombre ? detalle(n) : { nombre: n, firma: firmaDe(n) };
