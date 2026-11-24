@@ -21,7 +21,7 @@ function demoOps() {
 function demoDetail(o) {
   const fin = o.stage === 'finalized';
   const files = [{ fileName: o.name, kind: 'signed', fileUrl: 'demo://f/' + o.operation + '/s' }, { fileName: 'original.pdf', kind: 'original', fileUrl: 'demo://f/' + o.operation + '/o' }];
-  if (!fin) files.splice(0, 1);
+  // Portalfirma real lista el archivo «firmado» desde que se envía (aún sin firmas): la app solo lo da por completado si firmaron todos
   if (fin && o.proc === 'legalization') files.push({ fileName: 'legalized.pdf', kind: 'legalized', fileUrl: 'demo://f/' + o.operation + '/l' });
   if (fin && o.proc === 'protocolization') files.push({ fileName: 'protocolized.pdf', kind: 'legalized', fileUrl: 'demo://f/' + o.operation + '/p' });
   return { processId: 'demo-' + o.operation, operation: o.operation, status: fin ? 'finalized' : 'in_progress', protocolizationNumber: o.proc, repertoireNumber: fin && o.proc !== 'none' ? '1234-2026' : '',

@@ -26,7 +26,7 @@ function armar({ archivoExiste = true } = {}) {
   const avisos = { crear: async (a) => log.avisos.push(a) };
   const actividad = { registrar: async (a) => log.actividad.push(...a) };
   const wa = { enviarAContacto: async (cid, texto, canal, adj) => { log.enviados.push({ cid, texto, canal, adj }); return { messageId: 'm9' }; } };
-  return { s: new DocumentoRevisionService(db, enviados, r2, avisos, actividad), log, filas, wa };
+  return { s: new DocumentoRevisionService(db, enviados, r2, avisos, actividad, { crear: async (_k, clave) => 'https://api/d/' + clave.split('/').pop() }), log, filas, wa };
 }
 const u = { sub: 'u1', corredoraId: 'k1', rol: 'corredor' };
 const pedido = {
@@ -51,7 +51,7 @@ const msj = (texto, min = 1) => ({ id: 'x' + texto, direccion: 'entrante', texto
     ok((await s.interceptar(wa, 'k1', cv, [antes])).length === 1 && !log.enviados.length, 'un mensaje anterior al envío no lo dispara');
     const resto = await s.interceptar(wa, 'k1', cv, [msj('Enviar el documento')]);
     ok(resto.length === 0, 'el toque del botón no sigue a los asistentes');
-    ok(log.enviados[0].texto === pedido.texto && log.enviados[0].adj[0].startsWith('https://r2/negocios/n1/contrato-v2.pdf'), 'manda el mensaje del corredor con el PDF');
+    ok(log.enviados[0].texto.startsWith(pedido.texto) && log.enviados[0].texto.includes('https://api/d/contrato-v2.pdf'), 'manda el mensaje del corredor con el PDF como enlace (wechatia no entrega adjuntos)');
     ok(filas.get('n1:p1').datos.estado === 'entregada', 'queda entregada');
     ok(/se le envió el contrato/.test(log.avisos[0].texto) && log.avisos[0].usuarioId === 'u1', 'avisa al corredor');
     ok(log.actividad.length === 1, 'deja registro en el negocio');

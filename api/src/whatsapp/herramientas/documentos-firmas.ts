@@ -5,15 +5,17 @@
 //  · buscar_documento: archivos de una propiedad y documentos enviados a firmar.   · saldo: saldo de Portalfirma (MCP wallet).
 // La revisión periódica de firmas (ronda.ts) es la que mueve los negocios al firmarse: aquí solo se la apura cuando se nota un cambio.
 import { Injectable } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import type { Firma, Persona, Prisma, Propiedad } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ActividadService } from '../../comun/actividad.service';
 import { rutValido } from '../../comun/texto';
 import { AlmacenamientoService } from '../../archivos/almacenamiento.service';
+import { EnlacesCortosService } from '../../archivos/enlaces-cortos';
 import { PortalfirmaService } from '../../conexiones/portalfirma';
-import { PortalfirmaApiService } from '../../conexiones/portalfirma-api';
+import { PortalfirmaApiService, enlacesDe } from '../../conexiones/portalfirma-api';
 import { FirmasRondaService, leerDetalle } from '../../firmas/ronda';
-import { operacionDe } from '../../documentos/envio-firma';
+import { MENU_FIRMAS, operacionDe, respuestaEnvio } from '../../documentos/envio-firma';
 import { norm } from '../comun';
 import { AyudasHerramientas } from './ayudas';
 import { Confirmaciones } from './confirmar';
@@ -67,6 +69,7 @@ export class HerramientasFirmas implements ProveedorHerramientas {
     private readonly api: PortalfirmaApiService,
     private readonly ronda: FirmasRondaService,
     private readonly r2: AlmacenamientoService,
+    private readonly enlaces: EnlacesCortosService,
   ) {
     this.herramientas = this.definir();
   }
@@ -474,7 +477,7 @@ export class HerramientasFirmas implements ProveedorHerramientas {
       if (x.faltan.length) return { ok: true, listo: false, ...resumen, faltan: x.faltan, indicacion: 'NO se generó nada. Pídele al corredor SOLO lo que falta y vuelve a llamar con «valores» (id del campo → valor) y «personas».' };
       if (!conf) {
         this.conf.preparar(c, HERR, x.f.template_version_id ? String(x.f.template_version_id) : txt(args.plantilla, 80), { resumen, values }, { ...args, confirmado: false });
-        return { ok: true, listo: true, enviada: false, necesitaConfirmacion: true, ...resumen, indicacion: 'NO se generó ni se cobró. Muéstrale al corredor el documento, los firmantes y los datos y pregúntale si lo genero y envío a firmar (se cobra del saldo de Portalfirma y cada firmante recibe su enlace). Si dice que sí, llama generar_documento_plantilla con confirmado: true.' };
+        return { ok: true, listo: true, enviada: false, necesitaConfirmacion: true, ...resumen, indicacion: 'NO se generó . Muéstrale al corredor el documento, los firmantes y los datos y pregúntale si lo genero y envío a firmar (cada firmante recibe su enlace). Si dice que sí, llama generar_documento_plantilla con confirmado: true.' };
       }
       const p = this.conf.exigir(c, HERR);
       if ('error' in p) return p;
@@ -509,7 +512,62 @@ export class HerramientasFirmas implements ProveedorHerramientas {
           ...(x.negocio ? [{ corredoraId: c.corredoraId, entidadTipo: 'negocio' as const, entidadId: x.negocio.id, ref2: x.prop?.id ?? null, texto, usuarioId: c.usuarioId }] : []),
         ]);
       }
-      return { ok: true, enviada: true, operacion: op, plantilla: x.nombre, mensaje: op ? `«${x.nombre}» se envió a firmar (operación ${op}). Se cobró del saldo de Portalfirma.` : t.texto.slice(0, 300), ...(op ? {} : { aviso: 'Portalfirma no informó el número de operación: revísalo en «Mis operaciones».' }) };
+      // el detalle de la operación trae el enlace de firma de cada firmante; los propietarios reservados no se muestran (ni su enlace)
+      let detalle: Rec = {};
+      if (op) {
+        const fila = await this.db.firma.findFirst({ where: { corredoraId: c.corredoraId, operacion: op } });
+        const res = fila ? await this.reservados(c, [fila]) : { personas: new Set<string>(), ruts: new Set<string>() };
+        const raw = (await this.api.detallePorOperacion(c.corredoraId, op).catch(() => null)) as Detalle | null;
+        const sigs = (raw?.signatories as Detalle[]) ?? [];
+        const firmantesEnlace = enlacesDe(raw).map((f, i) => {
+          const rut = String(sigs[i]?.rut ?? '').replace(/[^0-9kK]/g, '').toUpperCase();
+          return rut && res.ruts.has(rut) ? { nombre: RESERVADO, rol: f.rol, email: '', telefono: '', url: '' } : f;
+        });
+        detalle = respuestaEnvio(x.nombre, { operacion: op, firmantes: firmantesEnlace });
+      }
+      return { ok: true, enviada: true, operacion: op, plantilla: x.nombre, mensaje: op ? `«${x.nombre}» se envió a firmar (operación ${op}).` : t.texto.slice(0, 300), ...detalle, ...(op ? {} : { aviso: 'Portalfirma no informó el número de operación: revísalo en «Mis operaciones».' }) };
+    } catch (e) {
+      return { error: mensajeError(e) };
+    }
+  }
+
+  // ================================================================== el PDF de una operación (original, firmado o legalizado)
+  /** copia el PDF de Portalfirma a R2 y devuelve un enlace que vale 24 horas (wechatia no entrega archivos adjuntos por WhatsApp: va el enlace) */
+  private async copiaPdf(c: CtxHerr, f: Firma, version: 'original' | 'signed' | 'legalized') {
+    const raw = (await this.api.detallePorOperacion(c.corredoraId, f.operacion!)) as Detalle;
+    if (!raw?.processId) throw new ErrorDoc('Portalfirma no informó el identificador de la operación: no puedo traer el documento.');
+    const arch = await this.api.archivo(c.corredoraId, String(raw.processId), version);
+    const nombre = arch.nombre || `${f.documento}.pdf`;
+    const clave = `c/${c.corredoraId}/vistas/${c.usuarioId}/firma-${f.operacion}-${version}.pdf`;
+    await this.r2.subir(clave, Buffer.from(arch.base64, 'base64'), 'application/pdf');
+    return { nombre, enlace: await this.enlaces.crear(c.corredoraId, clave, nombre, 24 * 3600) };
+  }
+
+  /** «mándame el documento original / firmado / legalizado» de una operación: el enlace de descarga del PDF (24 horas) */
+  private async documentoDeFirma(c: CtxHerr, a: Rec): Promise<Rec> {
+    try {
+      if (!hay(a.operacion) && !hay(a.negocio) && !hay(a.propiedad)) return { error: 'Indica el número de operación, el negocio o la propiedad.' };
+      const r = await this.visibles(c, { ...a, todas: true });
+      if ('error' in r) return r;
+      const lista = r.firmas.filter((f) => f.operacion);
+      if (!lista.length) return { error: hay(a.operacion) ? `No encontré la operación ${txt(a.operacion, 20)} entre las que enviaste.` : `No hay documentos enviados a firmar ${r.filtro}.` };
+      if (lista.length > 1 && !hay(a.operacion))
+        return { ok: true, variasOperaciones: lista.slice(0, 6).map((f) => ({ operacion: f.operacion, documento: f.documento, estado: f.estado })), indicacion: 'Hay más de un documento: pregúntale al corredor cuál (por número de operación o nombre) y vuelve a llamar con «operacion».' };
+      const f = lista[0];
+      const pedida = norm(txt(a.version, 20));
+      const version: 'original' | 'signed' | 'legalized' = /original|sin firmar/.test(pedida) ? 'original' : /legaliz|protocol/.test(pedida) ? 'legalized' : /firmad/.test(pedida) ? 'signed' : f.estado === 'firmado' ? 'signed' : 'original';
+      if (version === 'signed' && f.estado !== 'firmado') return { error: `La operación ${f.operacion} todavía no está firmada por todos (${f.firmados} de ${f.total}). Te puedo mandar el original o contarte quién falta.` };
+      const { nombre, enlace } = await this.copiaPdf(c, f, version);
+      const etiqueta = { original: 'el documento original (sin firmas)', signed: 'el documento firmado', legalized: 'el documento legalizado' }[version];
+      return {
+        ok: true,
+        operacion: f.operacion,
+        documento: f.documento,
+        version,
+        archivo: nombre,
+        enlace,
+        indicacion: `Dale al corredor el enlace del PDF de ${etiqueta} de «${f.documento}» (operación ${f.operacion}), solo, en su propia línea: se abre con un toque en WhatsApp. Vale 24 horas. NO digas que lo adjuntaste ni que «te lo mandé por aquí»: WhatsApp no deja adjuntarlo desde aquí, va el enlace.`,
+      };
     } catch (e) {
       return { error: mensajeError(e) };
     }
@@ -539,7 +597,7 @@ export class HerramientasFirmas implements ProveedorHerramientas {
       if (prop && ve) {
         const l = await this.db.propiedadDocumento.findMany({ where: { propiedadId: prop.id }, orderBy: { creadoEn: 'desc' }, take: 60 });
         for (const d of l.filter((x) => coincide(`${x.nombre} ${x.tipo}`)).slice(0, 8)) {
-          const enlace = d.claveAlmacenamiento ? await this.r2.urlDescarga(d.claveAlmacenamiento, d.nombre, 24 * 3600).catch(() => null) : null;
+          const enlace = d.claveAlmacenamiento ? await this.enlaces.crear(c.corredoraId, d.claveAlmacenamiento, d.nombre, 24 * 3600).catch(() => null) : null;
           archivos.push({ nombre: d.nombre, tipo: d.tipo, subido: d.creadoEn.toISOString().slice(0, 10), ...(enlace ? { enlace } : {}) });
         }
       }
@@ -556,7 +614,7 @@ export class HerramientasFirmas implements ProveedorHerramientas {
               const arch = await this.api.archivo(c.corredoraId, String(raw.processId));
               const clave = `c/${c.corredoraId}/vistas/${c.usuarioId}/firma-${f.operacion}.pdf`;
               await this.r2.subir(clave, Buffer.from(arch.base64, 'base64'), 'application/pdf');
-              enlace = await this.r2.urlDescarga(clave, arch.nombre || `${f.documento}.pdf`, 24 * 3600);
+              enlace = await this.enlaces.crear(c.corredoraId, clave, arch.nombre || `${f.documento}.pdf`, 24 * 3600);
             }
           } catch { /* sin enlace: igual se informa el estado */ }
         }
@@ -605,6 +663,19 @@ export class HerramientasFirmas implements ProveedorHerramientas {
         ejecutar: (c, a) => this.reenviar(c, a),
       },
       {
+        name: 'documento_de_firma',
+        description:
+          'Le da al corredor el enlace de descarga del PDF del documento de una operación enviada a firmar: el ORIGINAL (como se envió), el FIRMADO (cuando firmaron todos) o el LEGALIZADO. Úsala para «mándame el documento original/firmado de la operación 4521» o «el contrato firmado del negocio NG-014». Sin versión manda el firmado si ya lo está y, si no, el original. No cobra ni escribe a terceros. Es un enlace (WhatsApp no deja adjuntar el archivo desde aquí).',
+        input_schema: esquema({ operacion: { type: 'number', description: 'número de operación' }, negocio: REF_NEG, propiedad: REF_PROP, version: { type: 'string', enum: ['original', 'firmado', 'legalizado'], description: 'cuál versión; omítela si no la dijo' } }),
+        ejecutar: (c, a) => this.documentoDeFirma(c, a),
+      },
+      {
+        name: 'que_puedo_pedir_de_firmas',
+        description: 'Lo que el corredor puede pedirte sobre los documentos en firma (estado, reenviar el enlace, el documento original o firmado). Úsala si pregunta qué puede hacer o qué le puedes ofrecer con las firmas.',
+        input_schema: esquema(),
+        ejecutar: async () => ({ ok: true, menu: MENU_FIRMAS(), indicacion: 'Muéstrale el menú tal cual, corto.' }),
+      },
+      {
         name: 'saldo',
         description: 'El saldo de Portalfirma de la corredora (con él se pagan las firmas). Úsala si el corredor pregunta cuánto saldo queda o antes de enviar varios documentos.',
         input_schema: esquema({}),
@@ -627,7 +698,7 @@ export class HerramientasFirmas implements ProveedorHerramientas {
       {
         name: 'generar_documento_plantilla',
         description:
-          'Genera un documento desde una plantilla de la Notaría virtual con los datos de la propiedad y las personas y lo envía a firmar (cobra del saldo de Portalfirma). DOS pasos: sin confirmado llena el formulario y devuelve el resumen o lo que falta; con confirmado: true, solo tras el sí del corredor, lo genera. «valores» lleva solo los campos que faltaban o que el corredor quiere cambiar.',
+          'Genera un documento desde una plantilla de la Notaría virtual con los datos de la propiedad y las personas y lo envía a firmar. DOS pasos: sin confirmado llena el formulario y devuelve el resumen o lo que falta; con confirmado: true, solo tras el sí del corredor, lo genera. «valores» lleva solo los campos que faltaban o que el corredor quiere cambiar.',
         input_schema: esquema({ plantilla: { type: 'string', description: 'id de la plantilla' }, propiedad: REF_PROP, negocio: REF_NEG, personas: { type: 'object', description: 'grupo firmante → persona del CRM (nombre o RUT)', additionalProperties: { type: 'string' } }, valores: { type: 'object', description: 'id del campo → valor', additionalProperties: { type: 'string' } }, confirmado: CONFIRMADO }, ['plantilla']),
         ejecutar: (c, a) => this.generar(c, a),
       },

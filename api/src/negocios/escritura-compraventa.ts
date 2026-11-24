@@ -22,7 +22,7 @@ import { UsuarioActual, type UsuarioToken } from '../auth/usuario-actual';
 import { buscarVisible } from '../comun/asignados';
 import { ActividadService } from '../comun/actividad.service';
 import { PdfService } from '../documentos/pdf.service';
-import { EnvioFirmaService } from '../documentos/envio-firma';
+import { EnvioFirmaService, respuestaEnvio } from '../documentos/envio-firma';
 import { llenar } from '../documentos/plantilla';
 import { hoy } from '../whatsapp/comun';
 import { describir, dominioDe, perfilDe, rutDe, unir } from '../documentos/comparecientes';
@@ -429,7 +429,8 @@ export class EscrituraCompraventaService {
       enviada: true,
       operacion,
       numero,
-      indicacion: `El borrador de escritura de compraventa nº ${numero} se envió a firmar (operación ${operacion}) a ${quienes}. Se cobró del saldo de Portalfirma. Cuando todos firmen, el paso «Escritura firmada» se completa solo.`,
+      ...respuestaEnvio(`Borrador de escritura de compraventa nº ${numero}`, r),
+      indicacion: `El borrador de escritura de compraventa nº ${numero} se envió a firmar (operación ${operacion}) a ${quienes}. Cuando todos firmen, el paso «Escritura firmada» se completa solo.`,
     };
   }
 }

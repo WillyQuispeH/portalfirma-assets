@@ -11,6 +11,7 @@ import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { UsuarioToken } from '../auth/usuario-actual';
 import { AlmacenamientoService } from '../archivos/almacenamiento.service';
+import { EnlacesCortosService } from '../archivos/enlaces-cortos';
 import { AvisosService } from '../avisos/avisos';
 import { ActividadService } from '../comun/actividad.service';
 import { EnviadosService } from './enviados';
@@ -65,6 +66,7 @@ export class DocumentoRevisionService {
     private readonly r2: AlmacenamientoService,
     private readonly avisos: AvisosService,
     private readonly actividad: ActividadService,
+    private readonly enlaces: EnlacesCortosService,
   ) {}
 
   /**
@@ -159,9 +161,14 @@ export class DocumentoRevisionService {
     let fin: RevisionPendiente;
     try {
       if ((await this.r2.tamano(d.clave)) == null) throw new Error('el archivo ya no está');
-      const url = await this.r2.urlDescarga(d.clave, d.archivo);
-      const r = await wa.enviarAContacto(cv.contactId!, d.texto, 'whatsapp', [url]);
-      await this.enviados.registrar(corredoraId, cv.telefono, { messageId: r.messageId, texto: d.texto });
+      // wechatia no entrega archivos adjuntos por este canal de WhatsApp (solo el texto): el PDF va como enlace en el mensaje
+      const url = await this.enlaces.crear(corredoraId, d.clave, d.archivo, 3 * 24 * 3600);
+      const texto = `${d.texto}
+
+📄 ${d.archivo}
+${url}`;
+      const r = await wa.enviarAContacto(cv.contactId!, texto);
+      await this.enviados.registrar(corredoraId, cv.telefono, { messageId: r.messageId, texto });
       fin = { ...d, estado: 'entregada', entregadaEn: new Date().toISOString(), respuesta: respuesta.trim().slice(0, 200) };
     } catch (e) {
       fin = { ...d, estado: 'fallida', error: (e as Error).message.slice(0, 300), respuesta: respuesta.trim().slice(0, 200) };

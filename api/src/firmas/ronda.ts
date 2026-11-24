@@ -27,6 +27,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { UsuarioActual, type UsuarioToken } from '../auth/usuario-actual';
 import { ActividadService } from '../comun/actividad.service';
 import { AvisosService, type NuevoAviso } from '../avisos/avisos';
+import { AvisoFirmaService } from '../whatsapp/aviso-firma';
 import { PortalfirmaService } from '../conexiones/portalfirma';
 import { PortalfirmaApiService } from '../conexiones/portalfirma-api';
 import { GoogleService } from '../conexiones/google';
@@ -116,6 +117,7 @@ export class FirmasRondaService implements OnModuleInit, OnModuleDestroy {
     private readonly api: PortalfirmaApiService,
     private readonly actividad: ActividadService,
     private readonly avisos: AvisosService,
+    private readonly avisoFirma: AvisoFirmaService,
     private readonly google: GoogleService,
     private readonly modulo: ModuleRef,
     config: ConfigService<Env, true>,
@@ -165,17 +167,22 @@ export class FirmasRondaService implements OnModuleInit, OnModuleDestroy {
     const cambios: string[] = [];
     let revisadas = 0;
     // ---- documentos en firma
-    const firmas = await this.db.firma.findMany({
-      where: {
-        corredoraId,
-        eliminadoEn: null,
-        operacion: { not: null },
-        estado: { notIn: FINALES },
-        OR: [{ revisadoEn: null }, { revisadoEn: { lt: antes } }],
-      },
-      orderBy: { revisadoEn: { sort: 'asc', nulls: 'first' } },
-      take: MAX_POR_VUELTA,
-    });
+    // cuánto se espera para volver a mirar un documento según su edad (un documento abandonado no se consulta cada 5 minutos para siempre):
+    // el de hoy cada `minimoMs`; hasta 7 días, cada hora; hasta 30 días, cada 6 horas; más antiguo, una vez al día
+    const toca = await this.db.$queryRaw<{ id: string }[]>`
+      SELECT id FROM firmas
+      WHERE corredora_id = ${corredoraId}::uuid AND eliminado_en IS NULL AND operacion IS NOT NULL
+        AND estado <> ALL(${FINALES}::text[])
+        AND (revisado_en IS NULL OR revisado_en < now() - CASE
+          WHEN enviado_en > now() - interval '1 day' THEN (${Math.round(minimoMs / 1000)} * interval '1 second')
+          WHEN enviado_en > now() - interval '7 days' THEN GREATEST(interval '1 hour', ${Math.round(minimoMs / 1000)} * interval '1 second')
+          WHEN enviado_en > now() - interval '30 days' THEN interval '6 hours'
+          ELSE interval '24 hours' END)
+      ORDER BY revisado_en ASC NULLS FIRST
+      LIMIT ${MAX_POR_VUELTA}`;
+    const firmas = toca.length
+      ? await this.db.firma.findMany({ where: { id: { in: toca.map((x) => x.id) } }, orderBy: { revisadoEn: { sort: 'asc', nulls: 'first' } } })
+      : [];
     for (const f of firmas) {
       let d: Detalle;
       try {
@@ -303,6 +310,21 @@ export class FirmasRondaService implements OnModuleInit, OnModuleDestroy {
         texto,
         datos: { operacion: f.operacion, propiedadIds: f.propiedadIds, negocioId: f.negocioId },
       });
+    // además, por WhatsApp a quien lo envió (sin esperar y sin que un fallo frene la revisión)
+    const faltan = firmantes.filter((s) => !s.firmo).map((s) => s.nombre || 'un firmante');
+    void this.avisoFirma
+      .avisar({
+        corredoraId: f.corredoraId,
+        enviadoPorId: f.enviadoPorId,
+        operacion: f.operacion,
+        documento: doc,
+        firmados: firmantes.length - faltan.length,
+        total: firmantes.length,
+        faltan,
+        cambios,
+        completo: x.estado === 'firmado',
+      })
+      .catch(() => null);
     return cambios;
   }
 

@@ -16,7 +16,7 @@ import { UsuarioActual, type UsuarioToken } from '../auth/usuario-actual';
 import { buscarVisible } from '../comun/asignados';
 import { ActividadService } from '../comun/actividad.service';
 import { PdfService } from '../documentos/pdf.service';
-import { EnvioFirmaService } from '../documentos/envio-firma';
+import { EnvioFirmaService, respuestaEnvio } from '../documentos/envio-firma';
 import { llenar } from '../documentos/plantilla';
 import { hoy } from '../whatsapp/comun';
 import { describir, dominioDe, perfilDe, unir } from '../documentos/comparecientes';
@@ -374,7 +374,8 @@ export class CartaOfertaService {
       numero,
       oferente: x.persona.nombre,
       correo: x.persona.email,
-      indicacion: `La carta oferta nº ${numero} se envió a firmar (operación ${operacion}): ${x.persona.nombre} recibe el enlace para firmar en ${x.persona.email}. Se cobró del saldo de Portalfirma. Cuando firme, el negocio avanza solo.`,
+      ...respuestaEnvio(`Carta oferta nº ${numero}`, r),
+      indicacion: `La carta oferta nº ${numero} se envió a firmar (operación ${operacion}): ${x.persona.nombre} recibe el enlace para firmar en ${x.persona.email}. Cuando firme, el negocio avanza solo.`,
     };
   }
 }

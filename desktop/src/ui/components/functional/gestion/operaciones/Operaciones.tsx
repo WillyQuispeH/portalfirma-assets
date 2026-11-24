@@ -48,7 +48,9 @@ function Detalle({ d, items, alRefrescar }: { d: IDetalleOperacion; items: IOper
   const firmaron = sig.filter((s) => s.signed).length;
   // las versiones del documento que tiene Portalfirma: original, firmado y, si hay trámite notarial, legalizado (o protocolizado)
   const archivos = d.files || []; const sinInfo = !archivos.length;   // sin detalle de archivos se muestra el documento que haya
-  const tiene = (k: TVersionDoc) => (sinInfo ? (k === 'original' || (k === 'signed' && d.status === 'finalized')) : archivos.some((f) => f.kind === k));
+  // Portalfirma deja listado el archivo «firmado» desde que se envía (lleva la página de firmas en blanco): solo vale como firmado cuando firmaron todos o el proceso terminó
+  const firmado = d.status === 'finalized' || (sig.length > 0 && firmaron === sig.length);
+  const tiene = (k: TVersionDoc) => (sinInfo ? (k === 'original' || (k === 'signed' && d.status === 'finalized')) : k === 'original' ? archivos.some((f) => f.kind === k) : firmado && archivos.some((f) => f.kind === k));
   const notarial = d.protocolizationNumber === 'legalization' || d.protocolizationNumber === 'protocolization';
   const versiones: { k: TVersionDoc; titulo: string; sub: string; icono: string; listo: boolean }[] = [
     { k: 'original', titulo: 'Documento Original', sub: fecha(d.createdDateAt), icono: 'file', listo: tiene('original') },

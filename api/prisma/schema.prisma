@@ -1034,3 +1034,17 @@ model IncidenciaNota {
   @@index([incidenciaId, creadoEn])
   @@map("incidencia_notas")
 }
+
+/// Enlaces cortos a un archivo privado de R2 (p. ej. el PDF de un documento): /v1/d/<token> redirige a una descarga firmada de corta vida mientras
+/// el enlace no haya vencido. El token es un nombre legible + un sufijo al azar (no se puede adivinar).
+model EnlaceCorto {
+  token       String   @id
+  corredoraId String   @map("corredora_id") @db.Uuid
+  clave       String
+  nombre      String
+  expiraEn    DateTime @map("expira_en")
+  creadoEn    DateTime @default(now()) @map("creado_en")
+
+  @@index([expiraEn])
+  @@map("enlaces_cortos")
+}

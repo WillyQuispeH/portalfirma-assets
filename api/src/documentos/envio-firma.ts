@@ -7,7 +7,7 @@ import { z } from 'zod';
 import { PrismaService } from '../prisma/prisma.service';
 import { UsuarioActual, type UsuarioToken } from '../auth/usuario-actual';
 import { ZodPipe } from '../comun/zod.pipe';
-import { PortalfirmaApiService, partirNombre, type FirmanteApi } from '../conexiones/portalfirma-api';
+import { PortalfirmaApiService, partirNombre, type EnlaceFirmante, type FirmanteApi } from '../conexiones/portalfirma-api';
 import { GoogleService, type IRefDrive } from '../conexiones/google';
 import { configFirma, type TipoFirma } from './plantillas-doc';
 
@@ -59,6 +59,59 @@ export function operacionDe(r: unknown): number | null {
   }
   return null;
 }
+
+/** la página donde el cliente sigue su operación en Portalfirma */
+export const enlaceOperacion = (operacion: number | string) => `https://cliente.portalfirma.cl/c?o=${operacion}`;
+
+/** lo que el corredor puede pedirle al agente sobre un documento en firma (se le muestra al enviar y cuando pregunta qué puede hacer) */
+export const MENU_FIRMAS = (operacion?: number | string) => [
+  'Puedes pedirme, por ejemplo:',
+  `• «¿Cómo va la operación ${operacion ?? '11528'}?» → quién firmó y quién falta`,
+  '• «Reenvíale el link de firma a Juan» → se lo vuelvo a mandar a quien aún no firma',
+  '• «Mándame el link del documento original o del firmado» → el enlace para abrir o descargar el PDF',
+  '• «¿Qué documentos están pendientes de firma?» → todos los que siguen en curso',
+].join('\n');
+
+/** «Orden de visita nº 11» → «ORDEN DE VISITA N.º 11» */
+const tituloDoc = (d: string) => d.toUpperCase().replace(/N[º°]\s*/g, 'N.º ').trim();
+
+/**
+ * El detalle de un envío a firmar para mostrárselo al corredor por WhatsApp, siempre en este orden:
+ *   TÍTULO N.º · Estado · Operación → FIRMANTES (n) con el enlace de cada uno → SEGUIMIENTO DE LA OPERACIÓN → lo propio del documento
+ *   (`extra`, p. ej. VISITA AGENDADA) → lo que puede pedir.
+ * `firmantes` viene del detalle de Portalfirma; si no trae enlaces, igual queda el de la operación.
+ */
+export function resumenEnvio(o: {
+  documento: string;
+  operacion: number | string;
+  firmantes: Pick<EnlaceFirmante, 'nombre' | 'rol' | 'email' | 'telefono' | 'url'>[];
+  /** bloque propio del documento (ya con su título en mayúsculas), después del seguimiento */
+  extra?: string;
+}): string {
+  const lineas = [tituloDoc(o.documento), 'Estado: Enviada a firma', `Operación: #${o.operacion}`, ''];
+  if (o.firmantes.length) {
+    lineas.push(`FIRMANTES (${o.firmantes.length})`, '');
+    o.firmantes.forEach((f, i) => {
+      lineas.push(`${i + 1}. ${f.nombre || 'Firmante'}${f.rol ? ` (${f.rol})` : ''}`);
+      if (f.url) lineas.push(`Firma: ${f.url}`);
+      lineas.push('');
+    });
+  }
+  lineas.push('SEGUIMIENTO DE LA OPERACIÓN', enlaceOperacion(o.operacion), '');
+  if (o.extra?.trim()) lineas.push(o.extra.trim(), '');
+  lineas.push(MENU_FIRMAS(o.operacion));
+  return lineas.join('\n');
+}
+
+/**
+ * Lo que cada documento enviado a firmar suma a la respuesta de su herramienta de WhatsApp: el bloque con los enlaces y la orden
+ * de mostrarlo tal cual (los enlaces no se acortan ni se cambian). `extra`: lo propio del documento (p. ej. la visita agendada).
+ */
+export const respuestaEnvio = (documento: string, r: { operacion: number; firmantes?: EnlaceFirmante[] }, extra?: string) => ({
+  detalleEnvio: resumenEnvio({ documento, operacion: r.operacion, firmantes: r.firmantes ?? [], extra }),
+  instruccionRespuesta:
+    'En tu respuesta al corredor copia TEXTUALMENTE el bloque «detalleEnvio», con el mismo orden y los mismos títulos (documento, estado, operación, FIRMANTES con el enlace de cada uno, SEGUIMIENTO DE LA OPERACIÓN y lo que sigue), sin cambiar ni acortar ningún enlace. No agregues otro resumen antes ni después. No menciones saldo ni cobros.',
+});
 
 const emailOk = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 const rutLimpio = (r?: string | null) => (r ?? '').replace(/[^0-9kK]/g, '').toUpperCase();
@@ -145,7 +198,7 @@ export class EnvioFirmaService {
     /** además de las firmas ubicadas, que Portalfirma agregue una página de firmas al final */
     paginaExtra?: boolean;
   }): Promise<
-    | { operacion: number; tipoFirma: TipoFirma; tramite: 'none' | 'legalization'; processId?: string; paginaFirmas?: boolean }
+    | { operacion: number; tipoFirma: TipoFirma; tramite: 'none' | 'legalization'; processId?: string; paginaFirmas?: boolean; firmantes: EnlaceFirmante[] }
     | { error: string }
   > {
     try {
@@ -192,7 +245,7 @@ export class EnvioFirmaService {
           ref: o.drive,
         })
         .catch(() => null);
-      return { operacion: r.operacion, tipoFirma: cfg.tipoFirma, tramite: cfg.tramite, processId: r.processId, paginaFirmas: !ubicadas };
+      return { operacion: r.operacion, tipoFirma: cfg.tipoFirma, tramite: cfg.tramite, processId: r.processId, paginaFirmas: !ubicadas, firmantes: r.firmantes };
     } catch (e) {
       const m = (e as { response?: { codigo?: string } }).response;
       if (m?.codigo === 'NECESITA_CONEXION')

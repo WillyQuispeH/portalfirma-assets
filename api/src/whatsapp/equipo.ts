@@ -41,6 +41,8 @@ const ES_AUDIO = /\.(ogg|oga|opus|mp3|m4a|amr|aac|wav|webm)(\?|$)|audio/i;
 
 /** turnos que se guardan por personaje */
 const MAX_TURNOS = 16;
+/** «reiniciar», «/reset», «empezar de nuevo», «nueva conversación»…: borra lo conversado y parte de cero (solo si es todo el mensaje) */
+const REINICIAR = /^(\/(reiniciar|reinicia|reset|resetear|nuevo|nueva)|(reiniciar|reinicia|reset|resetear)( (el |la )?(chat|conversacion))?|(empezar|empecemos|partir|partamos|comenzar) de nuevo|(borrar|limpiar) (el |la )?(chat|conversacion)|nueva conversacion)$/;
 
 interface Ctx {
   corredoraId: string;
@@ -117,7 +119,7 @@ const HERRAMIENTAS: HerramientaIa[] = [
   {
     name: 'orden_visita',
     description:
-      'Prepara y envía a firmar la ORDEN DE VISITA de una propiedad (documento que firma el visitante; cobra del saldo de Portalfirma). SIEMPRE en dos pasos: 1) llámala SIN confirmado: arma el documento y devuelve los datos que llevaría, sin enviar ni cobrar; muéstraselos al corredor. 2) Solo cuando el corredor responda que sí, llámala de nuevo con confirmado: true y EXACTAMENTE los mismos datos. ANTES de preparar, pregúntale al corredor «¿Incluyo la dirección de la propiedad en la orden de visita?» y pasa su respuesta en incluir_direccion (sin ella el servidor no prepara nada). El servidor rechaza el envío si no hubo ese paso previo o si el corredor no confirmó. Si el visitante no está en el CRM necesita nombre completo y RUT; siempre necesita su correo.',
+      'Prepara y envía a firmar la ORDEN DE VISITA de una propiedad (documento que firma el visitante). SIEMPRE en dos pasos: 1) llámala SIN confirmado: arma el documento y devuelve los datos que llevaría, sin enviar ni cobrar; muéstraselos al corredor. 2) Solo cuando el corredor responda que sí, llámala de nuevo con confirmado: true y EXACTAMENTE los mismos datos. ANTES de preparar, pregúntale al corredor «¿Incluyo la dirección de la propiedad en la orden de visita?» y pasa su respuesta en incluir_direccion (sin ella el servidor no prepara nada). El servidor rechaza el envío si no hubo ese paso previo o si el corredor no confirmó. Si el visitante no está en el CRM necesita nombre completo y RUT; siempre necesita su correo.',
     input_schema: {
       type: 'object',
       properties: {
@@ -241,27 +243,47 @@ export class EquipoService {
     const datos = (v.datos ?? {}) as { persona?: string; hilos?: Record<string, TurnoIa[]>; nombre?: string };
     const persona = this.personaDe(texto, datos.persona, v.corredoraId);
     const p = { ...PERSONAS[persona], nombre: nombresAsistentes.get(v.corredoraId)?.[persona] || PERSONAS[persona].nombre };
+    // lo que se entendió del audio (para que lo corrija si el ruido jugó una mala pasada) va en el MISMO mensaje de la respuesta,
+    // justo bajo la firma, para no llenar el chat de mensajes sueltos
+    let eco = dichos.length ? `🎙️ _Entendí: «${dichos.join(' ').slice(0, 1200)}»_${avisosAudio.map((x) => `
+⚠️ ${x}`).join('')}` : '';
     const enviar = async (t: string) => {
       if (!cv.contactId) return;
-      const r = await wa.enviarAContacto(cv.contactId, `${firma(persona, v.corredoraId)}\n${t}`.slice(0, 3500));
-      await this.enviados.registrar(v.corredoraId, cv.telefono, { messageId: r.messageId, texto: t, enHilo: false });
+      const cuerpo = eco ? `${eco}
+
+${t}` : t;
+      eco = '';
+      const r = await wa.enviarAContacto(cv.contactId, `${firma(persona, v.corredoraId)}
+${cuerpo}`.slice(0, 3500));
+      await this.enviados.registrar(v.corredoraId, cv.telefono, { messageId: r.messageId, texto: cuerpo, enHilo: false });
     };
-    // lo que se entendió del audio, para que lo corrija si el micrófono o el ruido jugaron una mala pasada
-    if (dichos.length && cv.contactId) {
-      const eco = `🎙️ Entendí: «${dichos.join(' ').slice(0, 1200)}»${avisosAudio.map((x) => `\n⚠️ ${x}`).join('')}`;
-      const r = await wa.enviarAContacto(cv.contactId, eco);
-      await this.enviados.registrar(v.corredoraId, cv.telefono, { messageId: r.messageId, texto: eco, enHilo: false });
-    }
+    // si no se va a responder desde aquí (queda para su Asset), lo entendido igual se le muestra solo
+    const soltarEco = async () => {
+      if (!eco || !cv.contactId) return;
+      const e = eco;
+      eco = '';
+      const r = await wa.enviarAContacto(cv.contactId, e);
+      await this.enviados.registrar(v.corredoraId, cv.telefono, { messageId: r.messageId, texto: e, enHilo: false });
+    };
     // un audio o archivo que no se pudo abrir: se lo decimos (antes quedaba para el escritorio)
     if (!texto && conAdjuntos) {
       await enviar('No pude abrir lo que mandaste. ¿Me lo envías de nuevo o me dices qué es?');
       return true;
     }
     if (!texto) return true;
-    if (!(await this.ia.disponible(v.corredoraId))) return false;
+    // reiniciar la conversación: se olvida todo lo hablado con los asistentes y se parte de cero
+    if (REINICIAR.test(norm(texto).replace(/[¿?¡!.,]/g, '').trim())) {
+      await this.db.waVinculo.update({
+        where: { usuarioId: v.usuarioId },
+        data: { datos: { ...datos, persona: undefined, hilos: {} } as unknown as Prisma.InputJsonValue },
+      });
+      await enviar('Listo, empezamos de cero: ya no recuerdo lo que veníamos hablando. ¿En qué te ayudo?');
+      return true;
+    }
+    if (!(await this.ia.disponible(v.corredoraId))) return soltarEco().then(() => false);
 
     const u = await this.db.usuario.findUnique({ where: { id: v.usuarioId } });
-    if (!u) return false;
+    if (!u) return soltarEco().then(() => false);
     const c: Ctx = { corredoraId: v.corredoraId, usuarioId: u.id, nombre: u.nombre, admin: u.rol === 'ADMIN', texto, adjuntos: archivos };
     const nota = avisosAudio.length
       ? `\n\n[Aviso de la transcripción del audio: ${avisosAudio.join(' ')} No guardes ese dato sin que lo confirme.]`
@@ -273,6 +295,9 @@ export class EquipoService {
       contexto(),
       'Tú administras todo desde el servidor, aunque el corredor esté en terreno y su computador esté apagado: propiedades, personas, leads, agenda, negocios de venta y arriendo con todos sus pasos (tareas, etapas, pagos y comprobantes, aceptación, evaluación, contrato, postarriendo), documentos y firmas, portales. Usa siempre la herramienta que corresponda; no le pidas que abra Asset. Lo que cobra, publica fuera, envía a firmar, cierra o borra se hace en DOS pasos: primero la herramienta SIN confirmado para armar y mostrarle un resumen corto, y solo cuando el corredor responda que sí, de nuevo con confirmado: true; nunca lo hagas sin su sí. Pregunta SOLO lo que falte: si el dato ya está en el CRM, en el mensaje o en el archivo que mandó (PDF, foto, chat exportado), no lo vuelvas a pedir. dejar_para_asset es solo para algo que de verdad no tenga herramienta.',
       'REGLA DE NEGOCIOS: todo negocio tiene siempre una propiedad y un interesado (comprador en venta, arrendatario en arriendo) y un código NG-XXX. Si el corredor te pide algo de un negocio y no lo nombró o hay más de uno posible, pregúntale SIEMPRE a cuál (por su código NG-XXX); si falta la propiedad o el interesado, dilo y pídele el dato; nunca lo supongas. Un comprobante de pago (PDF o foto) que te manda se lee con la herramienta de comprobantes: pregunta a qué negocio va, pide solo lo que el comprobante no trae y confirma con SÍ antes de registrarlo.',
+      'LO QUE NUNCA LE DICES AL CORREDOR: no menciones «Portalfirma» (di «la firma electrónica» o «Asset»), ni saldo, cobros, pagos o costos de enviar a firmar; ni los valores «estándar» o por defecto (exclusividad, portales, comisión): solo cuéntale lo que él pidió o lo que falta. Los enlaces van tal como te los entrega la herramienta (cortos): nunca los alargues ni los modifiques.',
+      'MANDATOS (venta y arriendo): los datos mínimos son la dirección y la comuna de la propiedad y los datos del dueño (nombre, RUT y correo). Con eso lo armas; NO pidas precio, rol, superficies, exclusividad, comisión ni otras condiciones salvo que el corredor las mencione. Sé inteligente: si el corredor da la dirección y el dueño, pásalos TAL CUAL a preparar_mandato (direccion, comuna, unidad, propietario) y la herramienta busca la propiedad y a la persona y, si no existen, las crea sola; NUNCA preguntes «¿creo la ficha?» ni «¿lo agrego al CRM?», y no ofrezcas propiedades de otra comuna como si fueran la misma. Tipo: con N.º de departamento es un departamento. Pregunta SOLO un RUT válido o el correo del dueño cuando falten, todo en un solo mensaje.',
+      'DOCUMENTOS EN FIRMA: el corredor puede pedirte el estado de una operación (seguimiento_firma), reenviar el enlace de firma a quien falta (reenviar_firma, en dos pasos) y el documento original, firmado o legalizado (documento_de_firma: le doy el enlace del PDF). Si no sabe qué puede pedir, usa que_puedo_pedir_de_firmas.',
       'Fotos de una propiedad: el corredor puede mandarlas a este mismo chat con el código en el mensaje (por ejemplo «PF-1001») y se agregan solas a la ficha, aun con Asset cerrado. Nunca digas que no puedes recibir fotos.',
       'Responde corto y claro, como en WhatsApp: frases breves, listas con «•», *negrita* con asteriscos simples, sin títulos ni tablas. Usa siempre las herramientas antes de afirmar datos; nunca inventes. Fechas como «lunes 10/11». Trátalo de tú.',
     ].join('\n\n');
@@ -289,7 +314,7 @@ export class EquipoService {
       });
     } catch (e) {
       this.log.warn(`equipo (${persona}): ${(e as Error).message}`);
-      return false;
+      return soltarEco().then(() => false);
     }
     if (!respuesta.trim()) respuesta = 'No pude resolverlo ahora. Lo veo apenas abras Asset.';
     await enviar(respuesta);

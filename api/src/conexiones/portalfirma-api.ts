@@ -63,6 +63,26 @@ export interface FirmanteApi {
   posicion?: { pagina: number; x: number; y: number };
 }
 
+/** un firmante de una operación con su enlace personal de firma (signatories[].url del detalle de Portalfirma) */
+export interface EnlaceFirmante {
+  nombre: string;
+  rol: string;
+  email: string;
+  telefono: string;
+  url: string;
+}
+
+/** los firmantes con su enlace de firma, tal como los informa el detalle de Portalfirma */
+export function enlacesDe(d: Json | null | undefined): EnlaceFirmante[] {
+  return (((d as Json | null)?.signatories as Json[]) || []).map((s) => ({
+    nombre: [s.name, s.paternalLastName, s.maternalLastName].filter(Boolean).join(' ') || String(s.fullName ?? ''),
+    rol: String(s.alias ?? ''),
+    email: String(s.email ?? ''),
+    telefono: String(s.phone ?? ''),
+    url: String(s.url ?? ''),
+  }));
+}
+
 /** «Juan Pablo Pérez Soto» → nombre, apellido paterno y materno (la API pide los tres; si falta uno va «-») */
 export function partirNombre(completo: string) {
   const t = completo.trim().split(/\s+/).filter(Boolean);
@@ -210,7 +230,7 @@ export class PortalfirmaApiService {
   async enviar(
     corredoraId: string,
     o: { pdf: Buffer; firmantes: FirmanteApi[]; protocolizar: boolean; paginaFirmas?: boolean; paginaExtra?: boolean },
-  ): Promise<{ processId: string; operacion: number | null }> {
+  ): Promise<{ processId: string; operacion: number | null; firmantes: EnlaceFirmante[] }> {
     // con todas las firmas ubicadas se usan esas posiciones; `paginaExtra` pide además la página de firmas al final (la agrega Portalfirma)
     const manual = !o.paginaFirmas && o.firmantes.every((f) => !!f.posicion);
     const r = await this.pedir<{ processId?: string }>(corredoraId, 'POST', '/document/sendToSign', {
@@ -240,7 +260,7 @@ export class PortalfirmaApiService {
     // sendToSign entrega solo el proceso: el número de operación sale de su detalle
     const d = await this.detallePorProceso(corredoraId, processId).catch(() => null);
     const op = Number(d?.operation);
-    return { processId, operacion: Number.isFinite(op) && op > 0 ? op : null };
+    return { processId, operacion: Number.isFinite(op) && op > 0 ? op : null, firmantes: enlacesDe(d) };
   }
 
   /**

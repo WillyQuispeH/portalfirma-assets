@@ -15,9 +15,10 @@ import { buscarVisible } from '../comun/asignados';
 import { ActividadService } from '../comun/actividad.service';
 import { PdfService } from '../documentos/pdf.service';
 import { RegistrosService } from '../registros/registros';
+import { EnlacesCortosService } from '../archivos/enlaces-cortos';
 import { EnviadosService } from '../whatsapp/enviados';
 import { DocumentoRevisionService } from '../whatsapp/documento-revision';
-import { EnvioFirmaService, type FirmanteEnvio } from '../documentos/envio-firma';
+import { EnvioFirmaService, type FirmanteEnvio, respuestaEnvio } from '../documentos/envio-firma';
 import { llenar } from '../documentos/plantilla';
 import { hoy, telNorm } from '../whatsapp/comun';
 import { describir, dominioDe, unir } from '../documentos/comparecientes';
@@ -102,6 +103,7 @@ export class ContratoArriendoService {
     private readonly registros: RegistrosService,
     private readonly enviados: EnviadosService,
     private readonly revisionWa: DocumentoRevisionService,
+    private readonly enlaces: EnlacesCortosService,
   ) {}
 
   private async armar(u: UsuarioToken, negocioId: string) {
@@ -371,7 +373,9 @@ export class ContratoArriendoService {
       return {
         error: `${persona.nombre} no tiene celular en su ficha: agrégalo para mandarle el contrato por WhatsApp.`,
       };
-    const url = (await this.registros.descarga(u, 'archivos_negocio', b.negocioId, b.clave, b.nombre)).url;
+    // descarga() valida que el archivo sea de este negocio; lo que se manda es un enlace corto de 3 días
+    await this.registros.descarga(u, 'archivos_negocio', b.negocioId, b.clave, b.nombre);
+    const url = await this.enlaces.crear(u.corredoraId, b.clave, b.nombre, 3 * 24 * 3600);
     let plantilla = false;
     try {
       await this.enviados.enviarArchivo(u, { telefono: persona.telefono, nombre: persona.nombre, texto: b.texto, url });
@@ -541,7 +545,8 @@ export class ContratoArriendoService {
       operacion,
       numero,
       firmantes: x.firmantes.map((f) => ({ nombre: f.fullName, rol: f.rol, correo: f.email })),
-      indicacion: `El contrato de arriendo nº ${numero} se envió a firmar (operación ${operacion}) a ${total} persona${total === 1 ? '' : 's'}${r.tramite === 'legalization' ? ', con legalización notarial' : ''}. Se cobró del saldo de Portalfirma.`,
+      ...respuestaEnvio(`Contrato de arriendo nº ${numero}`, r),
+      indicacion: `El contrato de arriendo nº ${numero} se envió a firmar (operación ${operacion}) a ${total} persona${total === 1 ? '' : 's'}${r.tramite === 'legalization' ? ', con legalización notarial' : ''}.`,
     };
   }
 }

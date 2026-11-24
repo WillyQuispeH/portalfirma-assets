@@ -15,7 +15,7 @@ import { ZodPipe } from '../comun/zod.pipe';
 import { UsuarioActual, type UsuarioToken } from '../auth/usuario-actual';
 import { ActividadService } from '../comun/actividad.service';
 import { PdfService } from '../documentos/pdf.service';
-import { EnvioFirmaService } from '../documentos/envio-firma';
+import { EnvioFirmaService, respuestaEnvio } from '../documentos/envio-firma';
 import { llenar } from '../documentos/plantilla';
 import { describir, unir } from '../documentos/comparecientes';
 import { hoy } from '../whatsapp/comun';
@@ -241,7 +241,8 @@ export class MandatoArriendoService {
       enviada: true,
       operacion,
       numero,
-      indicacion: `El mandato de arriendo nº ${numero} se envió a firmar (operación ${operacion}) a ${unir(x.firmantes.map((f) => f.nombre))}. Se cobró del saldo de Portalfirma.`,
+      ...respuestaEnvio(`Mandato de arriendo nº ${numero}`, r),
+      indicacion: `El mandato de arriendo nº ${numero} se envió a firmar (operación ${operacion}) a ${unir(x.firmantes.map((f) => f.nombre))}.`,
     };
   }
 }

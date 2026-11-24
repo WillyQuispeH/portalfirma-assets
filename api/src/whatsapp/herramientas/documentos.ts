@@ -15,7 +15,10 @@ import { ActividadService } from '../../comun/actividad.service';
 import { igualJson } from '../../comun/asignados';
 import { normalizar, rutValido, formatearRut } from '../../comun/texto';
 import { AlmacenamientoService } from '../../archivos/almacenamiento.service';
+import { EnlacesCortosService } from '../../archivos/enlaces-cortos';
 import { PersonasService } from '../../personas/personas.service';
+import { PropiedadesAccionesService } from '../../propiedades/propiedades-acciones';
+import { TIPOS } from '../../propiedades/propiedades.esquemas';
 import { MandatoVentaService } from '../../negocios/mandato-venta';
 import { MandatoArriendoService } from '../../negocios/mandato-arriendo';
 import { CartaOfertaService } from '../../negocios/carta-oferta';
@@ -53,6 +56,8 @@ interface Objetivo {
   id: string;
   prop: Propiedad | null;
   n: Negocio | null;
+  /** lo que se creó o registró solo al resolver (propiedad nueva, propietario…) */
+  creado?: string[];
 }
 type Quien = 'propietarios' | 'cliente' | 'avales';
 interface Firmante {
@@ -89,7 +94,7 @@ interface Doc {
   opcionales?: (o: Objetivo, previa: Rec | null) => string[];
 }
 
-const COBRO = 'Se cobra del saldo de Portalfirma y cada firmante recibe el enlace para firmar en su correo.';
+const COBRO = 'Cada firmante recibe el enlace para firmar en su correo.';
 const L = (etiqueta: string, v: unknown) => (hay(v) ? `${etiqueta}: ${txt(v, 300)}` : '');
 const dat = (n: Negocio | null) => ((n?.datos ?? {}) as Rec) || {};
 const sub = (o: Rec, k: string): Rec => ((o[k] ?? {}) as Rec) || {};
@@ -134,6 +139,8 @@ export class HerramientasDocumentos implements ProveedorHerramientas {
     private readonly entrega: ActaEntregaService,
     private readonly actaPdf: ActaPdfService,
     private readonly enviados: EnviadosService,
+    private readonly acciones: PropiedadesAccionesService,
+    private readonly enlaces: EnlacesCortosService,
     firmas: HerramientasFirmas,
   ) {
     const lista = [this.defMandato(true), this.defMandato(false), this.defCarta(), this.defContrato(), this.defPromesa(), this.defEscritura(), this.defEntrega()];
@@ -235,7 +242,10 @@ export class HerramientasDocumentos implements ProveedorHerramientas {
         const out: string[] = [];
         if (venta && !p.venta) out.push('La propiedad no está en venta: el mandato de venta es solo para propiedades que se venden.');
         if (!venta && !p.arriendo) out.push('La propiedad no está en arriendo: el mandato de arriendo es solo para propiedades que se arriendan.');
-        if (!Number(venta ? p.precioVenta : p.precioArriendo)) out.push(venta ? 'Falta el precio de venta de la propiedad.' : 'Falta el canon de arriendo de la propiedad.');
+        // un mandato solo necesita la dirección, la comuna y los datos del dueño (que se piden aparte): el precio, el rol, las superficies,
+        // la exclusividad o la comisión son opcionales (se usan si están en la ficha; si no, valores por defecto)
+        if (!txt(p.direccion)) out.push('Falta la dirección de la propiedad.');
+        if (!txt(p.comuna)) out.push('Falta la comuna de la propiedad.');
         return out;
       },
       lineas: (o) => {
@@ -245,10 +255,10 @@ export class HerramientasDocumentos implements ProveedorHerramientas {
           L('Propiedad', `${p.codigo} · ${[p.direccion, p.unidad ? 'depto. ' + p.unidad : '', p.comuna].filter(Boolean).join(', ')}`),
           L(venta ? 'Precio' : 'Canon', pesos(venta ? p.precioVenta : p.precioArriendo, venta ? p.monedaVenta : p.monedaArriendo)),
           L('Rol de avalúo', p.rol),
-          L('Exclusividad', si(f.exclusividad) || 'no (si no se dijo)'),
-          L('Publicar en portales', si(f.publicarPortales) || 'sí (si no se dijo)'),
+          ...(f.exclusividad === true ? [L('Exclusividad', 'sí')] : []),
+          ...(f.publicarPortales === false ? [L('Publicar en portales', 'no')] : []),
           ...(venta
-            ? [L('Comisión', `${hay(f.comisionVentaPct) ? f.comisionVentaPct : 2} % + IVA`), L('Otras condiciones', f.condicionesMandatoVenta)]
+            ? [hay(f.comisionVentaPct) ? L('Comisión', `${f.comisionVentaPct} % + IVA`) : '', L('Otras condiciones', f.condicionesMandatoVenta)]
             : [L('Mascotas', si(f.mascotas)), L('Meses de garantía', f.mesesGarantia), L('Otras condiciones', f.condicionesMandato)]),
         ].filter(Boolean);
       },
@@ -704,11 +714,20 @@ export class HerramientasDocumentos implements ProveedorHerramientas {
   /** la propiedad o el negocio al que se refiere el pedido, con lo que puede ver este usuario */
   private async resolver(c: CtxHerr, d: Doc, a: Rec): Promise<{ error: string } | Objetivo> {
     if (d.sobre === 'propiedad') {
-      const p = await this.ayudas.propiedad(c, a.propiedad);
+      let p = await this.ayudas.propiedad(c, a.propiedad);
+      let creado: string[] = [];
+      // mandato pedido por dirección: se busca en la cartera y, si no está, se crea (con su dueño)
+      if (!p && d.id.startsWith('mandato_') && hay(a.direccion)) {
+        const r = await this.propiedadPorDireccion(c, d, a);
+        if ('error' in r) return r;
+        p = r.prop;
+        creado = r.notas;
+        a.propiedad = p.codigo; // lo que se guarda para el envío ya lleva el código: no se vuelve a buscar ni a crear
+      }
       if (!p) return { error: hay(a.propiedad) ? `No encontré la propiedad «${txt(a.propiedad, 40)}».` : 'Falta indicar la propiedad (su código, por ejemplo CV-9001).' };
       if (!c.admin && p.captadorId !== c.usuarioId)
         return { error: `La propiedad ${p.codigo} la captó otro corredor: solo él o un administrador puede armar su ${d.nombre.toLowerCase()}.` };
-      return { id: p.id, prop: p, n: null };
+      return { id: p.id, prop: p, n: null, ...(creado.length ? { creado } : {}) };
     }
     const r = await this.ayudas.negocio(c, a.negocio);
     if (!r.ok) return { error: r.error };
@@ -718,6 +737,75 @@ export class HerramientasDocumentos implements ProveedorHerramientas {
     const prop = await this.db.propiedad.findFirst({ where: { id: n.propiedadId, corredoraId: c.corredoraId, eliminadoEn: null } });
     if (!prop) return { error: 'La propiedad del negocio ya no existe.' };
     return { id: n.id, prop, n };
+  }
+
+  /**
+   * Un mandato pedido por dirección («un depto en Eyzaguirre 766, Providencia, del dueño Juan Lupe, RUT …»): busca la propiedad en la cartera
+   * por calle, número, comuna y unidad; si no está, LA CREA (con el tipo y la operación del mandato), y registra al dueño (lo busca por RUT
+   * y, si no está, lo crea y lo vincula). No se le pregunta nada al corredor: solo queda como «falta» lo que de verdad no se puede inferir
+   * (un RUT válido, el correo para el enlace de firma).
+   */
+  private async propiedadPorDireccion(c: CtxHerr, d: Doc, a: Rec): Promise<{ error: string } | { prop: Propiedad; notas: string[] }> {
+    const direccion = txt(a.direccion, 300);
+    const comuna = txt(a.comuna, 80);
+    const unidad = txt(a.unidad, 40);
+    const notas: string[] = [];
+    const palabras = (s: string) => norm(s).split(/[^a-z0-9]+/).filter((t) => t && !['avenida', 'av', 'avda', 'calle', 'pasaje', 'pje', 'camino', 'depto', 'departamento', 'dpto', 'numero', 'n'].includes(t));
+    const buscadas = palabras(direccion);
+    if (!buscadas.some((t) => /\d/.test(t))) return { error: 'Falta el número de la dirección de la propiedad (por ejemplo «Av. Eyzaguirre 766»).' };
+    const candidatas = await this.db.propiedad.findMany({
+      where: { corredoraId: c.corredoraId, eliminadoEn: null, ...(comuna ? { comuna: { contains: comuna, mode: 'insensitive' as const } } : {}) },
+      take: 500,
+    });
+    const iguales = candidatas.filter((p) => {
+      const en = palabras(p.direccion ?? '');
+      if (!buscadas.every((t) => en.includes(t))) return false;
+      return !unidad || !p.unidad || norm(p.unidad) === norm(unidad);
+    });
+    let prop: Propiedad;
+    if (iguales.length > 1) return { error: `Hay ${iguales.length} propiedades en esa dirección (${iguales.map((p) => p.codigo).join(', ')}): pregúntale al corredor cuál es.` };
+    if (iguales.length === 1) {
+      prop = iguales[0];
+    } else {
+      if (!comuna) return { error: 'No encontré esa dirección en la cartera y para crearla falta la comuna.' };
+      const tipo = (TIPOS as readonly string[]).includes(txt(a.tipo_propiedad, 40)) ? txt(a.tipo_propiedad, 40) : unidad ? 'departamento' : 'casa';
+      const nombreTipo = tipo.charAt(0).toUpperCase() + tipo.slice(1).replace(/_/g, ' ');
+      const venta = d.id === 'mandato_venta';
+      const creada = await this.acciones.crear(
+        tokenDe(c),
+        {
+          titulo: `${nombreTipo} en ${comuna}`.slice(0, 160),
+          tipo: tipo as (typeof TIPOS)[number],
+          direccion,
+          comuna,
+          ...(unidad ? { unidad } : {}),
+          venta,
+          arriendo: !venta,
+          captadorId: c.usuarioId,
+        },
+        null,
+      );
+      prop = await this.db.propiedad.findFirstOrThrow({ where: { id: creada.propiedad.id, corredoraId: c.corredoraId } });
+      notas.push(`Creé la propiedad ${prop.codigo} (${[direccion, unidad ? 'depto. ' + unidad : '', comuna].filter(Boolean).join(', ')}), que no estaba en la cartera`);
+    }
+    // el dueño: si la propiedad aún no tiene uno y el corredor lo dio, se registra (por RUT o nombre; si no está en el CRM, se crea)
+    const dueno = a.propietario && typeof a.propietario === 'object' ? (a.propietario as Rec) : null;
+    if (dueno && hay(dueno.nombre)) {
+      const ya = await this.db.propiedadPersona.count({ where: { propiedadId: prop.id, rol: 'propietario' } });
+      if (!ya) {
+        const rut = hay(dueno.rut) ? txt(dueno.rut, 20) : '';
+        const rutMalo = !!rut && !rutValido(rut);
+        const r = await this.acciones.registrarPropietario(tokenDe(c), prop.id, {
+          nombre: txt(dueno.nombre, 200),
+          rut: rutMalo ? '' : rut,
+          email: hay(dueno.email) ? txt(dueno.email, 200) : '',
+          telefono: hay(dueno.telefono) ? txt(dueno.telefono, 40) : '',
+        });
+        if (r?.ok) notas.push(`Registré a ${r.nombre} como propietario${rutMalo ? ` (sin RUT: el ${rut} no es válido, hay que pedirlo de nuevo)` : ''}`);
+        else if (r) notas.push(`No pude registrar al propietario: ${r.motivo}`);
+      }
+    }
+    return { prop, notas };
   }
 
   /** la persona del documento según su rol, o error si no se indicó */
@@ -828,7 +916,7 @@ export class HerramientasDocumentos implements ProveedorHerramientas {
       if (typeof p.pdf !== 'string' || !p.pdf) return undefined;
       const clave = `c/${c.corredoraId}/vistas/${c.usuarioId}/${d.id}-${o.id}.pdf`;
       await this.r2.subir(clave, Buffer.from(p.pdf, 'base64'), 'application/pdf');
-      return await this.r2.urlDescarga(clave, txt(p.archivo, 160) || `${d.nombre}.pdf`, 24 * 3600);
+      return await this.enlaces.crear(c.corredoraId, clave, txt(p.archivo, 160) || `${d.nombre}.pdf`, 24 * 3600);
     } catch {
       return undefined;
     }
@@ -847,7 +935,7 @@ export class HerramientasDocumentos implements ProveedorHerramientas {
       const r = await this.resolver(c, d, a);
       if ('error' in r) return r;
       let o = r;
-      const guardado: string[] = [];
+      const guardado: string[] = [...(r.creado ?? [])];
       // 1. datos de las personas (RUT, correo…) y 2. datos del documento, guardados en su lugar
       let firm = await this.firmantes(c, d, o, a);
       const p = await this.aplicarPersonas(c, firm, a.personas);
@@ -894,7 +982,7 @@ export class HerramientasDocumentos implements ProveedorHerramientas {
         enviada: false,
         necesitaConfirmacion: true,
         ...resumen,
-        indicacion: `El documento está listo, pero NO se envió ni se cobró. Muéstrale al corredor el resumen (datos, firmantes y el enlace para revisar el PDF) y pregúntale si lo envías a firmar. ${COBRO} Si contesta que sí, llama ${d.enviarHerr} con confirmado: true. Si pide un cambio, vuelve a llamar ${d.enviarHerr.replace('enviar_', 'preparar_')} con el cambio.`,
+        indicacion: `El documento está listo, pero NO se envió . Muéstrale al corredor el resumen (datos, firmantes y el enlace para revisar el PDF) y pregúntale si lo envías a firmar. ${COBRO} Si contesta que sí, llama ${d.enviarHerr} con confirmado: true. Si pide un cambio, vuelve a llamar ${d.enviarHerr.replace('enviar_', 'preparar_')} con el cambio.`,
       };
     } catch (e) {
       return { error: mensajeError(e) };
@@ -988,7 +1076,7 @@ export class HerramientasDocumentos implements ProveedorHerramientas {
         ciclo.contrato = con;
         dd.ciclo = ciclo;
       }, `Contrato de arriendo: versión ${numeroV} guardada`);
-      const enlace = await this.r2.urlDescarga(clave, nombre, 24 * 3600).catch(() => undefined);
+      const enlace = await this.enlaces.crear(c.corredoraId, clave, nombre, 24 * 3600).catch(() => undefined);
       return {
         ok: true,
         version: numeroV,
@@ -1225,7 +1313,7 @@ export class HerramientasDocumentos implements ProveedorHerramientas {
       },
     };
     const NOTA_PREPARAR = ' Pregunta SOLO lo que falte (los datos del CRM ya los tengo). Guarda los datos que des en su lugar y arma el PDF de vista previa; NO envía ni cobra.';
-    const NOTA_ENVIAR = ' Va SIEMPRE en dos pasos: sin confirmado arma el resumen (igual que preparar); cuando el corredor responda que sí, llámala con confirmado: true. El servidor rechaza el envío si no hubo ese paso previo o si el corredor no dijo que sí. Cobra del saldo de Portalfirma.';
+    const NOTA_ENVIAR = ' Va SIEMPRE en dos pasos: sin confirmado arma el resumen (igual que preparar); cuando el corredor responda que sí, llámala con confirmado: true. El servidor rechaza el envío si no hubo ese paso previo o si el corredor no dijo que sí.';
     const mandatoDe = async (c: CtxHerr, a: Rec): Promise<Doc | { error: string }> => {
       const op = txt(a.operacion).toLowerCase();
       if (op === 'venta' || op === 'arriendo') return this.docs[`mandato_${op}`];
@@ -1235,10 +1323,14 @@ export class HerramientasDocumentos implements ProveedorHerramientas {
       return this.docs[p.arriendo && !p.venta ? 'mandato_arriendo' : 'mandato_venta'];
     };
     const propsMandato = {
-      propiedad: REF_PROP,
+      propiedad: { type: 'string', description: 'código de la propiedad (CV-9001); si el corredor solo dio la dirección, omítelo y pasa direccion y comuna' },
       operacion: { type: 'string', enum: ['venta', 'arriendo'], description: 'qué mandato (si la propiedad va en venta y arriendo, pregunta cuál; si no, se deduce)' },
       exclusividad: { type: 'boolean', description: 'si el mandato es con exclusividad' },
       publicar_portales: { type: 'boolean', description: 'si se publica en portales y redes (por defecto sí)' },
+      direccion: { type: 'string', description: 'dirección con número (Av. Eyzaguirre 766) cuando el corredor NO dio el código de la propiedad: la busco en la cartera y, si no está, la creo' },
+      comuna: { type: 'string', description: 'comuna de esa dirección' },
+      tipo_propiedad: { type: 'string', enum: [...TIPOS], description: 'casa, departamento… (se deduce: con N.º de departamento es departamento)' },
+      propietario: { type: 'object', description: 'el dueño tal como lo dijo el corredor: lo registro en el CRM si no está (se busca por RUT)', properties: { nombre: { type: 'string' }, rut: { type: 'string' }, email: { type: 'string' }, telefono: { type: 'string' } } },
       comision_pct: { type: 'number', description: 'solo venta: comisión en % (por defecto 2 % + IVA)' },
       mascotas: { type: 'boolean', description: 'solo arriendo: si se aceptan mascotas' },
       meses_garantia: { type: 'number', description: 'solo arriendo: meses de garantía que se pedirán' },
@@ -1275,8 +1367,8 @@ export class HerramientasDocumentos implements ProveedorHerramientas {
       {
         name: 'preparar_mandato',
         description:
-          'Prepara el MANDATO DE GESTIÓN de venta o de arriendo de una propiedad (documento que firma el propietario): usa los datos de la ficha y del propietario, guarda lo que falte y arma el PDF para revisarlo.' + NOTA_PREPARAR,
-        input_schema: esquema(propsMandato, ['propiedad']),
+          'Prepara el MANDATO DE GESTIÓN de venta o de arriendo de una propiedad (documento que firma el propietario): usa los datos de la ficha y del propietario y arma el PDF para revisarlo. DATOS MÍNIMOS: solo la dirección y la comuna de la propiedad y los datos del dueño (nombre, RUT y correo para el enlace de firma). Si la propiedad o el dueño NO están en el CRM, los creo yo (pásalos en direccion, comuna, unidad y propietario): NUNCA le preguntes al corredor si los crees. NO pidas precio, canon, rol, superficies, exclusividad, comisión, mascotas, garantía ni otras condiciones: solo guárdalos si el corredor los dice por su cuenta; si no, el mandato sale con lo estándar.' + NOTA_PREPARAR,
+        input_schema: esquema(propsMandato),
         ejecutar: async (c, a) => {
           const d = await mandatoDe(c, a);
           return 'error' in d ? d : this.preparar(c, d, a);
@@ -1284,8 +1376,8 @@ export class HerramientasDocumentos implements ProveedorHerramientas {
       },
       {
         name: 'enviar_mandato',
-        description: 'Envía a firmar al propietario el MANDATO de venta o de arriendo de una propiedad (firma electrónica con Portalfirma).' + NOTA_ENVIAR,
-        input_schema: esquema({ ...propsMandato, confirmado: CONFIRMADO }, ['propiedad']),
+        description: 'Envía a firmar al propietario el MANDATO de venta o de arriendo de una propiedad (firma electrónica). Datos mínimos: dirección, comuna y datos del dueño; no pidas nada más.' + NOTA_ENVIAR,
+        input_schema: esquema({ ...propsMandato, confirmado: CONFIRMADO }),
         ejecutar: async (c, a) => {
           if (a.confirmado === true) return this.enviar(c, 'enviar_mandato', () => ({ error: '' }), a);
           const d = await mandatoDe(c, a);

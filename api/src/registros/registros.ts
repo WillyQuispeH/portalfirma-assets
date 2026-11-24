@@ -258,11 +258,11 @@ export class RegistrosService {
     };
   }
 
-  async descarga(u: UsuarioToken, c: string, id: string, clave: string, nombre: string) {
+  async descarga(u: UsuarioToken, c: string, id: string, clave: string, nombre: string, segundos?: number) {
     const dir = await this.puedeArchivos(u, c, id);
     if (!clave.startsWith(dir)) throw new BadRequestException('Ese archivo no es de este registro.');
     if ((await this.r2.tamano(clave)) == null) throw new NotFoundException('El archivo ya no está.');
-    return { url: await this.r2.urlDescarga(clave, nombre) };
+    return { url: await this.r2.urlDescarga(clave, nombre, segundos) };
   }
 
   /** los bytes de un archivo del registro (los usa el servidor, p. ej. para enviar a firmar el contrato aprobado) */

@@ -18,7 +18,8 @@ import sharp from 'sharp';
 import { z } from 'zod';
 import type { Prisma, Propiedad, PropiedadFoto, Usuario } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { EnvioFirmaService } from '../documentos/envio-firma';
+import { EnvioFirmaService, respuestaEnvio } from '../documentos/envio-firma';
+import type { EnlaceFirmante } from '../conexiones/portalfirma-api';
 import { PersonasService } from '../personas/personas.service';
 import { ActividadService } from '../comun/actividad.service';
 import { PdfService } from '../documentos/pdf.service';
@@ -520,16 +521,40 @@ export class OrdenVisitaService {
       ],
     });
     if ('error' in r) return { error: r.error };
-    return this.registrar(x, numero, r.operacion, r.tipoFirma, r.tramite);
+    return this.registrar(x, numero, r.operacion, r.tipoFirma, r.tramite, r.firmantes);
   }
 
   /** lo que queda anotado cuando la orden ya salió */
+  /** «VISITA AGENDADA»: lo que quedó en la agenda, para el final de la respuesta de envío */
+  private async bloqueVisita(x: Armada): Promise<string> {
+    if (!x.fecha) return '';
+    const d = new Date(`${x.fecha}T12:00:00Z`);
+    const dia = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'][d.getUTCDay()];
+    const fmt = `${dia} ${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+    let negocio = '';
+    if (x.negocioId) {
+      const n = await this.db.negocio.findUnique({ where: { id: x.negocioId }, select: { datos: true } }).catch(() => null);
+      negocio = (n?.datos as { codigo?: string } | null)?.codigo ?? '';
+    }
+    return [
+      'VISITA AGENDADA',
+      `Fecha: ${fmt}`,
+      `Hora: ${x.hora || 'por coordinar'}`,
+      ...(negocio ? [`Negocio: ${negocio}`] : []),
+      `Cliente: ${x.vis.nombre.split(/\s+/)[0]}`,
+      `Propiedad: ${x.p.codigo}`,
+      '',
+      'La visita ya fue agregada a tu agenda.',
+    ].join(String.fromCharCode(10));
+  }
+
   private async registrar(
     x: Armada,
     numero: number,
     operacion: number,
     tipoFirma: string,
     tramite: string,
+    firmantes: EnlaceFirmante[] = [],
   ): Promise<Record<string, unknown>> {
     const { c, p, vis, usuario, fecha, hora } = x;
     try {
@@ -688,7 +713,8 @@ export class OrdenVisitaService {
       fecha,
       hora: hora || null,
       negocio: x.negocioId,
-      indicacion: `La orden nº ${numero} se envió a firmar (operación ${operacion}): ${vis.nombre} recibe el enlace para firmar en ${vis.email}. Se cobró del saldo de Portalfirma. La visita quedó en la agenda${x.negocioId ? ', ligada al negocio de ' + vis.nombre + ' en ' + p.codigo : ''}.`,
+      ...respuestaEnvio(`Orden de visita nº ${numero}`, { operacion, firmantes }, await this.bloqueVisita(x)),
+      indicacion: `La orden nº ${numero} se envió a firmar (operación ${operacion}): ${vis.nombre} recibe el enlace para firmar en ${vis.email}. La visita quedó en la agenda${x.negocioId ? ', ligada al negocio de ' + vis.nombre + ' en ' + p.codigo : ''}.`,
     };
   }
 
@@ -835,7 +861,7 @@ export class OrdenVisitaService {
         negocio: codigoNegocio,
         ...this.resumen(x),
         indicacion:
-          'El negocio ya quedó creado (campo negocio: su código NG-XXX, en la etapa Visita): díselo al corredor. La orden NO se envió, NO se cobró y NO se agendó. Muéstrale estos datos y pregúntale si la envías (se cobra del saldo de Portalfirma y el visitante recibe el enlace para firmar en su correo). Cuando conteste que sí, vuelve a llamar esta herramienta con confirmado: true y EXACTAMENTE los mismos datos. Sin su sí, no la envíes.',
+          'El negocio ya quedó creado (campo negocio: su código NG-XXX, en la etapa Visita): díselo al corredor. La orden NO se envió, NO se cobró y NO se agendó. Muéstrale estos datos y pregúntale si la envías (el visitante recibe el enlace para firmar en su correo). Cuando conteste que sí, vuelve a llamar esta herramienta con confirmado: true y EXACTAMENTE los mismos datos. Sin su sí, no la envíes.',
       };
     }
 

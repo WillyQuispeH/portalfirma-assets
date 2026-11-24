@@ -19,7 +19,7 @@ import { UsuarioActual, type UsuarioToken } from '../auth/usuario-actual';
 import { buscarVisible } from '../comun/asignados';
 import { ActividadService } from '../comun/actividad.service';
 import { PdfService } from '../documentos/pdf.service';
-import { EnvioFirmaService } from '../documentos/envio-firma';
+import { EnvioFirmaService, respuestaEnvio } from '../documentos/envio-firma';
 import { llenar } from '../documentos/plantilla';
 import { hoy } from '../whatsapp/comun';
 import { describir, dominioDe, perfilDe, unir } from '../documentos/comparecientes';
@@ -387,7 +387,8 @@ export class PromesaCompraventaService {
       operacion,
       numero,
       comprador: x.persona.nombre,
-      indicacion: `La promesa de compraventa nº ${numero} se envió a firmar (operación ${operacion}) a ${quienes}. Se cobró del saldo de Portalfirma. Cuando firmen todos, el negocio avanza solo.`,
+      ...respuestaEnvio(`Promesa de compraventa nº ${numero}`, r),
+      indicacion: `La promesa de compraventa nº ${numero} se envió a firmar (operación ${operacion}) a ${quienes}. Cuando firmen todos, el negocio avanza solo.`,
     };
   }
 }

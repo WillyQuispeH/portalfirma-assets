@@ -39,10 +39,10 @@
   <div class="grid">
     <div class="dato"><span>Ubicación</span><b>{{propiedad.direccion}}</b></div>
     <div class="dato"><span>Comuna</span><b>{{propiedad.comuna}}</b></div>
-    <div class="dato"><span>Superficie total</span><b>{{propiedad.supTotal}}</b></div>
-    <div class="dato"><span>Superficie útil</span><b>{{propiedad.supUtil}}</b></div>
-    <div class="dato"><span>Rol</span><b>{{propiedad.rol}}</b></div>
-    <div class="dato"><span>Precio referencial</span><b class="grande">{{propiedad.precio}}</b></div>
+    {{#propiedad.supTotal}}<div class="dato"><span>Superficie total</span><b>{{propiedad.supTotal}}</b></div>{{/propiedad.supTotal}}
+    {{#propiedad.supUtil}}<div class="dato"><span>Superficie útil</span><b>{{propiedad.supUtil}}</b></div>{{/propiedad.supUtil}}
+    {{#propiedad.rol}}<div class="dato"><span>Rol</span><b>{{propiedad.rol}}</b></div>{{/propiedad.rol}}
+    {{#propiedad.precio}}<div class="dato"><span>Precio referencial</span><b class="grande">{{propiedad.precio}}</b></div>{{/propiedad.precio}}
   </div>
 </div>
 

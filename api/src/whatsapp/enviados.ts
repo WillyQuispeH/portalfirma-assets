@@ -201,7 +201,10 @@ export class EnviadosService {
     }
   }
 
-  /** texto libre con UN archivo adjunto (https). Lo usan los servicios del servidor que ya validaron el archivo y a quién va. */
+  /**
+   * texto libre con UN archivo (https). Lo usan los servicios del servidor que ya validaron el archivo y a quién va.
+   * wechatia no entrega adjuntos por este canal de WhatsApp (solo llega el texto): el archivo va como ENLACE dentro del mensaje.
+   */
   async enviarArchivo(u: UsuarioToken, b: { telefono: string; nombre: string; texto: string; url: string }) {
     await this.exigirDueno(u, b.telefono);
     const wa = await this.cliente(u.corredoraId);
@@ -209,8 +212,9 @@ export class EnviadosService {
       const r = await wa.enviar({
         telefono: b.telefono,
         nombre: b.nombre,
-        texto: b.texto,
-        adjuntos: [b.url],
+        texto: `${b.texto}
+
+📄 ${b.url}`,
         entrante24: () => this.escribio24(u.corredoraId, b.telefono),
         revisiones: 2,
       });

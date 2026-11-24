@@ -71,6 +71,8 @@ import { HerramientasDocumentos } from './whatsapp/herramientas/documentos';
 import { HerramientasFirmas } from './whatsapp/herramientas/documentos-firmas';
 import { LeadsWaService } from './whatsapp/leads-wa';
 import { AvisoLeadController, AvisoLeadService } from './whatsapp/aviso-lead';
+import { AvisoFirmaService } from './whatsapp/aviso-firma';
+import { EnlacesCortosController, EnlacesCortosService } from './archivos/enlaces-cortos';
 import { ClientesService } from './whatsapp/clientes';
 import { PostventaWaService } from './whatsapp/postventa';
 import { ObservadorController, ObservadorService } from './whatsapp/observador';
@@ -131,6 +133,7 @@ import { PortalInmobiliarioController, PortalInmobiliarioService } from './conex
     EventosController,
     LeadsController,
     AvisoLeadController,
+    EnlacesCortosController,
     LeadsEnvioController,
     FirmasController,
     RegistrosController,
@@ -235,6 +238,8 @@ import { PortalInmobiliarioController, PortalInmobiliarioService } from './conex
     EjecutivoService,
     LeadsWaService,
     AvisoLeadService,
+    AvisoFirmaService,
+    EnlacesCortosService,
     ClientesService,
     PostventaWaService,
     ObservadorService,

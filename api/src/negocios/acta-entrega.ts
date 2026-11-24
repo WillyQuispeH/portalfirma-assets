@@ -17,7 +17,7 @@ import { UsuarioActual, type UsuarioToken } from '../auth/usuario-actual';
 import { buscarVisible } from '../comun/asignados';
 import { ActividadService } from '../comun/actividad.service';
 import { PdfService } from '../documentos/pdf.service';
-import { EnvioFirmaService, type FirmanteEnvio } from '../documentos/envio-firma';
+import { EnvioFirmaService, type FirmanteEnvio, respuestaEnvio } from '../documentos/envio-firma';
 import { llenar } from '../documentos/plantilla';
 import { hoy } from '../whatsapp/comun';
 import { datosCorredora } from '../documentos/corredora-doc';
@@ -274,7 +274,8 @@ export class ActaEntregaService {
       enviada: true,
       operacion,
       numero,
-      indicacion: `El acta de entrega nº ${numero} se envió a firmar (operación ${operacion}) al arrendatario y a los propietarios. Se cobró del saldo de Portalfirma. Cuando firmen, la propiedad queda arrendada.`,
+      ...respuestaEnvio(`Acta de entrega nº ${numero}`, r),
+      indicacion: `El acta de entrega nº ${numero} se envió a firmar (operación ${operacion}) al arrendatario y a los propietarios. Cuando firmen, la propiedad queda arrendada.`,
     };
   }
 }
