@@ -7,7 +7,8 @@
 //  · POST /soporte/integraciones/publicacion-auto   { corredoraId, activo }
 //  · POST /soporte/integraciones/detectar           { corredoraId }   revisa lo publicado en los portales (no publica)
 //  · POST /soporte/integraciones/publicar           { corredoraId }   publica lo que falte (en segundo plano)
-import { Body, Controller, Get, Injectable, Post, Query } from '@nestjs/common';
+//  · POST /soporte/integraciones/convecta           { corredoraId }   importa la cartera de Convecta de esa corredora
+import { Body, Controller, Get, Injectable, Logger, Post, Query } from '@nestjs/common';
 import { z } from 'zod';
 import { PrismaService } from '../prisma/prisma.service';
 import { ZodPipe } from '../comun/zod.pipe';
@@ -17,6 +18,7 @@ import { KonverService } from '../conexiones/konver';
 import { ConvectaService } from '../propiedades/convecta';
 import { WechatiaService } from '../whatsapp/wechatia';
 import { PublicacionAutoService } from '../conexiones/publicacion-auto';
+import { PropiedadesService } from '../propiedades/propiedades.service';
 
 const corredoraQ = z.object({ corredoraId: z.uuid() });
 const activarB = z.object({ corredoraId: z.uuid(), activo: z.boolean() });
@@ -203,10 +205,12 @@ export class SoporteIntegracionesService {
 
 @Controller('soporte/integraciones')
 export class SoporteIntegracionesController {
+  private readonly log = new Logger('Soporte');
   constructor(
     private readonly s: SoporteIntegracionesService,
     private readonly auto: PublicacionAutoService,
     private readonly soporte: SoporteService,
+    private readonly props: PropiedadesService,
   ) {}
 
   @Get()
@@ -225,6 +229,27 @@ export class SoporteIntegracionesController {
   async detectar(@UsuarioActual() u: UsuarioToken, @Body(new ZodPipe(corredoraQ)) b: z.infer<typeof corredoraQ>) {
     await this.soporte.exigir(u);
     return this.auto.detectarAhora(b.corredoraId);
+  }
+
+  /**
+   * Soporte importa la cartera de Convecta de una corredora: lo mismo que «Importar desde Convecta» de su administrador,
+   * con la cuenta de Convecta de ESA corredora. Queda en el historial a nombre de quien lo hizo desde soporte.
+   */
+  @Post('convecta')
+  async convecta(@UsuarioActual() u: UsuarioToken, @Body(new ZodPipe(corredoraQ)) b: z.infer<typeof corredoraQ>) {
+    const correo = await this.soporte.exigir(u);
+    this.log.log(`${correo} importa Convecta en la corredora ${b.corredoraId}`);
+    const r = await this.props.importarConvecta({ ...u, corredoraId: b.corredoraId, rol: 'ADMIN' });
+    return {
+      total: r.total,
+      nuevas: r.nuevas,
+      actualizadas: r.actualizadas,
+      sinCambios: r.sinCambios,
+      personas: r.personas,
+      captadores: r.captadores,
+      sinCaptador: r.sinCaptador,
+      sinCorredor: r.sinCorredor,
+    };
   }
 
   @Post('publicar')
