@@ -89,6 +89,7 @@ import { SoporteDocumentosController, SoporteDocumentosService } from './soporte
 import { SoportePropiedadesController, SoportePropiedadesService } from './soporte/soporte-propiedades';
 import { SoporteIntegracionesController, SoporteIntegracionesService } from './soporte/soporte-integraciones';
 import { PublicacionAutoService } from './conexiones/publicacion-auto';
+import { ChilepropiedadesController, ChilepropiedadesService } from './conexiones/chilepropiedades';
 import { DocumentoRevisionService } from './whatsapp/documento-revision';
 import { RevisionContratoWaService } from './whatsapp/revision-contrato';
 import { ActaVisitaController, ActaVisitaService } from './whatsapp/acta-visita';
@@ -178,6 +179,7 @@ import { PortalInmobiliarioController, PortalInmobiliarioService } from './conex
     SoporteDocumentosController,
     SoportePropiedadesController,
     SoporteIntegracionesController,
+    ChilepropiedadesController,
     ActaVisitaController,
     PropiedadesAccionesController,
     AgendaAccionesController,
@@ -266,6 +268,7 @@ import { PortalInmobiliarioController, PortalInmobiliarioService } from './conex
     SoportePropiedadesService,
     SoporteIntegracionesService,
     PublicacionAutoService,
+    ChilepropiedadesService,
     DocumentoRevisionService,
     RevisionContratoWaService,
     ActaVisitaService,

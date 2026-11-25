@@ -7,8 +7,21 @@
 //  · POST /soporte/integraciones/publicacion-auto   { corredoraId, activo }
 //  · POST /soporte/integraciones/detectar           { corredoraId }   revisa lo publicado en los portales (no publica)
 //  · POST /soporte/integraciones/publicar           { corredoraId }   publica lo que falte (en segundo plano)
+//  · PUT/DELETE /soporte/integraciones/chilepropiedades  { corredoraId, token? }  token de la API de contactos
+//  · POST /soporte/integraciones/chilepropiedades/revisar { corredoraId }   lee ahora los contactos nuevos
 //  · POST /soporte/integraciones/convecta           { corredoraId }   importa la cartera de Convecta de esa corredora
-import { Body, Controller, Get, Injectable, Logger, Post, Query } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Injectable,
+  Logger,
+  Post,
+  Put,
+  Query,
+} from '@nestjs/common';
 import { z } from 'zod';
 import { PrismaService } from '../prisma/prisma.service';
 import { ZodPipe } from '../comun/zod.pipe';
@@ -19,9 +32,11 @@ import { ConvectaService } from '../propiedades/convecta';
 import { WechatiaService } from '../whatsapp/wechatia';
 import { PublicacionAutoService } from '../conexiones/publicacion-auto';
 import { PropiedadesService } from '../propiedades/propiedades.service';
+import { ChilepropiedadesService } from '../conexiones/chilepropiedades';
 
 const corredoraQ = z.object({ corredoraId: z.uuid() });
 const activarB = z.object({ corredoraId: z.uuid(), activo: z.boolean() });
+const tokenB = z.object({ corredoraId: z.uuid(), token: z.string().trim().min(16).max(200) });
 type J = Record<string, any>;
 
 const NOMBRES: Record<string, string> = {
@@ -52,9 +67,11 @@ export class SoporteIntegracionesService {
     private readonly convecta: ConvectaService,
     private readonly wechatia: WechatiaService,
     private readonly auto: PublicacionAutoService,
+    private readonly cp: ChilepropiedadesService,
   ) {}
 
   async ver(corredoraId: string) {
+    const cp = await this.cp.estado(corredoraId);
     const [conexiones, props, cfgFila, auto, claveConvecta, numeroWa] = await Promise.all([
       this.db.conexion.findMany({ where: { corredoraId }, orderBy: [{ proveedor: 'asc' }, { conectadoEn: 'desc' }] }),
       this.db.propiedad.findMany({
@@ -179,6 +196,14 @@ export class SoporteIntegracionesService {
           conectado: conexion('wechatia')?.estado === 'activa',
           detalle: numeroWa ?? (conexion('wechatia') ? conexion('wechatia')!.estado : 'sin conectar'),
         },
+        {
+          id: 'chilepropiedades',
+          nombre: 'Chilepropiedades (contactos)',
+          conectado: cp.conectado,
+          detalle: cp.conectado
+            ? `${cp.leads} contactos recibidos${cp.ultimaSync ? '' : ' · aún sin leer'}`
+            : cp.error || 'sin token',
+        },
       ],
       konver,
       portales: porPortal,
@@ -199,6 +224,7 @@ export class SoporteIntegracionesService {
         tipoAviso: cfg.ml?.tipoAviso ?? 'silver',
       },
       publicacionAuto: auto,
+      chilepropiedades: cp,
     };
   }
 }
@@ -211,7 +237,32 @@ export class SoporteIntegracionesController {
     private readonly auto: PublicacionAutoService,
     private readonly soporte: SoporteService,
     private readonly props: PropiedadesService,
+    private readonly cp: ChilepropiedadesService,
   ) {}
+
+  @Put('chilepropiedades')
+  async cpToken(@UsuarioActual() u: UsuarioToken, @Body(new ZodPipe(tokenB)) b: z.infer<typeof tokenB>) {
+    const correo = await this.soporte.exigir(u);
+    this.log.log(`${correo} guarda el token de Chilepropiedades de la corredora ${b.corredoraId}`);
+    return this.cp.guardarToken(b.corredoraId, b.token, u.sub);
+  }
+
+  @Delete('chilepropiedades')
+  async cpQuitar(@UsuarioActual() u: UsuarioToken, @Query(new ZodPipe(corredoraQ)) q: z.infer<typeof corredoraQ>) {
+    await this.soporte.exigir(u);
+    return this.cp.quitarToken(q.corredoraId);
+  }
+
+  @Post('chilepropiedades/revisar')
+  async cpRevisar(@UsuarioActual() u: UsuarioToken, @Body(new ZodPipe(corredoraQ)) b: z.infer<typeof corredoraQ>) {
+    await this.soporte.exigir(u);
+    try {
+      const r = await this.cp.revisarCorredora(b.corredoraId);
+      return { ...r, estado: await this.cp.estado(b.corredoraId) };
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
 
   @Get()
   async ver(@UsuarioActual() u: UsuarioToken, @Query(new ZodPipe(corredoraQ)) q: z.infer<typeof corredoraQ>) {

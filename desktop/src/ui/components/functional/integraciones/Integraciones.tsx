@@ -17,13 +17,15 @@ import Esqueleto, { EsqueletoZona } from '../../ui/Esqueleto';
 import { useIntegraciones } from '../../../store/hooks/useIntegraciones.hook';
 import { useCuenta } from '../../../store/hooks/useCuenta.hook';
 import { useAcceso } from '../../../store/hooks/useAcceso.hook';
-import { integracionesService as svc, type IConvectaEstado, type IGoogleEstado, type IPfApiEstado } from '../../../store/services/integraciones.service';
+import { integracionesService as svc, type IChilepropiedadesEstado, type IConvectaEstado, type IGoogleEstado, type IPfApiEstado } from '../../../store/services/integraciones.service';
 import { refrescarCuenta } from '../cuenta/controlador';
 import { abrirConfiguracion } from './controlador';
 import { abrirPublicaciones, abrirUrl, pedirInicioSesion, toast } from '../../../utils/app';
 import { api } from '../../../utils/api';
 import { LogoPortal } from '../publicaciones/comun';
+import { abrirCorreoPortal } from './CorreoPortal';
 import type { IPortal } from '../../../store/interfaces/publicacion.interface';
+import type { IUsuarioAsset } from '../../../store/interfaces/acceso.interface';
 import { fechaHora } from '../../../utils/formato';
 import type { ICanal, IMlEstado } from '../../../store/interfaces/integraciones.interface';
 
@@ -238,12 +240,7 @@ export function IntegracionesContenido() {
             </Fila>
           )}
           {portales.filter((x) => x.id !== 'pi' && x.via !== 'api').map((x) => (
-            <Fila key={x.id} id={x.id} logo={<LogoPortal id={x.id} nombre={x.nombre} />} nombre={x.nombre}
-              detalle={x.listo ? `${x.estado}. Publica y retira avisos desde Asset.` : x.enTramite ? 'Integración en proceso: te avisamos cuando puedas publicar.' : x.via === 'acuerdo' ? 'Requiere un acuerdo comercial con el portal.' : 'Activa la publicación y pega el código cuando el portal te lo entregue.'}
-              estado={x.listo ? 'conectado' : x.enTramite ? 'en-tramite' : 'sin-conectar'}>
-              <Boton tamano="sm" variante="secundario" icono="settings" disabled={!admin} title={admin ? undefined : 'Lo configura el administrador de la corredora'}
-                onClick={() => abrirPublicaciones('portales')}>Configurar</Boton>
-            </Fila>
+            <PortalFeed key={x.id} x={x} admin={admin} yo={yo ?? null} alCambiar={cargarPortales} />
           ))}
         </Lista>
       </Card>
@@ -309,6 +306,7 @@ type TAccion = (id: string, fn: () => Promise<{ ok: boolean; error?: string }>, 
  *  (DELETE /v1/cuenta/mercadolibre y /v1/cuenta/toctoc de KONVER) y quitar la llave suelta los dos. */
 function PortalesKonver({ ml, admin, ocupado, accion }: { ml: IMlEstado; admin: boolean; ocupado: string | null; accion: TAccion }) {
   const kv = ml.konver; const tt = ml.toctoc;
+  const { usuario: yo } = useAcceso();
   const [llaveAbierta, setLlaveAbierta] = useState(false); const [llave, setLlave] = useState('');
   const [ttAbierto, setTtAbierto] = useState(false);
   // qué se está por desconectar (se confirma abajo de su fila): la llave de KONVER entera, solo Mercado Libre o solo TOCTOC
@@ -368,6 +366,7 @@ function PortalesKonver({ ml, admin, ocupado, accion }: { ml: IMlEstado; admin: 
       <Fila id="toctoc" logo={<LogoPortal id="toctoc" nombre="TOCTOC" />} nombre="TOCTOC"
         detalle={!kv?.conectado ? 'Primero conecta KONVER.' : tt?.conectado ? (tt.planActivo ? `Publica, actualiza y retira avisos; los interesados llegan a Leads${tt.corredorId ? ' · corredor ' + tt.corredorId : ''}.` : 'Llaves válidas, pero la cuenta no tiene plan activo o se acabó el cupo.') : 'Pega las 3 llaves que TOCTOC (integraciones@toctoc.com) entrega a las corredoras con plan activo.'}
         estado={!kv?.conectado ? 'no-disponible' : tt?.conectado ? (tt.planActivo ? 'conectado' : 'atencion') : 'sin-conectar'}>
+        {!tt?.conectado && <Boton tamano="sm" variante="secundario" icono="mail" onClick={() => abrirCorreoPortal('toctoc', yo ?? null)}>Solicitar llaves</Boton>}
         {kv?.conectado && (tt?.conectado
           ? <Boton tamano="sm" variante="fantasma" cargando={ocupado === 'toctoc'} disabled={!admin} title={soloAdmin('Lo desconecta')}
               onClick={() => alternar('toctoc')}>{desconectando === 'toctoc' ? 'Cerrar' : 'Desconectar'}</Boton>
@@ -389,6 +388,87 @@ function PortalesKonver({ ml, admin, ocupado, accion }: { ml: IMlEstado; admin: 
           <Boton variante="secundario" tamano="lg" type="button" onClick={() => setTtAbierto(false)}>Cancelar</Boton>
           <Boton tamano="lg" type="submit" cargando={ocupado === 'toctoc'} disabled={!ttListo}>Guardar</Boton>
         </form>
+      )}
+    </>
+  );
+}
+
+// Broku y Yapo quedan desactivados por ahora: se ven, pero no se pueden conectar
+const FEED_DESACTIVADOS = ['broku', 'yapo'];
+
+/** un portal por feed: todos con «Conectar» / «Desconectar». Chilepropiedades se conecta con el token de la cuenta de la
+ *  corredora (trae los contactos de los avisos a Leads) y tiene «Solicitar llaves» (abre el correo al portal) */
+function PortalFeed({ x, admin, yo, alCambiar }: { x: IPortal; admin: boolean; yo: IUsuarioAsset | null; alCambiar: () => void }) {
+  const cp = x.id === 'chilepropiedades';
+  const [cpEstado, setCpEstado] = useState<IChilepropiedadesEstado | null>(null);
+  const [abierto, setAbierto] = useState(false);
+  const [token, setToken] = useState('');
+  const [confirmando, setConfirmando] = useState(false);
+  const [cargando, setCargando] = useState(false);
+  useEffect(() => {
+    if (!cp) return;
+    svc.chilepropiedades().then((r) => setCpEstado(r.ok ? r.data ?? null : null)).catch(() => setCpEstado(null));
+  }, [cp]);
+  const desactivado = FEED_DESACTIVADOS.includes(x.id);
+  const conectado = cp ? !!cpEstado?.conectado : x.listo;
+  const soloAdmin = admin ? undefined : 'Lo hace el administrador de la corredora';
+  const correr = async (fn: () => Promise<{ ok: boolean; data?: IChilepropiedadesEstado; error?: string }>, listo: string) => {
+    setCargando(true);
+    try {
+      const r = await fn();
+      if (!r.ok) { toast(r.error || 'No se pudo completar.'); return false; }
+      if (r.data) setCpEstado(r.data);
+      toast(listo);
+      alCambiar();
+      return true;
+    } finally {
+      setCargando(false);
+    }
+  };
+  const desconectar = async () => {
+    if (cp) { if (await correr(svc.chilepropiedadesDesconectar, 'Chilepropiedades desconectado.')) setConfirmando(false); return; }
+    setCargando(true);
+    try {
+      await api('pubConfigurar', x.id, { activo: false, feedUrl: x.feedUrl ?? '' });
+      toast(`${x.nombre} desconectado.`);
+      setConfirmando(false);
+      alCambiar();
+    } catch (e) {
+      toast((e as Error).message || `No se pudo desconectar ${x.nombre}.`);
+    } finally {
+      setCargando(false);
+    }
+  };
+  const detalle = desactivado ? 'Próximamente.'
+    : cp ? (cpEstado?.error && cpEstado.estado === 'error' ? 'Chilepropiedades rechazó el token: vuelve a conectarlo.'
+      : conectado ? `Los contactos de tus avisos llegan a Leads${cpEstado?.leads ? ` · ${cpEstado.leads} recibidos` : ''}.`
+      : 'Solicita las llaves al portal y pega el token que te entregue.')
+    : conectado ? `${x.estado}. Publica y retira avisos desde Asset.` : 'Solicita las llaves al portal y conéctalo cuando te las entregue.';
+  return (
+    <>
+      <Fila id={x.id} logo={<LogoPortal id={x.id} nombre={x.nombre} />} nombre={x.nombre} detalle={detalle}
+        estado={desactivado ? 'no-disponible' : cp && cpEstado?.estado === 'error' ? 'atencion' : conectado ? 'conectado' : 'sin-conectar'}>
+        {!desactivado && !conectado && cp && (
+          <Boton tamano="sm" variante="secundario" icono="mail" onClick={() => abrirCorreoPortal('chilepropiedades', yo)}>Solicitar llaves</Boton>
+        )}
+        {conectado && !desactivado
+          ? <Boton tamano="sm" variante="fantasma" disabled={!admin} title={soloAdmin} onClick={() => setConfirmando((v) => !v)}>{confirmando ? 'Cerrar' : 'Desconectar'}</Boton>
+          : <Boton tamano="sm" icono="link" disabled={desactivado || !admin} title={desactivado ? undefined : soloAdmin}
+              onClick={() => (cp ? setAbierto((v) => !v) : abrirPublicaciones('portales'))}>{cp && abierto ? 'Cerrar' : 'Conectar'}</Boton>}
+      </Fila>
+      {cp && abierto && !conectado && admin && (
+        <form className="tw:flex tw:flex-wrap tw:items-end tw:justify-end tw:gap-ui tw:pl-[52px]"
+          onSubmit={async (e) => { e.preventDefault(); if (await correr(() => svc.chilepropiedadesConectar(token.trim()), 'Chilepropiedades conectado.')) { setToken(''); setAbierto(false); } }}>
+          <Input id="cpToken" autoFocus clasesCampo="tw:flex-1 tw:min-w-[260px]" etiqueta="Token de Chilepropiedades" type="password" autoComplete="off" value={token} onChange={(e) => setToken(e.target.value)} />
+          <Boton variante="secundario" tamano="lg" type="button" onClick={() => setAbierto(false)}>Cancelar</Boton>
+          <Boton tamano="lg" type="submit" cargando={cargando} disabled={!token.trim()}>Guardar</Boton>
+        </form>
+      )}
+      {confirmando && admin && (
+        <Confirmar id={x.id} cargando={cargando} alCancelar={() => setConfirmando(false)} alConfirmar={() => void desconectar()}>
+          {cp ? 'Se borra el token: los contactos de Chilepropiedades dejan de llegar a Leads. Para volver, pega el token otra vez.'
+            : `Asset deja de enviar tus avisos a ${x.nombre}. Para volver a publicar, pulsa «Conectar».`}
+        </Confirmar>
       )}
     </>
   );

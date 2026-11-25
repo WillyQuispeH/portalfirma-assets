@@ -214,7 +214,7 @@ app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) creat
 
 // ---- IPC: cada handler devuelve {ok, data} o {ok:false, error, code} ----
 // Canales que solo usa el administrador (rol ADMIN del usuario de Asset; el resto lo usa también el corredor)
-const SOLO_ADMIN = { 'gdrive:connect': 'conexiones', 'gdrive:setClient': 'conexiones', 'gdrive:disconnect': 'conexiones', 'ml:conectar': 'conexiones', 'kv:llave': 'conexiones', 'pfapi:conectar': 'conexiones', 'pfapi:desconectar': 'conexiones', 'kv:quitarLlave': 'conexiones', 'kv:toctoc': 'conexiones', 'kv:toctocQuitar': 'conexiones', 'ml:desconectar': 'conexiones', 'ml:contacto': 'conexiones', 'pub:configurar': 'conexiones', 'pub:feeds': 'conexiones', 'pub:feedsRotar': 'conexiones',
+const SOLO_ADMIN = { 'gdrive:connect': 'conexiones', 'gdrive:setClient': 'conexiones', 'gdrive:disconnect': 'conexiones', 'ml:conectar': 'conexiones', 'kv:llave': 'conexiones', 'pfapi:conectar': 'conexiones', 'pfapi:desconectar': 'conexiones', 'kv:quitarLlave': 'conexiones', 'kv:toctoc': 'conexiones', 'kv:toctocQuitar': 'conexiones', 'cp:conectar': 'conexiones', 'cp:desconectar': 'conexiones', 'ml:desconectar': 'conexiones', 'ml:contacto': 'conexiones', 'pub:configurar': 'conexiones', 'pub:feeds': 'conexiones', 'pub:feedsRotar': 'conexiones',
   'res:configurar': 'conexiones', 'pv:claveWa': 'conexiones', 'obs:configurar': 'conexiones', 'dir:configurar': 'conexiones', 'ops:setFileKey': 'conexiones', 'ai:config': 'conexiones',
   'pv:configurar': 'fernanda', 'wallet:topup': 'saldo', 'inmo:propArchivar': 'borrar', 'inmo:perBorrar': 'borrar', 'leads:borrar': 'borrar', 'neg:borrar': 'borrar',
   'leads:asignar': 'reasignar', 'neg:corredor': 'reasignar', 'inmo:importar': 'importar', 'pv:importar': 'importar', 'fmt:configurar': 'documentos', 'usr:listar': 'usuarios', 'usr:crear': 'usuarios', 'usr:editar': 'usuarios', 'usr:clave': 'usuarios' };
@@ -1348,6 +1348,10 @@ handle('wa:numero', (numero) => waSrv.guardarNumero(numero)); // el número de W
 handle('cv:estado', () => (process.env.PF_MOCK === '1' ? { disponible: true, conectado: true, propia: true, admin: true } : asset.llamar('GET', '/convecta/conexion')));
 handle('cv:conectar', (clave) => asset.llamar('PUT', '/convecta/conexion', { clave: String(clave || '').trim() }));
 handle('cv:desconectar', () => asset.llamar('DELETE', '/convecta/conexion'));
+// Chilepropiedades: el token de la cuenta de la corredora (trae los contactos de los avisos a Leads)
+handle('cp:estado', () => asset.llamar('GET', '/chilepropiedades/conexion'));
+handle('cp:conectar', (token) => asset.llamar('PUT', '/chilepropiedades/conexion', { token: String(token || '').trim() }));
+handle('cp:desconectar', () => asset.llamar('DELETE', '/chilepropiedades/conexion'));
 // API de Portalfirma (enviar a firmar, estado y PDF firmado): las credenciales de la corredora (clave id, customer_id, correo y contraseña) las ingresa el administrador; quedan cifradas en el servidor
 handle('pfapi:estado', () => (process.env.PF_MOCK === '1' ? { conectado: true, customerId: 'mock', email: 'mock@asset.cl', admin: true } : asset.llamar('GET', '/portalfirma-api/conexion')));
 handle('pfapi:conectar', (o) => asset.llamar('PUT', '/portalfirma-api/conexion', { id: String(o?.id || '').trim(), customerId: String(o?.customerId || '').trim(), email: String(o?.email || '').trim(), password: String(o?.password || '') }));

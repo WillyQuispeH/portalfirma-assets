@@ -44,6 +44,8 @@ const esquema = z.object({
   RECORDATORIOS_CADA_SEG: z.coerce.number().int().min(0).max(3600).default(60),
   /** cada cuántos segundos revisa el servidor en Portalfirma lo que está en firma (0 = esta API no lo revisa) */
   FIRMAS_CADA_SEG: z.coerce.number().int().min(0).max(86400).default(300),
+  /** cada cuántos segundos lee el servidor los contactos de Chilepropiedades de cada corredora con token (0 = no lee) */
+  CHILEPROPIEDADES_CADA_SEG: z.coerce.number().int().min(0).max(86400).default(300),
   /** cada cuántos segundos lee el servidor el WhatsApp de cada corredora para sus asistentes (0 = esta API no lee) */
   LECTOR_CADA_SEG: z.coerce.number().int().min(0).max(600).default(4),
   /**

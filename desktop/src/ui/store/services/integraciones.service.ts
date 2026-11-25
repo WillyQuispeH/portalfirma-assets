@@ -11,6 +11,8 @@ export interface IGoogleConexion { conectada: boolean; estado: string | null; cu
 export interface IConvectaEstado { disponible: boolean; conectado: boolean; propia: boolean; conectadoEn?: string | null; error?: string | null; admin: boolean }
 /** las credenciales de la API de Portalfirma de la corredora (nunca vuelven a la pantalla: solo quién las ingresó) */
 export interface IPfApiEstado { conectado: boolean; customerId: string | null; email: string | null; conectadoEn?: string | null; admin: boolean }
+/** el token de la cuenta de Chilepropiedades de la corredora (nunca vuelve a la pantalla) */
+export interface IChilepropiedadesEstado { conectado: boolean; estado: string | null; conectadoEn: string | null; ultimaSync: string | null; leads: number; error: string | null; admin: boolean }
 export interface IGoogleEstado { disponible: boolean; admin: boolean; usuario: IGoogleConexion; empresa: IGoogleConexion }
 
 export const integracionesService = {
@@ -24,6 +26,9 @@ export const integracionesService = {
   convecta: () => apiCruda<IConvectaEstado>('cvEstado'),
   convectaConectar: (clave: string) => apiCruda<IConvectaEstado>('cvConectar', clave),
   convectaDesconectar: () => apiCruda<IConvectaEstado>('cvDesconectar'),
+  chilepropiedades: () => apiCruda<IChilepropiedadesEstado>('cpEstado'),
+  chilepropiedadesConectar: (token: string) => apiCruda<IChilepropiedadesEstado>('cpConectar', token),
+  chilepropiedadesDesconectar: () => apiCruda<IChilepropiedadesEstado>('cpDesconectar'),
   ml: () => apiCruda<IMlEstado>('mlEstado'),
   mlConectar: () => apiCruda('mlConectar'),
   mlDesconectar: () => apiCruda('mlDesconectar'),
