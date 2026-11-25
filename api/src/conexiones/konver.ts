@@ -36,6 +36,7 @@ import { Publico, UsuarioActual, type UsuarioToken } from '../auth/usuario-actua
 import { ZodPipe } from '../comun/zod.pipe';
 import type { Env } from '../config/env';
 import { CifradoService } from './cifrado';
+import { avisarCartera } from '../propiedades/propiedades.eventos';
 
 const PROVEEDOR = 'konver';
 /** las rutas de KONVER que usa Asset */
@@ -181,6 +182,12 @@ export class KonverService {
     return null;
   }
 
+  /** una llamada a KONVER con la llave de la corredora, sin sesión (procesos del servidor); null si no tiene llave */
+  async pedirCorredora(corredoraId: string, l: Llamada): Promise<{ status: number; cuerpo: unknown } | null> {
+    const llave = await this.llaveDe(corredoraId);
+    return llave ? this.pedir(llave, l) : null;
+  }
+
   private async pedir(llave: string, l: Llamada) {
     const conCuerpo = l.cuerpo !== undefined && l.metodo !== 'GET' && l.metodo !== 'DELETE';
     const r = await fetch(this.url + l.ruta, {
@@ -215,6 +222,10 @@ export class KonverService {
     if (llave) {
       const r = await this.pedir(llave, { metodo: 'GET', ruta: '/v1/cuenta' }).catch((e: Error) => ({ status: 502, cuerpo: { detail: { mensaje: e.message } } }));
       if (r.status === 200) cuenta = r.cuerpo;
+      // la cuenta de Mercado Libre o TOCTOC se conecta en el navegador: al verla conectada se revisa qué ya está publicado
+      const cc = cuenta as { portal_inmobiliario?: { conectado?: boolean }; toctoc?: { conectado?: boolean } } | null;
+      if (cc?.portal_inmobiliario?.conectado || cc?.toctoc?.conectado)
+        avisarCartera({ tipo: 'portales', corredoraId: u.corredoraId, forzar: false });
       if (r.status === 200 && propia && !(c?.datos as { webhookCif?: string } | null)?.webhookCif && this.webhookUrlBase) {
         const intento = (c?.datos as { webhookIntento?: string } | null)?.webhookIntento;
         if (!intento || Date.now() - Date.parse(intento) > 3600e3) void this.registrarWebhook(u.corredoraId, llave).catch(() => undefined);
@@ -249,6 +260,7 @@ export class KonverService {
       update: datos,
     });
     await this.registrarWebhook(u.corredoraId, llave).catch(() => false);
+    avisarCartera({ tipo: 'portales', corredoraId: u.corredoraId, forzar: true });
     return this.estado(u);
   }
 

@@ -28,6 +28,7 @@ import {
   type PropiedadCompleta,
 } from './propiedades.mapper';
 import { aPropiedadAsset, ConvectaService, SISTEMA_CONVECTA } from './convecta';
+import { avisarCartera } from './propiedades.eventos';
 import type { ImportarEntrada, ListarPropiedades, PropiedadEntrada, VinculoEntrada } from './propiedades.esquemas';
 
 type Tx = Prisma.TransactionClient;
@@ -183,6 +184,7 @@ export class PropiedadesService {
       await this.actividad.registrar(this.log(u, creada.id, 'Propiedad creada'), tx);
       return this.buscar(u, creada.id, tx);
     });
+    avisarCartera({ tipo: 'propiedad', corredoraId: u.corredoraId, propiedadId: p.id });
     return propiedadApp(p, u);
   }
 
@@ -240,6 +242,7 @@ export class PropiedadesService {
       return this.buscar(u, id, tx);
     });
     this.r2.borrar(quitadas);
+    avisarCartera({ tipo: 'propiedad', corredoraId: u.corredoraId, propiedadId: id });
     return propiedadApp(p, u);
   }
 
@@ -365,11 +368,19 @@ export class PropiedadesService {
         // lo que antes vino de Portalfirma con el mismo código pasa a ser de este origen (así no se duplica)
         if (!previa && sistema === SISTEMA_CONVECTA && it.datos.codigo) {
           previa = await tx.propiedad.findFirst({
-            where: { corredoraId: u.corredoraId, origenSistema: 'portalfirma', codigo: it.datos.codigo, eliminadoEn: null },
+            where: {
+              corredoraId: u.corredoraId,
+              origenSistema: 'portalfirma',
+              codigo: it.datos.codigo,
+              eliminadoEn: null,
+            },
             include: INCLUIR,
           });
           if (previa) {
-            await tx.propiedad.update({ where: { id: previa.id }, data: { origenSistema: sistema, origenId: it.origenId } });
+            await tx.propiedad.update({
+              where: { id: previa.id },
+              data: { origenSistema: sistema, origenId: it.origenId },
+            });
             previa = { ...previa, origenSistema: sistema, origenId: it.origenId };
           }
         }
@@ -539,7 +550,12 @@ export class PropiedadesService {
       const r = await this.importar(u, { sistema: SISTEMA_CONVECTA, items: items.slice(i, i + 100) });
       for (const k of ['nuevas', 'actualizadas', 'sinCambios', 'personas', 'captadores'] as const) res[k] += r[k];
     }
-    return { ...res, sinCorredor: [...faltan.values()], sinCaptador: [...faltan.values()].reduce((a, f) => a + f.propiedades, 0) };
+    avisarCartera({ tipo: 'cartera', corredoraId: u.corredoraId, origen: 'convecta' });
+    return {
+      ...res,
+      sinCorredor: [...faltan.values()],
+      sinCaptador: [...faltan.values()].reduce((a, f) => a + f.propiedades, 0),
+    };
   }
 
   // ------------------------------------------------------------------ resumen (inicio)

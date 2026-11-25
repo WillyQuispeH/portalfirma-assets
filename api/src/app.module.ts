@@ -85,6 +85,10 @@ import { SoporteWaController, SoporteWaService } from './soporte/soporte-wa';
 import { SoportePersonasController, SoportePersonasService } from './soporte/soporte-personas';
 import { SoporteNegociosController, SoporteNegociosService } from './soporte/soporte-negocios';
 import { SoportePlantillasController, SoportePlantillasService } from './soporte/soporte-plantillas';
+import { SoporteDocumentosController, SoporteDocumentosService } from './soporte/soporte-documentos';
+import { SoportePropiedadesController, SoportePropiedadesService } from './soporte/soporte-propiedades';
+import { SoporteIntegracionesController, SoporteIntegracionesService } from './soporte/soporte-integraciones';
+import { PublicacionAutoService } from './conexiones/publicacion-auto';
 import { DocumentoRevisionService } from './whatsapp/documento-revision';
 import { RevisionContratoWaService } from './whatsapp/revision-contrato';
 import { ActaVisitaController, ActaVisitaService } from './whatsapp/acta-visita';
@@ -171,6 +175,9 @@ import { PortalInmobiliarioController, PortalInmobiliarioService } from './conex
     SoportePersonasController,
     SoporteNegociosController,
     SoportePlantillasController,
+    SoporteDocumentosController,
+    SoportePropiedadesController,
+    SoporteIntegracionesController,
     ActaVisitaController,
     PropiedadesAccionesController,
     AgendaAccionesController,
@@ -255,6 +262,10 @@ import { PortalInmobiliarioController, PortalInmobiliarioService } from './conex
     SoportePersonasService,
     SoporteNegociosService,
     SoportePlantillasService,
+    SoporteDocumentosService,
+    SoportePropiedadesService,
+    SoporteIntegracionesService,
+    PublicacionAutoService,
     DocumentoRevisionService,
     RevisionContratoWaService,
     ActaVisitaService,
