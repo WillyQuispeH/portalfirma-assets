@@ -6,11 +6,13 @@ import { MuestraFlujo } from '../gestion/flujos/VentanasAntiguas';
 import { FirmantesDocumento, ConfirmarEnvioLote } from '../gestion/carga-masiva/Ventanas';
 import { TelefonoCuenta, ErrorArchivo, AccesoDocumentos } from '../gestion/operaciones/Ventanas';
 import { ActivarFormatos, FormatosHito, ConfirmarFormato } from './gestion/Formatos';
+import { GuardarConfiguracion } from '../configuracion/documentos/ventanas';
 
 export const ventanas: TVentanas = {
   'gestion.flujosMuestra': MuestraFlujo, // flujos.js · modal-21
   'gestion.envioLote': ConfirmarEnvioLote, // flujos.js · modal-22 y masiva.js · modal-43
   'gestion.masivaFirmantes': FirmantesDocumento, // masiva.js · modal-42
+  'gestion.guardarTipoDocumento': GuardarConfiguracion, // masiva.js · modal-157 («¿Guardas configuración por defecto?», al terminar el envío)
   'gestion.formatosConfirmar': ConfirmarFormato, // formatos.js · modal-23
   'gestion.formatosActivar': ActivarFormatos, // formatos.js · modal-24
   'gestion.formatos': FormatosHito, // formatos.js · modal-25

@@ -106,6 +106,10 @@ async function work(it) {
     it.signers = (ext?.firmantes || []).map((s) => ({ fullName: s.nombre || '', rut: s.rut || '', email: s.email || '', phone: s.telefono || '', alias: s.rol || '', pagina: s.pagina || 0 }));
     it.analizado = true;
     if (it.preset?.length) it.signers = it.preset.map((s) => ({ ...s })); // el flujo ya sabe quién firma
+    // un documento de un tipo de Configuración › Documentos: su firma y su trámite parten llenos (se cambian a mano, por documento o por firmante)
+    const tc = ext?.tipoConocido;
+    it.tipoConocido = tc ? { id: tc.id, nombre: tc.nombre, tipoFirma: tc.tipoFirma, tramite: tc.tramite } : null;
+    if (tc) { it.tramite = tc.tramite === 'legalization' ? 'legalization' : 'none'; it.signers = it.signers.map((s) => ({ ...s, typeSign: s.typeSign || tc.tipoFirma })); }
     it.status = 'ready'; it.error = ''; failStreak = 0;
     validate(it);
   } catch (e) {

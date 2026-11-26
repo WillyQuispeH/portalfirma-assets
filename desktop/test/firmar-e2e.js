@@ -40,6 +40,8 @@ const FX = path.join(__dirname, 'fixtures');
     ok((await txt('#doneOp')).trim().length > 0, 'enviado: operación ' + (await txt('#doneOp')).trim());
     await w.waitForFunction(() => !/Cargando/.test(document.querySelector('#doneDetail')?.textContent || ''), null, { timeout: 15000 });
     ok(/Operación|\{/.test(await txt('#doneDetail')), 'enviado: el detalle de la operación (enlaces de firma)');
+    // el documento era de un tipo que la corredora no tiene configurado: al final pregunta «¿Guardas configuración por defecto?»
+    await w.waitForSelector('#modalCard #tdPregunta', { timeout: 8000 }); ok(/Guardas configuración por defecto/.test(await txt('#modalCard')), 'al final pregunta si guarda la configuración por defecto'); await w.click('#mCancel');
     await w.click('#newDocBtn'); ok(await w.isVisible('#dropzone'), 'enviar otro documento vuelve a soltar');
     await w.evaluate(() => window.modal('<p id="viejo">antiguo</p><button id="mCancel" onclick="closeModal()">x</button>'));
     ok(await w.isVisible('#viejo'), 'un formulario antiguo usa el modal después de uno de React');

@@ -18,6 +18,8 @@ import { ConvectaController, ConvectaService } from './propiedades/convecta';
 import { KonverController, KonverService } from './conexiones/konver';
 import { CorredoraDocController, CorredoraDocService } from './documentos/corredora-doc';
 import { PlantillasDocController, PlantillasDocService } from './documentos/plantillas-doc';
+import { TiposDocumentoController, TiposDocumentoService } from './documentos/tipos-documento';
+import { SoporteTiposDocumentoController, SoporteTiposDocumentoService } from './soporte/soporte-tipos-documento';
 import { DominioIaController, DominioIaService } from './propiedades/dominio-ia';
 import { FeedsController } from './propiedades/feeds';
 import { ArchivosModule } from './archivos/archivos';
@@ -118,6 +120,7 @@ import { PortalInmobiliarioController, PortalInmobiliarioService } from './conex
   controllers: [
     DominioIaController,
     PlantillasDocController,
+    TiposDocumentoController,
     CorredoraDocController,
     ConvectaController,
     KonverController,
@@ -176,6 +179,7 @@ import { PortalInmobiliarioController, PortalInmobiliarioService } from './conex
     SoportePersonasController,
     SoporteNegociosController,
     SoportePlantillasController,
+    SoporteTiposDocumentoController,
     SoporteDocumentosController,
     SoportePropiedadesController,
     SoporteIntegracionesController,
@@ -195,6 +199,7 @@ import { PortalInmobiliarioController, PortalInmobiliarioService } from './conex
     KonverService,
     CorredoraDocService,
     PlantillasDocService,
+    TiposDocumentoService,
     DominioIaService,
     PersonasService,
     NegociosService,
@@ -264,6 +269,7 @@ import { PortalInmobiliarioController, PortalInmobiliarioService } from './conex
     SoportePersonasService,
     SoporteNegociosService,
     SoportePlantillasService,
+    SoporteTiposDocumentoService,
     SoporteDocumentosService,
     SoportePropiedadesService,
     SoporteIntegracionesService,

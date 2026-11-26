@@ -127,7 +127,7 @@ module.exports = {
     if (ruta === '/firmas-envio/firmantes') {
       if (globalThis.__retrasoExtraer) await new Promise((r) => setTimeout(r, globalThis.__retrasoExtraer));   // las pruebas alargan el análisis para ver los esqueletos
       const ing = await this.ingest(cuerpo.pdf, 'documento.pdf'); const ex = await this.extractSigners(ing.document_id);
-      return { legible: true, escaneado: false, tipoDocumento: ex.typeDocument || '', avisos: ['Firman el prestador y la arrendataria.', 'No aparecen teléfonos de los firmantes.'], firmantes: (ex.firmantes || []).map((f) => ({ nombre: f.fullName || '', rut: f.rut || '', rutValido: true, rol: f.alias || '', email: f.email || '', telefono: f.phone || '', pagina: 1 })) };
+      return { legible: true, escaneado: false, tipoDocumento: ex.typeDocument || '', ...(globalThis.__tipoConocido ? { tipoConocido: globalThis.__tipoConocido } : {}), avisos: ['Firman el prestador y la arrendataria.', 'No aparecen teléfonos de los firmantes.'], firmantes: (ex.firmantes || []).map((f) => ({ nombre: f.fullName || '', rut: f.rut || '', rutValido: true, rol: f.alias || '', email: f.email || '', telefono: f.phone || '', pagina: 1 })) };
     }
     if (ruta === '/firmas-envio/pdf') {
       if (globalThis.__retrasoEnvio) await new Promise((r) => setTimeout(r, globalThis.__retrasoEnvio));   // las pruebas alargan el envío para ver el «enviando»

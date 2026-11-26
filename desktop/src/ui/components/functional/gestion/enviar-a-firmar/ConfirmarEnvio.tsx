@@ -10,6 +10,7 @@ import { saldoSesion } from '../../../../utils/app';
 import { monto } from '../../../../utils/formato';
 import { resumenEnvio } from '../../../../utils/envio';
 import { mostrarEnviado } from './controlador';
+import { preguntarGuardarConfiguracion } from '../../configuracion/documentos/ventanas';
 import type { IAnalisis, IArchivoEnvio, IPayloadEnvio } from '../../../../store/interfaces/envio.interface';
 
 export default function ConfirmarEnvio({ analisis, archivo, payload: p }: { analisis: IAnalisis; archivo: IArchivoEnvio; payload: IPayloadEnvio }) {
@@ -20,6 +21,12 @@ export default function ConfirmarEnvio({ analisis, archivo, payload: p }: { anal
     try {
       const r = await envioOperacion.enviar({ ...p, __fileName: archivo.name });
       cerrarModal(); mostrarEnviado(r);
+      // al final, si era un tipo de documento que la corredora no tenía configurado: ¿guarda esta firma y trámite para los próximos?
+      const tipo = (analisis.extract?.typeDocument || '').trim();
+      if (r.operation != null && tipo && !analisis.extract?.tipoConocido) {
+        const t = p.signatories[0]?.typeSign;
+        void preguntarGuardarConfiguracion(tipo, (t === 'simple' || t === 'avanzada' || t === 'visada' || t === 'enrolada' ? t : 'avanzada'), p.protocolization === 'legalization' ? 'legalization' : 'none');
+      }
     } catch (e) {
       cerrarModal();
       const m = (e as Error).message;

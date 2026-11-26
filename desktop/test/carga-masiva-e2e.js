@@ -146,6 +146,9 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     await w.waitForSelector('#segundoPlano[data-fin]', { timeout: 30000 });
     ok(/3 documentos enviados a firmar/.test(await w.textContent('#segundoPlano')) && parseInt(await w.textContent('#spPct'), 10) === 100, 'al terminar dice cuántos se enviaron (100 %) y se va sola');
     await w.waitForSelector('#segundoPlano', { state: 'detached', timeout: 10000 });
+    // al final del envío (nunca antes): una sola pregunta por tipo de documento que la corredora no tenía configurado
+    await w.waitForSelector('#modalCard #tdPregunta', { timeout: 10000 }); await w.click('#mCancel');
+    await w.waitForTimeout(400); ok(await w.locator('#tdPregunta').count() === 0, 'tres documentos del mismo tipo: «¿Guardas configuración por defecto?» se pregunta una sola vez, al final');
     await w.evaluate(() => window.Masiva.open());
     await w.waitForFunction(() => !document.querySelector('.bk-card'), null, { timeout: 60000 });
     const env = await app.evaluate(() => (globalThis.__llamadasIntegracion || []).filter((x) => x.ruta === '/firmas-envio/pdf').map((x) => x.cuerpo));

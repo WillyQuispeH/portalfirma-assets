@@ -39,7 +39,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     await w.click('#sendBtn'); await w.waitForSelector('#modal:not(.hidden) #mOk');
     const conf = await txt('#modalCard');
     ok(/Confirmar envío/.test(conf) && /página de firmas|Ubicadas/.test(conf) && !/Pagador/.test(conf), 'confirmación del envío (sin pagador: dice dónde van las firmas)'); await shot('4-confirm.png');
-    await w.click('#mOk'); await w.waitForSelector('#view-done:visible', { timeout: 20000 }); await w.waitForTimeout(800);
+    await w.click('#mOk'); await w.waitForSelector('#view-done:visible', { timeout: 20000 }); await w.waitForTimeout(800); await w.waitForTimeout(500); if (await w.isVisible('#tdPregunta')) await w.click('#mCancel');   // «¿Guardas configuración por defecto?» (tipo de documento sin configurar)
     const op = (await txt('#doneOp')).trim(); ok(/^\d+$/.test(op), 'enviado: operación ' + op);
     await w.screenshot({ path: path.join(__dirname, '5-done.png'), fullPage: true }).catch(() => {});
     // Mis operaciones necesita la cuenta de la API de Portalfirma (o el teléfono): sin ella, la pide antes de listar

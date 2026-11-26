@@ -127,7 +127,9 @@ function RevisarPantalla() {
             </div>
           ) : (
             <div id="configFree" className="tw:flex tw:flex-col tw:gap-ui">
-              <Select id="protocolization" etiqueta="Trámite notarial" value={protocolizacion} onChange={(e) => envioDatos({ protocolizacion: e.target.value })} opciones={Object.entries(TRAMITES_NOTARIALES)} />
+              {x.tipoConocido && <p id="tipoConocido" className="tw:m-0 tw:text-[13px] tw:text-muted">Es un documento de tipo <b>{x.tipoConocido.nombre}</b>: la firma y el trámite ya vienen llenos. Puedes cambiarlos.</p>}
+              <Select id="tipoFirmaDoc" etiqueta="Tipo de firma" value={tipoFirma} resaltado={!!x.tipoConocido} onChange={(e) => envioDatos({ tipoFirma: e.target.value })} opciones={Object.entries(TIPOS_FIRMA)} />
+              <Select id="protocolization" etiqueta="Trámite notarial" value={protocolizacion} resaltado={!!x.tipoConocido} onChange={(e) => envioDatos({ protocolizacion: e.target.value })} opciones={Object.entries(TRAMITES_NOTARIALES)} />
             </div>
           )}
           <Switch id="paginaExtra" className="tw:mt-ui" activo={paginaExtra} alCambiar={(v) => envioDatos({ paginaExtra: v })}

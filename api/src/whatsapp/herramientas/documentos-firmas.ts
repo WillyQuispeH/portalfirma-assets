@@ -15,11 +15,15 @@ import { EnlacesCortosService } from '../../archivos/enlaces-cortos';
 import { PortalfirmaService } from '../../conexiones/portalfirma';
 import { PortalfirmaApiService, enlacesDe } from '../../conexiones/portalfirma-api';
 import { FirmasRondaService, leerDetalle } from '../../firmas/ronda';
-import { MENU_FIRMAS, operacionDe, respuestaEnvio } from '../../documentos/envio-firma';
+import { EnvioFirmaService, MENU_FIRMAS, operacionDe, respuestaEnvio, type FirmanteEnvio } from '../../documentos/envio-firma';
+import { ExtraerFirmantesService } from '../../documentos/extraer-firmantes';
+import { TiposDocumentoService } from '../../documentos/tipos-documento';
+import { TIPOS_FIRMA, type TipoFirma } from '../../documentos/plantillas-doc';
 import { norm } from '../comun';
 import { AyudasHerramientas } from './ayudas';
 import { Confirmaciones } from './confirmar';
 import { ErrorDoc, hay, mensajeError, numero, tokenDe, txt, type Rec } from './docs-util';
+// (enviar_pdf_a_firmar y guardar_tipo_documento: un PDF que el corredor manda y los tipos de Configuración › Documentos)
 import { esquema, type CtxHerr, type Herramienta, type ProveedorHerramientas } from './tipos';
 
 const FINALES = ['firmado', 'anulado', 'rechazado', 'finalizada', 'cancelada'];
@@ -70,6 +74,9 @@ export class HerramientasFirmas implements ProveedorHerramientas {
     private readonly ronda: FirmasRondaService,
     private readonly r2: AlmacenamientoService,
     private readonly enlaces: EnlacesCortosService,
+    private readonly extraer: ExtraerFirmantesService,
+    private readonly envio: EnvioFirmaService,
+    private readonly tipos: TiposDocumentoService,
   ) {
     this.herramientas = this.definir();
   }
@@ -635,6 +642,154 @@ export class HerramientasFirmas implements ProveedorHerramientas {
     }
   }
 
+  // ================================================================== un PDF que el corredor manda para firmar
+  /** lo preparado por usuario: el PDF y lo que se le mostró (el «sí» llega en otro mensaje, sin el archivo) */
+  private readonly leidos = new Map<string, { bytes: Buffer; archivo: string; lectura: Awaited<ReturnType<ExtraerFirmantesService['extraerPdf']>>; en: number }>();
+  private readonly pdfs = new Map<string, { bytes: Buffer; nombre: string; firmantes: FirmanteEnvio[]; tipoFirma: TipoFirma; tramite: 'none' | 'legalization'; tipoDocumento: string; conocido: boolean }>();
+
+  /**
+   * «Envíalo a firmar» con un PDF adjunto: la IA lee quiénes firman y de qué documento se trata; si el documento corresponde a un tipo de
+   * Configuración › Documentos, la firma y el trámite salen de ahí (igual que en la app). DOS pasos: sin confirmado arma y muestra el resumen;
+   * con confirmado: true, solo tras el sí del corredor, lo envía.
+   */
+  private async enviarPdf(c: CtxHerr, a: Rec): Promise<Rec> {
+    const HERR = 'enviar_pdf_a_firmar';
+    if (a.confirmado !== true) this.conf.usar(c);
+    try {
+      const conf = a.confirmado === true;
+      let args = a;
+      if (conf) {
+        const p = this.conf.exigir(c, HERR);
+        if ('error' in p) return p;
+        args = p.pend.args;
+      }
+      let x = this.pdfs.get(c.usuarioId);
+      const adj = c.adjuntos.find((f) => f.mime === 'application/pdf' || /\.pdf$/i.test(f.nombre));
+      if (!conf) {
+        // el PDF llega en un mensaje y las correcciones («con legalización», «el correo es…») en otros: la lectura se guarda un rato
+        let leido = this.leidos.get(c.usuarioId);
+        if (adj) {
+          const lectura = await this.extraer.extraerPdf(c.corredoraId, adj.bytes.toString('base64'));
+          leido = { bytes: adj.bytes, archivo: adj.nombre, lectura, en: Date.now() };
+          this.leidos.set(c.usuarioId, leido);
+          if (this.leidos.size > 200) for (const kk of this.leidos.keys()) { this.leidos.delete(kk); break; }
+        } else if (!leido || Date.now() - leido.en > 30 * 60_000) {
+          return { error: 'Mándame el PDF que quieres enviar a firmar (adjunto en este mismo mensaje o en el anterior) y me dices a quién va.' };
+        }
+        const { lectura } = leido;
+        if (!lectura.legible) return { error: 'No pude leer ese documento: ¿me lo mandas de nuevo, o en PDF más nítido?' };
+        // quién firma: lo que dijo el corredor manda sobre lo que leyó la IA
+        const dichos = Array.isArray(a.firmantes) ? (a.firmantes as Rec[]) : null;
+        const base = dichos?.length
+          ? dichos.map((f) => ({ nombre: txt(f.nombre, 160), rut: txt(f.rut, 20), email: txt(f.email, 160).toLowerCase(), telefono: txt(f.telefono, 30), rol: txt(f.rol, 80).toLowerCase() || 'firmante' }))
+          : lectura.firmantes.map((f) => ({ nombre: f.nombre, rut: f.rut, email: f.email, telefono: f.telefono, rol: f.rol || 'firmante' }));
+        const faltan: string[] = [];
+        base.forEach((f, i) => {
+          const q = f.nombre || `el firmante ${i + 1}`;
+          if (!f.nombre) faltan.push(`el nombre del firmante ${i + 1}`);
+          if (!f.rut || !rutValido(f.rut)) faltan.push(`un RUT válido de ${q}`);
+          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email)) faltan.push(`el correo de ${q}`);
+        });
+        if (!base.length) faltan.push('quiénes firman (nombre, RUT y correo de cada uno)');
+        // cómo se firma: lo que pidió el corredor, si no el tipo de documento reconocido (Configuración › Documentos) y, si no, firma avanzada sin trámite
+        const k = lectura.tipoConocido;
+        const pedidaFirma = TIPOS_FIRMA.find((t) => t === norm(txt(a.tipo_firma, 20)));
+        const pedidoTramite = /legaliz/.test(norm(txt(a.tramite, 30))) ? 'legalization' : /sin|ning|none/.test(norm(txt(a.tramite, 30))) ? 'none' : null;
+        const tipoFirma: TipoFirma = pedidaFirma ?? k?.tipoFirma ?? 'avanzada';
+        const tramite: 'none' | 'legalization' = pedidoTramite ?? k?.tramite ?? 'none';
+        const nombreDoc = (lectura.tipoDocumento || k?.nombre || leido.archivo.replace(/\.pdf$/i, '') || 'Documento').slice(0, 120);
+        x = {
+          bytes: leido.bytes,
+          nombre: /\.pdf$/i.test(leido.archivo) ? leido.archivo : `${nombreDoc}.pdf`,
+          firmantes: base.map((f) => ({ rut: f.rut, fullName: f.nombre, email: f.email, phone: f.telefono || undefined, alias: f.rol, typeSign: tipoFirma })),
+          tipoFirma,
+          tramite,
+          tipoDocumento: nombreDoc,
+          conocido: !!k,
+        };
+        const etiquetaFirma = { simple: 'firma simple', avanzada: 'firma avanzada', visada: 'firma visada', enrolada: 'firma avanzada enrolada' }[tipoFirma];
+        const resumen = {
+          documento: nombreDoc,
+          firmantes: x.firmantes.map((f) => `${f.alias}: ${f.fullName}${f.rut ? ' · ' + f.rut : ''}${f.email ? ' · ' + f.email : ''}`),
+          firma: `${etiquetaFirma}${tramite === 'legalization' ? ' con legalización notarial' : ''}`,
+          ...(k ? { tipoReconocido: k.nombre } : {}),
+          ...(lectura.avisos.length ? { avisos: lectura.avisos.slice(0, 4) } : {}),
+        };
+        if (faltan.length) return { ok: true, listo: false, enviada: false, ...resumen, faltan, indicacion: 'NO se envió nada. Pídele al corredor SOLO lo que falta, todo en un mensaje, y vuelve a llamar enviar_pdf_a_firmar con «firmantes» completos (nombre, rut, correo, rol). El PDF sigue disponible.' };
+        this.pdfs.set(c.usuarioId, x);
+        if (this.pdfs.size > 200) for (const kk of this.pdfs.keys()) { this.pdfs.delete(kk); break; }
+        this.conf.preparar(c, HERR, nombreDoc, resumen, { ...a, confirmado: false });
+        return {
+          ok: true,
+          listo: true,
+          enviada: false,
+          necesitaConfirmacion: true,
+          ...resumen,
+          indicacion: `NO se envió nada. Muéstrale al corredor el documento, quién firma y cómo se firma${k ? ` (es un «${k.nombre}»: así lo tiene configurado la corredora)` : ' (no es un tipo que la corredora tenga configurado: se usó firma avanzada sin trámite; dile que puede pedirte otra)'} y pregúntale si lo envías. Si pide otra firma o trámite, vuelve a llamar con tipo_firma (simple, avanzada, visada o enrolada) o tramite (ninguno o legalización). Si dice que sí, llama enviar_pdf_a_firmar con confirmado: true.`,
+        };
+      }
+      // segundo paso: lo preparado manda (el «sí» no trae el archivo)
+      if (!x) return { error: 'No tengo el documento preparado (venció). Mándame el PDF otra vez.' };
+      this.conf.usar(c);
+      this.pdfs.delete(c.usuarioId);
+      this.leidos.delete(c.usuarioId);
+      const r = await this.envio.enviar({
+        corredoraId: c.corredoraId,
+        usuarioId: c.usuarioId,
+        bytes: x.bytes,
+        nombreArchivo: x.nombre,
+        firmantes: x.firmantes,
+        protocolizacion: x.tramite,
+      });
+      if ('error' in r) return { error: r.error };
+      await this.db.firma.upsert({
+        where: { corredoraId_operacion: { corredoraId: c.corredoraId, operacion: r.operacion } },
+        create: {
+          id: `op${r.operacion}`,
+          corredoraId: c.corredoraId,
+          operacion: r.operacion,
+          documento: x.tipoDocumento,
+          origen: 'whatsapp',
+          estado: 'en_firma',
+          propiedadIds: [],
+          enviadoPorId: c.usuarioId,
+          total: x.firmantes.length,
+          firmantes: x.firmantes.map((f) => ({ nombre: f.fullName, rut: f.rut, rol: f.alias, email: f.email, firmo: false })) as Prisma.InputJsonValue,
+          datos: { formato: 'pdf_whatsapp', tipoFirma: x.tipoFirma, tramite: x.tramite },
+        },
+        update: {},
+      });
+      // si el documento no era de un tipo conocido, al final se pregunta si se guarda esa configuración para la próxima
+      return {
+        ok: true,
+        enviada: true,
+        operacion: r.operacion,
+        mensaje: `«${x.tipoDocumento}» se envió a firmar (operación ${r.operacion}).`,
+        ...respuestaEnvio(x.tipoDocumento, r),
+        ...(x.conocido || !x.tipoDocumento
+          ? {}
+          : { indicacionGuardar: `Después del bloque, pregunta en una línea: «¿Guardo esta configuración (${x.tipoFirma}${x.tramite === 'legalization' ? ' con legalización' : ', sin trámite'}) como la de “${x.tipoDocumento}” para los próximos?». Si dice que sí, llama guardar_tipo_documento con esos datos. Si no, no insistas.` }),
+      };
+    } catch (e) {
+      return { error: mensajeError(e) };
+    }
+  }
+
+  /** «sí, guárdala»: deja la firma y el trámite que se usaron como la configuración por defecto de ese tipo de documento */
+  private async guardarTipo(c: CtxHerr, a: Rec): Promise<Rec> {
+    try {
+      if (!hay(a.nombre)) return { error: 'Falta el nombre del tipo de documento.' };
+      const tipoFirma = TIPOS_FIRMA.find((t) => t === norm(txt(a.tipo_firma, 20)));
+      if (!tipoFirma) return { error: 'Falta el tipo de firma (simple, avanzada, visada o enrolada).' };
+      const tramite = /legaliz/.test(norm(txt(a.tramite, 30))) ? 'legalization' : 'none';
+      const t = await this.tipos.crear(tokenDe(c), { nombre: txt(a.nombre, 80), tipoFirma, tramite });
+      const igual = t.tipoFirma === tipoFirma && t.tramite === tramite;
+      return { ok: true, mensaje: igual ? `Listo: «${t.nombre}» queda con esa configuración.` : `«${t.nombre}» ya estaba configurado (${t.tipoFirma}${t.tramite === 'legalization' ? ' con legalización' : ', sin trámite'}); solo el administrador lo cambia.` };
+    } catch (e) {
+      return { error: mensajeError(e) };
+    }
+  }
+
   // ================================================================== las herramientas
   private definir(): Herramienta[] {
     const REF_PROP = { type: 'string', description: 'código de la propiedad (CV-9001)' };
@@ -701,6 +856,25 @@ export class HerramientasFirmas implements ProveedorHerramientas {
           'Genera un documento desde una plantilla de la Notaría virtual con los datos de la propiedad y las personas y lo envía a firmar. DOS pasos: sin confirmado llena el formulario y devuelve el resumen o lo que falta; con confirmado: true, solo tras el sí del corredor, lo genera. «valores» lleva solo los campos que faltaban o que el corredor quiere cambiar.',
         input_schema: esquema({ plantilla: { type: 'string', description: 'id de la plantilla' }, propiedad: REF_PROP, negocio: REF_NEG, personas: { type: 'object', description: 'grupo firmante → persona del CRM (nombre o RUT)', additionalProperties: { type: 'string' } }, valores: { type: 'object', description: 'id del campo → valor', additionalProperties: { type: 'string' } }, confirmado: CONFIRMADO }, ['plantilla']),
         ejecutar: (c, a) => this.generar(c, a),
+      },
+      {
+        name: 'enviar_pdf_a_firmar',
+        description:
+          'Envía a firmar un PDF que el corredor mandó por WhatsApp (un contrato, carta oferta, mandato, anexo… que no armó Asset). Lee quiénes firman y de qué documento se trata; si es de un tipo que la corredora configuró en Documentos (carta oferta, mandato de venta…), la firma y el trámite salen de esa configuración: NO los preguntes. DOS pasos: sin confirmado lee el PDF y devuelve el resumen (documento, quién firma, cómo se firma) o lo que falta; con confirmado: true, solo tras el sí del corredor, lo envía. «firmantes» solo si el corredor corrige o completa quién firma (reemplaza la lista leída). tipo_firma y tramite solo si él los pide distintos.',
+        input_schema: esquema({
+          firmantes: { type: 'array', description: 'quién firma, solo si el corredor lo corrige o completa', items: { type: 'object', properties: { nombre: { type: 'string' }, rut: { type: 'string' }, email: { type: 'string' }, telefono: { type: 'string' }, rol: { type: 'string', description: 'su calidad: arrendador, comprador, mandante…' } } } },
+          tipo_firma: { type: 'string', enum: ['simple', 'avanzada', 'visada', 'enrolada'], description: 'solo si el corredor pide una firma distinta a la configurada' },
+          tramite: { type: 'string', enum: ['ninguno', 'legalizacion'], description: 'solo si el corredor pide un trámite distinto al configurado' },
+          confirmado: CONFIRMADO,
+        }),
+        ejecutar: (c, a) => this.enviarPdf(c, a),
+      },
+      {
+        name: 'guardar_tipo_documento',
+        description:
+          'Guarda como configuración por defecto de la corredora cómo se firma un tipo de documento (tipo de firma y trámite), para que la próxima vez salga sola. Úsala SOLO cuando enviar_pdf_a_firmar te lo indicó y el corredor dijo que sí a guardarla.',
+        input_schema: esquema({ nombre: { type: 'string', description: 'el nombre del documento, como lo dijo enviar_pdf_a_firmar' }, tipo_firma: { type: 'string', enum: ['simple', 'avanzada', 'visada', 'enrolada'] }, tramite: { type: 'string', enum: ['ninguno', 'legalizacion'] } }, ['nombre', 'tipo_firma']),
+        ejecutar: (c, a) => this.guardarTipo(c, a),
       },
       {
         name: 'buscar_documento',

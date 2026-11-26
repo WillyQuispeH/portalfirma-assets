@@ -19,6 +19,8 @@ export interface IExtraccion {
   documentConfig?: { name?: string };
   type_sign?: string;
   notarial_procedure?: string;
+  /** el tipo de Configuración › Documentos al que corresponde el documento: de ahí vienen la firma y el trámite (type_sign y notarial_procedure) */
+  tipoConocido?: { id: string; nombre: string; tipoFirma: string; tramite: string };
   firmantes?: IFirmanteExtraido[];
 }
 

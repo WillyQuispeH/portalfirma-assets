@@ -61,7 +61,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     await correos();
     await w.click('#sendBtn'); await w.waitForSelector('#modal:not(.hidden) #mOk');
     ok(/Confirmar envío/.test(await w.textContent('#modalCard')) && /página para las firmas/.test(await w.textContent('#modalCard')) && !/Pagador/.test(await w.textContent('#modalCard')), 'la confirmación dice dónde van las firmas (con la página extra) y no menciona pagador');
-    await w.click('#mOk'); await w.waitForSelector('#view-done:not(.hidden)', { timeout: 30000 });
+    await w.click('#mOk'); await w.waitForSelector('#view-done:not(.hidden)', { timeout: 30000 }); await w.waitForTimeout(500); if (await w.isVisible('#tdPregunta')) await w.click('#mCancel');   // «¿Guardas configuración por defecto?» (tipo de documento sin configurar)
     let env = await envios();
     ok(env.length === 1 && !('posiciones' in env[0]) && env[0].paginaExtra === true && env[0].firmantes.length === 2 && env[0].firmantes[0].alias === 'prestador' && env[0].firmantes[0].email === 'juan@correo.cl' && !('email' in env[0]), 'con la página extra el envío no lleva posiciones y pide la página de firmas (paginaExtra)');
 
@@ -106,7 +106,7 @@ const ok = (c, m) => { if (!c) throw new Error('FALLÓ: ' + m); console.log('  �
     await shot('fe1-ubicar.png');
     await w.click('#sendBtn'); await w.waitForSelector('#modal:not(.hidden) #mOk');
     ok(/Ubicadas en el documento/.test(await w.textContent('#modalCard')), 'la confirmación dice que las firmas están ubicadas en el documento');
-    await w.click('#mOk'); await w.waitForSelector('#view-done:not(.hidden)', { timeout: 30000 });
+    await w.click('#mOk'); await w.waitForSelector('#view-done:not(.hidden)', { timeout: 30000 }); await w.waitForTimeout(500); if (await w.isVisible('#tdPregunta')) await w.click('#mCancel');   // «¿Guardas configuración por defecto?» (tipo de documento sin configurar)
     env = await envios();
     const e2 = env[1]; const s = (m0.cw / 612);
     ok(env.length === 2 && Array.isArray(e2.posiciones) && e2.posiciones.length === 2 && e2.posiciones.every((p) => p.pagina >= 1 && Number.isInteger(p.x) && Number.isInteger(p.y)), 'ubicadas: el envío lleva una posición por firmante (página y coordenadas enteras)');

@@ -29,10 +29,28 @@ async function confirmarEnvio(ids, opts) {
     alEnviar: async () => {
       const r = await pf.bulkSend(ready.map((x) => x.id), { ...opts });
       if (!r.ok) return toast(r.error, 5000);
-      const sent = r.data.items.filter((x) => ready.some((y) => y.id === x.id) && x.status === 'sent').length;
-      toast(`${sent} de ${ready.length} documento(s) enviados a firmar.`, 5000);
+      const enviados = r.data.items.filter((x) => ready.some((y) => y.id === x.id) && x.status === 'sent');
+      toast(`${enviados.length} de ${ready.length} documento(s) enviados a firmar.`, 5000);
+      preguntarGuardarTipos(enviados, opts);
     },
   }, { clave: 'modal-43' });
+}
+
+// Al final del envío: por cada tipo de documento que la corredora no tenía configurado, una sola vez, «¿Guardas configuración por defecto?»
+// con la firma y el trámite que se usaron. Después de enviar todo, nunca antes ni por cada documento.
+const preguntados = new Set();
+async function preguntarGuardarTipos(enviados, opts) {
+  const tipos = new Map();
+  for (const it of enviados) {
+    const nombre = String(it.typeDocument || '').trim(); const k = nombre.toLowerCase();
+    if (!nombre || it.tipoConocido || preguntados.has(k) || tipos.has(k)) continue;
+    const t = it.signers?.[0]?.typeSign || opts?.typeSign; const tramite = it.tramite || opts?.protocolization;
+    tipos.set(k, { nombre, tipoFirma: ['simple', 'avanzada', 'visada', 'enrolada'].includes(t) ? t : 'avanzada', tramite: tramite === 'legalization' || tramite === 'protocolization' ? 'legalization' : 'none' });
+  }
+  for (const [k, t] of tipos) {
+    preguntados.add(k);
+    await new Promise((fin) => window.Ventanas.abrir('gestion.guardarTipoDocumento', { ...t, alResponder: () => { closeModal(); fin(); } }, { clave: 'modal-157' }));
+  }
 }
 
 window.Masiva = { open, editarFirmantes: editSigners, confirmarEnvio, get _bk() { return { st: estado().cola }; } };

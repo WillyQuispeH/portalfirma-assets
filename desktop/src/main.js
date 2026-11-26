@@ -477,6 +477,8 @@ handle('doc:analyze', async (originalPath) => {
     ingest: { document_id: filePath },   // la ruta del PDF: al enviar se lee de ahí
     extract: {
       typeDocument: ext.tipoDocumento || '', summary: (ext.avisos || []).join(' · '),
+      // si es un tipo de Configuración › Documentos, la firma y el trámite parten llenos (se pueden cambiar); si no, nada: se usan los de siempre
+      ...(ext.tipoConocido ? { tipoConocido: ext.tipoConocido, documentConfig: { name: ext.tipoConocido.nombre }, type_sign: ext.tipoConocido.tipoFirma, notarial_procedure: ext.tipoConocido.tramite === 'legalization' ? 'legalization' : 'none' } : {}),
       required_fields: { rut: true, alias: true, name: true, email: true, phone: false },   // la API de Portalfirma pide nombre y correo de cada firmante
       firmantes: (ext.firmantes || []).map((x) => ({ fullName: x.nombre, rut: x.rut, email: x.email, phone: x.telefono, alias: x.rol, pagina: x.pagina || 0 })),
     },
@@ -1384,6 +1386,14 @@ handle('pl:restaurar', (n, version) => (plMock ? plMock.restaurar(n, Number(vers
 handle('pl:firma', (n, o) => (plMock ? plMock.firma(n, o || {}) : asset.llamar('PUT', `${plRuta(n)}/firma`, { tipoFirma: o?.tipoFirma, tramite: o?.tramite })));
 // cómo se firma una plantilla, para la ventana de un documento: { tipoFirma, tramite } (null si no se pudo leer)
 handle('pl:firmaDe', async (n) => { try { return plMock ? plMock.firmaDe(n) : ((await asset.llamar('GET', plRuta(n)))?.firma || null); } catch { return null; } });
+// Configuración › Documentos: los tipos de documento de la corredora (carta oferta, mandato…) con su tipo de firma y trámite legal; al analizar un
+// PDF, el que corresponda llena solo los formularios de firmantes (GET/POST/PUT/DELETE /v1/tipos-documento). En modo de prueba, en memoria.
+const tiposMock = process.env.PF_MOCK === '1' ? require('./tipos-documento-mock').crear() : null;
+const tipoRuta = (id) => `/tipos-documento/${encodeURIComponent(String(id || ''))}`;
+handle('tipos:lista', () => (tiposMock ? tiposMock.lista() : asset.llamar('GET', '/tipos-documento')));
+handle('tipos:crear', (o) => (tiposMock ? tiposMock.crear(o || {}) : asset.llamar('POST', '/tipos-documento', o || {})));
+handle('tipos:editar', (id, o) => (tiposMock ? tiposMock.editar(id, o || {}) : asset.llamar('PUT', tipoRuta(id), o || {})));
+handle('tipos:borrar', (id) => (tiposMock ? tiposMock.borrar(id) : asset.llamar('DELETE', tipoRuta(id))));
 // pantalla Configuración › WhatsApp: el número de la empresa, si el servidor está leyendo, y Sofía / Tomás / postventa.
 // En modo de prueba (sin la API) los interruptores quedan en este equipo.
 const ASIST_PRUEBA = { enServidor: false, lectorEncendido: false, numeroEmpresa: '+56 9 4497 5958', clientesActivo: true, leadsActivo: true, ultimaLectura: null, error: null };
